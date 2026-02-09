@@ -33,3 +33,4 @@ dist-ssr
 # Build files
 build/
 temp/
+upload_script.gs

@@ -3,9 +3,11 @@ import { auth, db } from '../services/firebase';
 import { signOut } from 'firebase/auth';
 import { collection, query, where, onSnapshot, updateDoc, doc, writeBatch, getDocs } from 'firebase/firestore';
 import React, { useState, useEffect } from 'react';
+import { useNavigationConfig } from '../hooks/useNavigationConfig';
 
 const Home = () => {
 	const navigate = useNavigate();
+	const { sidebarItems } = useNavigationConfig();
 	const [unreadCount, setUnreadCount] = useState(0);
 
 	useEffect(() => {
@@ -133,43 +135,21 @@ const Home = () => {
 								Phím tắt nhanh
 								<span className="material-symbols-outlined text-slate-300">apps</span>
 							</h3>
-							<div className="grid grid-cols-2 gap-3">
-								<button
-									onClick={() => navigate('/orders')}
-									className="aspect-square bg-slate-50 hover:bg-[#1A237E] hover:text-white transition-all rounded-3xl flex flex-col items-center justify-center gap-2 group"
-								>
-									<div className="p-3 bg-white rounded-full text-[#1A237E] group-hover:bg-[#FF6D00] group-hover:text-white shadow-sm">
-										<span className="material-symbols-outlined">shopping_cart</span>
-									</div>
-									<span className="text-xs font-bold">Đơn Hàng</span>
-								</button>
-								<button
-									onClick={() => navigate('/inventory')}
-									className="aspect-square bg-slate-50 hover:bg-[#1A237E] hover:text-white transition-all rounded-3xl flex flex-col items-center justify-center gap-2 group"
-								>
-									<div className="p-3 bg-white rounded-full text-[#1A237E] group-hover:bg-[#FF6D00] group-hover:text-white shadow-sm">
-										<span className="material-symbols-outlined">inventory_2</span>
-									</div>
-									<span className="text-xs font-bold">Sản Phẩm</span>
-								</button>
-								<button
-									onClick={() => navigate('/customers')}
-									className="aspect-square bg-slate-50 hover:bg-[#1A237E] hover:text-white transition-all rounded-3xl flex flex-col items-center justify-center gap-2 group"
-								>
-									<div className="p-3 bg-white rounded-full text-[#1A237E] group-hover:bg-[#FF6D00] group-hover:text-white shadow-sm">
-										<span className="material-symbols-outlined">group</span>
-									</div>
-									<span className="text-xs font-bold">Khách Hàng</span>
-								</button>
-								<button
-									onClick={() => navigate('/checkin')}
-									className="aspect-square bg-slate-50 hover:bg-[#1A237E] hover:text-white transition-all rounded-3xl flex flex-col items-center justify-center gap-2 group"
-								>
-									<div className="p-3 bg-white rounded-full text-[#1A237E] group-hover:bg-[#FF6D00] group-hover:text-white shadow-sm">
-										<span className="material-symbols-outlined">location_on</span>
-									</div>
-									<span className="text-xs font-bold">Checkin</span>
-								</button>
+							<div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+								{sidebarItems
+									.filter(item => item.path !== '/dashboard')
+									.map((item) => (
+										<button
+											key={item.path}
+											onClick={() => navigate(item.path)}
+											className="aspect-square bg-slate-50 hover:bg-[#1A237E] hover:text-white transition-all rounded-3xl flex flex-col items-center justify-center gap-2 group p-2"
+										>
+											<div className="p-3 bg-white rounded-full text-[#1A237E] group-hover:bg-[#FF6D00] group-hover:text-white shadow-sm transition-colors">
+												<span className="material-symbols-outlined">{item.icon}</span>
+											</div>
+											<span className="text-[11px] font-bold text-center leading-tight">{item.label}</span>
+										</button>
+									))}
 							</div>
 						</div>
 					</div>

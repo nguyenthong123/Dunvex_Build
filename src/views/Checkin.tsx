@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 import { collection, query, onSnapshot, addDoc, serverTimestamp, where, limit, orderBy } from 'firebase/firestore';
 import { MapPin, User, FileText, Camera, CheckCircle2, Navigation2, History, ArrowLeft } from 'lucide-react';
@@ -108,6 +108,16 @@ const Checkin = () => {
         const timer = setInterval(() => setCurrentTime(new Date()), 1000);
         return () => clearInterval(timer);
     }, []);
+
+    const { search } = useLocation();
+    useEffect(() => {
+        const params = new URLSearchParams(search);
+        if (params.get('new') === 'true') {
+            setShowCheckinForm(true);
+            // Optional: clean up the URL to prevent reopening on reload
+            navigate('/checkin', { replace: true });
+        }
+    }, [search, navigate]);
 
     const [formData, setFormData] = useState({
         customerId: '',
@@ -299,7 +309,7 @@ const Checkin = () => {
                 purpose: 'Viếng thăm',
                 imageUrl: ''
             });
-            alert("Check-in thành công!");
+            alert("Checkin thành công!");
         } catch (error) {
             console.error(error);
             alert("Lỗi lưu dữ liệu.");
@@ -454,7 +464,7 @@ const Checkin = () => {
                         className="flex items-center gap-4 bg-[#f27121] hover:bg-orange-600 text-white px-10 py-5 rounded-[2.5rem] shadow-[0_20px_40px_rgba(242,113,33,0.3)] transition-all transform hover:scale-105 active:scale-95 font-black text-sm uppercase tracking-[3px]"
                     >
                         <span className="material-symbols-outlined text-2xl">add_location_alt</span>
-                        Check-in Ngay
+                        Checkin Ngay
                     </button>
                 </div>
 
@@ -504,7 +514,7 @@ const Checkin = () => {
                     <div className="px-7 pb-4 lg:pt-8 lg:pb-4 flex flex-col gap-5 shrink-0">
                         <div className="flex items-center justify-between">
                             <h1 className="text-[#181411] text-2xl font-black uppercase tracking-tight flex items-center gap-3">
-                                Hoạt Động
+                                Hoạt động
                                 <span className="text-[10px] font-black uppercase px-2 py-1 bg-orange-50 text-[#f27121] rounded-lg tracking-widest border border-orange-100">Sale</span>
                             </h1>
                         </div>
@@ -673,7 +683,7 @@ const Checkin = () => {
                             className="w-full flex items-center justify-center gap-4 bg-[#1A237E] text-white py-5 rounded-[2rem] font-black text-sm uppercase tracking-[3px] shadow-2xl shadow-blue-900/20 active:scale-95 transition-all"
                         >
                             <span className="material-symbols-outlined text-2xl">add_location_alt</span>
-                            Check-in Mới
+                            Checkin Ngay
                         </button>
                     </div>
                 </div>
@@ -686,7 +696,7 @@ const Checkin = () => {
                     <div className="bg-white w-full max-w-xl rounded-t-[2.5rem] md:rounded-[2.5rem] shadow-2xl flex flex-col max-h-[95vh] md:max-h-[85vh] animate-in slide-in-from-bottom duration-300 overflow-hidden">
                         <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between shrink-0">
                             <div className="space-y-1">
-                                <h3 className="text-xl font-black text-[#1A237E] uppercase tracking-tight">Thực hiện Check-in</h3>
+                                <h3 className="text-xl font-black text-[#1A237E] uppercase tracking-tight">Thực hiện Checkin</h3>
                                 <p className="text-[10px] font-black text-[#f27121] uppercase tracking-[2px]">
                                     {currentTime.toLocaleDateString('vi-VN')} — {currentTime.toLocaleTimeString('vi-VN')}
                                 </p>
@@ -741,7 +751,7 @@ const Checkin = () => {
                                     </div>
 
                                     <div className="col-span-1 md:col-span-2">
-                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[2px] pl-1 mb-2">Trạng thái Check-in *</label>
+                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[2px] pl-1 mb-2">Trạng thái Checkin *</label>
                                         <div className="grid grid-cols-3 gap-2">
                                             {['Khách mới', 'Viếng thăm', 'Khiếu nại'].map((p) => (
                                                 <button

@@ -1,22 +1,15 @@
 import React from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { useNavigationConfig } from '../../hooks/useNavigationConfig';
 
 const MobileNav = () => {
 	const navigate = useNavigate();
-	const location = useLocation();
-
-	const navItems = [
-		{ icon: 'home', label: 'Trang chủ', path: '/dashboard' },
-		{ icon: 'location_on', label: 'Check-in', path: '/checkin' },
-		{ icon: 'add', label: 'Lên đơn', path: '/quick-order', isCenter: true },
-		{ icon: 'shopping_cart', label: 'Đơn hàng', path: '/orders' },
-		{ icon: 'settings', label: 'Cài đặt', path: '/settings' },
-	];
+	const { navItems, currentPath } = useNavigationConfig();
 
 	return (
 		<div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 px-4 py-2 flex justify-between items-center z-50 pb-6 h-24">
 			{navItems.map((item) => {
-				const isActive = location.pathname === item.path;
+				const isActive = currentPath === item.path;
 
 				if (item.isCenter) {
 					return (
@@ -27,7 +20,7 @@ const MobileNav = () => {
 							>
 								<span className="material-symbols-outlined text-3xl font-bold">{item.icon}</span>
 							</button>
-							<span className="text-[10px] font-black uppercase text-[#FF6D00] mt-2 tracking-tighter">Lên đơn</span>
+							<span className="text-[10px] font-black uppercase text-[#FF6D00] mt-2 tracking-tighter">{item.label}</span>
 						</div>
 					);
 				}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 import { signOut } from 'firebase/auth';
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, deleteDoc, doc, writeBatch, getDocs } from 'firebase/firestore';
@@ -64,6 +64,16 @@ const Debts: React.FC = () => {
 		});
 		return () => unsubscribe();
 	}, []);
+
+	const { search } = useLocation();
+	useEffect(() => {
+		const params = new URLSearchParams(search);
+		if (params.get('payment') === 'true') {
+			setShowPaymentForm(true);
+			// Optional: clean up URL
+			navigate('/', { replace: true });
+		}
+	}, [search, navigate]);
 
 	const markAllAsRead = async () => {
 		if (!auth.currentUser) return;

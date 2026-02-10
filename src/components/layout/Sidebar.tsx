@@ -2,10 +2,11 @@ import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth } from '../../services/firebase';
 import { signOut } from 'firebase/auth';
+import { useNavigationConfig } from '../../hooks/useNavigationConfig';
 
 const Sidebar = () => {
 	const navigate = useNavigate();
-	const location = useLocation();
+	const { sidebarItems, currentPath } = useNavigationConfig();
 
 	const handleLogout = async () => {
 		if (window.confirm("Bạn có chắc chắn muốn đăng xuất?")) {
@@ -14,14 +15,7 @@ const Sidebar = () => {
 		}
 	};
 
-	const menuItems = [
-		{ icon: 'home', label: 'Trang chủ', path: '/dashboard' },
-		{ icon: 'location_on', label: 'Check-in', path: '/checkin' },
-		{ icon: 'shopping_cart', label: 'Đơn hàng', path: '/orders' },
-		{ icon: 'attach_money', label: 'Công nợ', path: '/' },
-		{ icon: 'group', label: 'Khách hàng', path: '/customers' },
-		{ icon: 'inventory_2', label: 'Kho hàng', path: '/inventory' },
-	];
+	const menuItems = sidebarItems;
 
 	return (
 		<aside className="hidden md:flex flex-col h-screen bg-[#1A237E] text-white transition-all duration-300 z-40 md:w-20 lg:w-64 flex-shrink-0">
@@ -36,7 +30,7 @@ const Sidebar = () => {
 			</div>
 			<div className="flex-1 overflow-y-auto py-6 flex flex-col gap-2 px-3">
 				{menuItems.map((item) => {
-					const isActive = location.pathname === item.path;
+					const isActive = currentPath === item.path;
 					return (
 						<button
 							key={item.path}

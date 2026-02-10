@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, where } from 'firebase/firestore';
 
@@ -56,6 +56,16 @@ const ProductList = () => {
 		});
 		return unsubscribe;
 	}, [auth.currentUser]);
+
+	const { search } = useLocation();
+	useEffect(() => {
+		const params = new URLSearchParams(search);
+		if (params.get('new') === 'true') {
+			setShowAddForm(true);
+			// Optional: clean up URL
+			navigate('/inventory', { replace: true });
+		}
+	}, [search, navigate]);
 
 	const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];

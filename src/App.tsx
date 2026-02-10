@@ -12,6 +12,7 @@ import CustomerList from './views/CustomerList';
 import ProductList from './views/ProductList';
 import OrderList from './views/OrderList';
 import Checkin from './views/Checkin';
+import MainLayout from './components/layout/MainLayout';
 
 function App() {
 	const [currentUser, setCurrentUser] = useState<any>(null);
@@ -40,67 +41,47 @@ function App() {
 	return (
 		<div className="min-h-screen bg-slate-50">
 			<Routes>
-				{/* Full screen routes like Login and Home (Command Center) */}
 				<Route
 					path="/login"
 					element={currentUser ? <Navigate to="/" /> : <Login />}
 				/>
 
-				{/* Root is now Debt Management */}
+				{/* Protected Routes wrapped in MainLayout */}
 				<Route
 					path="/"
-					element={currentUser ? <Debts /> : <Navigate to="/login" />}
+					element={currentUser ? <MainLayout><Debts /></MainLayout> : <Navigate to="/login" />}
 				/>
-
-				{/* Dashboard (Old Home/Command Center) is now at /dashboard */}
 				<Route
 					path="/dashboard"
-					element={currentUser ? <Home /> : <Navigate to="/login" />}
+					element={currentUser ? <MainLayout><Home /></MainLayout> : <Navigate to="/login" />}
 				/>
-
-				{/* Customer Management - Full Screen Responsive */}
 				<Route
 					path="/customers"
-					element={currentUser ? <CustomerList /> : <Navigate to="/login" />}
+					element={currentUser ? <MainLayout><CustomerList /></MainLayout> : <Navigate to="/login" />}
 				/>
-
-				{/* Product Management - Full Screen Responsive */}
 				<Route
 					path="/inventory"
-					element={currentUser ? <ProductList /> : <Navigate to="/login" />}
+					element={currentUser ? <MainLayout><ProductList /></MainLayout> : <Navigate to="/login" />}
 				/>
-
-				{/* Order Management - Full Screen Responsive */}
 				<Route
 					path="/orders"
-					element={currentUser ? <OrderList /> : <Navigate to="/login" />}
+					element={currentUser ? <MainLayout><OrderList /></MainLayout> : <Navigate to="/login" />}
 				/>
-
 				<Route
 					path="/checkin"
-					element={currentUser ? <Checkin /> : <Navigate to="/login" />}
+					element={currentUser ? <MainLayout><Checkin /></MainLayout> : <Navigate to="/login" />}
 				/>
-
-				{/* Other pages wrap in a mobile-first container for consistency with design */}
 				<Route
 					path="/quick-order"
-					element={currentUser ? <QuickOrder /> : <Navigate to="/login" />}
+					element={currentUser ? <MainLayout><QuickOrder /></MainLayout> : <Navigate to="/login" />}
 				/>
 				<Route
 					path="/quick-order/:id"
-					element={currentUser ? <QuickOrder /> : <Navigate to="/login" />}
+					element={currentUser ? <MainLayout><QuickOrder /></MainLayout> : <Navigate to="/login" />}
 				/>
 				<Route
 					path="/settings"
-					element={
-						currentUser ? (
-							<div className="flex justify-center items-start min-h-screen">
-								<div className="mobile-container bg-white">
-									<AdminSettings />
-								</div>
-							</div>
-						) : <Navigate to="/login" />
-					}
+					element={currentUser ? <MainLayout><AdminSettings /></MainLayout> : <Navigate to="/login" />}
 				/>
 
 				{/* Catch all */}

@@ -1,9 +1,43 @@
 import { useNavigate } from 'react-router-dom';
-import { auth } from '../services/firebase';
+import { auth, db } from '../services/firebase';
 import { signOut } from 'firebase/auth';
+import { collection, query, where, onSnapshot, updateDoc, doc, writeBatch, getDocs } from 'firebase/firestore';
+import React, { useState, useEffect } from 'react';
 
 const Home = () => {
 	const navigate = useNavigate();
+	const [unreadCount, setUnreadCount] = useState(0);
+
+	useEffect(() => {
+		if (!auth.currentUser) return;
+
+		const q = query(
+			collection(db, 'notifications'),
+			where('userId', '==', auth.currentUser.uid),
+			where('read', '==', false)
+		);
+
+		const unsubscribe = onSnapshot(q, (snapshot) => {
+			setUnreadCount(snapshot.size);
+		});
+
+		return () => unsubscribe();
+	}, []);
+
+	const markAllAsRead = async () => {
+		if (!auth.currentUser) return;
+		const q = query(
+			collection(db, 'notifications'),
+			where('userId', '==', auth.currentUser.uid),
+			where('read', '==', false)
+		);
+		const snapshot = await getDocs(q);
+		const batch = writeBatch(db);
+		snapshot.docs.forEach((d) => {
+			batch.update(d.ref, { read: true });
+		});
+		await batch.commit();
+	};
 
 	const handleLogout = async () => {
 		if (window.confirm("Bạn có chắc chắn muốn đăng xuất?")) {
@@ -13,44 +47,39 @@ const Home = () => {
 	};
 
 	return (
-		<div className="bg-[#F0F2F5] min-h-screen text-slate-900 overflow-x-hidden">
-			{/* Navigation */}
-			<nav className="fixed top-0 left-0 right-0 z-50 bg-[#1A237E]/95 backdrop-blur-md text-white h-16 flex items-center px-4 lg:px-8 shadow-xl">
-				<div className="flex items-center gap-4 flex-1">
-					<div className="bg-[#FF6D00] p-1.5 rounded-lg rotate-12">
-						<span className="material-symbols-outlined block text-white font-bold">architecture</span>
-					</div>
-					<span className="font-black text-xl tracking-tighter uppercase">Dunvex<span className="text-[#FF6D00]">Build</span></span>
-				</div>
-
-				<div className="hidden lg:flex items-center gap-8 text-sm font-semibold tracking-wide">
-					<a className="border-b-2 border-[#FF6D00] text-[#FF6D00] pb-1 uppercase" href="#" onClick={() => navigate('/')}>Quản Lý Công Nợ</a>
-					<a className="text-white/70 hover:text-white transition-colors uppercase" href="#" onClick={() => navigate('/inventory')}>Kho hàng</a>
-					<a className="text-white/70 hover:text-white transition-colors uppercase" href="#" onClick={() => navigate('/orders')}>Đơn hàng</a>
-					<a className="text-white/70 hover:text-white transition-colors uppercase" href="#" onClick={() => navigate('/checkin')}>Check-in</a>
-				</div>
-
-				<div className="flex flex-1 justify-end items-center gap-4">
-					<button className="p-2 hover:bg-white/10 rounded-full relative">
-						<span className="material-symbols-outlined">notifications</span>
-						<span className="absolute top-2 right-2 w-2 h-2 bg-[#FF6D00] rounded-full border-2 border-[#1A237E]"></span>
+		<>
+			{/* HEADER */}
+			<header className="h-16 md:h-20 bg-white border-b border-gray-100 flex items-center justify-between px-4 md:px-8 shrink-0">
+				<h2 className="text-lg md:text-xl font-black text-[#1A237E] uppercase tracking-tight">Tổng Quan Hệ Thống</h2>
+				<div className="flex items-center gap-4">
+					<button
+						onClick={markAllAsRead}
+						className="p-2 relative text-slate-400 hover:bg-slate-50 rounded-xl transition-colors group"
+						title="Thông báo"
+					>
+						<span className="material-symbols-outlined text-2xl group-hover:scale-110 transition-transform">notifications</span>
+						{unreadCount > 0 && (
+							<span className="absolute top-2 right-2 size-4 bg-[#FF6D00] text-white text-[8px] font-black flex items-center justify-center rounded-full border-2 border-white animate-bounce">
+								{unreadCount}
+							</span>
+						)}
 					</button>
-					<div className="flex items-center gap-3 pl-4 border-l border-white/20">
-						<div className="text-right hidden sm:block">
-							<p className="text-xs font-bold leading-none">{auth.currentUser?.displayName || 'User'}</p>
-							<p className="text-[10px] text-white/50">Admin</p>
-						</div>
-						<img
-							alt="Profile"
-							className="w-9 h-9 rounded-full object-cover border-2 border-white/20 cursor-pointer hover:opacity-80 transition-opacity"
-							src={auth.currentUser?.photoURL || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=100"}
-							onClick={handleLogout}
-						/>
-					</div>
-				</div>
-			</nav>
 
-			<main className="pt-20 pb-24 lg:pb-8 px-4 lg:px-8 max-w-[1600px] mx-auto">
+					<div className="h-8 w-px bg-slate-100 mx-2"></div>
+
+					<div className="text-right hidden sm:block">
+						<p className="text-xs font-bold leading-none text-slate-900">{auth.currentUser?.displayName || 'Người dùng'}</p>
+						<p className="text-[10px] text-slate-400 uppercase font-black tracking-widest mt-0.5">Quản trị viên</p>
+					</div>
+					<img
+						alt="Profile"
+						className="size-10 rounded-full object-cover border-2 border-[#1A237E]/10"
+						src={auth.currentUser?.photoURL || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=100"}
+					/>
+				</div>
+			</header>
+
+			<main className="p-4 md:p-8 max-w-[1600px] mx-auto">
 				{/* Alerts Section */}
 				<div className="mb-8 flex flex-col md:flex-row gap-4">
 					<div className="flex-1 bg-white border-l-4 border-[#FF6D00] p-4 rounded-r-xl shadow-sm flex items-center justify-between">
@@ -194,23 +223,7 @@ const Home = () => {
 					</div>
 				</div>
 			</main>
-
-			{/* Mobile Bottom Nav */}
-			<div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 px-6 py-3 flex justify-between items-center z-50 pb-8">
-				<NavButton icon="attach_money" label="Công nợ" active onClick={() => navigate('/')} />
-				<NavButton icon="inventory_2" label="Kho" onClick={() => navigate('/inventory')} />
-				<div className="relative -top-8">
-					<button
-						onClick={() => navigate('/quick-order')}
-						className="w-14 h-14 bg-[#FF6D00] text-white rounded-full shadow-2xl shadow-orange-500/40 flex items-center justify-center scale-110 border-4 border-[#F0F2F5]"
-					>
-						<span className="material-symbols-outlined text-3xl">add</span>
-					</button>
-				</div>
-				<NavButton icon="analytics" label="Báo cáo" />
-				<NavButton icon="settings" label="Cài đặt" onClick={() => navigate('/settings')} />
-			</div>
-		</div>
+		</>
 	);
 };
 
@@ -234,14 +247,5 @@ const ActivityRow = ({ icon, color, name, task, value, time }: any) => (
 	</tr>
 );
 
-const NavButton = ({ icon, label, active, onClick }: any) => (
-	<button
-		onClick={onClick}
-		className={`flex flex-col items-center gap-1 ${active ? 'text-[#1A237E]' : 'text-slate-400'}`}
-	>
-		<span className={`material-symbols-outlined ${active ? 'filled' : ''}`} style={active ? { fontVariationSettings: "'FILL' 1" } : {}}>{icon}</span>
-		<span className="text-[9px] font-bold">{label}</span>
-	</button>
-);
 
 export default Home;

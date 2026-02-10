@@ -8,11 +8,12 @@ interface OrderTicketProps {
 
 const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 	const [scale, setScale] = React.useState(1);
+	const [zoom, setZoom] = React.useState(0.85); // Default zoom slightly out for desktop
 
 	React.useEffect(() => {
 		const handleResize = () => {
-			if (window.innerWidth < 800) {
-				const s = (window.innerWidth - 20) / 800;
+			if (window.innerWidth < 850) {
+				const s = (window.innerWidth - 40) / 800;
 				setScale(s);
 			} else {
 				setScale(1);
@@ -38,7 +39,7 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 	};
 
 	return (
-		<div className="fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-xl flex flex-col items-center overflow-y-auto pt-20 pb-10 custom-scrollbar">
+		<div className="fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-xl flex flex-col items-center overflow-y-auto pt-8 pb-10 custom-scrollbar">
 			<style>
 				{`
 					@media print {
@@ -53,17 +54,28 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 			</style>
 
 			{/* CONTROLS - Hidden when printing */}
-			<div className="fixed top-4 right-4 flex gap-3 z-[110] no-print">
+			<div className="fixed top-4 right-4 flex items-center gap-3 z-[110] no-print">
+				<div className="flex bg-white/10 backdrop-blur-md rounded-full p-1 border border-white/20 mr-4">
+					{[0.6, 0.85, 1.0].map((v) => (
+						<button
+							key={v}
+							onClick={() => setZoom(v)}
+							className={`px-3 py-1.5 rounded-full text-[9px] font-black transition-all ${zoom === v ? 'bg-white text-slate-900 shadow-lg' : 'text-white hover:bg-white/10'}`}
+						>
+							{v * 100}%
+						</button>
+					))}
+				</div>
 				<button
 					onClick={handlePrint}
-					className="h-12 px-6 rounded-full bg-[#f27121] text-white flex items-center justify-center backdrop-blur-md border border-orange-500/30 shadow-xl shadow-orange-500/20 transition-all font-black text-xs uppercase tracking-widest active:scale-95 hover:bg-orange-600 gap-2"
+					className="h-10 px-5 rounded-full bg-[#f27121] text-white flex items-center justify-center backdrop-blur-md border border-orange-500/30 shadow-xl shadow-orange-500/20 transition-all font-black text-[10px] uppercase tracking-widest active:scale-95 hover:bg-orange-600 gap-2"
 				>
-					<span className="material-symbols-outlined text-lg">print</span>
+					<span className="material-symbols-outlined text-base">print</span>
 					In phiếu
 				</button>
 				<button
 					onClick={onClose}
-					className="h-12 px-6 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center backdrop-blur-md border border-white/20 transition-all font-bold text-sm uppercase tracking-widest active:scale-95"
+					className="h-10 px-5 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center backdrop-blur-md border border-white/20 transition-all font-bold text-[10px] uppercase tracking-widest active:scale-95"
 				>
 					Đóng
 				</button>
@@ -73,16 +85,16 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 			<div
 				style={{
 					width: '800px',
-					transform: `scale(${scale})`,
+					transform: `scale(${scale * zoom})`,
 					transformOrigin: 'top center',
-					marginBottom: scale < 1 ? `-${(1 - scale) * 1100}px` : '0'
+					marginBottom: (scale * zoom) < 1 ? `-${(1 - (scale * zoom)) * 1100}px` : '0'
 				}}
 				className="flex-shrink-0 print-scale"
 			>
-				<div className="bg-white shadow-2xl overflow-hidden relative border border-gray-200">
+				<div className="bg-white shadow-2xl overflow-hidden relative border border-gray-100">
 					<main className="bg-white text-gray-900 font-sans antialiased">
-						<header className="p-10 border-b border-gray-100">
-							<h1 className="text-4xl font-black text-center text-gray-900 uppercase mb-6 tracking-[4px]">
+						<header className="p-6 border-b border-gray-100">
+							<h1 className="text-3xl font-black text-center text-gray-900 uppercase mb-4 tracking-[3px]">
 								PHIẾU GIAO HÀNG
 							</h1>
 							<div className="flex justify-center gap-10 text-base font-bold text-gray-700 border-t border-b border-dashed border-gray-300 py-4">
@@ -96,7 +108,7 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 								</div>
 								<div className="flex items-center">
 									<span className="text-gray-400 mr-2 uppercase text-[10px] tracking-widest">Kiện:</span>
-									<span className="text-slate-900">{order.totalItems || 0}</span>
+									<span className="text-slate-900">{(order.totalItems || 0).toLocaleString('vi-VN', { maximumFractionDigits: 2 })}</span>
 								</div>
 								<div className="flex items-center">
 									<span className="text-gray-400 mr-2 uppercase text-[10px] tracking-widest">TL tải:</span>
@@ -105,7 +117,7 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 							</div>
 						</header>
 
-						<section className="px-10 py-8 grid grid-cols-2 gap-10">
+						<section className="px-8 py-6 grid grid-cols-2 gap-8">
 							<div className="space-y-4">
 								<div className="flex flex-col">
 									<span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Khách hàng</span>
@@ -128,7 +140,7 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 							</div>
 						</section>
 
-						<section className="px-10 pb-8">
+						<section className="px-8 pb-6">
 							<div className="rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
 								<table className="w-full text-left text-sm border-collapse">
 									<thead className="bg-[#1c130d] text-white uppercase font-black text-[10px] tracking-widest">
@@ -159,7 +171,7 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 							</div>
 						</section>
 
-						<section className="px-10 pb-10 flex flex-col items-end">
+						<section className="px-8 pb-8 flex flex-col items-end">
 							<div className="w-[400px] space-y-4">
 								<div className="flex justify-between items-center text-xs font-bold text-gray-400">
 									<span className="uppercase tracking-[2px]">Cộng tiền hàng:</span>
@@ -188,18 +200,18 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 							</div>
 						</section>
 
-						<footer className="p-10 pb-20 mt-10 bg-gray-50/50 border-t border-gray-100 flex justify-between items-start text-center">
+						<footer className="p-6 pb-10 mt-6 bg-gray-50/50 border-t border-gray-100 flex justify-between items-start text-center">
 							<div className="w-1/3">
-								<h4 className="font-black text-[10px] uppercase text-gray-400 mb-24 tracking-[2px]">Người Lập Phiếu</h4>
-								<span className="font-black text-[#1A237E] text-xs uppercase border-t border-dashed border-gray-300 pt-4 px-6">{order.createdByEmail?.split('@')[0]}</span>
+								<h4 className="font-black text-[9px] uppercase text-gray-400 mb-16 tracking-[2px]">Người Lập Phiếu</h4>
+								<span className="font-black text-[#1A237E] text-[10px] uppercase border-t border-dashed border-gray-300 pt-3 px-4">{order.createdByEmail?.split('@')[0]}</span>
 							</div>
 							<div className="w-1/3">
-								<h4 className="font-black text-[10px] uppercase text-gray-400 mb-32 tracking-[2px]">Người Giao Hàng</h4>
-								<div className="mx-auto h-px w-24 bg-gray-200"></div>
+								<h4 className="font-black text-[9px] uppercase text-gray-400 mb-20 tracking-[2px]">Người Giao Hàng</h4>
+								<div className="mx-auto h-px w-20 bg-gray-200"></div>
 							</div>
 							<div className="w-1/3">
-								<h4 className="font-black text-[10px] uppercase text-gray-400 mb-32 tracking-[2px]">Người Nhận Hàng</h4>
-								<div className="mx-auto h-px w-24 bg-gray-200"></div>
+								<h4 className="font-black text-[9px] uppercase text-gray-400 mb-20 tracking-[2px]">Người Nhận Hàng</h4>
+								<div className="mx-auto h-px w-20 bg-gray-200"></div>
 							</div>
 						</footer>
 					</main>

@@ -51,14 +51,39 @@ const createCustomIcon = (purpose: string, hasImage: boolean) => {
     });
 };
 
-// Helper to update map center
-const MapUpdater = ({ center }: { center: [number, number] }) => {
+// Helper to calculate distance in meters (Haversine formula)
+const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371e3; // metres
+    const φ1 = lat1 * Math.PI / 180;
+    const φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180;
+    const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+        Math.cos(φ1) * Math.cos(φ2) *
+        Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c; // in metres
+};
+
+// Helper to update map center and handle resize
+const MapUpdater = ({ center, sidebarExpanded }: { center: [number, number], sidebarExpanded: boolean }) => {
     const map = useMap();
     useEffect(() => {
         map.setView(center, map.getZoom());
     }, [center, map]);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            map.invalidateSize();
+        }, 500); // Match transition duration
+        return () => clearTimeout(timer);
+    }, [map, sidebarExpanded]);
+
     return null;
 };
+
 
 const Checkin = () => {
     const navigate = useNavigate();
@@ -96,9 +121,13 @@ const Checkin = () => {
 
     const [gettingLocation, setGettingLocation] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [sidebarExpanded, setSidebarExpanded] = useState(true);
 
-    // Helper to format Google Drive URLs for reliable loading
+
+    const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
+
     const formatDriveUrl = (url: string) => {
+
         if (!url) return '';
         if (url.includes('drive.google.com')) {
             const fileId = url.split('id=')[1];
@@ -121,15 +150,20 @@ const Checkin = () => {
         const qCheck = query(
             collection(db, 'checkins'),
             where('userId', '==', auth.currentUser.uid),
-            orderBy('createdAt', 'desc'),
-            limit(100) // Increase limit for client-side filtering/pagination
+            limit(100)
         );
         const unsubCheck = onSnapshot(qCheck, (snapshot) => {
-            const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setRecentCheckins(docs);
+            const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+            // Sort client-side to avoid requiring a composite index
+            const sortedDocs = docs.sort((a, b) => {
+                const dateA = a.createdAt?.seconds || 0;
+                const dateB = b.createdAt?.seconds || 0;
+                return dateB - dateA;
+            });
+            setRecentCheckins(sortedDocs);
 
-            if (docs.length > 0 && docs[0].location) {
-                setMapCenter([docs[0].location.lat, docs[0].location.lng]);
+            if (sortedDocs.length > 0 && sortedDocs[0].location) {
+                setMapCenter([sortedDocs[0].location.lat, sortedDocs[0].location.lng]);
             }
 
             setLoading(false);
@@ -197,6 +231,9 @@ const Checkin = () => {
                     ...prev,
                     location: { lat: latitude, lng: longitude }
                 }));
+                setMapCenter([latitude, longitude]);
+                mapInstance?.flyTo([latitude, longitude], 16);
+
 
                 // Get address using Nominatim (free)
                 try {
@@ -225,9 +262,25 @@ const Checkin = () => {
             return;
         }
 
+        const customer = customers.find(c => c.id === formData.customerId);
+
+        // Distance Check (Limited to 50 meters)
+        if (customer && customer.lat && customer.lng) {
+            const distance = calculateDistance(
+                formData.location.lat,
+                formData.location.lng,
+                customer.lat,
+                customer.lng
+            );
+
+            if (distance > 50) {
+                alert(`Bạn đang cách khách hàng ${Math.round(distance)}m. Vui lòng di chuyển lại gần phạm vi 50m để check-in!`);
+                return;
+            }
+        }
+
         setLoading(true);
         try {
-            const customer = customers.find(c => c.id === formData.customerId);
             await addDoc(collection(db, 'checkins'), {
                 ...formData,
                 customerName: customer?.name || 'Vãng lai',
@@ -236,6 +289,7 @@ const Checkin = () => {
                 createdAt: serverTimestamp()
             });
             setShowCheckinForm(false);
+
             setFormData({
                 customerId: '',
                 customerName: '',
@@ -255,51 +309,66 @@ const Checkin = () => {
     };
 
     return (
-        <div className="bg-[#f8f7f5] font-['Manrope'] text-[#181411] overflow-hidden h-screen flex flex-col">
-            {/* Top Navigation */}
-            <header className="flex-none flex items-center justify-between whitespace-nowrap border-b border-solid border-[#e6dfdb] bg-white px-4 lg:px-6 py-3 z-[1000] shadow-sm">
-                <div className="flex items-center gap-4 text-[#181411]">
-                    <div className="size-10 bg-[#f27121] rounded-xl flex items-center justify-center text-white cursor-pointer shadow-lg shadow-orange-500/20" onClick={() => navigate('/')}>
-                        <span className="material-symbols-outlined text-[24px]">grid_view</span>
-                    </div>
-                    <h2 className="text-xl font-black leading-tight tracking-tight cursor-pointer" onClick={() => navigate('/')}>Dunvex Build</h2>
-                </div>
-                <div className="flex items-center gap-3">
-                    <button
-                        className="hidden md:flex items-center gap-2 px-4 py-2 bg-[#f8f7f5] border border-slate-200 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-100 transition-all text-slate-600"
-                        onClick={() => navigate('/')}
-                    >
-                        <span className="material-symbols-outlined text-[18px]">grid_view</span>
-                        <span>Quay lại</span>
-                    </button>
-                    <div
-                        className="bg-center bg-no-repeat bg-cover rounded-full size-10 border-2 border-[#f27121]/20 shadow-md"
-                        style={{ backgroundImage: `url(${auth.currentUser?.photoURL || 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y'})` }}
-                    ></div>
-                </div>
-            </header>
+        <div className="flex-1 flex flex-col lg:flex-row relative overflow-hidden h-full">
+            {/* Map Area */}
+            <div className="relative flex-1 h-full w-full bg-[#e5e3df] z-0 overflow-hidden">
+                <MapContainer
+                    center={mapCenter}
+                    zoom={13}
+                    style={{ height: '100%', width: '100%' }}
+                    zoomControl={false}
+                    ref={setMapInstance}
+                >
 
-            {/* Main Content Area */}
-            <main className="flex-1 flex flex-col lg:flex-row relative overflow-hidden">
-                {/* Map Area */}
-                <div className="relative flex-1 h-full w-full bg-[#e5e3df] z-0 overflow-hidden">
-                    <MapContainer
-                        center={mapCenter}
-                        zoom={13}
-                        style={{ height: '100%', width: '100%' }}
-                        zoomControl={false}
-                    >
-                        <TileLayer
-                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                        />
-                        <MapUpdater center={mapCenter} />
+                    <TileLayer
+                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    />
+                    <MapUpdater center={mapCenter} sidebarExpanded={sidebarExpanded} />
 
-                        {recentCheckins.map((checkin) => (
-                            checkin.location && (
+
+                    {/* Current capturing location marker */}
+                    {formData.location && (
+                        <Marker
+                            position={[formData.location.lat, formData.location.lng]}
+                            icon={L.divIcon({
+                                className: 'current-location-icon',
+                                html: `
+                                        <div class="relative flex items-center justify-center">
+                                            <div class="absolute inset-0 size-8 bg-[#f27121]/30 rounded-full animate-ping"></div>
+                                            <div class="size-4 bg-[#f27121] rounded-full border-2 border-white shadow-lg relative z-10"></div>
+                                        </div>
+                                    `,
+                                iconSize: [32, 32],
+                                iconAnchor: [16, 16]
+                            })}
+                        >
+                            <Popup>
+                                <p className="text-[10px] font-black uppercase text-[#f27121]">Vị trí bạn đang chọn</p>
+                            </Popup>
+                        </Marker>
+                    )}
+
+                    {/* Filtered history markers */}
+                    {(() => {
+                        const filtered = recentCheckins.filter(item => {
+                            const itemDate = item.createdAt?.seconds ? new Date(item.createdAt.seconds * 1000).toISOString().split('T')[0] : '';
+                            const matchDate = itemDate >= dateRange.start && itemDate <= dateRange.end;
+                            const matchSearch = item.customerName.toLowerCase().includes(searchQuery.toLowerCase());
+                            return matchDate && matchSearch;
+                        });
+
+                        return filtered.map((checkin) => {
+                            // Support both plain object and Firestore GeoPoint
+                            const lat = checkin.location?.lat ?? checkin.location?.latitude;
+                            const lng = checkin.location?.lng ?? checkin.location?.longitude;
+
+                            if (lat === undefined || lng === undefined) return null;
+
+                            return (
                                 <Marker
                                     key={checkin.id}
-                                    position={[checkin.location.lat, checkin.location.lng]}
+                                    position={[lat, lng]}
                                     icon={createCustomIcon(checkin.purpose, !!checkin.imageUrl)}
                                 >
                                     <Popup className="custom-popup">
@@ -315,47 +384,121 @@ const Checkin = () => {
                                                 />
                                             )}
                                             <p className="text-[8px] text-slate-400 italic">"{checkin.note || 'Không có ghi chú'}"</p>
+                                            <p className="text-[7px] text-slate-300 mt-2">{checkin.address}</p>
                                         </div>
                                     </Popup>
                                 </Marker>
-                            )
-                        ))}
-                    </MapContainer>
+                            );
+                        });
+                    })()}
+                </MapContainer>
 
-                    {/* Map Overlay Controls */}
-                    <div className="absolute top-6 left-6 flex flex-col gap-2 z-[999]">
-                        <button className="size-10 bg-white rounded-xl shadow-2xl flex items-center justify-center hover:bg-slate-50 transition-all font-black text-[#1A237E] border border-slate-100">
-                            <span className="material-symbols-outlined">add</span>
-                        </button>
-                        <button className="size-10 bg-white rounded-xl shadow-2xl flex items-center justify-center hover:bg-slate-50 transition-all font-black text-[#1A237E] border border-slate-100">
-                            <span className="material-symbols-outlined">remove</span>
-                        </button>
-                    </div>
 
-                    {/* Desktop Check-in Button Overlay */}
-                    <div className="absolute bottom-10 left-1/2 -translate-x-1/2 hidden lg:block z-[999]">
+                {/* Map Overlay Controls */}
+                <div className="absolute top-6 left-6 flex flex-col gap-3 z-[1000]">
+                    <div className="flex flex-col gap-2 mb-4">
                         <button
-                            onClick={() => setShowCheckinForm(true)}
-                            className="flex items-center gap-4 bg-[#f27121] hover:bg-orange-600 text-white px-10 py-5 rounded-[2.5rem] shadow-[0_20px_40px_rgba(242,113,33,0.3)] transition-all transform hover:scale-105 active:scale-95 font-black text-sm uppercase tracking-[3px]"
+                            onClick={() => navigate('/dashboard')}
+                            className="size-11 bg-[#1A237E] text-white rounded-2xl shadow-2xl flex items-center justify-center hover:bg-slate-900 transition-all border border-white/20"
+                            title="Về Trang Chủ"
                         >
-                            <span className="material-symbols-outlined text-2xl">add_location_alt</span>
-                            Check-in Ngay
+                            <span className="material-symbols-outlined">home</span>
+                        </button>
+                        <button
+                            onClick={() => navigate(-1)}
+                            className="size-11 bg-white text-slate-400 rounded-2xl shadow-2xl flex items-center justify-center hover:bg-slate-50 transition-all border border-slate-100"
+                            title="Quay lại"
+                        >
+                            <span className="material-symbols-outlined">arrow_back</span>
                         </button>
                     </div>
+
+                    <button
+                        onClick={() => mapInstance?.zoomIn()}
+                        className="size-11 bg-white rounded-2xl shadow-2xl flex items-center justify-center hover:bg-slate-50 transition-all font-black text-[#1A237E] border border-slate-100"
+                    >
+                        <span className="material-symbols-outlined">add</span>
+                    </button>
+                    <button
+                        onClick={() => mapInstance?.zoomOut()}
+                        className="size-11 bg-white rounded-2xl shadow-2xl flex items-center justify-center hover:bg-slate-50 transition-all font-black text-[#1A237E] border border-slate-100"
+                    >
+                        <span className="material-symbols-outlined">remove</span>
+                    </button>
+                    <button
+                        onClick={handleGetLocation}
+                        className={`size-11 rounded-2xl shadow-2xl flex items-center justify-center transition-all border border-slate-100 ${gettingLocation ? 'bg-orange-50 text-orange-500 animate-pulse' : 'bg-white text-[#f27121] hover:bg-orange-50'}`}
+                        title="Vị trí của tôi"
+                    >
+                        <span className="material-symbols-outlined">{gettingLocation ? 'sync' : 'my_location'}</span>
+                    </button>
+
+                    {/* Expand activities button (Only visible when collapsed on desktop) */}
+                    {!sidebarExpanded && (
+                        <button
+                            onClick={() => setSidebarExpanded(true)}
+                            className="hidden lg:flex size-11 bg-[#1A237E] text-white rounded-2xl shadow-2xl items-center justify-center hover:bg-indigo-900 transition-all animate-in fade-in zoom-in"
+                            title="Mở danh sách hoạt động"
+                        >
+                            <span className="material-symbols-outlined">list_alt</span>
+                        </button>
+                    )}
                 </div>
 
-                {/* Sidebar / Bottom Sheet */}
-                <aside
-                    className={`lg:w-[30%] lg:min-w-[400px] lg:max-w-[460px] lg:h-full lg:relative lg:border-l lg:border-[#e6dfdb] absolute bottom-0 left-0 w-full bg-white shadow-[0_-20px_50px_rgba(0,0,0,0.1)] lg:shadow-none z-[1001] flex flex-col transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] ${sheetOpen ? 'h-[75vh] rounded-t-[3rem]' : 'h-[14vh] lg:h-full rounded-t-[3rem] lg:rounded-none'
-                        }`}
+
+
+                {/* Desktop Check-in Button Overlay */}
+                <div className="absolute bottom-10 left-1/2 -translate-x-1/2 hidden lg:block z-[999]">
+                    <button
+                        onClick={() => setShowCheckinForm(true)}
+                        className="flex items-center gap-4 bg-[#f27121] hover:bg-orange-600 text-white px-10 py-5 rounded-[2.5rem] shadow-[0_20px_40px_rgba(242,113,33,0.3)] transition-all transform hover:scale-105 active:scale-95 font-black text-sm uppercase tracking-[3px]"
+                    >
+                        <span className="material-symbols-outlined text-2xl">add_location_alt</span>
+                        Check-in Ngay
+                    </button>
+                </div>
+
+            </div>
+
+            {/* Sidebar / Bottom Sheet */}
+            <aside
+                className={`lg:h-full lg:relative absolute bottom-0 left-0 w-full bg-white shadow-[0_-20px_50px_rgba(0,0,0,0.1)] lg:shadow-none z-40 flex flex-col transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] 
+                        ${showCheckinForm ? 'translate-y-full opacity-0 pointer-events-none scale-95' : 'translate-y-0 opacity-100'}
+                        ${sheetOpen ? 'h-[75vh] rounded-t-[3rem]' : 'h-[14vh] lg:h-full rounded-t-[3rem] lg:rounded-none'} 
+                        ${sidebarExpanded ? 'lg:w-[30%] lg:min-w-[400px] lg:max-w-[460px] lg:border-l lg:border-[#e6dfdb]' : 'lg:w-0 lg:min-w-0 lg:max-w-0 lg:border-none'}`}
+            >
+
+                {/* Desktop Toggle Button */}
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setSidebarExpanded(!sidebarExpanded);
+                    }}
+                    className={`hidden lg:flex absolute -left-6 top-10 size-12 bg-white border border-[#e6dfdb] rounded-full items-center justify-center shadow-2xl text-[#FF6D00] hover:bg-orange-50 transition-all z-[100] group/toggle ${!sidebarExpanded ? 'rotate-180 translate-x-12' : ''}`}
                 >
+                    <span className="material-symbols-outlined font-black text-3xl">{sidebarExpanded ? 'chevron_right' : 'chevron_left'}</span>
+                    {/* Tooltip */}
+                    <div className={`absolute right-full mr-4 px-3 py-1.5 bg-[#1A237E] text-white text-[10px] font-black uppercase rounded-lg opacity-0 group-hover/toggle:opacity-100 pointer-events-none transition-all whitespace-nowrap shadow-xl ${!sidebarExpanded ? 'hidden' : ''}`}>
+                        Thu gọn danh sách
+                    </div>
+                </button>
+
+
+                <div className={`flex flex-col h-full transition-opacity duration-300 ${sidebarExpanded ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+
+
                     {/* Drawer Handle / Header for Mobile */}
                     <div
-                        className="w-full h-12 lg:hidden flex justify-center items-center cursor-pointer shrink-0"
-                        onClick={() => setSheetOpen(!sheetOpen)}
+                        className="w-full h-14 lg:hidden flex flex-col justify-center items-center cursor-pointer shrink-0 border-b border-slate-50"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setSheetOpen(!sheetOpen);
+                        }}
                     >
-                        <div className="w-16 h-1 bg-slate-200 rounded-full"></div>
+                        <div className="w-12 h-1.5 bg-slate-200 rounded-full mb-1"></div>
+                        <p className="text-[10px] font-black uppercase text-slate-400">Danh sách hoạt động</p>
                     </div>
+
 
                     {/* Header Contents */}
                     <div className="px-7 pb-4 lg:pt-8 lg:pb-4 flex flex-col gap-5 shrink-0">
@@ -454,11 +597,11 @@ const Checkin = () => {
                                                         <h4 className="text-[13px] lg:text-sm font-black text-[#1A237E] uppercase tracking-tight leading-tight truncate">{checkin.customerName}</h4>
                                                         <div className="flex flex-wrap items-center gap-1.5 lg:gap-2">
                                                             <span className={`px-1.5 py-0.5 rounded text-[7px] lg:text-[8px] font-black uppercase tracking-widest ${checkin.purpose === 'Khiếu nại' ? 'bg-red-50 text-red-500' :
-                                                                    checkin.purpose === 'Khách mới' ? 'bg-emerald-50 text-emerald-500' :
-                                                                        checkin.purpose === 'Viếng thăm' ? 'bg-purple-50 text-purple-600' :
-                                                                            checkin.purpose === 'Thăm hỏi' ? 'bg-blue-50 text-blue-600' :
-                                                                                checkin.purpose === 'Giao hàng' ? 'bg-yellow-50 text-yellow-600' :
-                                                                                    checkin.purpose === 'Thu tiền' ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-[#f27121]'
+                                                                checkin.purpose === 'Khách mới' ? 'bg-emerald-50 text-emerald-500' :
+                                                                    checkin.purpose === 'Viếng thăm' ? 'bg-purple-50 text-purple-600' :
+                                                                        checkin.purpose === 'Thăm hỏi' ? 'bg-blue-50 text-blue-600' :
+                                                                            checkin.purpose === 'Giao hàng' ? 'bg-yellow-50 text-yellow-600' :
+                                                                                checkin.purpose === 'Thu tiền' ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-[#f27121]'
                                                                 }`}>
                                                                 {checkin.purpose}
                                                             </span>
@@ -533,13 +676,13 @@ const Checkin = () => {
                             Check-in Mới
                         </button>
                     </div>
-                </aside>
-            </main>
-
+                </div>
+            </aside>
 
             {/* Checkin Form Modal */}
             {showCheckinForm && (
-                <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-[#1A237E]/80 backdrop-blur-sm p-0 md:p-4 font-['Manrope']">
+                <div className="fixed inset-0 z-[2000] flex items-end md:items-center justify-center bg-[#1A237E]/80 backdrop-blur-sm p-0 md:p-4 font-['Manrope']">
+
                     <div className="bg-white w-full max-w-xl rounded-t-[2.5rem] md:rounded-[2.5rem] shadow-2xl flex flex-col max-h-[95vh] md:max-h-[85vh] animate-in slide-in-from-bottom duration-300 overflow-hidden">
                         <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between shrink-0">
                             <div className="space-y-1">

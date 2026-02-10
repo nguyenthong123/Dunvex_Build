@@ -16,6 +16,7 @@ const CustomerList = () => {
 	// Form state
 	const [formData, setFormData] = useState({
 		name: '',
+		businessName: '',
 		phone: '',
 		email: '',
 		type: 'Chủ nhà',
@@ -139,6 +140,7 @@ const CustomerList = () => {
 	const resetForm = () => {
 		setFormData({
 			name: '',
+			businessName: '',
 			phone: '',
 			email: '',
 			type: 'Chủ nhà',
@@ -154,6 +156,7 @@ const CustomerList = () => {
 		setSelectedCustomer(customer);
 		setFormData({
 			name: customer.name || '',
+			businessName: customer.businessName || '',
 			phone: customer.phone || '',
 			email: customer.email || '',
 			type: customer.type || 'Chủ nhà',
@@ -178,170 +181,133 @@ const CustomerList = () => {
 	);
 
 	return (
-		<div className="flex h-screen w-full relative bg-slate-50 overflow-hidden font-['Inter']">
-			{/* SIDEBAR - Desktop */}
-			<aside className="hidden lg:flex flex-col bg-[#1A237E] text-white h-full w-64 flex-shrink-0 shadow-xl">
-				<div className="h-16 flex items-center px-6 border-b border-white/10">
-					<div className="size-8 bg-[#FF6D00] rounded-lg flex items-center justify-center shrink-0">
-						<span className="material-symbols-outlined text-white text-xl">group</span>
-					</div>
-					<h1 className="ml-3 font-bold text-lg tracking-wide uppercase">Dunvex <span className="text-[#FF6D00]">Build</span></h1>
+		<>
+			<header className="bg-white border-b border-gray-200 h-16 md:h-20 flex items-center justify-between px-4 md:px-8 shrink-0">
+				<div className="flex items-center gap-3">
+					<button
+						onClick={() => navigate('/dashboard')}
+						className="size-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 hover:text-[#1A237E] transition-all group"
+						title="Về Trang Chủ"
+					>
+						<span className="material-symbols-outlined text-xl group-hover:rotate-[-45deg] transition-transform">home</span>
+					</button>
+					<div className="h-6 w-px bg-slate-200 mx-1"></div>
+					<h2 className="text-lg md:text-xl font-black text-[#1A237E] uppercase tracking-tight">Khách Hàng</h2>
 				</div>
-				<nav className="flex-1 py-4 px-2 space-y-1">
-					<button onClick={() => navigate('/')} className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-white/70 hover:bg-white/10 hover:text-white transition-colors">
-						<span className="material-symbols-outlined">dashboard</span>
-						<span className="text-sm font-medium tracking-wide">Command Center</span>
-					</button>
-					<button onClick={() => navigate('/orders')} className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-white/70 hover:bg-white/10 hover:text-white transition-colors font-medium transition-all">
-						<span className="material-symbols-outlined">shopping_cart</span>
-						<span className="text-sm">Đơn Hàng</span>
-					</button>
-					<button onClick={() => navigate('/inventory')} className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-white/70 hover:bg-white/10 hover:text-white transition-colors">
-						<span className="material-symbols-outlined">inventory_2</span>
-						<span className="text-sm font-medium tracking-wide">Sản Phẩm</span>
-					</button>
-					<button className="w-full flex items-center gap-3 px-3 py-3 rounded-xl bg-[#FF6D00] text-white shadow-lg shadow-[#FF6D00]/30 font-bold transition-all">
-						<span className="material-symbols-outlined">group</span>
-						<span className="text-sm">Khách Hàng</span>
-					</button>
-				</nav>
-			</aside>
-
-			<main className="flex-1 flex flex-col h-full overflow-hidden relative">
-				{/* HEADER */}
-				<header className="bg-white border-b border-gray-200 h-16 md:h-20 flex items-center justify-between px-4 md:px-8 shrink-0">
-					<div className="flex items-center gap-4">
-						<button onClick={() => navigate('/')} className="lg:hidden p-2 text-gray-600 hover:bg-gray-100 rounded-lg">
-							<span className="material-symbols-outlined">arrow_back</span>
-						</button>
-						<h2 className="text-lg md:text-2xl font-bold text-[#1A237E]">Danh Sách Khách Hàng</h2>
+				<div className="flex items-center gap-4">
+					<div className="hidden md:relative md:block">
+						<span className="material-symbols-outlined absolute left-3 top-2.5 text-gray-400">search</span>
+						<input
+							type="text"
+							placeholder="Tìm khách hàng..."
+							className="pl-10 pr-4 py-2.5 bg-gray-100 border-none rounded-xl text-sm focus:ring-2 focus:ring-[#FF6D00]/30 w-64 transition-all"
+							value={searchTerm}
+							onChange={(e) => setSearchTerm(e.target.value)}
+						/>
 					</div>
-					<div className="flex items-center gap-4">
-						<div className="hidden md:relative md:block">
-							<span className="material-symbols-outlined absolute left-3 top-2.5 text-gray-400">search</span>
-							<input
-								type="text"
-								placeholder="Tìm khách hàng..."
-								className="pl-10 pr-4 py-2.5 bg-gray-100 border-none rounded-xl text-sm focus:ring-2 focus:ring-[#FF6D00]/30 w-64 transition-all"
-								value={searchTerm}
-								onChange={(e) => setSearchTerm(e.target.value)}
-							/>
-						</div>
-						<button
-							onClick={() => { resetForm(); setShowAddForm(true); }}
-							className="bg-[#FF6D00] hover:bg-orange-600 text-white px-4 py-2.5 rounded-xl font-bold shadow-lg shadow-orange-500/20 transition-all flex items-center gap-2"
-						>
-							<span className="material-symbols-outlined">person_add</span>
-							<span className="hidden sm:inline">Thêm mới</span>
-						</button>
-					</div>
-				</header>
+					<button
+						onClick={() => { resetForm(); setShowAddForm(true); }}
+						className="bg-[#FF6D00] hover:bg-orange-600 text-white px-4 py-2.5 rounded-xl font-bold shadow-lg shadow-orange-500/20 transition-all flex items-center gap-2"
+					>
+						<span className="material-symbols-outlined">person_add</span>
+						<span className="hidden sm:inline">Thêm mới</span>
+					</button>
+				</div>
+			</header>
 
-				{/* CONTENT */}
-				<div className="flex-1 overflow-y-auto p-4 md:p-8">
-					{/* Stats Cards */}
-					<div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-						<StatCard icon="group" label="Tổng khách" value={customers.length.toString()} color="bg-blue-50 text-blue-600" />
-						<StatCard icon="person_add" label="Khách mới" value="12" color="bg-orange-50 text-orange-600" />
-						<StatCard icon="verified" label="VIP" value="5" color="bg-purple-50 text-purple-600" />
-						<StatCard icon="location_on" label="Vị trí" value="8" color="bg-green-50 text-green-600" />
-					</div>
+			{/* CONTENT */}
+			<div className="flex-1 p-4 md:p-8">
+				{/* Stats Cards */}
+				<div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+					<StatCard icon="group" label="Tổng khách" value={customers.length.toString()} color="bg-blue-50 text-blue-600" />
+					<StatCard icon="person_add" label="Khách mới" value="12" color="bg-orange-50 text-orange-600" />
+					<StatCard icon="verified" label="VIP" value="5" color="bg-purple-50 text-purple-600" />
+					<StatCard icon="location_on" label="Vị trí" value="8" color="bg-green-50 text-green-600" />
+				</div>
 
-					{/* Desktop Table */}
-					<div className="hidden md:block bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-						<table className="w-full text-left">
-							<thead>
-								<tr className="bg-gray-50 border-b border-gray-100">
-									<th className="py-4 px-6 text-xs font-bold text-gray-400 uppercase tracking-wider">Khách hàng</th>
-									<th className="py-4 px-6 text-xs font-bold text-gray-400 uppercase tracking-wider">Liên hệ</th>
-									<th className="py-4 px-6 text-xs font-bold text-gray-400 uppercase tracking-wider">Phân loại</th>
-									<th className="py-4 px-6 text-xs font-bold text-gray-400 uppercase tracking-wider text-center">Trạng thái</th>
-									<th className="py-4 px-6 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Hành động</th>
+				{/* Desktop Table */}
+				<div className="hidden md:block bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+					<table className="w-full text-left">
+						<thead>
+							<tr className="bg-gray-50 border-b border-gray-100">
+								<th className="py-4 px-6 text-xs font-bold text-gray-400 uppercase tracking-wider">Khách hàng</th>
+								<th className="py-4 px-6 text-xs font-bold text-gray-400 uppercase tracking-wider">Liên hệ</th>
+								<th className="py-4 px-6 text-xs font-bold text-gray-400 uppercase tracking-wider">Phân loại</th>
+								<th className="py-4 px-6 text-xs font-bold text-gray-400 uppercase tracking-wider text-center">Trạng thái</th>
+								<th className="py-4 px-6 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Hành động</th>
+							</tr>
+						</thead>
+						<tbody className="divide-y divide-gray-100">
+							{loading ? (
+								<tr><td colSpan={5} className="py-8 text-center text-slate-400 font-medium">Đang tải dữ liệu...</td></tr>
+							) : filteredCustomers.length === 0 ? (
+								<tr><td colSpan={5} className="py-12 text-center text-slate-400 font-medium tracking-wide">Không tìm thấy khách hàng nào</td></tr>
+							) : filteredCustomers.map((customer) => (
+								<tr key={customer.id} className="hover:bg-slate-50 transition-colors group cursor-pointer" onClick={() => openDetail(customer)}>
+									<td className="py-4 px-6">
+										<div className="flex items-center gap-3">
+											<div className="size-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm">
+												{(customer.name?.[0] || 'K').toUpperCase()}
+											</div>
+											<div>
+												<div className="font-bold text-[#1A237E]">{customer.name}</div>
+												<div className="text-[10px] text-gray-400">#{customer.id.slice(-6)}</div>
+											</div>
+										</div>
+									</td>
+									<td className="py-4 px-6 font-medium text-slate-600">{customer.phone}</td>
+									<td className="py-4 px-6">
+										<span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-orange-50 text-[#FF6D00] uppercase tracking-wider">
+											{customer.type}
+										</span>
+									</td>
+									<td className="py-4 px-6 text-center">
+										<span className="px-2 py-0.5 text-[10px] font-bold bg-green-100 text-green-700 rounded uppercase">
+											{customer.status}
+										</span>
+									</td>
+									<td className="py-4 px-6 text-right">
+										<div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+											<button onClick={() => openEdit(customer)} className="p-2 text-slate-300 hover:text-blue-500 transition-colors">
+												<span className="material-symbols-outlined text-[20px]">edit</span>
+											</button>
+											<button onClick={() => handleDeleteCustomer(customer.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
+												<span className="material-symbols-outlined text-[20px]">delete</span>
+											</button>
+										</div>
+									</td>
 								</tr>
-							</thead>
-							<tbody className="divide-y divide-gray-100">
-								{loading ? (
-									<tr><td colSpan={5} className="py-8 text-center text-slate-400 font-medium">Đang tải dữ liệu...</td></tr>
-								) : filteredCustomers.length === 0 ? (
-									<tr><td colSpan={5} className="py-12 text-center text-slate-400 font-medium tracking-wide">Không tìm thấy khách hàng nào</td></tr>
-								) : filteredCustomers.map((customer) => (
-									<tr key={customer.id} className="hover:bg-slate-50 transition-colors group cursor-pointer" onClick={() => openDetail(customer)}>
-										<td className="py-4 px-6">
-											<div className="flex items-center gap-3">
-												<div className="size-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm">
-													{(customer.name?.[0] || 'K').toUpperCase()}
-												</div>
-												<div>
-													<div className="font-bold text-[#1A237E]">{customer.name}</div>
-													<div className="text-[10px] text-gray-400">#{customer.id.slice(-6)}</div>
-												</div>
-											</div>
-										</td>
-										<td className="py-4 px-6 font-medium text-slate-600">{customer.phone}</td>
-										<td className="py-4 px-6">
-											<span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-orange-50 text-[#FF6D00] uppercase tracking-wider">
-												{customer.type}
-											</span>
-										</td>
-										<td className="py-4 px-6 text-center">
-											<span className="px-2 py-0.5 text-[10px] font-bold bg-green-100 text-green-700 rounded uppercase">
-												{customer.status}
-											</span>
-										</td>
-										<td className="py-4 px-6 text-right">
-											<div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-												<button onClick={() => openEdit(customer)} className="p-2 text-slate-300 hover:text-blue-500 transition-colors">
-													<span className="material-symbols-outlined text-[20px]">edit</span>
-												</button>
-												<button onClick={() => handleDeleteCustomer(customer.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
-													<span className="material-symbols-outlined text-[20px]">delete</span>
-												</button>
-											</div>
-										</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
-					</div>
+							))}
+						</tbody>
+					</table>
+				</div>
 
-					{/* Mobile List */}
-					<div className="md:hidden space-y-4 pb-24">
-						{filteredCustomers.map((customer) => (
-							<div key={customer.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100" onClick={() => openDetail(customer)}>
-								<div className="flex justify-between items-start mb-3">
-									<div className="flex items-center gap-3">
-										<div className="size-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
-											{(customer.name?.[0] || 'K').toUpperCase()}
-										</div>
-										<div>
-											<div className="font-black text-[#1A237E]">{customer.name}</div>
-											<div className="text-xs text-slate-500 font-medium">{customer.phone}</div>
-										</div>
+				{/* Mobile List */}
+				<div className="md:hidden space-y-4 pb-24">
+					{filteredCustomers.map((customer) => (
+						<div key={customer.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100" onClick={() => openDetail(customer)}>
+							<div className="flex justify-between items-start mb-3">
+								<div className="flex items-center gap-3">
+									<div className="size-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
+										{(customer.name?.[0] || 'K').toUpperCase()}
 									</div>
-									<span className="px-2 py-1 rounded-lg text-[9px] font-bold bg-green-100 text-green-700 uppercase">
-										{customer.status}
-									</span>
+									<div>
+										<div className="font-black text-[#1A237E]">{customer.name}</div>
+										<div className="text-xs text-slate-500 font-medium">{customer.phone}</div>
+									</div>
 								</div>
-								<div className="flex justify-between items-center pt-2 border-t border-gray-50">
-									<span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded uppercase tracking-wider">{customer.type}</span>
-									<span className="text-[10px] text-gray-400 font-medium">#{customer.id.slice(-6)}</span>
-								</div>
+								<span className="px-2 py-1 rounded-lg text-[9px] font-bold bg-green-100 text-green-700 uppercase">
+									{customer.status}
+								</span>
 							</div>
-						))}
-					</div>
+							<div className="flex justify-between items-center pt-2 border-t border-gray-50">
+								<span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded uppercase tracking-wider">{customer.type}</span>
+								<span className="text-[10px] text-gray-400 font-medium">#{customer.id.slice(-6)}</span>
+							</div>
+						</div>
+					))}
 				</div>
-
-				{/* MOBILE BOTTOM NAV */}
-				<div className="lg:hidden fixed bottom-6 left-4 right-4 bg-[#1A237E] rounded-3xl p-3 shadow-2xl flex justify-between items-center z-50">
-					<NavButton icon="inventory_2" label="Kho" onClick={() => navigate('/inventory')} />
-					<NavButton icon="shopping_cart" label="Đơn hàng" onClick={() => navigate('/orders')} />
-					<button onClick={() => { resetForm(); setShowAddForm(true); }} className="size-14 bg-[#FF6D00] rounded-2xl shadow-lg flex items-center justify-center text-white relative -top-6 border-4 border-slate-50">
-						<span className="material-symbols-outlined text-3xl">add</span>
-					</button>
-					<NavButton icon="group" label="Khách" active />
-					<NavButton icon="dashboard" label="Center" onClick={() => navigate('/')} />
-				</div>
-			</main>
+			</div>
 
 			{/* ADD/EDIT MODAL */}
 			{(showAddForm || showEditForm) && (
@@ -355,14 +321,26 @@ const CustomerList = () => {
 						</div>
 						<form onSubmit={showAddForm ? handleAddCustomer : handleUpdateCustomer} className="p-8 space-y-5 overflow-y-auto">
 							<div className="grid grid-cols-1 gap-4">
-								<div>
-									<label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5 tracking-widest pl-1">Họ và Tên *</label>
-									<input
-										type="text" required
-										className="w-full bg-slate-50 border-none rounded-2xl py-3 px-4 text-sm font-bold focus:ring-2 focus:ring-[#FF6D00]/20"
-										value={formData.name}
-										onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-									/>
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+									<div>
+										<label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5 tracking-widest pl-1">Họ và Tên *</label>
+										<input
+											type="text" required
+											className="w-full bg-slate-50 border-none rounded-2xl py-3 px-4 text-sm font-bold focus:ring-2 focus:ring-[#FF6D00]/20"
+											value={formData.name}
+											onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+										/>
+									</div>
+									<div>
+										<label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5 tracking-widest pl-1">Tên cơ sở kinh doanh</label>
+										<input
+											type="text"
+											className="w-full bg-slate-50 border-none rounded-2xl py-3 px-4 text-sm font-bold focus:ring-2 focus:ring-[#FF6D00]/20"
+											placeholder="VD: Cửa hàng VLXD Hưng Thịnh"
+											value={formData.businessName}
+											onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
+										/>
+									</div>
 								</div>
 								<div className="grid grid-cols-2 gap-4">
 									<div>
@@ -445,6 +423,9 @@ const CustomerList = () => {
 								{(selectedCustomer.name?.[0] || 'K').toUpperCase()}
 							</div>
 							<h3 className="text-2xl font-black text-[#1A237E] mb-1 relative z-10">{selectedCustomer.name}</h3>
+							{selectedCustomer.businessName && (
+								<p className="text-sm font-bold text-slate-500 mb-2 relative z-10">🏢 {selectedCustomer.businessName}</p>
+							)}
 							<div className="px-4 py-1.5 bg-orange-50 text-[#FF6D00] text-[10px] font-black rounded-full uppercase tracking-widest mb-6 relative z-10">
 								{selectedCustomer.type}
 							</div>
@@ -486,7 +467,7 @@ const CustomerList = () => {
 					</div>
 				</div>
 			)}
-		</div>
+		</>
 	);
 };
 
@@ -498,13 +479,6 @@ const StatCard = ({ icon, label, value, color }: any) => (
 		<p className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">{label}</p>
 		<h3 className="text-xl font-black text-[#1A237E] leading-none mt-1">{value}</h3>
 	</div>
-);
-
-const NavButton = ({ icon, label, active, onClick }: any) => (
-	<button onClick={onClick} className={`flex flex-col items-center gap-1 ${active ? 'text-[#FF6D00]' : 'text-white/50'}`}>
-		<span className="material-symbols-outlined text-2xl" style={active ? { fontVariationSettings: "'FILL' 1" } : {}}>{icon}</span>
-		<span className="text-[9px] font-bold">{label}</span>
-	</button>
 );
 
 export default CustomerList;

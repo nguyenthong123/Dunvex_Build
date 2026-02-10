@@ -1,30 +1,36 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Search, Plus, Minus, CheckCircle, Calculator as CalcIcon, Trash2, ShoppingCart, User, Package, MapPin, Truck, FileText, ChevronDown, X, Layers } from 'lucide-react';
+import { ArrowLeft, Search, Plus, Minus, Trash2, ShoppingCart, User, Package, MapPin, Truck, FileText, ChevronDown, X, Layers, CheckCircle, Mail, RotateCcw } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { db, auth } from '../services/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, doc, getDoc, serverTimestamp, where } from 'firebase/firestore';
-import Calculator from '../components/shared/Calculator';
 
 const QuickOrder = () => {
 	const navigate = useNavigate();
 	const { id } = useParams();
-	const [showCalc, setShowCalc] = useState(false);
 	const [products, setProducts] = useState<any[]>([]);
 	const [customers, setCustomers] = useState<any[]>([]);
-	const [cart, setCart] = useState<any[]>([]);
-	const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
 	const [loading, setLoading] = useState(true);
 	const [fetchingOrder, setFetchingOrder] = useState(false);
-	const [orderNote, setOrderNote] = useState('');
-	const [adjustmentValue, setAdjustmentValue] = useState(0);
-	const [discountValue, setDiscountValue] = useState(0);
-	const [orderStatus, setOrderStatus] = useState('Đơn chốt');
-	const [searchProductQuery, setSearchProductQuery] = useState('');
+	const [sendEmail, setSendEmail] = useState(false);
+	const [showSuccessModal, setShowSuccessModal] = useState(false);
+
+	// Form state
+	const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
 	const [searchCustomerQuery, setSearchCustomerQuery] = useState('');
-	const [activeCategory, setActiveCategory] = useState('Tất cả');
 	const [showCustomerResults, setShowCustomerResults] = useState(false);
-	const [deliveryAddress, setDeliveryAddress] = useState('');
+	const [orderStatus, setOrderStatus] = useState('Đơn chốt');
+	const [orderNote, setOrderNote] = useState('');
 	const [orderDate, setOrderDate] = useState(new Date().toISOString().split('T')[0]);
+
+	// Line items state
+	const [lineItems, setLineItems] = useState<any[]>([
+		{ id: Date.now(), category: '', productId: '', name: '', qty: 1, price: 0, unit: '', packaging: '', density: '' }
+	]);
+
+	// Adjustments
+	const [shippingFee, setShippingFee] = useState(0);
+	const [discountAmt, setDiscountAmt] = useState(0);
+
 	const customerSearchRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
@@ -73,18 +79,24 @@ const QuickOrder = () => {
 					const orderSnap = await getDoc(orderRef);
 					if (orderSnap.exists()) {
 						const data = orderSnap.data();
-						// Map stored items back to local cart format
-						setCart((data.items || []).map((item: any) => ({
-							...item,
-							priceSell: item.price // Restore UI-expected key
+
+						setLineItems((data.items || []).map((item: any) => ({
+							id: Math.random(),
+							productId: item.id || '',
+							name: item.name || '',
+							category: item.category || '',
+							qty: item.qty || 0,
+							price: item.price || 0,
+							unit: item.unit || '',
+							packaging: item.packaging || '',
+							density: item.density || ''
 						})));
+
 						setOrderNote(data.note || '');
-						setAdjustmentValue(data.adjustmentValue || 0);
-						setDiscountValue(data.discountValue || 0);
+						setShippingFee(data.adjustmentValue || 0);
+						setDiscountAmt(data.discountValue || 0);
 						setOrderStatus(data.status || 'Đơn chốt');
-						setDeliveryAddress(data.deliveryAddress || '');
 						if (data.orderDate) {
-							// If it's a Firestore timestamp
 							if (data.orderDate.seconds) {
 								setOrderDate(new Date(data.orderDate.seconds * 1000).toISOString().split('T')[0]);
 							} else {
@@ -110,90 +122,77 @@ const QuickOrder = () => {
 		}
 	}, [id, auth.currentUser, customers.length > 0]);
 
-	// Auto-fill delivery address when customer is selected
-	useEffect(() => {
-		if (selectedCustomer) {
-			setDeliveryAddress(selectedCustomer.address || '11.993350, 107.525646');
-		} else {
-			setDeliveryAddress('11.993350, 107.525646');
-		}
-	}, [selectedCustomer]);
-
-	// Handle clicking outside customer search
-	useEffect(() => {
-		const handleClickOutside = (event: MouseEvent) => {
-			if (customerSearchRef.current && !customerSearchRef.current.contains(event.target as Node)) {
-				setShowCustomerResults(false);
-			}
-		};
-		document.addEventListener('mousedown', handleClickOutside);
-		return () => document.removeEventListener('mousedown', handleClickOutside);
-	}, []);
-
-	const addToCart = (product: any, qty: number) => {
-		if (qty <= 0) {
-			setCart(prev => prev.filter(item => item.id !== product.id));
-			return;
-		}
-		setCart(prev => {
-			const existing = prev.find(item => item.id === product.id);
-			if (existing) {
-				return prev.map(item => item.id === product.id ? { ...item, qty } : item);
-			}
-			return [...prev, { ...product, qty }];
-		});
+	const addLineItem = () => {
+		setLineItems([...lineItems, { id: Date.now(), category: '', productId: '', name: '', qty: 1, price: 0, unit: '', packaging: '', density: '' }]);
 	};
 
-	const userCategories = ['Tất cả', ...Array.from(new Set(products.map(p => p.category).filter(Boolean)))];
+	const removeLineItem = (index: number) => {
+		if (lineItems.length > 1) {
+			setLineItems(lineItems.filter((_, i) => i !== index));
+		}
+	};
 
-	const subTotal = cart.reduce((sum, item) => sum + (item.priceSell * item.qty), 0);
-	const taxRate = 0.08;
-	// VAT is included in price, so we extract it for display: (Price * 8%) / 108%
-	const taxMount = (subTotal * 8) / 108;
-	const finalTotal = subTotal + adjustmentValue - discountValue;
+	const updateLineItem = (index: number, field: string, value: any) => {
+		const newItems = [...lineItems];
+		newItems[index][field] = value;
 
-	const totalWeight = cart.reduce((sum, item) => {
+		if (field === 'productId') {
+			const prod = products.find(p => p.id === value);
+			if (prod) {
+				newItems[index].name = prod.name;
+				newItems[index].price = prod.priceSell;
+				newItems[index].unit = prod.unit;
+				newItems[index].category = prod.category;
+				newItems[index].packaging = prod.packaging;
+				newItems[index].density = prod.density;
+			}
+		}
+		setLineItems(newItems);
+	};
+
+	const subTotal = lineItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 0), 0);
+	const finalTotal = subTotal + Number(shippingFee) - Number(discountAmt);
+
+	const totalWeight = lineItems.reduce((sum, item) => {
 		const unit = item.unit?.toLowerCase();
 		const density = parseFloat(item.density) || 0;
-		if (unit === 'kg') return sum + item.qty;
-		return sum + (item.qty * density);
+		const qty = Number(item.qty) || 0;
+		if (unit === 'kg') return sum + qty;
+		return sum + (qty * density);
 	}, 0);
 
-	const totalItems = cart.reduce((sum, item) => sum + item.qty, 0);
-
 	const handleConfirmOrder = async () => {
-		if (cart.length === 0) {
+		const validItems = lineItems.filter(item => item.productId && item.qty > 0);
+		if (validItems.length === 0) {
 			alert("Vui lòng thêm sản phẩm vào đơn hàng");
 			return;
 		}
 
 		try {
 			const orderData: any = {
-				customerName: selectedCustomer?.name || 'Khách vãng lai',
+				customerName: selectedCustomer?.name || searchCustomerQuery || 'Khách vãng lai',
 				customerId: selectedCustomer?.id || null,
 				customerPhone: selectedCustomer?.phone || '',
-				deliveryAddress: deliveryAddress,
 				orderDate: orderDate,
-				items: cart.map(item => ({
-					id: item.id,
+				items: validItems.map(item => ({
+					id: item.productId,
 					name: item.name,
-					price: item.priceSell,
-					qty: item.qty,
-					unit: item.unit,
-					category: item.category,
-					density: item.density
+					price: Number(item.price) || 0,
+					qty: Number(item.qty) || 0,
+					unit: item.unit || '',
+					category: item.category || '',
+					density: item.density || '',
+					packaging: item.packaging || ''
 				})),
-				subTotal,
-				taxAmount: taxMount,
-				adjustmentValue,
-				discountValue,
-				totalAmount: finalTotal,
-				totalWeight,
-				totalItems,
+				subTotal: Number(subTotal) || 0,
+				adjustmentValue: Number(shippingFee) || 0,
+				discountValue: Number(discountAmt) || 0,
+				totalAmount: Number(finalTotal) || 0,
+				totalWeight: Number(totalWeight) || 0,
 				note: orderNote,
 				status: orderStatus,
-				createdBy: auth.currentUser?.uid,
-				createdByEmail: auth.currentUser?.email
+				createdBy: auth.currentUser?.uid || '',
+				createdByEmail: auth.currentUser?.email || ''
 			};
 
 			if (id) {
@@ -201,28 +200,26 @@ const QuickOrder = () => {
 					...orderData,
 					updatedAt: serverTimestamp()
 				});
-				alert("Cập nhật đơn hàng thành công!");
 			} else {
 				orderData.createdAt = serverTimestamp();
-				await addDoc(collection(db, 'orders'), orderData);
-				alert("Tạo đơn hàng thành công!");
+				const docRef = await addDoc(collection(db, 'orders'), orderData);
+
+				// Add to notifications
+				await addDoc(collection(db, 'notifications'), {
+					title: 'Đơn hàng mới',
+					message: `Đơn hàng cho ${orderData.customerName} đã được tạo thành công: ${finalTotal.toLocaleString('vi-VN')} đ`,
+					type: 'order',
+					orderId: docRef.id,
+					userId: auth.currentUser?.uid,
+					read: false,
+					createdAt: serverTimestamp()
+				});
 			}
-			navigate('/orders');
+			setShowSuccessModal(true);
 		} catch (error) {
 			console.error("Error saving order:", error);
 			alert("Lỗi khi lưu đơn hàng");
 		}
-	};
-
-	const getImageUrl = (url: string) => {
-		if (!url) return '';
-		if (url.includes('drive.google.com')) {
-			const match = url.match(/[-\w]{25,}/);
-			if (match) {
-				return `https://drive.google.com/thumbnail?id=${match[0]}&sz=w1000`;
-			}
-		}
-		return url;
 	};
 
 	const filteredCustomers = customers.filter(c =>
@@ -230,426 +227,369 @@ const QuickOrder = () => {
 		c.phone?.includes(searchCustomerQuery)
 	);
 
-	const filteredProducts = products.filter(p => {
-		const matchesQuery = !searchProductQuery ||
-			p.name?.toLowerCase().includes(searchProductQuery.toLowerCase()) ||
-			p.sku?.toLowerCase().includes(searchProductQuery.toLowerCase());
-		const matchesCategory = activeCategory === 'Tất cả' || p.category === activeCategory;
-		return matchesQuery && matchesCategory;
-	});
+	const categories = Array.from(new Set(products.map(p => p.category).filter(Boolean)));
 
 	return (
-		<div className="flex h-screen w-full bg-[#f8f7f5] font-['Inter'] text-[#1c130d]">
-			{/* SIDEBAR (Desktop) */}
-			<aside className="hidden lg:flex w-64 flex-col bg-white border-r border-[#e8d8ce] h-full overflow-y-auto shrink-0">
-				<div className="p-8">
-					<h1 className="text-xl font-bold tracking-tight text-[#1c130d]">Dunvex <span className="text-[#f27121]">Build</span></h1>
-					<p className="text-[#9c6949] text-xs font-medium uppercase tracking-widest mt-1">Quản lý bán hàng</p>
+		<div className="min-h-screen bg-[#f8f9fb] p-4 md:p-8 font-sans pb-32 md:pb-8">
+			{/* TOP HEADER */}
+			<div className="max-w-[1000px] mx-auto mb-8 flex flex-col md:flex-row md:items-center justify-between gap-6 px-2">
+				<div className="flex items-center gap-4">
+					<button
+						onClick={() => navigate('/dashboard')}
+						className="size-12 shrink-0 rounded-2xl bg-white border border-slate-100 shadow-sm flex items-center justify-center text-slate-400 hover:text-[#1A237E] hover:border-[#1A237E]/20 transition-all active:scale-90"
+						title="Về Trang Chủ"
+					>
+						<RotateCcw size={20} />
+					</button>
+					<div>
+						<h1 className="text-xl md:text-2xl font-black text-[#1c130d] flex items-center gap-2 uppercase tracking-tight leading-tight">
+							📝 {id ? 'Chỉnh Sửa Đơn' : 'Lên Đơn Hàng Mới'}
+						</h1>
+						<p className="text-slate-500 text-[10px] md:text-sm font-medium mt-1">Hoàn tất thông tin đơn hàng mới</p>
+					</div>
 				</div>
-				<nav className="flex-1 px-4 space-y-1.5">
-					<button onClick={() => navigate('/')} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-[#9c6949] hover:bg-[#f4ece7] hover:text-[#1c130d] transition-all group">
-						<span className="material-symbols-outlined text-xl group-hover:text-[#f27121]">home</span>
-						<span className="text-sm font-semibold">Tổng quan</span>
-					</button>
-					<button onClick={() => navigate('/orders')} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-[#f4ece7] text-[#f27121] transition-all">
-						<span className="material-symbols-outlined text-xl fill-1">shopping_cart</span>
-						<span className="text-sm font-bold">Đơn hàng</span>
-					</button>
-					<button onClick={() => navigate('/inventory')} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-[#9c6949] hover:bg-[#f4ece7] hover:text-[#1c130d] transition-all group">
-						<span className="material-symbols-outlined text-xl group-hover:text-[#f27121]">inventory_2</span>
-						<span className="text-sm font-semibold">Sản phẩm</span>
-					</button>
-					<button onClick={() => navigate('/customers')} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-[#9c6949] hover:bg-[#f4ece7] hover:text-[#1c130d] transition-all group">
-						<span className="material-symbols-outlined text-xl group-hover:text-[#f27121]">group</span>
-						<span className="text-sm font-semibold">Khách hàng</span>
-					</button>
-				</nav>
-			</aside>
 
-			<main className="flex-1 flex flex-col h-full overflow-hidden relative">
-				{fetchingOrder && (
-					<div className="absolute inset-0 z-[100] bg-white/80 backdrop-blur-sm flex items-center justify-center">
-						<div className="flex flex-col items-center gap-3">
-							<div className="size-12 border-4 border-[#f27121] border-t-transparent rounded-full animate-spin"></div>
-							<p className="text-[#f27121] font-black text-xs uppercase tracking-[3px]">Đang tải dữ liệu đơn...</p>
-						</div>
-					</div>
-				)}
-				{/* HEADER */}
-				<header className="h-16 md:h-20 bg-white border-b border-[#e8d8ce] px-4 md:px-8 flex items-center justify-between sticky top-0 z-40 shrink-0">
-					<div className="flex items-center gap-4">
-						<button onClick={() => navigate(-1)} className="size-10 flex items-center justify-center rounded-xl hover:bg-slate-50 text-slate-400 transition-colors border border-slate-100">
-							<ArrowLeft size={20} />
-						</button>
-						<div className="hidden md:block">
-							<h2 className="text-xl font-black text-[#1c130d] uppercase tracking-tight">
-								{id ? 'Chỉnh Sửa Đơn Hàng' : 'Tạo Đơn Hàng'}
-							</h2>
-							<div className="flex items-center gap-4 mt-0.5">
-								<div className="flex items-center gap-1.5">
-									<span className="text-[10px] font-black text-[#9c6949] uppercase tracking-widest opacity-60">Trọng lượng:</span>
-									<span className="text-xs font-black text-[#1A237E]">{totalWeight.toLocaleString('vi-VN')} kg</span>
-								</div>
-								<div className="size-1 rounded-full bg-slate-200"></div>
-								<div className="flex items-center gap-1.5">
-									<span className="text-[10px] font-black text-[#9c6949] uppercase tracking-widest opacity-60">Đóng gói:</span>
-									<span className="text-xs font-black text-[#1A237E]">{totalItems} món</span>
-								</div>
-							</div>
-						</div>
-					</div>
-
-					<div className="hidden md:flex items-center gap-3">
-						<button className="px-6 h-11 bg-slate-100 text-[#1c130d] rounded-xl font-bold text-sm transition-all hover:bg-slate-200 uppercase tracking-widest">
-							Lưu nháp
-						</button>
+				<div className="flex items-center justify-between md:justify-end gap-6 border-t md:border-none pt-4 md:pt-0 border-slate-100">
+					<div className="flex items-center gap-3">
+						<span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">GỬI EMAIL:</span>
 						<button
-							onClick={handleConfirmOrder}
-							className="px-8 h-12 bg-[#f27121] text-white rounded-2xl font-black text-sm transition-all shadow-xl shadow-orange-500/20 hover:bg-orange-600 active:scale-95 flex items-center gap-2 uppercase tracking-[1px]"
+							onClick={() => setSendEmail(!sendEmail)}
+							className={`w-10 h-5 md:w-12 md:h-6 rounded-full transition-colors relative ${sendEmail ? 'bg-[#ffcc00]' : 'bg-slate-200'}`}
 						>
-							{id ? 'CẬP NHẬT ĐƠN' : 'XÁC NHẬN ĐƠN'}
+							<div className={`absolute top-0.5 md:top-1 size-4 bg-white rounded-full transition-all ${sendEmail ? 'left-5 md:left-7' : 'left-0.5 md:left-1'}`}></div>
 						</button>
 					</div>
-				</header>
 
-				<div className="flex-1 overflow-y-auto px-4 py-6 md:p-8 bg-[#f8f7f5]">
-					<div className="max-w-[1500px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 pb-24 md:pb-0">
+					<button
+						onClick={() => navigate('/orders')}
+						className="flex items-center gap-2 text-slate-500 hover:text-[#1c130d] font-bold text-[11px] md:text-sm transition-colors group"
+					>
+						<ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
+						Quay lại
+					</button>
+				</div>
+			</div>
 
-						{/* LEFT COLUMN - PRODUCT PICKER & CUSTOMER */}
-						<div className="lg:col-span-8 space-y-6">
+			<div className="max-w-[1000px] mx-auto space-y-6">
 
-							{/* CUSTOMER PICKER */}
-							<div className="bg-white rounded-2xl border border-[#e8d8ce] shadow-sm p-6 overflow-visible">
-								<div className="flex items-center justify-between mb-6">
-									<div className="flex items-center gap-2">
-										<div className="size-10 rounded-xl bg-orange-50 flex items-center justify-center text-[#f27121]">
-											<User size={20} />
-										</div>
-										<h3 className="text-lg font-black uppercase tracking-tight">Thông tin khách hàng</h3>
-									</div>
-								</div>
-
-								<div className="grid grid-cols-1 md:grid-cols-2 gap-5" ref={customerSearchRef}>
-									<div className="md:col-span-2 relative">
-										<label className="block text-[10px] font-black text-[#9c6949] uppercase tracking-widest mb-1.5 ml-1">Tìm kiếm khách hàng</label>
-										<div className="relative">
-											<Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-											<input
-												type="text"
-												placeholder="Tên, SĐT hoặc Mã khách..."
-												className="w-full pl-12 pr-4 h-12 bg-[#fcf9f8] border border-[#e8d8ce] rounded-xl text-sm font-bold focus:ring-2 focus:ring-[#f27121]/20 focus:border-[#f27121] transition-all"
-												value={searchCustomerQuery}
-												onChange={(e) => {
-													setSearchCustomerQuery(e.target.value);
-													setShowCustomerResults(true);
-												}}
-												onFocus={() => setShowCustomerResults(true)}
-											/>
-										</div>
-										{showCustomerResults && searchCustomerQuery && (
-											<div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-[#e8d8ce] rounded-2xl shadow-2xl max-h-60 overflow-y-auto">
-												{filteredCustomers.map(c => (
-													<button
-														key={c.id}
-														className="w-full px-6 py-4 text-left hover:bg-orange-50 flex items-center justify-between border-b border-slate-50 last:border-none group"
-														onClick={() => {
-															setSelectedCustomer(c);
-															setSearchCustomerQuery(c.name);
-															setShowCustomerResults(false);
-														}}
-													>
-														<div>
-															<p className="font-black text-sm uppercase group-hover:text-[#f27121]">{c.name}</p>
-															<p className="text-xs text-slate-400 font-medium">{c.phone}</p>
-														</div>
-														<CheckCircle size={18} className="text-slate-200 group-hover:text-[#f27121]" />
-													</button>
-												))}
-											</div>
-										)}
-									</div>
-									<div className="md:col-span-1">
-										<label className="block text-[10px] font-black text-[#9c6949] uppercase tracking-widest mb-1.5 ml-1">Ngày lên đơn</label>
-										<input
-											type="date"
-											className="w-full px-4 h-12 bg-[#fcf9f8] border border-[#e8d8ce] rounded-xl text-sm font-bold focus:ring-2 focus:ring-[#f27121]/20 focus:border-[#f27121] transition-all"
-											value={orderDate}
-											onChange={(e) => setOrderDate(e.target.value)}
-										/>
-									</div>
-									<div className="md:col-span-1">
-										<label className="block text-[10px] font-black text-[#9c6949] uppercase tracking-widest mb-1.5 ml-1">Trạng thái xử lý</label>
-										<select
-											className="w-full px-4 h-12 bg-[#fcf9f8] border border-[#e8d8ce] rounded-xl text-xs font-black focus:ring-2 focus:ring-[#f27121]/20 appearance-none transition-all"
-											value={orderStatus}
-											onChange={(e) => setOrderStatus(e.target.value)}
-										>
-											<option value="Đơn chốt">ĐƠN CHỐT</option>
-											<option value="Đơn nháp">ĐƠN NHÁP</option>
-										</select>
-									</div>
-								</div>
+				{/* SECTION 1: CUSTOMER & STATUS */}
+				<div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5 md:p-8">
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+						{/* CUSTOMER SEARCH */}
+						<div className="relative" ref={customerSearchRef}>
+							<label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">KHÁCH HÀNG *</label>
+							<div className="relative">
+								<Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" />
+								<input
+									type="text"
+									placeholder="Nhập tên hoặc tìm khách hàng..."
+									className="w-full pl-12 pr-4 h-14 bg-white border border-slate-200 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-[#f27121]/10 focus:border-[#f27121] transition-all"
+									value={searchCustomerQuery}
+									onChange={(e) => {
+										setSearchCustomerQuery(e.target.value);
+										setShowCustomerResults(true);
+									}}
+									onFocus={() => setShowCustomerResults(true)}
+								/>
 							</div>
-
-							{/* PRODUCT PICKER GRID (The "Boxes" requested) */}
-							<div className="bg-white rounded-3xl border border-[#e8d8ce] shadow-sm p-6 space-y-6">
-								<div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-									<div className="flex items-center gap-2">
-										<div className="size-10 rounded-xl bg-orange-50 flex items-center justify-center text-[#f27121]">
-											<Package size={20} />
-										</div>
-										<h3 className="text-lg font-black uppercase tracking-tight">Chọn sản phẩm</h3>
-									</div>
-									<div className="flex items-center gap-2 w-full md:w-auto">
-										<div className="relative flex-1 md:w-64">
-											<Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-											<input
-												type="text"
-												placeholder="Tìm nhanh..."
-												className="w-full pl-10 pr-4 h-10 bg-[#fcf9f8] border border-[#e8d8ce] rounded-xl text-xs font-bold focus:ring-2 focus:ring-[#f27121]/10"
-												value={searchProductQuery}
-												onChange={(e) => setSearchProductQuery(e.target.value)}
-											/>
-										</div>
-									</div>
-								</div>
-
-								{/* Categories Pills */}
-								<div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-									{userCategories.map(cat => (
+							{showCustomerResults && searchCustomerQuery && (
+								<div className="absolute z-50 left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-2xl max-h-60 overflow-y-auto">
+									{filteredCustomers.map(c => (
 										<button
-											key={cat}
-											onClick={() => setActiveCategory(cat)}
-											className={`px-5 h-9 rounded-full text-[10px] font-black uppercase tracking-widest transition-all shrink-0 border ${activeCategory === cat ? 'bg-[#f27121] text-white border-[#f27121] shadow-lg shadow-orange-500/20' : 'bg-white text-slate-500 border-[#e8d8ce] hover:border-[#f27121] hover:text-[#f27121]'}`}
+											key={c.id}
+											className="w-full px-6 py-4 text-left hover:bg-slate-50 flex items-center justify-between border-b border-slate-50 last:border-none group"
+											onClick={() => {
+												setSelectedCustomer(c);
+												setSearchCustomerQuery(c.name);
+												setShowCustomerResults(false);
+											}}
 										>
-											{cat}
+											<div>
+												<p className="font-black text-sm uppercase group-hover:text-[#f27121]">{c.name}</p>
+												<p className="text-xs text-slate-400 font-medium">{c.phone}</p>
+											</div>
+											<CheckCircle size={18} className="text-slate-100 group-hover:text-[#f27121]" />
 										</button>
 									))}
-								</div>
-
-								{/* The Grid of Boxes */}
-								<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 md:gap-4 max-h-[600px] overflow-y-auto pr-1 custom-scrollbar">
-									{filteredProducts.length > 0 ? filteredProducts.map(p => {
-										const inCart = cart.find(item => item.id === p.id);
-										return (
-											<button
-												key={p.id}
-												onClick={() => addToCart(p, (inCart?.qty || 0) + 1)}
-												className={`relative group p-3 md:p-4 rounded-2xl border-2 transition-all text-left flex flex-col h-full bg-[#fcf9f8] ${inCart ? 'border-[#f27121] bg-orange-50/30' : 'border-transparent hover:border-orange-200 hover:bg-white hover:shadow-xl'}`}
-											>
-												{inCart && (
-													<div className="absolute -top-2 -right-2 size-6 rounded-full bg-[#f27121] text-white flex items-center justify-center text-[10px] font-black shadow-lg z-10 border-2 border-white">
-														{inCart.qty}
-													</div>
-												)}
-												<div className="size-full flex flex-col">
-													<div className="aspect-square rounded-xl bg-white border border-slate-100 mb-3 flex items-center justify-center overflow-hidden shrink-0">
-														{p.imageUrl ? <img src={getImageUrl(p.imageUrl)} className="size-full object-cover" alt={p.name} /> : <span className="material-symbols-outlined text-slate-200 text-3xl font-light">image</span>}
-													</div>
-													<div className="flex-1 flex flex-col">
-														<p className="text-[10px] font-black text-[#9c6949] uppercase tracking-widest mb-1 opacity-60 truncate">{p.category}</p>
-														<h4 className="text-xs font-black uppercase text-slate-900 leading-tight mb-2 line-clamp-2 md:group-hover:text-[#f27121] transition-colors">{p.name}</h4>
-														<div className="mt-auto pt-2 border-t border-slate-100 flex items-center justify-between">
-															<span className="text-[11px] font-black text-[#f27121]">{p.priceSell.toLocaleString('vi-VN')} đ</span>
-															<span className="text-[9px] font-black text-slate-400 uppercase">/ {p.unit}</span>
-														</div>
-													</div>
-												</div>
-											</button>
-										);
-									}) : (
-										<div className="col-span-full py-20 text-center">
-											<div className="flex flex-col items-center opacity-20">
-												<Package size={48} className="mb-4" />
-												<p className="font-black uppercase tracking-[3px] text-xs">Không có sản phẩm</p>
-											</div>
-										</div>
-									)}
-								</div>
-							</div>
-
-							{/* THE ORDER LIST (Cart Items) */}
-							<div className="bg-white rounded-3xl border border-[#e8d8ce] shadow-sm overflow-hidden">
-								<div className="p-6 border-b border-slate-50 flex items-center gap-2">
-									<div className="size-10 rounded-xl bg-orange-50 flex items-center justify-center text-[#f27121]">
-										<ShoppingCart size={20} />
-									</div>
-									<h3 className="text-lg font-black uppercase tracking-tight text-slate-900">Chi tiết đơn hàng</h3>
-									<span className="ml-auto bg-slate-100 text-slate-500 text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider">{cart.length} sản phẩm</span>
-								</div>
-
-								<div className="overflow-x-auto">
-									<table className="w-full text-left border-collapse">
-										<thead className="bg-[#fcf9f8] border-b border-[#e8d8ce]">
-											<tr>
-												<th className="px-6 py-4 text-[10px] font-black text-[#9c6949] uppercase tracking-widest">Sản phẩm</th>
-												<th className="px-4 py-4 text-[10px] font-black text-[#9c6949] uppercase tracking-widest text-center">ĐVT</th>
-												<th className="px-6 py-4 text-[10px] font-black text-[#9c6949] uppercase tracking-widest text-center w-36">Số lượng</th>
-												<th className="px-6 py-4 text-[10px] font-black text-[#9c6949] uppercase tracking-widest text-right">Thành tiền</th>
-												<th className="px-5 py-4 w-10"></th>
-											</tr>
-										</thead>
-										<tbody className="divide-y divide-slate-50">
-											{cart.length === 0 ? (
-												<tr>
-													<td colSpan={5} className="py-20 text-center">
-														<p className="text-xs font-black uppercase tracking-widest text-slate-300">Nhấp chọn sản phẩm ở trên để thêm vào đơn</p>
-													</td>
-												</tr>
-											) : cart.map(item => (
-												<tr key={item.id} className="hover:bg-slate-50/50 transition-colors group">
-													<td className="px-6 py-5">
-														<p className="text-sm font-black text-slate-900 uppercase leading-snug">{item.name}</p>
-														<p className="text-[9px] font-bold text-[#f27121] uppercase mt-1 tracking-wider">{item.category}</p>
-													</td>
-													<td className="px-4 py-5 text-center">
-														<span className="text-[10px] font-black text-slate-500 uppercase">{item.unit}</span>
-													</td>
-													<td className="px-6 py-5">
-														<div className="flex items-center justify-center gap-1.5 bg-white border border-slate-200 p-1 rounded-xl shadow-sm">
-															<button onClick={() => addToCart(item, item.qty - 1)} className="size-8 flex items-center justify-center rounded-lg bg-slate-50 text-slate-400 hover:text-red-500 transition-all"><Minus size={12} strokeWidth={3} /></button>
-															<input
-																type="number" step="any" className="w-12 bg-transparent border-none text-center p-0 text-xs font-black text-slate-900 focus:ring-0"
-																value={item.qty === 0 ? '' : item.qty} placeholder="0" onFocus={(e) => e.target.select()} onChange={(e) => addToCart(item, parseFloat(e.target.value) || 0)}
-															/>
-															<button onClick={() => addToCart(item, item.qty + 1)} className="size-8 flex items-center justify-center rounded-lg bg-slate-900 text-white shadow-lg active:scale-95 transition-all"><Plus size={12} strokeWidth={3} /></button>
-														</div>
-													</td>
-													<td className="px-6 py-5 text-right font-black text-sm tabular-nums text-slate-900">{(item.qty * item.priceSell).toLocaleString('vi-VN')}</td>
-													<td className="px-5 py-5 text-center">
-														<button onClick={() => addToCart(item, 0)} className="size-8 flex items-center justify-center rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100"><Trash2 size={16} /></button>
-													</td>
-												</tr>
-											))}
-										</tbody>
-									</table>
-								</div>
-							</div>
-						</div>
-
-						{/* RIGHT COLUMN - SUMMARY & LOCATION */}
-						<div className="lg:col-span-4 space-y-6">
-
-							{/* DELIVERY LOCATION */}
-							<div className="bg-white rounded-3xl border border-[#e8d8ce] shadow-md overflow-hidden">
-								<div className="p-5 border-b border-[#e8d8ce] bg-[#fcf9f8] flex items-center justify-between">
-									<div className="flex items-center gap-2">
-										<Truck size={18} className="text-[#f27121]" />
-										<h3 className="text-sm font-black uppercase tracking-widest leading-none">Giao hàng</h3>
-									</div>
-									<div className="px-3 py-1 bg-orange-50 rounded-lg text-[10px] font-black text-[#f27121] uppercase tracking-widest">Dự kiến</div>
-								</div>
-								<div className="relative h-48 bg-slate-100 overflow-hidden flex items-center justify-center group">
-									<MapPin size={32} className="text-red-500 drop-shadow-xl animate-bounce relative z-10" />
-									<div className="absolute inset-0 bg-slate-200 opacity-40 group-hover:opacity-70 transition-opacity flex items-center justify-center font-black text-slate-400 text-[10px] tracking-[4px]">Hệ thống bản đồ</div>
-								</div>
-								<div className="p-6 space-y-5">
-									<div>
-										<label className="block text-[10px] font-black text-[#9c6949] uppercase mb-2 tracking-widest ml-1 opacity-60">Địa chỉ / Tọa độ (Lat, Long)</label>
-										<div className="relative">
-											<MapPin size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#f27121]" />
-											<input
-												type="text"
-												placeholder="Nhập địa chỉ hoặc tọa độ..."
-												className="w-full pl-12 pr-4 h-12 bg-white border border-[#e8d8ce] rounded-xl text-xs font-bold focus:ring-4 focus:ring-orange-500/10 focus:border-[#f27121] transition-all"
-												value={deliveryAddress}
-												onChange={(e) => setDeliveryAddress(e.target.value)}
-											/>
-										</div>
-									</div>
-									<div className="flex items-center justify-between text-xs pt-1">
-										<span className="text-[#9c6949] font-black uppercase tracking-[1px] opacity-60 italic">Phí vận chuyển:</span>
-										<div className="flex items-center gap-2 border-b-2 border-slate-100 pb-1 px-2">
-											<input type="number" className="w-24 text-right bg-transparent border-none p-0 focus:ring-0 text-sm font-black text-slate-900" value={adjustmentValue || ''} placeholder="0" onChange={(e) => setAdjustmentValue(Number(e.target.value))} />
-											<span className="font-black text-slate-400 text-[10px] uppercase">đ</span>
-										</div>
-									</div>
-									<div className="flex items-center justify-between text-xs pt-1">
-										<span className="text-red-400 font-black uppercase tracking-[1px] opacity-70 italic">Chiết khấu (-):</span>
-										<div className="flex items-center gap-2 border-b-2 border-slate-100 pb-1 px-2">
-											<input type="number" className="w-24 text-right bg-transparent border-none p-0 focus:ring-0 text-sm font-black text-red-600" value={discountValue || ''} placeholder="0" onChange={(e) => setDiscountValue(Number(e.target.value))} />
-											<span className="font-black text-slate-400 text-[10px] uppercase">đ</span>
-										</div>
-									</div>
-								</div>
-							</div>
-
-							{/* SUMMARY CARD */}
-							<div className="bg-[#1c130d] rounded-3xl shadow-2xl p-8 overflow-hidden relative text-white">
-								<div className="absolute top-0 right-0 w-48 h-48 bg-orange-500 rounded-full blur-[100px] -mr-24 -mt-24 opacity-30"></div>
-								<div className="absolute bottom-0 left-0 w-32 h-32 bg-orange-600 rounded-full blur-[80px] -ml-16 -mb-16 opacity-20"></div>
-
-								<h3 className="text-lg font-black mb-8 flex items-center gap-3 relative z-10 uppercase tracking-widest">
-									<FileText size={22} className="text-[#f27121]" />
-									Tổng kết đơn
-								</h3>
-
-								<div className="space-y-5 mb-8 relative z-10">
-									<div className="flex justify-between items-center px-1">
-										<span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Tạm tính (Gồm VAT)</span>
-										<span className="text-sm font-black tabular-nums">{subTotal.toLocaleString('vi-VN')}</span>
-									</div>
-									{discountValue > 0 && (
-										<div className="flex justify-between items-center px-1">
-											<span className="text-xs font-bold text-red-400 uppercase tracking-widest">Chiết khấu giảm</span>
-											<span className="text-sm font-black tabular-nums text-red-400">-{discountValue.toLocaleString('vi-VN')}</span>
-										</div>
-									)}
-									{adjustmentValue > 0 && (
-										<div className="flex justify-between items-center px-1">
-											<span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Phí vận chuyển</span>
-											<span className="text-sm font-black tabular-nums">+{adjustmentValue.toLocaleString('vi-VN')}</span>
-										</div>
-									)}
-									<div className="flex justify-between items-center px-1 opacity-40">
-										<span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest italic">Thuế VAT (8%) [Đã bao gồm]</span>
-										<span className="text-[10px] font-black tabular-nums italic">{taxMount.toLocaleString('vi-VN')}</span>
-									</div>
-									<div className="h-px bg-white/10 my-4"></div>
-									<div className="flex flex-col gap-1 items-end px-1">
-										<span className="text-[10px] font-black text-orange-500 uppercase tracking-[3px] mb-1">Tổng thanh toán</span>
-										<p className="text-3xl font-black text-white leading-none tabular-nums tracking-tighter">{finalTotal.toLocaleString('vi-VN')} đ</p>
-										<p className="text-[9px] font-bold text-slate-500 mt-2 uppercase tracking-widest">Đã bao gồm thuế giá trị gia tăng</p>
-									</div>
-								</div>
-
-								<div className="space-y-4 relative z-10">
-									<textarea
-										rows={2}
-										placeholder="Ghi chú đơn hàng..."
-										className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-xs font-medium focus:ring-2 focus:ring-[#f27121]/50 focus:border-[#f27121] transition-all resize-none text-white placeholder-slate-600 mb-2"
-										value={orderNote}
-										onChange={(e) => setOrderNote(e.target.value)}
-									/>
 									<button
-										onClick={handleConfirmOrder}
-										className="w-full h-16 bg-[#f27121] text-white rounded-2xl font-black text-sm uppercase tracking-[3px] shadow-2xl shadow-orange-500/40 hover:bg-orange-600 transition-all active:scale-95 flex items-center justify-center gap-3"
+										className="w-full px-6 py-4 text-left hover:bg-slate-50 flex items-center gap-2 border-t border-slate-50 text-[#f27121]"
+										onClick={() => setShowCustomerResults(false)}
 									>
-										XÁC NHẬN ĐƠN
-										<CheckCircle size={20} strokeWidth={3} />
+										<Plus size={16} /> <span className="text-xs font-bold uppercase tracking-wider">Khách vãng lai mới</span>
 									</button>
 								</div>
+							)}
+						</div>
+
+						{/* STATUS SELECT */}
+						<div>
+							<label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">TRẠNG THÁI ĐƠN</label>
+							<div className="relative">
+								<select
+									className="w-full px-5 h-14 bg-white border border-slate-200 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-[#f27121]/10 appearance-none transition-all"
+									value={orderStatus}
+									onChange={(e) => setOrderStatus(e.target.value)}
+								>
+									<option value="Đơn chốt">Đơn chốt</option>
+									<option value="Đơn nháp">Đơn nháp</option>
+									<option value="Đang giao">Đang giao</option>
+								</select>
+								<ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
 							</div>
+						</div>
+
+						{/* NOTE */}
+						<div className="md:col-span-2">
+							<label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">GHI CHÚ ĐƠN HÀNG</label>
+							<textarea
+								rows={2}
+								placeholder="Yêu cầu giao hàng sớm..."
+								className="w-full p-5 bg-white border border-slate-200 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-[#f27121]/10 resize-none min-h-[100px]"
+								value={orderNote}
+								onChange={(e) => setOrderNote(e.target.value)}
+							/>
 						</div>
 					</div>
 				</div>
 
-				{/* MOBILE STICKY BOTTOM BAR */}
-				<div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-[#e8d8ce] p-4 shadow-[0_-15px_40px_rgba(0,0,0,0.08)] z-50 flex items-center gap-4">
-					<div className="flex flex-col">
-						<span className="text-[10px] font-black text-[#9c6949] uppercase tracking-widest leading-none mb-1 opacity-60 text-left">Thanh toán</span>
-						<span className="text-xl font-black text-[#f27121] leading-none tabular-nums tracking-tight">{finalTotal.toLocaleString('vi-VN')} đ</span>
+				{/* SECTION 2: PRODUCT LIST */}
+				<div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+					<div className="p-8 border-b border-slate-50 flex items-center justify-between">
+						<h3 className="text-sm font-black text-slate-400 uppercase tracking-widest">DANH SÁCH SẢN PHẨM</h3>
 					</div>
-					<button
-						onClick={handleConfirmOrder}
-						className="flex-1 h-14 bg-[#f27121] text-white rounded-2xl font-black text-xs uppercase tracking-[2px] shadow-xl shadow-orange-500/20 active:scale-95 transition-all"
-					>
-						ĐẶT HÀNG
-					</button>
+
+					<div className="p-4 md:p-8 overflow-x-auto no-scrollbar">
+						<table className="w-full min-w-[1000px]">
+							<thead>
+								<tr className="text-[10px] font-black text-slate-400 uppercase tracking-[2px] border-b border-slate-50">
+									<th className="pb-4 text-left font-black w-[200px]">NGÀNH HÀNG</th>
+									<th className="pb-4 text-left font-black w-[350px]">SẢN PHẨM</th>
+									<th className="pb-4 text-center font-black w-24">SỐ LƯỢNG</th>
+									<th className="pb-4 text-center font-black w-32">ĐƠN GIÁ</th>
+									<th className="pb-4 text-center font-black w-20">KIỆN</th>
+									<th className="pb-4 text-right font-black w-32">THÀNH TIỀN</th>
+									<th className="pb-4 w-12"></th>
+								</tr>
+							</thead>
+							<tbody className="divide-y divide-slate-50">
+								{lineItems.map((item, index) => (
+									<tr key={index} className="group transition-colors">
+										<td className="py-6">
+											<div className="relative group/select">
+												<select
+													className="w-full h-12 bg-white border border-slate-100 rounded-xl px-4 text-xs font-bold appearance-none hover:border-[#f27121] transition-colors"
+													value={item.category}
+													onChange={(e) => updateLineItem(index, 'category', e.target.value)}
+												>
+													<option value="">Tìm ngành...</option>
+													{categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+												</select>
+												<ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
+											</div>
+										</td>
+										<td className="py-6 pl-4">
+											<div className="relative">
+												<select
+													className="w-full h-12 bg-white border border-slate-100 rounded-xl px-4 text-xs font-bold appearance-none hover:border-[#f27121] transition-colors"
+													value={item.productId}
+													onChange={(e) => updateLineItem(index, 'productId', e.target.value)}
+												>
+													<option value="">Tìm SP...</option>
+													{products
+														.filter(p => !item.category || p.category === item.category)
+														.map(p => <option key={p.id} value={p.id}>{p.name}</option>)
+													}
+												</select>
+												<ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
+											</div>
+										</td>
+										<td className="py-6">
+											<div className="flex justify-center px-4">
+												<input
+													type="number"
+													className="w-16 h-12 text-center bg-white border border-slate-100 rounded-xl text-xs font-bold focus:ring-[#f27121]"
+													value={item.qty === 0 ? '' : item.qty}
+													onChange={(e) => updateLineItem(index, 'qty', e.target.value === '' ? 0 : Number(e.target.value))}
+													placeholder="0"
+												/>
+											</div>
+										</td>
+										<td className="py-6">
+											<div className="flex justify-center px-2">
+												<input
+													type="number"
+													className="w-full h-12 text-center bg-white border border-slate-100 rounded-xl text-[10px] font-black text-slate-400"
+													value={item.price === 0 ? '' : item.price}
+													onChange={(e) => updateLineItem(index, 'price', e.target.value === '' ? 0 : Number(e.target.value))}
+													placeholder="0"
+												/>
+											</div>
+										</td>
+										<td className="py-6 text-center">
+											<span className="text-xs font-bold text-slate-900">{item.packaging || '0'}</span>
+										</td>
+										<td className="py-6 text-right">
+											<span className="text-xs font-black text-[#f27121]">{(item.price * item.qty).toLocaleString('vi-VN')} đ</span>
+										</td>
+										<td className="py-6 text-right pl-4">
+											<button
+												onClick={() => removeLineItem(index)}
+												className="size-8 rounded-lg flex items-center justify-center text-rose-200 hover:bg-rose-50 hover:text-rose-500 transition-all opacity-0 group-hover:opacity-100"
+											>
+												<X size={16} />
+											</button>
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+
+						<button
+							onClick={addLineItem}
+							className="w-full py-4 mt-6 border-2 border-dashed border-orange-100 rounded-2xl text-[#f27121] font-black text-xs uppercase tracking-[2px] flex items-center justify-center gap-2 hover:bg-orange-50 transition-all active:scale-[0.99]"
+						>
+							<Plus size={16} strokeWidth={3} />
+							+ THÊM SẢN PHẨM
+						</button>
+					</div>
 				</div>
 
-				{showCalc && <Calculator onClose={() => setShowCalc(false)} onConfirm={(val) => { console.log(val); setShowCalc(false); }} />}
-			</main>
+				{/* SECTION 3: ADJUSTMENTS & SUMMARY */}
+				<div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-6 md:p-10">
+					<div className="flex flex-col md:flex-row gap-8 md:gap-12">
+						{/* ADJUSTMENTS LEFT */}
+						<div className="flex-1 space-y-6">
+							<h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">ĐIỀU CHỈNH ĐƠN HÀNG</h4>
+							<div className="space-y-4">
+								<div>
+									<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Phí vận chuyển (+)</label>
+									<input
+										type="number"
+										placeholder="0"
+										className="w-full h-14 bg-white border border-slate-100 rounded-2xl px-6 text-sm font-bold focus:ring-[#f27121]"
+										value={shippingFee === 0 ? '' : shippingFee}
+										onChange={(e) => setShippingFee(e.target.value === '' ? 0 : Number(e.target.value))}
+									/>
+								</div>
+								<div>
+									<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Chiết khấu (-)</label>
+									<input
+										type="number"
+										placeholder="0"
+										className="w-full h-14 bg-white border border-slate-100 rounded-2xl px-6 text-sm font-bold focus:ring-[#f27121]"
+										value={discountAmt === 0 ? '' : discountAmt}
+										onChange={(e) => setDiscountAmt(e.target.value === '' ? 0 : Number(e.target.value))}
+									/>
+								</div>
+							</div>
+						</div>
+
+						{/* SUMMARY RIGHT */}
+						<div className="flex-1">
+							<div className="space-y-4 text-right mb-10">
+								<div className="flex justify-end gap-12">
+									<span className="text-sm font-bold text-slate-500 uppercase">Tiền hàng:</span>
+									<span className="text-sm font-black text-slate-900 w-32 tabular-nums">{subTotal.toLocaleString('vi-VN')} đ</span>
+								</div>
+								{Number(shippingFee) > 0 && (
+									<div className="flex justify-end gap-12">
+										<span className="text-sm font-bold text-slate-500 uppercase">Phí vận chuyển:</span>
+										<span className="text-sm font-black text-slate-900 w-32 tabular-nums">+{Number(shippingFee).toLocaleString('vi-VN')} đ</span>
+									</div>
+								)}
+								{Number(discountAmt) > 0 && (
+									<div className="flex justify-end gap-12">
+										<span className="text-sm font-bold text-slate-500 uppercase">Chiết khấu:</span>
+										<span className="text-sm font-black text-rose-600 w-32 tabular-nums">-{Number(discountAmt).toLocaleString('vi-VN')} đ</span>
+									</div>
+								)}
+								<div className="flex justify-end gap-12">
+									<span className="text-sm font-bold text-slate-500 uppercase">Tổng trọng lượng:</span>
+									<span className="text-sm font-black text-[#1a237e] w-32 tabular-nums">{totalWeight.toFixed(2)} kg</span>
+								</div>
+							</div>
+
+							<div className="text-right">
+								<div className="text-4xl md:text-[56px] font-black text-[#00a859] leading-none mb-6 md:mb-8 tracking-tighter tabular-nums">
+									{finalTotal.toLocaleString('vi-VN')} đ
+								</div>
+								<button
+									onClick={handleConfirmOrder}
+									className="w-full md:w-[350px] ml-auto h-16 bg-[#ffcc00] text-slate-900 rounded-2xl font-black text-sm uppercase tracking-[2px] shadow-xl shadow-yellow-500/10 hover:bg-[#fbc02d] transition-all active:scale-[0.98]"
+								>
+									XÁC NHẬN LÊN ĐƠN
+								</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			{/* STICKY BOTTOM BAR FOR MOBILE */}
+			<div className="fixed bottom-24 left-4 right-4 bg-white/90 backdrop-blur-xl border border-slate-100 p-4 flex items-center justify-between md:hidden z-[1001] shadow-[0_20px_50px_rgba(0,0,0,0.15)] rounded-3xl animate-in slide-in-from-bottom-5 duration-700">
+				<div className="flex flex-col">
+					<span className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">TỔNG CỘNG:</span>
+					<span className="text-xl font-black text-[#00a859] leading-none">{finalTotal.toLocaleString('vi-VN')} đ</span>
+				</div>
+				<button
+					onClick={handleConfirmOrder}
+					className="bg-[#ffcc00] text-slate-900 h-14 px-8 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-yellow-500/20 active:scale-95 transition-all"
+				>
+					LÊN ĐƠN
+				</button>
+			</div>
+
+			<style dangerouslySetInnerHTML={{
+				__html: `
+                .no-scrollbar::-webkit-scrollbar { display: none; }
+                .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+                select { background-image: none !important; }
+            `}} />
+
+			{/* SUCCESS MODAL */}
+			{showSuccessModal && (
+				<div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+					<div
+						className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300"
+						onClick={() => navigate('/orders')}
+					></div>
+					<div className="bg-white rounded-[3rem] w-full max-w-md p-10 relative z-10 shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-10 duration-500">
+						<div className="flex flex-col items-center text-center">
+							<div className="size-24 bg-green-50 rounded-full flex items-center justify-center mb-8 relative">
+								<div className="absolute inset-0 bg-green-100 rounded-full animate-ping opacity-20"></div>
+								<div className="size-16 bg-[#00a859] rounded-full flex items-center justify-center text-white shadow-lg shadow-green-200">
+									<CheckCircle size={32} strokeWidth={3} />
+								</div>
+							</div>
+
+							<h3 className="text-3xl font-black text-slate-900 mb-2 uppercase tracking-tight">Thành Công!</h3>
+							<p className="text-slate-500 font-medium mb-10 leading-relaxed px-4">
+								{id ? 'Đơn hàng đã được cập nhật thay đổi thành công.' : 'Đơn hàng mới của bạn đã được ghi nhận vào hệ thống.'}
+							</p>
+
+							<div className="w-full space-y-3">
+								<button
+									onClick={() => navigate('/orders')}
+									className="w-full h-14 bg-[#1A237E] text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-slate-900 transition-all shadow-xl shadow-indigo-100"
+								>
+									Xem danh sách đơn
+								</button>
+								<button
+									onClick={() => {
+										setShowSuccessModal(false);
+										if (!id) {
+											window.location.reload();
+										}
+									}}
+									className="w-full h-14 bg-white text-slate-400 rounded-2xl font-bold text-sm uppercase tracking-widest hover:bg-slate-50 transition-all"
+								>
+									{id ? 'Đóng thông báo' : 'Lên đơn mới'}
+								</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 };

@@ -93,6 +93,35 @@ const Debts: React.FC = () => {
 
 	const [showStatement, setShowStatement] = useState(false);
 	const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
+	const [statementFromDate, setStatementFromDate] = useState('');
+	const [statementToDate, setStatementToDate] = useState('');
+	const [statementScale, setStatementScale] = useState(1);
+	const [statementZoom, setStatementZoom] = useState(0.85);
+
+	useEffect(() => {
+		if (showStatement) {
+			const handleResize = () => {
+				if (window.innerWidth < 840) {
+					setStatementScale((window.innerWidth - 32) / 800);
+				} else {
+					setStatementScale(1);
+				}
+			};
+			handleResize();
+			window.addEventListener('resize', handleResize);
+			return () => window.removeEventListener('resize', handleResize);
+		}
+	}, [showStatement]);
+
+	const openStatement = (customer: any) => {
+		setSelectedCustomer(customer);
+		// Default to current month
+		const now = new Date();
+		const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+		setStatementFromDate(firstDay.toISOString().split('T')[0]);
+		setStatementToDate(now.toISOString().split('T')[0]);
+		setShowStatement(true);
+	};
 
 	// Form state for payment
 	const [paymentData, setPaymentData] = useState({
@@ -561,7 +590,7 @@ const Debts: React.FC = () => {
 									) : aggregatedData.length === 0 ? (
 										<tr><td colSpan={5} className="py-20 text-center text-slate-400 uppercase font-black text-xs tracking-[4px]">Không tìm thấy đối tác nào</td></tr>
 									) : aggregatedData.map((row) => (
-										<tr key={row.id} className="hover:bg-slate-50/50 transition-colors group cursor-pointer" onClick={() => { setSelectedCustomer(row); setShowStatement(true); }}>
+										<tr key={row.id} className="hover:bg-slate-50/50 transition-colors group cursor-pointer" onClick={() => openStatement(row)}>
 											<td className="px-8 py-5">
 												<div className="flex items-center gap-4">
 													<div className={`size-12 rounded-2xl bg-[#1A237E]/5 flex items-center justify-center text-[#1A237E] font-black text-sm shrink-0 shadow-sm border border-slate-100`}>{row.initials}</div>
@@ -585,7 +614,7 @@ const Debts: React.FC = () => {
 											<td className="px-6 py-5 text-right">
 												<div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
 													<button
-														onClick={() => { setSelectedCustomer(row); setShowStatement(true); }}
+														onClick={() => openStatement(row)}
 														className="bg-white border border-slate-100 p-2.5 rounded-xl text-slate-400 hover:text-[#1A237E] hover:border-[#1A237E] transition-all shadow-sm"
 														title="Xem chi tiết"
 													>
@@ -753,7 +782,7 @@ const Debts: React.FC = () => {
 							</div>
 							<div className="flex items-center gap-2">
 								<button onClick={() => window.print()} className="h-10 px-4 rounded-xl bg-slate-100 text-slate-600 flex items-center gap-2 font-bold text-xs uppercase hover:bg-slate-200 transition-all">
-									<Printer size={16} /> In phiếu
+									<Printer size={16} /> <span className="hidden md:inline">In phiếu</span>
 								</button>
 								<button onClick={() => setShowStatement(false)} className="size-10 rounded-full bg-slate-50 text-slate-400 hover:bg-slate-100 flex items-center justify-center transition-colors">
 									<X size={20} />
@@ -761,201 +790,262 @@ const Debts: React.FC = () => {
 							</div>
 						</div>
 
-						{/* SCROLLABLE DOCUMENT AREA */}
-						<div className="flex-1 overflow-y-auto bg-slate-100 md:p-8 p-1 flex justify-center scroll-smooth">
-
-							{/* THE PAPER SHEET - Fixed look for all devices */}
-							<div className="bg-white w-full max-w-[800px] shadow-2xl min-h-[1100px] p-8 md:p-12 mb-20 flex flex-col font-['Inter', sans-serif]">
-
-								{/* 1. Header with Logo */}
-								<div className="flex justify-between items-start mb-10">
-									<div className="flex items-start gap-4">
-										<div className="size-16 bg-[#1A237E] rounded-full flex items-center justify-center text-white text-3xl font-black shrink-0 shadow-lg">D</div>
-										<div className="flex flex-col">
-											<h1 className="text-[#1A237E] text-2xl font-black uppercase tracking-tight mb-1">CÔNG TY CP DUNVEX BUILD</h1>
-											<p className="text-[11px] text-slate-500 font-medium">Số 58, Đường Tố Hữu, Nam Từ Liêm, Hà Nội</p>
-											<p className="text-[11px] text-slate-500 font-medium">Hotline: 1900 888 999 - Website: dunvex.vn</p>
-										</div>
-									</div>
-									<div className="flex flex-col items-end text-right">
-										<h2 className="text-[#1A237E] text-3xl font-black uppercase tracking-tighter mb-2 italic">PHIẾU ĐỐI SOÁT</h2>
-										<p className="text-[10px] text-slate-400 font-bold uppercase tracking-[1px]">Số: DS-{new Date().toISOString().slice(0, 7).replace('-', '')}-{selectedCustomer.id.slice(-5).toUpperCase()}</p>
-										<p className="text-[10px] text-slate-400 italic">Ngày xuất: {formatDate(new Date())}</p>
-									</div>
+						{/* DATE FILTER BAR FOR STATEMENT */}
+						<div className="flex-none bg-slate-50 px-4 md:px-8 py-3 border-b border-slate-100 flex flex-col md:flex-row items-center justify-between gap-4 z-10 print:hidden">
+							<div className="flex items-center gap-4 w-full md:w-auto">
+								<span className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Lọc giao dịch:</span>
+								<div className="flex items-center gap-2 w-full">
+									<input
+										type="date"
+										value={statementFromDate}
+										onChange={(e) => setStatementFromDate(e.target.value)}
+										className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-700"
+									/>
+									<span className="text-slate-300">-</span>
+									<input
+										type="date"
+										value={statementToDate}
+										onChange={(e) => setStatementToDate(e.target.value)}
+										className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-700"
+									/>
 								</div>
+							</div>
 
-								<div className="w-full h-[1px] bg-slate-200 mb-10"></div>
+							{/* ZOOM CONTROLS */}
+							<div className="flex bg-white rounded-lg p-1 border border-slate-200 shadow-sm">
+								{[0.6, 0.85, 1.0].map((v) => (
+									<button
+										key={v}
+										onClick={() => setStatementZoom(v)}
+										className={`px-3 py-1 rounded-md text-[10px] font-black transition-all ${statementZoom === v ? 'bg-[#1A237E] text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+									>
+										{v * 100}%
+									</button>
+								))}
+							</div>
+						</div>
 
-								{/* 2. Customer & Cycle Info Grid */}
-								{(() => {
-									const startVal = fromDate || '0000-00-00';
-									const endVal = toDate || '9999-99-99';
+						{/* SCROLLABLE DOCUMENT AREA */}
+						<div className="flex-1 overflow-y-auto bg-slate-100 py-8 flex items-start justify-center scroll-smooth custom-scrollbar">
 
-									// Normalized date extraction for grouping
-									const getNormDate = (tx: any) => {
-										if (tx.orderDate) return tx.orderDate; // "2026-02-10"
-										if (tx.date) return tx.date; // "2026-02-10"
-										if (tx.createdAt?.seconds) {
-											// Convert UTC timestamp to Local Date string YYYY-MM-DD
-											const d = new Date(tx.createdAt.seconds * 1000);
+							{/* THE PAPER SHEET - Scalable Wrapper */}
+							<div
+								style={{
+									width: '800px',
+									transform: `scale(${statementScale * statementZoom})`,
+									transformOrigin: 'top center',
+									marginBottom: (statementScale * statementZoom) < 1 ? `-${(1 - (statementScale * statementZoom)) * 1200}px` : '0'
+								}}
+								className="flex-shrink-0 print-scale transition-transform duration-200"
+							>
+								<div className="bg-white w-[800px] shadow-2xl min-h-[1100px] p-12 mb-20 flex flex-col font-['Inter', sans-serif] relative text-sm text-slate-900 border border-gray-100">
+
+									{/* INJECT PRINT STYLES */}
+									<style>
+										{`
+											@media print {
+												.no-print { display: none !important; }
+												body { background: white !important; }
+												.print-scale { transform: scale(1) !important; margin: 0 !important; width: 100% !important; }
+												.fixed { position: static !important; overflow: visible !important; }
+											}
+										`}
+									</style>
+
+									{/* 2. Customer & Cycle Info Grid */}
+									{(() => {
+										const startVal = statementFromDate || '0000-00-00';
+										const endVal = statementToDate || '9999-99-99';
+
+										// Normalized date extraction for grouping
+										const getNormDate = (tx: any) => {
+											if (tx.orderDate) return tx.orderDate; // "2026-02-10"
+											if (tx.date) return tx.date; // "2026-02-10"
+
+											let d;
+											if (tx.createdAt?.seconds) {
+												d = new Date(tx.createdAt.seconds * 1000);
+											} else if (tx.createdAt) {
+												d = new Date(tx.createdAt);
+											} else {
+												return '';
+											}
+
+											if (isNaN(d.getTime())) return '';
+
 											const year = d.getFullYear();
 											const month = String(d.getMonth() + 1).padStart(2, '0');
 											const day = String(d.getDate()).padStart(2, '0');
 											return `${year}-${month}-${day}`;
-										}
-										return '';
-									};
+										};
 
-									const allPossibleTx = [
-										...orders.filter(o => {
-											if (selectedCustomer.isGuest) {
-												return (!o.customerId || !registeredMap.has(o.customerId)) && (o.customerName === selectedCustomer.name || (!o.customerName && selectedCustomer.name === 'Khách vãng lai'));
+										const allPossibleTx = [
+											...orders.filter(o => {
+												if (selectedCustomer.isGuest) {
+													return (!o.customerId || !registeredMap.has(o.customerId)) && (o.customerName === selectedCustomer.name || (!o.customerName && selectedCustomer.name === 'Khách vãng lai'));
+												}
+												return o.customerId === selectedCustomer.id;
+											}).filter(o => o.status === 'Đơn chốt').map(o => ({ ...o, txType: 'order' })),
+											...payments.filter(p => {
+												if (selectedCustomer.isGuest) {
+													return (!p.customerId || !registeredMap.has(p.customerId)) && (p.customerName === selectedCustomer.name || (!p.customerName && selectedCustomer.name === 'Khách vãng lai'));
+												}
+												return p.customerId === selectedCustomer.id;
+											}).map(p => ({ ...p, txType: 'payment' }))
+										];
+
+										// Calculate Opening Balance (all tx before 'startVal')
+										const openingBalance = allPossibleTx.reduce((sum, tx) => {
+											const txDate = getNormDate(tx);
+											if (txDate !== '' && txDate < startVal) {
+												return sum + (tx.totalAmount || 0) - (tx.amount || 0);
 											}
-											return o.customerId === selectedCustomer.id;
-										}).filter(o => o.status === 'Đơn chốt').map(o => ({ ...o, txType: 'order' })),
-										...payments.filter(p => {
-											if (selectedCustomer.isGuest) {
-												return (!p.customerId || !registeredMap.has(p.customerId)) && (p.customerName === selectedCustomer.name || (!p.customerName && selectedCustomer.name === 'Khách vãng lai'));
-											}
-											return p.customerId === selectedCustomer.id;
-										}).map(p => ({ ...p, txType: 'payment' }))
-									];
+											return sum;
+										}, 0);
 
-									// Calculate Opening Balance (all tx before 'startVal')
-									const openingBalance = allPossibleTx.reduce((sum, tx) => {
-										const txDate = getNormDate(tx);
-										if (txDate !== '' && txDate < startVal) {
-											return sum + (tx.totalAmount || 0) - (tx.amount || 0);
-										}
-										return sum;
-									}, 0);
+										// Current Transactions in cycle
+										const cycleTx = allPossibleTx.filter(tx => {
+											const txDate = getNormDate(tx);
+											return txDate >= startVal && txDate <= endVal;
+										}).sort((a, b) => {
+											const da = getNormDate(a);
+											const db = getNormDate(b);
+											if (da !== db) return da.localeCompare(db);
+											const ta = a.createdAt?.seconds || 0;
+											const tb = b.createdAt?.seconds || 0;
+											return ta - tb;
+										});
 
-									// Current Transactions in cycle
-									const cycleTx = allPossibleTx.filter(tx => {
-										const txDate = getNormDate(tx);
-										return txDate >= startVal && txDate <= endVal;
-									}).sort((a, b) => {
-										const da = getNormDate(a);
-										const db = getNormDate(b);
-										if (da !== db) return da.localeCompare(db);
-										const ta = a.createdAt?.seconds || 0;
-										const tb = b.createdAt?.seconds || 0;
-										return ta - tb;
-									});
+										const debitIncrease = cycleTx.filter(t => t.txType === 'order').reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+										const creditDecrease = cycleTx.filter(t => t.txType === 'payment').reduce((sum, p) => sum + (p.amount || 0), 0);
+										const closingBalance = openingBalance + debitIncrease - creditDecrease;
 
-									const debitIncrease = cycleTx.filter(t => t.txType === 'order').reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-									const creditDecrease = cycleTx.filter(t => t.txType === 'payment').reduce((sum, p) => sum + (p.amount || 0), 0);
-									const closingBalance = openingBalance + debitIncrease - creditDecrease;
-
-									return (
-										<>
-											<div className="grid grid-cols-2 gap-12 bg-slate-50/50 p-6 rounded-[2rem] border border-slate-100 mb-8">
-												<div className="space-y-4">
-													<p className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">KHÁCH HÀNG</p>
-													<div className="space-y-1">
-														<p className="font-black text-[#1A237E] text-lg uppercase tracking-tight leading-none mb-1">{selectedCustomer.name}</p>
-														{selectedCustomer.businessName && (
-															<p className="font-bold text-slate-700 text-xs italic mb-2 tracking-tight">🏢 {selectedCustomer.businessName}</p>
-														)}
-														<p className="text-[11px] text-slate-500 font-bold">Địa chỉ: {selectedCustomer.address || 'Chưa cập nhật'}</p>
-														<p className="text-[11px] text-slate-500 font-bold">SĐT: {selectedCustomer.phone || '-'}</p>
+										return (
+											<>
+												{/* 1. Header */}
+												<div className="flex justify-between items-start mb-6 border-b-2 border-[#FFD600] pb-4">
+													<div>
+														<h1 className="text-[#FFD600] text-3xl font-bold uppercase mb-1 tracking-tight">PHIẾU BÁO CÔNG NỢ</h1>
+														<p className="text-slate-500 text-sm font-medium uppercase tracking-wide">Hệ thống quản lý Dunvex Digital</p>
+													</div>
+													<div className="text-right">
+														<p className="text-slate-700 font-bold text-sm">Ngày báo: {new Date().toLocaleDateString('vi-VN')}</p>
+														<p className="text-slate-700 font-bold text-sm">Mã KH: {selectedCustomer.id?.slice(-6).toUpperCase()}</p>
 													</div>
 												</div>
-												<div className="space-y-4">
-													<p className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">THÔNG TIN KỲ ĐỐI SOÁT</p>
-													<div className="space-y-3">
-														<div className="flex justify-between items-center text-[11px] font-bold">
-															<span className="text-slate-500">Thời gian:</span>
-															<span className="text-[#1A237E]">{fromDate ? formatDate(fromDate) : '---'} - {toDate ? formatDate(toDate) : formatDate(new Date())}</span>
-														</div>
-														<div className="flex justify-between items-center text-[11px] font-bold">
-															<span className="text-slate-500">Dư nợ đầu kỳ:</span>
-															<span className="text-[#1A237E]">{formatPrice(openingBalance)}</span>
-														</div>
-														<div className="flex justify-between items-start pt-2 border-t border-slate-200">
-															<span className="text-[11px] font-black text-[#1A237E] uppercase mt-1">Dư nợ phải thanh toán:</span>
-															<span className="text-2xl font-black text-[#FF6D00] tracking-tighter leading-none">{formatPrice(closingBalance)}</span>
-														</div>
+
+												<div className="mb-8">
+													<p className="text-slate-800 font-medium text-base">Kính gửi: <span className="font-bold text-[#1A237E] uppercase">{selectedCustomer.businessName || selectedCustomer.name}</span></p>
+													<p className="text-slate-600 text-base mt-1">Chúng tôi xin thông báo tình trạng công nợ tính đến hiện tại như sau:</p>
+												</div>
+
+												{/* 2. List of Orders (Includes Opening Balance) */}
+												<div className="mb-8">
+													<h3 className="flex items-center text-slate-800 font-bold text-base mb-3 pl-3 border-l-4 border-[#FFD600]">
+														1. Danh sách đơn hàng
+													</h3>
+													<div className="rounded-lg border border-slate-200 overflow-hidden">
+														<table className="w-full text-sm border-collapse">
+															<thead className="bg-[#EEF0F5] text-slate-700 font-bold">
+																<tr>
+																	<th className="py-3 px-4 text-left w-1/4">Ngày</th>
+																	<th className="py-3 px-4 text-left w-1/4">Mã đơn</th>
+																	<th className="py-3 px-4 text-right w-1/2">Giá trị</th>
+																</tr>
+															</thead>
+															<tbody className="text-slate-700 divide-y divide-slate-100">
+																{/* Opening Balance Row */}
+																<tr className="bg-[#FFFDF5] font-semibold text-slate-800">
+																	<td className="py-3 px-4">{statementFromDate ? formatDate(statementFromDate) : '---'}</td>
+																	<td className="py-3 px-4 uppercase text-[#d97706] text-xs tracking-wider">DƯ NỢ ĐẦU KỲ</td>
+																	<td className="py-3 px-4 text-right">{formatPrice(openingBalance)}</td>
+																</tr>
+																{/* Order Rows */}
+																{cycleTx.filter(t => t.txType === 'order').map((order, idx) => (
+																	<tr key={`ord-${idx}`} className="hover:bg-slate-50">
+																		<td className="py-3 px-4">{formatDate(order.orderDate || order.createdAt)}</td>
+																		<td className="py-3 px-4 font-medium text-[#1A237E]">{order.id?.slice(0, 8).toUpperCase()}</td>
+																		<td className="py-3 px-4 text-right font-medium">{formatPrice(order.totalAmount)}</td>
+																	</tr>
+																))}
+																{cycleTx.filter(t => t.txType === 'order').length === 0 && (
+																	<tr>
+																		<td colSpan={3} className="py-4 text-center text-slate-400 italic text-xs">Không có đơn hàng mới trong kỳ</td>
+																	</tr>
+																)}
+																{/* Total Row */}
+																<tr className="bg-[#F8F9FA] font-bold border-t border-slate-200">
+																	<td colSpan={2} className="py-3 px-4 uppercase text-slate-800 text-xs shadow-sm">TỔNG CỘNG (ĐẦU KỲ + PHÁT SINH)</td>
+																	<td className="py-3 px-4 text-right text-rose-600 font-black">{formatPrice(openingBalance + debitIncrease)}</td>
+																</tr>
+															</tbody>
+														</table>
 													</div>
 												</div>
-											</div>
 
-											{/* 3. Status Badges */}
-											<div className="grid grid-cols-4 gap-4 mb-10">
-												<div className="bg-blue-50 border border-blue-100 p-4 rounded-2xl flex flex-col justify-center gap-1">
-													<p className="text-[8px] font-black text-blue-600 uppercase tracking-widest">Dư đầu kỳ</p>
-													<p className="text-sm font-black text-[#1A237E]">{formatPrice(openingBalance).replace(' đ', '')}</p>
-												</div>
-												<div className="bg-orange-50 border border-orange-100 p-4 rounded-2xl flex flex-col justify-center gap-1">
-													<p className="text-[8px] font-black text-orange-600 uppercase tracking-widest">Phát sinh tăng</p>
-													<p className="text-sm font-black text-[#FF6D00]">{formatPrice(debitIncrease).replace(' đ', '')}</p>
-												</div>
-												<div className="bg-emerald-50 border border-emerald-100 p-4 rounded-2xl flex flex-col justify-center gap-1">
-													<p className="text-[8px] font-black text-emerald-600 uppercase tracking-widest">Đã thanh toán</p>
-													<p className="text-sm font-black text-emerald-600">{formatPrice(creditDecrease).replace(' đ', '')}</p>
-												</div>
-												<div className="bg-[#1A237E] p-4 rounded-2xl flex flex-col justify-center gap-1 shadow-lg shadow-blue-900/20">
-													<p className="text-[8px] font-black text-white/60 uppercase tracking-widest">Dư cuối kỳ</p>
-													<p className="text-sm font-black text-white">{formatPrice(closingBalance).replace(' đ', '')}</p>
-												</div>
-											</div>
-
-											{/* 4. Main Transaction Table */}
-											<div className="border border-slate-200 rounded-2xl overflow-hidden mb-16 shadow-sm">
-												<table className="w-full text-left table-fixed">
-													<thead>
-														<tr className="bg-[#1A237E] text-white">
-															<th className="w-[15%] py-4 px-4 text-[10px] font-black uppercase tracking-widest text-center">Ngày</th>
-															<th className="w-[15%] py-4 px-4 text-[10px] font-black uppercase tracking-widest text-center">Số CT</th>
-															<th className="w-[40%] py-4 px-4 text-[10px] font-black uppercase tracking-widest">Diễn giải</th>
-															<th className="w-[15%] py-4 px-4 text-[10px] font-black uppercase tracking-widest text-right">Tiền nợ</th>
-															<th className="w-[15%] py-4 px-4 text-[10px] font-black uppercase tracking-widest text-right">Tiền trả</th>
-														</tr>
-													</thead>
-													<tbody className="divide-y divide-slate-100 text-[11px] font-bold text-slate-600">
-														{cycleTx.map((tx, idx) => (
-															<tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/40'}>
-																<td className="py-5 px-4 text-center">{formatDate(tx.orderDate || tx.date || tx.createdAt)}</td>
-																<td className="py-5 px-4 text-center text-[#1A237E] font-black uppercase">{tx.txType === 'order' ? 'BH' : 'TT'}{(tx.id || '').toUpperCase().slice(0, 8)}</td>
-																<td className="py-5 px-4 leading-relaxed italic">{tx.note || (tx.txType === 'order' ? 'Xuất bán hàng theo đơn' : 'Thanh toán công nợ')}</td>
-																<td className="py-5 px-4 text-right text-rose-600 font-black">{tx.txType === 'order' ? formatPrice(tx.totalAmount).replace(' đ', '') : '-'}</td>
-																<td className="py-5 px-4 text-right text-emerald-600 font-black">{tx.txType === 'payment' ? formatPrice(tx.amount).replace(' đ', '') : '-'}</td>
-															</tr>
-														))}
-														{cycleTx.length === 0 && (
-															<tr>
-																<td colSpan={5} className="py-10 text-center text-slate-300 uppercase tracking-widest">Không có giao dịch trong kỳ</td>
-															</tr>
-														)}
-														<tr className="bg-slate-50 border-t-2 border-slate-200">
-															<td colSpan={3} className="py-5 px-4 text-right text-[#1A237E] font-black uppercase tracking-widest">Tổng cộng</td>
-															<td className="py-5 px-4 text-right text-rose-600 font-black text-sm">{formatPrice(debitIncrease).replace(' đ', '')}</td>
-															<td className="py-5 px-4 text-right text-emerald-600 font-black text-sm">{formatPrice(creditDecrease).replace(' đ', '')}</td>
-														</tr>
-													</tbody>
-												</table>
-											</div>
-
-											{/* 5. Signatures Content */}
-											<div className="mt-auto grid grid-cols-2 gap-20 px-10 pb-20">
-												<div className="flex flex-col items-center gap-24">
-													<div className="text-center">
-														<p className="font-black text-[#1A237E] uppercase text-sm tracking-tight mb-1">Người lập phiếu</p>
-														<p className="text-[10px] text-slate-400 italic">(Ký, ghi rõ họ tên)</p>
+												{/* 3. Payment History */}
+												<div className="mb-10">
+													<h3 className="flex items-center text-slate-800 font-bold text-base mb-3 pl-3 border-l-4 border-emerald-500">
+														2. Lịch sử đã thanh toán
+													</h3>
+													<div className="rounded-lg border border-slate-200 overflow-hidden">
+														<table className="w-full text-sm border-collapse">
+															<thead className="bg-[#EEF0F5] text-slate-700 font-bold">
+																<tr>
+																	<th className="py-3 px-4 text-left w-1/4">Ngày</th>
+																	<th className="py-3 px-4 text-left w-1/2">Nội dung</th>
+																	<th className="py-3 px-4 text-right w-1/4">Số tiền</th>
+																</tr>
+															</thead>
+															<tbody className="text-slate-700 divide-y divide-slate-100">
+																{cycleTx.filter(t => t.txType === 'payment').map((pay, idx) => (
+																	<tr key={`pay-${idx}`} className="hover:bg-slate-50">
+																		<td className="py-3 px-4">{formatDate(pay.date || pay.createdAt)}</td>
+																		<td className="py-3 px-4">{pay.note || 'Thanh toán công nợ'}</td>
+																		<td className="py-3 px-4 text-right font-bold text-emerald-600">{formatPrice(pay.amount)}</td>
+																	</tr>
+																))}
+																{cycleTx.filter(t => t.txType === 'payment').length === 0 && (
+																	<tr>
+																		<td colSpan={3} className="py-4 text-center text-slate-400 italic text-xs">Chưa có thanh toán nào trong kỳ</td>
+																	</tr>
+																)}
+																{/* Total Payment Row */}
+																<tr className="bg-[#F8F9FA] font-bold border-t border-slate-200">
+																	<td colSpan={2} className="py-3 px-4 uppercase text-slate-800 text-xs">TỔNG ĐÃ THANH TOÁN TRONG KỲ</td>
+																	<td className="py-3 px-4 text-right text-emerald-600 font-black">{formatPrice(creditDecrease)}</td>
+																</tr>
+															</tbody>
+														</table>
 													</div>
-													<p className="font-black text-[#1A237E] text-lg uppercase tracking-tight">{auth.currentUser?.displayName || 'Admin'}</p>
 												</div>
-												<div className="flex flex-col items-center gap-24">
-													<div className="text-center">
-														<p className="font-black text-[#1A237E] uppercase text-sm tracking-tight mb-1">Khách hàng xác nhận</p>
-														<p className="text-[10px] text-slate-400 italic">(Ký, ghi rõ họ tên)</p>
+
+												{/* 4. Final Summary Box */}
+												<div className="bg-[#FFD600] rounded-xl p-5 flex flex-row justify-between items-center mb-16 shadow-md shadow-yellow-500/20">
+													<span className="text-slate-900 font-bold uppercase text-lg tracking-tight">SỐ DƯ CÔNG NỢ CÒN LẠI</span>
+													<span className="text-slate-900 font-black text-3xl tracking-tighter">{formatPrice(closingBalance)}</span>
+												</div>
+
+												{/* 5. Signatures */}
+												<div className="flex justify-between px-10 mb-8 items-end">
+													<div className="text-center flex flex-col items-center">
+														<p className="font-bold text-slate-800 mb-20 text-base">Đại diện khách hàng</p>
+														<p className="text-slate-400 italic text-sm">(Ký và ghi rõ họ tên)</p>
 													</div>
-													<div className="w-40 h-[1px] bg-transparent"></div> {/* Spacer */}
+													<div className="text-center flex flex-col items-center">
+														<p className="font-bold text-slate-800 mb-20 text-base">Người lập phiếu</p>
+														<p className="font-black text-slate-800 uppercase text-base">{auth.currentUser?.displayName || 'Admin'}</p>
+													</div>
 												</div>
-											</div>
-										</>
-									);
-								})()}
+
+												{/* Footer for print */}
+												<div className="hidden print:block text-center mt-8 pt-4 border-t border-slate-100">
+													<p className="text-[10px] text-slate-400 italic">Cảm ơn quý khách đã tin tưởng và hợp tác cùng Dunvex Build.</p>
+												</div>
+											</>
+										);
+									})()}
+								</div>
 							</div>
 						</div>
 					</div>

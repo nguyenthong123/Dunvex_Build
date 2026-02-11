@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 import { signOut } from 'firebase/auth';
-import { collection, query, where, onSnapshot, updateDoc, doc, writeBatch, getDocs } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, updateDoc, doc, writeBatch, getDocs, limit } from 'firebase/firestore';
 import React, { useState, useEffect } from 'react';
 import { useNavigationConfig } from '../hooks/useNavigationConfig';
 
@@ -9,21 +9,45 @@ const Home = () => {
 	const navigate = useNavigate();
 	const { sidebarItems } = useNavigationConfig();
 	const [unreadCount, setUnreadCount] = useState(0);
+	const [showNotifications, setShowNotifications] = useState(false);
+	const [notifications, setNotifications] = useState<any[]>([]);
 
 	useEffect(() => {
 		if (!auth.currentUser) return;
 
-		const q = query(
+		// 1. Listen for unread count
+		const qUnread = query(
 			collection(db, 'notifications'),
 			where('userId', '==', auth.currentUser.uid),
 			where('read', '==', false)
 		);
 
-		const unsubscribe = onSnapshot(q, (snapshot) => {
+		const unsubscribeUnread = onSnapshot(qUnread, (snapshot) => {
 			setUnreadCount(snapshot.size);
 		});
 
-		return () => unsubscribe();
+		// 2. Listen for notification list (last 20)
+		const qList = query(
+			collection(db, 'notifications'),
+			where('userId', '==', auth.currentUser.uid),
+			limit(20)
+		);
+
+		const unsubscribeList = onSnapshot(qList, (snapshot) => {
+			const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+			// Client-side sort to avoid index issues
+			list.sort((a: any, b: any) => {
+				const timeA = a.createdAt?.seconds || 0;
+				const timeB = b.createdAt?.seconds || 0;
+				return timeB - timeA;
+			});
+			setNotifications(list);
+		});
+
+		return () => {
+			unsubscribeUnread();
+			unsubscribeList();
+		};
 	}, []);
 
 	const markAllAsRead = async () => {
@@ -41,6 +65,26 @@ const Home = () => {
 		await batch.commit();
 	};
 
+	const handleNotificationClick = async (notification: any) => {
+		if (!notification.read) {
+			await updateDoc(doc(db, 'notifications', notification.id), { read: true });
+		}
+		// Optional: Navigate if notification has a link
+		// if (notification.link) navigate(notification.link);
+	};
+
+	const formatTimeAgo = (timestamp: any) => {
+		if (!timestamp) return '';
+		const date = timestamp.seconds ? new Date(timestamp.seconds * 1000) : new Date(timestamp);
+		const now = new Date();
+		const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+		if (diffInSeconds < 60) return 'Vừa xong';
+		if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} phút trước`;
+		if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} giờ trước`;
+		return `${date.getDate()}/${date.getMonth() + 1}`;
+	};
+
 	const handleLogout = async () => {
 		if (window.confirm("Bạn có chắc chắn muốn đăng xuất?")) {
 			await signOut(auth);
@@ -51,21 +95,74 @@ const Home = () => {
 	return (
 		<>
 			{/* HEADER */}
-			<header className="h-16 md:h-20 bg-white border-b border-gray-100 flex items-center justify-between px-4 md:px-8 shrink-0">
+			<header className="h-16 md:h-20 bg-white border-b border-gray-100 flex items-center justify-between px-4 md:px-8 shrink-0 relative z-20">
 				<h2 className="text-lg md:text-xl font-black text-[#1A237E] uppercase tracking-tight">Tổng Quan Hệ Thống</h2>
 				<div className="flex items-center gap-4">
-					<button
-						onClick={markAllAsRead}
-						className="p-2 relative text-slate-400 hover:bg-slate-50 rounded-xl transition-colors group"
-						title="Thông báo"
-					>
-						<span className="material-symbols-outlined text-2xl group-hover:scale-110 transition-transform">notifications</span>
-						{unreadCount > 0 && (
-							<span className="absolute top-2 right-2 size-4 bg-[#FF6D00] text-white text-[8px] font-black flex items-center justify-center rounded-full border-2 border-white animate-bounce">
-								{unreadCount}
-							</span>
+
+					{/* Notification Bell */}
+					<div className="relative">
+						<button
+							onClick={() => setShowNotifications(!showNotifications)}
+							className="p-2 relative text-slate-400 hover:bg-slate-50 rounded-xl transition-colors group"
+							title="Thông báo"
+						>
+							<span className="material-symbols-outlined text-2xl group-hover:scale-110 transition-transform">notifications</span>
+							{unreadCount > 0 && (
+								<span className="absolute top-2 right-2 size-4 bg-[#FF6D00] text-white text-[8px] font-black flex items-center justify-center rounded-full border-2 border-white animate-bounce">
+									{unreadCount}
+								</span>
+							)}
+						</button>
+
+						{/* Notification Dropdown */}
+						{showNotifications && (
+							<>
+								<div className="fixed inset-0 z-30" onClick={() => setShowNotifications(false)}></div>
+								<div className="absolute top-full right-0 mt-2 w-80 md:w-96 bg-white rounded-xl shadow-2xl border border-slate-100 z-40 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+									<div className="p-4 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+										<h3 className="font-bold text-xs uppercase text-slate-700 tracking-wider">Thông báo</h3>
+										<button onClick={markAllAsRead} className="text-[10px] font-bold text-[#1A237E] hover:underline cursor-pointer">
+											Đánh dấu đã đọc tất cả
+										</button>
+									</div>
+									<div className="max-h-[400px] overflow-y-auto custom-scrollbar">
+										{notifications.length === 0 ? (
+											<div className="p-8 text-center flex flex-col items-center">
+												<span className="material-symbols-outlined text-4xl text-slate-200 mb-2">notifications_off</span>
+												<p className="text-xs text-slate-400 font-medium">Không có thông báo nào</p>
+											</div>
+										) : (
+											<div className="divide-y divide-slate-50">
+												{notifications.map((n) => (
+													<div
+														key={n.id}
+														onClick={() => handleNotificationClick(n)}
+														className={`p-4 hover:bg-slate-50 cursor-pointer transition-colors flex gap-3 ${!n.read ? 'bg-blue-50/30' : ''}`}
+													>
+														<div className={`mt-1.5 size-2 rounded-full shrink-0 ${!n.read ? 'bg-[#FF6D00] ring-4 ring-orange-50' : 'bg-slate-200'}`}></div>
+														<div>
+															<h4 className={`text-sm ${!n.read ? 'font-bold text-slate-800' : 'font-medium text-slate-600'}`}>
+																{n.title || 'Thông báo hệ thống'}
+															</h4>
+															<p className="text-xs text-slate-500 mt-1 leading-relaxed">
+																{n.message}
+															</p>
+															<p className="text-[10px] text-slate-400 mt-2 font-medium">
+																{formatTimeAgo(n.createdAt)}
+															</p>
+														</div>
+													</div>
+												))}
+											</div>
+										)}
+									</div>
+									<div className="p-2 border-t border-slate-50 bg-slate-50/30 text-center">
+										<button className="text-[10px] font-bold text-slate-500 hover:text-[#1A237E]">Xem tất cả</button>
+									</div>
+								</div>
+							</>
 						)}
-					</button>
+					</div>
 
 					<div className="h-8 w-px bg-slate-100 mx-2"></div>
 

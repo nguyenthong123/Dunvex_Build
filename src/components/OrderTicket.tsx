@@ -39,7 +39,7 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 	};
 
 	return (
-		<div className="fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-xl flex flex-col items-center overflow-y-auto pt-8 pb-10 custom-scrollbar">
+		<div className="fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-xl flex flex-col items-center overflow-y-auto pt-32 md:pt-10 pb-10 custom-scrollbar">
 			<style>
 				{`
 					@media print {

@@ -421,24 +421,23 @@ const Debts: React.FC = () => {
 
 
 	return (
-		<>
+		<div className="flex flex-col h-full bg-[#f8f9fa] dark:bg-slate-950 transition-colors duration-300">
 			{/* Header */}
-			{/* Header */}
-			<header className="h-16 md:h-20 bg-white border-b border-slate-100 flex items-center justify-between px-4 md:px-8 shrink-0">
+			<header className="h-16 md:h-20 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between px-4 md:px-8 shrink-0 transition-colors duration-300">
 				<div className="flex items-center gap-4">
 					<div className="flex flex-col">
-						<h2 className="text-[#1A237E] text-lg md:text-2xl font-black uppercase tracking-tight">Quản Lý Công Nợ</h2>
-						<p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest hidden md:block">
+						<h2 className="text-[#1A237E] dark:text-indigo-400 text-lg md:text-2xl font-black uppercase tracking-tight">Quản Lý Công Nợ</h2>
+						<p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest hidden md:block">
 							Cập nhật lúc: {currentTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} — {currentTime.toLocaleDateString('vi-VN')}
 						</p>
 					</div>
 				</div>
 
 				<div className="flex items-center gap-3 md:gap-6">
-					<div className="hidden md:flex items-center bg-slate-50 rounded-xl px-4 py-2 w-64 lg:w-96 border border-transparent focus-within:border-[#FF6D00]/50 transition-all shadow-inner">
+					<div className="hidden md:flex items-center bg-slate-50 dark:bg-slate-800 rounded-xl px-4 py-2 w-64 lg:w-96 border border-transparent focus-within:border-[#FF6D00]/50 transition-all shadow-inner">
 						<span className="material-symbols-outlined text-slate-400">search</span>
 						<input
-							className="bg-transparent border-none focus:ring-0 text-sm w-full text-slate-700 ml-2 font-bold"
+							className="bg-transparent border-none focus:ring-0 text-sm w-full text-slate-700 dark:text-slate-200 ml-2 font-bold placeholder:text-slate-400 dark:placeholder:text-slate-500"
 							placeholder="Tìm kiếm đối tác..."
 							type="text"
 							value={searchTerm}
@@ -449,18 +448,18 @@ const Debts: React.FC = () => {
 					<div className="flex items-center gap-2">
 						<button
 							onClick={markAllAsRead}
-							className="p-2 relative text-slate-400 hover:bg-slate-50 rounded-xl transition-colors group"
+							className="p-2 relative text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors group"
 						>
 							<span className="material-symbols-outlined text-2xl group-hover:scale-110 transition-transform">notifications</span>
 							{unreadCount > 0 && (
-								<span className="absolute top-2 right-2 size-4 bg-[#FF6D00] text-white text-[8px] font-black flex items-center justify-center rounded-full border-2 border-white animate-bounce">
+								<span className="absolute top-2 right-2 size-4 bg-[#FF6D00] text-white text-[8px] font-black flex items-center justify-center rounded-full border-2 border-white dark:border-slate-900 animate-bounce">
 									{unreadCount}
 								</span>
 							)}
 						</button>
 						<button
 							onClick={() => setShowPaymentForm(true)}
-							className="hidden md:flex items-center justify-center gap-2 bg-[#1A237E] hover:bg-[#0D47A1] text-white px-5 py-2.5 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-blue-900/20 transition-all active:scale-95"
+							className="hidden md:flex items-center justify-center gap-2 bg-[#1A237E] dark:bg-indigo-600 hover:bg-[#0D47A1] dark:hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-blue-900/20 dark:shadow-indigo-900/20 transition-all active:scale-95"
 						>
 							<span className="material-symbols-outlined text-xl">add_card</span>
 							<span>Ghi nhận thu nợ</span>
@@ -470,18 +469,18 @@ const Debts: React.FC = () => {
 			</header>
 
 			{/* Scrollable Content */}
-			<div className="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 bg-[#f8f9fa]">
+			<div className="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 custom-scrollbar">
 				<div className="max-w-7xl mx-auto flex flex-col gap-6 md:gap-8">
 					{/* KPI Cards Section */}
 					<div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
 						{/* KPI Card 1 */}
-						<div className="bg-white rounded-3xl p-6 shadow-sm border-l-[6px] border-[#10b981] relative overflow-hidden group">
+						<div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border-l-[6px] border-[#10b981] relative overflow-hidden group transition-colors duration-300">
 							<div className="absolute right-0 top-1/2 -translate-y-1/2 p-4 opacity-10 group-hover:scale-110 transition-transform">
 								<span className="material-symbols-outlined text-7xl text-[#10b981]">download</span>
 							</div>
 							<div className="relative z-10 flex flex-col">
-								<p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Tổng Phải thu</p>
-								<p className="text-[#1A237E] text-2xl lg:text-3xl font-black tracking-tighter">{formatPrice(totalReceivable)}</p>
+								<p className="text-slate-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Tổng Phải thu</p>
+								<p className="text-[#1A237E] dark:text-indigo-400 text-2xl lg:text-3xl font-black tracking-tighter">{formatPrice(totalReceivable)}</p>
 								<p className="text-[10px] font-black text-[#10b981] mt-2 flex items-center gap-1 uppercase">
 									<span className="material-symbols-outlined text-xs">arrow_upward</span> {aggregatedData.length} KHÁCH HÀNG
 								</p>
@@ -489,13 +488,13 @@ const Debts: React.FC = () => {
 						</div>
 
 						{/* KPI Card 2 */}
-						<div className="bg-white rounded-3xl p-6 shadow-sm border-l-[6px] border-[#3b82f6] relative overflow-hidden group">
+						<div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border-l-[6px] border-[#3b82f6] relative overflow-hidden group transition-colors duration-300">
 							<div className="absolute right-0 top-1/2 -translate-y-1/2 p-4 opacity-10 group-hover:scale-110 transition-transform">
 								<span className="material-symbols-outlined text-7xl text-[#3b82f6]">upload</span>
 							</div>
 							<div className="relative z-10 flex flex-col">
-								<p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Tổng Phải trả</p>
-								<p className="text-[#1A237E] text-2xl lg:text-3xl font-black tracking-tighter">{formatPrice(totalPayable)}</p>
+								<p className="text-slate-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Tổng Phải trả</p>
+								<p className="text-[#1A237E] dark:text-indigo-400 text-2xl lg:text-3xl font-black tracking-tighter">{formatPrice(totalPayable)}</p>
 								<p className="text-[10px] font-black text-rose-500 mt-2 flex items-center gap-1 uppercase">
 									<span className="material-symbols-outlined text-xs">arrow_downward</span> CHIẾM {((totalPayable / (totalReceivable || 1)) * 100).toFixed(0)}% PHẢI THU
 								</p>
@@ -503,14 +502,14 @@ const Debts: React.FC = () => {
 						</div>
 
 						{/* KPI Card 3 */}
-						<div className="bg-white rounded-3xl p-6 shadow-sm border-l-[6px] border-rose-500 relative overflow-hidden group">
+						<div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border-l-[6px] border-rose-500 relative overflow-hidden group transition-colors duration-300">
 							<div className="absolute right-0 top-1/2 -translate-y-1/2 p-4 opacity-10 group-hover:scale-110 transition-transform">
 								<span className="material-symbols-outlined text-7xl text-rose-500">warning</span>
 							</div>
 							<div className="relative z-10 flex flex-col">
-								<p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Nợ Quá hạn</p>
+								<p className="text-slate-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Nợ Quá hạn</p>
 								<p className="text-rose-600 text-2xl lg:text-3xl font-black tracking-tighter">{overdueCount}</p>
-								<div className="bg-rose-50 text-rose-600 text-[8px] font-black uppercase px-2 py-1 rounded-full w-fit mt-2 animate-pulse">
+								<div className="bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 text-[8px] font-black uppercase px-2 py-1 rounded-full w-fit mt-2 animate-pulse">
 									KHOẢN NỢ LỚN
 								</div>
 							</div>
@@ -526,8 +525,8 @@ const Debts: React.FC = () => {
 										key={status}
 										onClick={() => setStatusFilter(status)}
 										className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${statusFilter === status
-											? 'bg-[#1A237E] text-white shadow-lg shadow-blue-900/20'
-											: 'bg-white text-slate-500 border border-slate-100 hover:bg-slate-50'
+											? 'bg-[#1A237E] dark:bg-indigo-600 text-white shadow-lg shadow-blue-900/20 dark:shadow-indigo-900/20'
+											: 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'
 											}`}
 									>
 										{status}
@@ -537,7 +536,7 @@ const Debts: React.FC = () => {
 							<div className="flex items-center gap-2 w-full md:w-auto">
 								<button
 									onClick={() => setShowFilterOptions(!showFilterOptions)}
-									className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${showFilterOptions ? 'bg-[#1A237E] text-white' : 'bg-white text-slate-500 border border-slate-100'}`}
+									className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${showFilterOptions ? 'bg-[#1A237E] dark:bg-indigo-600 text-white' : 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-100 dark:border-slate-800'}`}
 								>
 									<Filter size={16} /> Lọc thời gian
 								</button>
@@ -548,21 +547,21 @@ const Debts: React.FC = () => {
 						</div>
 
 						{showFilterOptions && (
-							<div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-top-4 duration-300">
+							<div className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-top-4 duration-300 transition-colors duration-300">
 								<div>
-									<label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Từ ngày</label>
+									<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">Từ ngày</label>
 									<input
 										type="date"
-										className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-[#1A237E]/20"
+										className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#1A237E]/20 dark:focus:ring-indigo-500/20"
 										value={fromDate}
 										onChange={(e) => setFromDate(e.target.value)}
 									/>
 								</div>
 								<div>
-									<label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Đến ngày</label>
+									<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">Đến ngày</label>
 									<input
 										type="date"
-										className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-[#1A237E]/20"
+										className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#1A237E]/20 dark:focus:ring-indigo-500/20"
 										value={toDate}
 										onChange={(e) => setToDate(e.target.value)}
 									/>
@@ -572,42 +571,42 @@ const Debts: React.FC = () => {
 					</div>
 
 					{/* Table */}
-					<div className="bg-white rounded-[2rem] shadow-xl shadow-blue-900/5 border border-slate-100 overflow-hidden">
+					<div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-xl shadow-blue-900/5 dark:shadow-indigo-900/5 border border-slate-100 dark:border-slate-800 overflow-hidden transition-colors duration-300">
 						<div className="overflow-x-auto">
 							<table className="w-full text-left">
 								<thead>
-									<tr className="bg-slate-50/50 border-b border-slate-100">
-										<th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Đối tác / Mã KH</th>
-										<th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Tổng Mua</th>
-										<th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Đã Trả</th>
-										<th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Dư nợ hiện tại</th>
-										<th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Hành động</th>
+									<tr className="bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
+										<th className="px-8 py-5 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Đối tác / Mã KH</th>
+										<th className="px-8 py-5 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-right">Tổng Mua</th>
+										<th className="px-8 py-5 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-right">Đã Trả</th>
+										<th className="px-8 py-5 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-right">Dư nợ hiện tại</th>
+										<th className="px-6 py-5 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-right">Hành động</th>
 									</tr>
 								</thead>
-								<tbody className="divide-y divide-slate-100">
+								<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
 									{loading ? (
-										<tr><td colSpan={5} className="py-20 text-center text-slate-400 uppercase font-black text-xs tracking-[4px]">Đang tải dữ liệu...</td></tr>
+										<tr><td colSpan={5} className="py-20 text-center text-slate-400 dark:text-slate-500 uppercase font-black text-xs tracking-[4px]">Đang tải dữ liệu...</td></tr>
 									) : aggregatedData.length === 0 ? (
-										<tr><td colSpan={5} className="py-20 text-center text-slate-400 uppercase font-black text-xs tracking-[4px]">Không tìm thấy đối tác nào</td></tr>
+										<tr><td colSpan={5} className="py-20 text-center text-slate-400 dark:text-slate-500 uppercase font-black text-xs tracking-[4px]">Không tìm thấy đối tác nào</td></tr>
 									) : aggregatedData.map((row) => (
-										<tr key={row.id} className="hover:bg-slate-50/50 transition-colors group cursor-pointer" onClick={() => openStatement(row)}>
+										<tr key={row.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer" onClick={() => openStatement(row)}>
 											<td className="px-8 py-5">
 												<div className="flex items-center gap-4">
-													<div className={`size-12 rounded-2xl bg-[#1A237E]/5 flex items-center justify-center text-[#1A237E] font-black text-sm shrink-0 shadow-sm border border-slate-100`}>{row.initials}</div>
+													<div className={`size-12 rounded-2xl bg-[#1A237E]/5 dark:bg-indigo-500/10 flex items-center justify-center text-[#1A237E] dark:text-indigo-400 font-black text-sm shrink-0 shadow-sm border border-slate-100 dark:border-slate-800`}>{row.initials}</div>
 													<div>
-														<p className="text-sm font-black text-[#1A237E] uppercase tracking-tight leading-tight">{row.name}</p>
-														<p className="text-[10px] text-slate-400 font-bold mt-1 tracking-wider uppercase">{row.phone || row.id.slice(-6)}</p>
+														<p className="text-sm font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight leading-tight">{row.name}</p>
+														<p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold mt-1 tracking-wider uppercase">{row.phone || row.id.slice(-6)}</p>
 													</div>
 												</div>
 											</td>
 											<td className="px-8 py-5 text-right">
-												<span className="text-xs font-bold text-slate-500">{formatPrice(row.totalOrdersAmount)}</span>
+												<span className="text-xs font-bold text-slate-500 dark:text-slate-400">{formatPrice(row.totalOrdersAmount)}</span>
 											</td>
 											<td className="px-8 py-5 text-right">
-												<span className="text-xs font-bold text-green-600">{formatPrice(row.totalPaymentsAmount)}</span>
+												<span className="text-xs font-bold text-green-600 dark:text-green-400">{formatPrice(row.totalPaymentsAmount)}</span>
 											</td>
 											<td className="px-8 py-5 text-right">
-												<span className={`text-sm font-black tracking-tight ${row.currentDebt > 0 ? 'text-rose-600' : 'text-[#10b981]'}`}>
+												<span className={`text-sm font-black tracking-tight ${row.currentDebt > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-[#10b981] dark:text-emerald-400'}`}>
 													{formatPrice(row.currentDebt)}
 												</span>
 											</td>
@@ -615,7 +614,7 @@ const Debts: React.FC = () => {
 												<div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
 													<button
 														onClick={() => openStatement(row)}
-														className="bg-white border border-slate-100 p-2.5 rounded-xl text-slate-400 hover:text-[#1A237E] hover:border-[#1A237E] transition-all shadow-sm"
+														className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-2.5 rounded-xl text-slate-400 dark:text-slate-500 hover:text-[#1A237E] dark:hover:text-indigo-400 hover:border-[#1A237E] dark:hover:border-indigo-400 transition-all shadow-sm"
 														title="Xem chi tiết"
 													>
 														<FileText size={20} />
@@ -625,7 +624,7 @@ const Debts: React.FC = () => {
 															setPaymentData({ ...paymentData, customerId: row.id, customerName: row.name });
 															setShowPaymentForm(true);
 														}}
-														className="bg-white border border-slate-100 p-2.5 rounded-xl text-slate-400 hover:text-[#FF6D00] hover:border-[#FF6D00] transition-all shadow-sm"
+														className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-2.5 rounded-xl text-slate-400 dark:text-slate-500 hover:text-[#FF6D00] hover:border-[#FF6D00] transition-all shadow-sm"
 														title="Thu nợ"
 													>
 														<PlusCircle size={20} />
@@ -643,9 +642,9 @@ const Debts: React.FC = () => {
 
 			{/* PAYMENT FORM MODAL */}
 			{showPaymentForm && (
-				<div className="fixed inset-0 z-[100] bg-[#1A237E]/80 backdrop-blur-sm flex items-center justify-center p-4">
-					<div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-						<div className="px-8 py-6 bg-[#1A237E] text-white flex items-center justify-between">
+				<div className="fixed inset-0 z-[100] bg-[#1A237E]/80 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+					<div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 transition-colors duration-300">
+						<div className="px-8 py-6 bg-[#1A237E] dark:bg-indigo-900 text-white flex items-center justify-between">
 							<div className="flex items-center gap-3">
 								<PlusCircle size={24} className="text-[#FF6D00]" />
 								<h3 className="text-xl font-black uppercase tracking-tight">{editingPaymentId ? 'Chỉnh sửa phiếu thu' : 'Ghi nhận thu nợ'}</h3>
@@ -656,9 +655,9 @@ const Debts: React.FC = () => {
 						</div>
 						<form onSubmit={handleRecordPayment} className="p-8 space-y-6">
 							<div>
-								<label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Chọn khách hàng</label>
+								<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">Chọn khách hàng</label>
 								<select
-									className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-[#FF6D00]/20 appearance-none"
+									className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#FF6D00]/20 appearance-none"
 									value={paymentData.customerId}
 									onChange={(e) => {
 										const cust = customers.find((c: any) => c.id === e.target.value);
@@ -674,10 +673,10 @@ const Debts: React.FC = () => {
 
 
 							<div>
-								<label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Ngày thu nợ</label>
+								<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">Ngày thu nợ</label>
 								<input
 									type="date"
-									className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-[#FF6D00]/20"
+									className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#FF6D00]/20"
 									value={paymentData.date}
 									onChange={(e) => setPaymentData({ ...paymentData, date: e.target.value })}
 								/>
@@ -685,19 +684,19 @@ const Debts: React.FC = () => {
 
 							<div className="grid grid-cols-2 gap-4">
 								<div>
-									<label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Số tiền thu</label>
+									<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">Số tiền thu</label>
 									<input
 										type="number"
-										className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-sm font-black text-[#FF6D00] focus:ring-2 focus:ring-[#FF6D00]/20"
+										className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 text-sm font-black text-[#FF6D00] focus:ring-2 focus:ring-[#FF6D00]/20"
 										placeholder="0"
 										value={paymentData.amount === 0 ? '' : paymentData.amount}
 										onChange={(e) => setPaymentData({ ...paymentData, amount: parseFloat(e.target.value) || 0 })}
 									/>
 								</div>
 								<div>
-									<label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Hình thức</label>
+									<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">Hình thức</label>
 									<select
-										className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-[#FF6D00]/20 appearance-none"
+										className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#FF6D00]/20 appearance-none"
 										value={paymentData.paymentMethod}
 										onChange={(e) => setPaymentData({ ...paymentData, paymentMethod: e.target.value })}
 									>
@@ -708,10 +707,10 @@ const Debts: React.FC = () => {
 							</div>
 
 							<div>
-								<label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Ghi chú</label>
+								<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">Ghi chú</label>
 								<textarea
 									rows={3}
-									className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-sm font-medium focus:ring-2 focus:ring-[#FF6D00]/20 resize-none"
+									className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-[#FF6D00]/20 resize-none"
 									placeholder="VD: Thu nợ đơn hàng tháng 10..."
 									value={paymentData.note}
 									onChange={(e) => setPaymentData({ ...paymentData, note: e.target.value })}
@@ -719,20 +718,20 @@ const Debts: React.FC = () => {
 							</div>
 
 							<div>
-								<label className="block text-[10px] font-black text-slate-400 uppercase tracking-[2px] mb-2">Bằng chứng thanh toán (Lệnh chuyển tiền)</label>
+								<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px] mb-2">Bằng chứng thanh toán (Lệnh chuyển tiền)</label>
 								<div className="flex gap-4">
 									<button
 										type="button"
 										onClick={() => document.getElementById('payment-proof-upload')?.click()}
 										disabled={uploadingPaymentImage}
-										className="flex-1 h-20 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center gap-1 hover:bg-slate-100 transition-all disabled:opacity-50"
+										className="flex-1 h-20 bg-slate-50 dark:bg-slate-800 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl flex flex-col items-center justify-center gap-1 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all disabled:opacity-50"
 									>
 										{uploadingPaymentImage ? (
-											<div className="size-5 border-2 border-[#1A237E] border-t-transparent rounded-full animate-spin"></div>
+											<div className="size-5 border-2 border-[#1A237E] dark:border-indigo-400 border-t-transparent rounded-full animate-spin"></div>
 										) : (
 											<>
-												<Camera size={24} className="text-slate-400" />
-												<span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{paymentData.proofImage ? 'Chụp lại ảnh' : 'Chụp/Tải ảnh'}</span>
+												<Camera size={24} className="text-slate-400 dark:text-slate-500" />
+												<span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">{paymentData.proofImage ? 'Chụp lại ảnh' : 'Chụp/Tải ảnh'}</span>
 											</>
 										)}
 									</button>
@@ -744,7 +743,7 @@ const Debts: React.FC = () => {
 										onChange={handlePaymentImageUpload}
 									/>
 									{paymentData.proofImage && (
-										<div className="size-20 bg-slate-100 rounded-2xl overflow-hidden border-2 border-white shadow-lg shrink-0">
+										<div className="size-20 bg-slate-100 dark:bg-slate-800 rounded-2xl overflow-hidden border-2 border-white dark:border-slate-700 shadow-lg shrink-0">
 											<img src={paymentData.proofImage.includes('drive.google.com') ? `https://drive.google.com/thumbnail?id=${paymentData.proofImage.split('id=')[1]}&sz=w200` : paymentData.proofImage} alt="Proof" className="w-full h-full object-cover" />
 										</div>
 									)}
@@ -768,56 +767,56 @@ const Debts: React.FC = () => {
 			{/* DEBT STATEMENT MODAL */}
 			{showStatement && selectedCustomer && (
 				<div className="fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-xl flex items-center justify-center p-0 md:p-8">
-					<div className="bg-white w-full max-w-4xl max-h-[95vh] md:max-h-[90vh] md:rounded-[3rem] shadow-2xl relative flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+					<div className="bg-white dark:bg-slate-900 w-full max-w-4xl max-h-[95vh] md:max-h-[90vh] md:rounded-[3rem] shadow-2xl relative flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 transaction-colors duration-300">
 						{/* MODAL HEADER - STICKY FOR UI BUT HIDDEN FOR SCREENSHOT ONCE SCROLLED */}
-						<div className="flex-none bg-white px-8 py-5 border-b border-slate-100 flex items-center justify-between z-20 md:rounded-t-[3rem] print:hidden">
+						<div className="flex-none bg-white dark:bg-slate-900 px-8 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between z-20 md:rounded-t-[3rem] print:hidden transition-colors duration-300">
 							<div className="flex items-center gap-3">
-								<div className="size-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
+								<div className="size-10 bg-indigo-50 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center">
 									<History size={20} />
 								</div>
 								<div>
-									<h3 className="text-lg font-black uppercase tracking-tight">Chi tiết công nợ</h3>
-									<p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">{selectedCustomer.name}</p>
+									<h3 className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white">Chi tiết công nợ</h3>
+									<p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest mt-0.5">{selectedCustomer.name}</p>
 								</div>
 							</div>
 							<div className="flex items-center gap-2">
-								<button onClick={() => window.print()} className="h-10 px-4 rounded-xl bg-slate-100 text-slate-600 flex items-center gap-2 font-bold text-xs uppercase hover:bg-slate-200 transition-all">
+								<button onClick={() => window.print()} className="h-10 px-4 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center gap-2 font-bold text-xs uppercase hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">
 									<Printer size={16} /> <span className="hidden md:inline">In phiếu</span>
 								</button>
-								<button onClick={() => setShowStatement(false)} className="size-10 rounded-full bg-slate-50 text-slate-400 hover:bg-slate-100 flex items-center justify-center transition-colors">
+								<button onClick={() => setShowStatement(false)} className="size-10 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center transition-colors">
 									<X size={20} />
 								</button>
 							</div>
 						</div>
 
 						{/* DATE FILTER BAR FOR STATEMENT */}
-						<div className="flex-none bg-slate-50 px-4 md:px-8 py-3 border-b border-slate-100 flex flex-col md:flex-row items-center justify-between gap-4 z-10 print:hidden">
+						<div className="flex-none bg-slate-50 dark:bg-slate-800/50 px-4 md:px-8 py-3 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4 z-10 print:hidden transition-colors duration-300">
 							<div className="flex items-center gap-4 w-full md:w-auto">
-								<span className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Lọc giao dịch:</span>
+								<span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest whitespace-nowrap">Lọc giao dịch:</span>
 								<div className="flex items-center gap-2 w-full">
 									<input
 										type="date"
 										value={statementFromDate}
 										onChange={(e) => setStatementFromDate(e.target.value)}
-										className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-700"
+										className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200"
 									/>
 									<span className="text-slate-300">-</span>
 									<input
 										type="date"
 										value={statementToDate}
 										onChange={(e) => setStatementToDate(e.target.value)}
-										className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-700"
+										className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200"
 									/>
 								</div>
 							</div>
 
 							{/* ZOOM CONTROLS */}
-							<div className="flex bg-white rounded-lg p-1 border border-slate-200 shadow-sm">
+							<div className="flex bg-white dark:bg-slate-900 rounded-lg p-1 border border-slate-200 dark:border-slate-700 shadow-sm">
 								{[0.6, 0.85, 1.0].map((v) => (
 									<button
 										key={v}
 										onClick={() => setStatementZoom(v)}
-										className={`px-3 py-1 rounded-md text-[10px] font-black transition-all ${statementZoom === v ? 'bg-[#1A237E] text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+										className={`px-3 py-1 rounded-md text-[10px] font-black transition-all ${statementZoom === v ? 'bg-[#1A237E] dark:bg-indigo-600 text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
 									>
 										{v * 100}%
 									</button>
@@ -826,7 +825,7 @@ const Debts: React.FC = () => {
 						</div>
 
 						{/* SCROLLABLE DOCUMENT AREA */}
-						<div className="flex-1 overflow-y-auto bg-slate-100 py-8 flex items-start justify-center scroll-smooth custom-scrollbar">
+						<div className="flex-1 overflow-y-auto bg-slate-100 dark:bg-slate-950/50 py-8 flex items-start justify-center scroll-smooth custom-scrollbar">
 
 							{/* THE PAPER SHEET - Scalable Wrapper */}
 							<div
@@ -898,7 +897,7 @@ const Debts: React.FC = () => {
 										const openingBalance = allPossibleTx.reduce((sum, tx) => {
 											const txDate = getNormDate(tx);
 											if (txDate !== '' && txDate < startVal) {
-												return sum + (tx.totalAmount || 0) - (tx.amount || 0);
+												return sum + Number(tx.totalAmount || 0) - Number(tx.amount || 0);
 											}
 											return sum;
 										}, 0);
@@ -916,8 +915,8 @@ const Debts: React.FC = () => {
 											return ta - tb;
 										});
 
-										const debitIncrease = cycleTx.filter(t => t.txType === 'order').reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-										const creditDecrease = cycleTx.filter(t => t.txType === 'payment').reduce((sum, p) => sum + (p.amount || 0), 0);
+										const debitIncrease = cycleTx.filter(t => t.txType === 'order').reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
+										const creditDecrease = cycleTx.filter(t => t.txType === 'payment').reduce((sum, p) => sum + Number(p.amount || 0), 0);
 										const closingBalance = openingBalance + debitIncrease - creditDecrease;
 
 										return (
@@ -1051,7 +1050,7 @@ const Debts: React.FC = () => {
 					</div>
 				</div>
 			)}
-		</>
+		</div>
 	);
 };
 

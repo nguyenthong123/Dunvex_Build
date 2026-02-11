@@ -68,7 +68,7 @@ export const useNavigationConfig = () => {
 		{ icon: 'receipt_long', label: 'Đơn hàng', path: '/orders' },
 		{ ...getCenterItem(), isCenter: true },
 		{ icon: 'account_balance_wallet', label: 'Công nợ', path: '/' },
-		{ icon: 'history', label: 'Hoạt động', path: '/checkin' },
+		{ icon: 'history', label: 'Hoạt động', path: '/checkin?action=history' },
 		{ icon: 'group', label: 'Khách hàng', path: '/customers', desktopOnly: true },
 		{ icon: 'inventory_2', label: 'Sản phẩm', path: '/inventory', desktopOnly: true },
 		{ icon: 'settings', label: 'Cài đặt', path: '/settings' },

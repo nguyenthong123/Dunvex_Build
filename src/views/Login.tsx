@@ -36,7 +36,7 @@ const Login = () => {
 	};
 
 	return (
-		<div className="min-h-screen w-full bg-[#F8FAFC] flex flex-col md:flex-row overflow-x-hidden">
+		<div className="min-h-screen w-full bg-[#F8FAFC] dark:bg-slate-950 flex flex-col md:flex-row overflow-x-hidden transition-colors duration-300">
 			{/* Desktop Left Side - Hero Section */}
 			<div className="hidden md:flex md:w-1/2 lg:w-[60%] relative overflow-hidden bg-[#1A237E]">
 				<img
@@ -70,25 +70,25 @@ const Login = () => {
 			</div>
 
 			{/* Login Form Section */}
-			<div className="flex-1 flex flex-col items-center justify-center p-6 md:p-12 lg:p-24 bg-white md:bg-transparent">
-				<div className="w-full max-w-md bg-white p-8 md:p-10 rounded-2xl md:shadow-2xl md:border md:border-slate-100 flex flex-col items-center">
+			<div className="flex-1 flex flex-col items-center justify-center p-6 md:p-12 lg:p-24 bg-white dark:bg-slate-900 md:bg-transparent md:dark:bg-transparent transition-colors duration-300">
+				<div className="w-full max-w-md bg-white dark:bg-slate-900 p-8 md:p-10 rounded-2xl md:shadow-2xl md:border md:border-slate-100 dark:md:border-slate-800 flex flex-col items-center transition-colors duration-300">
 					{/* Mobile Logo */}
 					<div className="md:hidden flex flex-col items-center mb-8">
 						<div className="w-20 h-20 bg-[#1A237E] rounded-2xl flex items-center justify-center shadow-xl mb-4">
 							<span className="material-symbols-outlined text-white text-5xl">apartment</span>
 						</div>
-						<h1 className="text-2xl font-black text-[#1A237E] tracking-tight">DUNVEX BUILD</h1>
+						<h1 className="text-2xl font-black text-[#1A237E] dark:text-white tracking-tight">DUNVEX BUILD</h1>
 					</div>
 
 					<div className="w-full text-center md:text-left mb-10">
-						<h2 className="text-2xl font-bold text-slate-900 mb-2">Chào mừng bạn trở lại</h2>
-						<p className="text-slate-500 text-sm">Vui lòng đăng nhập bằng Google để truy cập hệ thống.</p>
+						<h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Chào mừng bạn trở lại</h2>
+						<p className="text-slate-500 dark:text-slate-400 text-sm">Vui lòng đăng nhập bằng Google để truy cập hệ thống.</p>
 					</div>
 
 					<div className="w-full space-y-4">
 						<button
 							onClick={handleGoogleLogin}
-							className="w-full flex items-center justify-center gap-3 bg-white border-2 border-[#1A237E]/10 hover:border-[#1A237E] hover:bg-slate-50 text-slate-700 font-semibold h-14 rounded-xl transition-all duration-300 group shadow-sm"
+							className="w-full flex items-center justify-center gap-3 bg-white dark:bg-slate-800 border-2 border-[#1A237E]/10 dark:border-slate-700 hover:border-[#1A237E] dark:hover:border-indigo-500 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold h-14 rounded-xl transition-all duration-300 group shadow-sm"
 						>
 							<svg className="w-6 h-6" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
 								<path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"></path>
@@ -100,43 +100,43 @@ const Login = () => {
 						</button>
 
 						<div className="relative flex py-4 items-center">
-							<div className="flex-grow border-t border-slate-200"></div>
-							<span className="flex-shrink-0 mx-4 text-slate-400 text-[11px] font-bold uppercase tracking-widest">DUNVEX</span>
-							<div className="flex-grow border-t border-slate-200"></div>
+							<div className="flex-grow border-t border-slate-200 dark:border-slate-700"></div>
+							<span className="flex-shrink-0 mx-4 text-slate-400 dark:text-slate-500 text-[11px] font-bold uppercase tracking-widest">DUNVEX</span>
+							<div className="flex-grow border-t border-slate-200 dark:border-slate-700"></div>
 						</div>
 
-						<p className="text-center text-slate-400 text-xs">Phần mềm quản lý VLXD chuyên biệt</p>
+						<p className="text-center text-slate-400 dark:text-slate-500 text-xs">Phần mềm quản lý VLXD chuyên biệt</p>
 					</div>
 
-					<div className="mt-10 p-4 rounded-xl bg-[#FF6D00]/5 border border-[#FF6D00]/20 flex gap-3 items-start">
+					<div className="mt-10 p-4 rounded-xl bg-[#FF6D00]/5 dark:bg-[#FF6D00]/10 border border-[#FF6D00]/20 dark:border-[#FF6D00]/30 flex gap-3 items-start">
 						<span className="material-symbols-outlined text-[#FF6D00] text-[20px] mt-0.5">verified_user</span>
-						<p className="text-[13px] text-slate-600 leading-relaxed text-left">
-							Dữ liệu được lưu trữ bảo mật trên hệ thống Cloud của <span className="font-bold text-[#1A237E]">Firebase (Google)</span>.
+						<p className="text-[13px] text-slate-600 dark:text-slate-300 leading-relaxed text-left">
+							Dữ liệu được lưu trữ bảo mật trên hệ thống Cloud của <span className="font-bold text-[#1A237E] dark:text-indigo-400">Firebase (Google)</span>.
 						</p>
 					</div>
 
 					<div className="mt-auto pt-10 w-full">
-						<div className="flex flex-col items-center justify-center border-t border-slate-100 pt-6">
-							<p className="text-xs text-slate-400 font-medium mb-3">Hỗ trợ kỹ thuật 24/7</p>
+						<div className="flex flex-col items-center justify-center border-t border-slate-100 dark:border-slate-800 pt-6">
+							<p className="text-xs text-slate-400 dark:text-slate-500 font-medium mb-3">Hỗ trợ kỹ thuật 24/7</p>
 							<a className="flex items-center gap-3 group" href="tel:0909123456">
-								<div className="w-10 h-10 rounded-full bg-[#1A237E]/5 group-hover:bg-[#1A237E] transition-colors flex items-center justify-center">
-									<span className="material-symbols-outlined text-[#1A237E] group-hover:text-white text-[20px]">support_agent</span>
+								<div className="w-10 h-10 rounded-full bg-[#1A237E]/5 dark:bg-indigo-500/10 group-hover:bg-[#1A237E] dark:group-hover:bg-indigo-600 transition-colors flex items-center justify-center">
+									<span className="material-symbols-outlined text-[#1A237E] dark:text-indigo-400 group-hover:text-white text-[20px]">support_agent</span>
 								</div>
-								<span className="text-sm font-bold text-[#1A237E]">0909 123 456</span>
+								<span className="text-sm font-bold text-[#1A237E] dark:text-indigo-400">0909 123 456</span>
 							</a>
 						</div>
 					</div>
 				</div>
 
-				<p className="mt-8 text-[11px] text-slate-400 font-medium uppercase tracking-[2px]">
+				<p className="mt-8 text-[11px] text-slate-400 dark:text-slate-500 font-medium uppercase tracking-[2px]">
 					© 2024 Dunvex Build Technology Solutions
 				</p>
 			</div>
 
 			{/* Online Status Badge (LG only) */}
-			<div className="hidden lg:flex fixed bottom-6 right-6 bg-white shadow-xl border border-slate-200 rounded-full py-2 px-6 items-center gap-3 hover:scale-105 transition-transform cursor-pointer">
+			<div className="hidden lg:flex fixed bottom-6 right-6 bg-white dark:bg-slate-900 shadow-xl border border-slate-200 dark:border-slate-800 rounded-full py-2 px-6 items-center gap-3 hover:scale-105 transition-transform cursor-pointer">
 				<div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-				<span className="text-xs font-semibold text-slate-700">Hệ thống hoạt động ổn định</span>
+				<span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Hệ thống hoạt động ổn định</span>
 			</div>
 		</div>
 	);

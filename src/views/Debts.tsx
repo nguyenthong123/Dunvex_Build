@@ -25,8 +25,11 @@ interface DataRow {
 	riskBg: string;
 }
 
+import { useOwner } from '../hooks/useOwner';
+
 const Debts: React.FC = () => {
 	const navigate = useNavigate();
+	const owner = useOwner();
 	const [currentTime, setCurrentTime] = useState(new Date());
 
 	const handleLogout = async () => {
@@ -71,7 +74,7 @@ const Debts: React.FC = () => {
 		if (params.get('payment') === 'true') {
 			setShowPaymentForm(true);
 			// Optional: clean up URL
-			navigate('/', { replace: true });
+			navigate('/debts', { replace: true });
 		}
 	}, [search, navigate]);
 
@@ -143,11 +146,11 @@ const Debts: React.FC = () => {
 	}, []);
 
 	useEffect(() => {
-		if (!auth.currentUser) return;
+		if (owner.loading || !owner.ownerId) return;
 
 		const qOrders = query(
 			collection(db, 'orders'),
-			where('createdBy', '==', auth.currentUser.uid)
+			where('ownerId', '==', owner.ownerId)
 		);
 
 		const unsubOrders = onSnapshot(qOrders, (snapshot) => {
@@ -157,7 +160,7 @@ const Debts: React.FC = () => {
 
 		const qPayments = query(
 			collection(db, 'payments'),
-			where('createdBy', '==', auth.currentUser.uid)
+			where('ownerId', '==', owner.ownerId)
 		);
 
 		const unsubPayments = onSnapshot(qPayments, (snapshot) => {
@@ -167,7 +170,7 @@ const Debts: React.FC = () => {
 
 		const qCustomers = query(
 			collection(db, 'customers'),
-			where('createdBy', '==', auth.currentUser.uid)
+			where('ownerId', '==', owner.ownerId)
 		);
 
 		const unsubCustomers = onSnapshot(qCustomers, (snapshot) => {
@@ -181,7 +184,7 @@ const Debts: React.FC = () => {
 			unsubPayments();
 			unsubCustomers();
 		};
-	}, [auth.currentUser]);
+	}, [owner.loading, owner.ownerId]);
 
 	const formatPrice = (price: number) => {
 		return new Intl.NumberFormat('vi-VN').format(price || 0) + ' đ';
@@ -338,7 +341,7 @@ const Debts: React.FC = () => {
 			reader.onload = async () => {
 				const base64Data = (reader.result as string).split(',')[1];
 				try {
-					const response = await fetch('https://script.google.com/macros/s/AKfycby6Bm4e2rkzn7y6Skkl9eYKqclc927iJo1as-fBP7lsnvG1eC7sSh8Albak4fmy59w2FA/exec', {
+					const response = await fetch('https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec', {
 						method: 'POST',
 						body: JSON.stringify({
 							filename: `payment_${Date.now()}_${file.name}`,
@@ -384,6 +387,8 @@ const Debts: React.FC = () => {
 				await addDoc(collection(db, 'payments'), {
 					...paymentData,
 					createdAt: serverTimestamp(),
+					ownerId: owner.ownerId,
+					ownerEmail: owner.ownerEmail,
 					createdBy: auth.currentUser?.uid,
 					createdByEmail: auth.currentUser?.email
 				});

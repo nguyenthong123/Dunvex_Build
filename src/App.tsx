@@ -6,6 +6,7 @@ import Home from './views/Home';
 import QuickOrder from './views/QuickOrder';
 import Debts from './views/Debts';
 import AdminSettings from './views/AdminSettings';
+import AppSettings from './views/AppSettings';
 import Login from './views/Login';
 
 import CustomerList from './views/CustomerList';
@@ -39,7 +40,7 @@ function App() {
 	}
 
 	return (
-		<div className="min-h-screen bg-slate-50">
+		<div className="min-h-screen bg-[#f8f9fb] transition-colors duration-300 dark:bg-slate-950">
 			<Routes>
 				<Route
 					path="/login"
@@ -49,11 +50,11 @@ function App() {
 				{/* Protected Routes wrapped in MainLayout */}
 				<Route
 					path="/"
-					element={currentUser ? <MainLayout><Debts /></MainLayout> : <Navigate to="/login" />}
+					element={currentUser ? <MainLayout><Home /></MainLayout> : <Navigate to="/login" />}
 				/>
 				<Route
-					path="/dashboard"
-					element={currentUser ? <MainLayout><Home /></MainLayout> : <Navigate to="/login" />}
+					path="/debts"
+					element={currentUser ? <MainLayout><Debts /></MainLayout> : <Navigate to="/login" />}
 				/>
 				<Route
 					path="/customers"
@@ -79,9 +80,16 @@ function App() {
 					path="/quick-order/:id"
 					element={currentUser ? <MainLayout><QuickOrder /></MainLayout> : <Navigate to="/login" />}
 				/>
+
+				{/* Business Admin (Separated) */}
+				<Route
+					path="/admin"
+					element={currentUser ? <MainLayout><AdminSettings /></MainLayout> : <Navigate to="/login" />}
+				/>
+				{/* General App Settings */}
 				<Route
 					path="/settings"
-					element={currentUser ? <MainLayout><AdminSettings /></MainLayout> : <Navigate to="/login" />}
+					element={currentUser ? <MainLayout><AppSettings /></MainLayout> : <Navigate to="/login" />}
 				/>
 
 				{/* Catch all */}

@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { auth, googleProvider, db } from '../services/firebase';
 import { signInWithPopup } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 
 const Login = () => {
 	const navigate = useNavigate();
@@ -13,18 +13,55 @@ const Login = () => {
 
 			// Save/Check user in Firestore
 			const userRef = doc(db, 'users', user.uid);
-			const userSnap = await getDoc(userRef);
+			const inviteRef = doc(db, 'permissions', user.email || 'unknown');
 
-			if (!userSnap.exists()) {
-				// New user registration
+			// Fetch both concurrently
+			const [userSnap, inviteSnap] = await Promise.all([
+				getDoc(userRef),
+				getDoc(inviteRef)
+			]);
+
+			if (inviteSnap.exists()) {
+				// Case 1: User has a pending invitation
+				// We overwrite/update their role and ownerId to match the invitation
+				const inviteData = inviteSnap.data();
+				console.log("Found invitation, consuming invite to join owner:", inviteData.ownerId);
+
 				await setDoc(userRef, {
 					uid: user.uid,
 					displayName: user.displayName,
 					email: user.email,
 					photoURL: user.photoURL,
-					role: 'admin', // Default role
+					role: inviteData.role || 'sale',
+					ownerId: inviteData.ownerId,
+					ownerEmail: inviteData.ownerEmail,
+					lastLogin: serverTimestamp(),
+					// Preserve creation date if it was an existing user re-joining
+					createdAt: userSnap.exists() ? userSnap.data().createdAt : new Date().toISOString()
+				}, { merge: true });
+
+				// Delete the permission doc since it's now consumed/activated
+				await deleteDoc(inviteRef);
+
+			} else if (!userSnap.exists()) {
+				// Case 2: New User, No Invitation -> Default to Business Owner (Admin)
+				await setDoc(userRef, {
+					uid: user.uid,
+					displayName: user.displayName,
+					email: user.email,
+					photoURL: user.photoURL,
+					role: 'admin',
+					ownerId: user.uid,
+					ownerEmail: user.email,
 					createdAt: new Date().toISOString()
 				});
+			} else {
+				// Case 3: Existing User, No Invitation -> Just update basic info
+				await setDoc(userRef, {
+					displayName: user.displayName,
+					photoURL: user.photoURL,
+					lastLogin: serverTimestamp()
+				}, { merge: true });
 			}
 
 			console.log("Logged in successfully:", user.displayName);

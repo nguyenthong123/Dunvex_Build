@@ -45,11 +45,11 @@ export const useNavigationConfig = () => {
 			};
 		}
 
-		if (path === '/dashboard' || path === '/') {
+		if (path === '/debts' || path === '/') {
 			return {
 				icon: 'payments',
 				label: 'Thu nợ',
-				path: '/?payment=true'
+				path: '/debts?payment=true'
 			};
 		}
 
@@ -64,10 +64,10 @@ export const useNavigationConfig = () => {
 
 	// 2. Toàn bộ danh sách Menu trong hệ thống
 	const allItems: NavItem[] = [
-		{ icon: 'home', label: 'Trang chủ', path: '/dashboard' },
+		{ icon: 'home', label: 'Trang chủ', path: '/' },
 		{ icon: 'receipt_long', label: 'Đơn hàng', path: '/orders' },
 		{ ...getCenterItem(), isCenter: true },
-		{ icon: 'account_balance_wallet', label: 'Công nợ', path: '/' },
+		{ icon: 'account_balance_wallet', label: 'Công nợ', path: '/debts' },
 		{ icon: 'history', label: 'Hoạt động', path: '/checkin?action=history' },
 		{ icon: 'group', label: 'Khách hàng', path: '/customers', desktopOnly: true },
 		{ icon: 'inventory_2', label: 'Sản phẩm', path: '/inventory', desktopOnly: true },
@@ -76,10 +76,7 @@ export const useNavigationConfig = () => {
 
 	// Logic xử lý slot 5: "Hoạt động" hay "Cài đặt"
 	const getSlot5 = () => {
-		if (path === '/' || path === '/orders' || path === '/inventory') {
-			return allItems[7]; // Cài đặt
-		}
-		if (path === '/dashboard') {
+		if (path === '/debts' || path === '/orders' || path === '/inventory' || path === '/') {
 			return allItems[7]; // Cài đặt
 		}
 		return allItems[4]; // Hoạt động
@@ -107,7 +104,7 @@ export const useNavigationConfig = () => {
 			];
 		}
 
-		if (path === '/') {
+		if (path === '/debts') {
 			return [
 				allItems[0], // Trang chủ
 				allItems[1], // Đơn hàng
@@ -117,7 +114,7 @@ export const useNavigationConfig = () => {
 			];
 		}
 
-		if (path === '/dashboard') {
+		if (path === '/') {
 			return [
 				allItems[0], // Trang chủ
 				allItems[1], // Đơn hàng

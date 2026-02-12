@@ -4,8 +4,11 @@ import { auth, db } from '../services/firebase';
 import { collection, query, orderBy, onSnapshot, updateDoc, doc, deleteDoc, serverTimestamp, where } from 'firebase/firestore';
 import OrderTicket from '../components/OrderTicket';
 
+import { useOwner } from '../hooks/useOwner';
+
 const OrderList = () => {
 	const navigate = useNavigate();
+	const owner = useOwner();
 	const [orders, setOrders] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [searchTerm, setSearchTerm] = useState('');
@@ -13,11 +16,11 @@ const OrderList = () => {
 	const [selectedOrder, setSelectedOrder] = useState<any>(null);
 
 	useEffect(() => {
-		if (!auth.currentUser) return;
+		if (owner.loading || !owner.ownerId) return;
 
 		const q = query(
 			collection(db, 'orders'),
-			where('createdBy', '==', auth.currentUser.uid)
+			where('ownerId', '==', owner.ownerId)
 		);
 		const unsubscribe = onSnapshot(q, (snapshot: any) => {
 			const docs = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
@@ -30,7 +33,7 @@ const OrderList = () => {
 			setLoading(false);
 		});
 		return unsubscribe;
-	}, [auth.currentUser]);
+	}, [owner.loading, owner.ownerId]);
 
 	const filteredOrders = orders.filter(order =>
 		(order.customerName?.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -87,7 +90,7 @@ const OrderList = () => {
 			<header className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 h-16 md:h-20 flex items-center justify-between px-4 md:px-8 shrink-0 transition-colors duration-300">
 				<div className="flex items-center gap-3">
 					<button
-						onClick={() => navigate('/dashboard')}
+						onClick={() => navigate('/')}
 						className="size-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-[#1A237E] dark:hover:text-indigo-400 transition-all group"
 						title="Về Trang Chủ"
 					>

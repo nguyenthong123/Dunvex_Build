@@ -3,8 +3,11 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, where } from 'firebase/firestore';
 
+import { useOwner } from '../hooks/useOwner';
+
 const ProductList = () => {
 	const navigate = useNavigate();
+	const owner = useOwner();
 	const [products, setProducts] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [showAddForm, setShowAddForm] = useState(false);
@@ -38,11 +41,11 @@ const ProductList = () => {
 	]));
 
 	useEffect(() => {
-		if (!auth.currentUser) return;
+		if (owner.loading || !owner.ownerId) return;
 
 		const q = query(
 			collection(db, 'products'),
-			where('createdBy', '==', auth.currentUser.uid)
+			where('ownerId', '==', owner.ownerId)
 		);
 		const unsubscribe = onSnapshot(q, (snapshot: any) => {
 			const docs = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
@@ -55,7 +58,7 @@ const ProductList = () => {
 			setLoading(false);
 		});
 		return unsubscribe;
-	}, [auth.currentUser]);
+	}, [owner.loading, owner.ownerId]);
 
 	const { search } = useLocation();
 	useEffect(() => {
@@ -79,7 +82,7 @@ const ProductList = () => {
 				const base64Data = (reader.result as string).split(',')[1];
 
 				try {
-					const response = await fetch('https://script.google.com/macros/s/AKfycby6Bm4e2rkzn7y6Skkl9eYKqclc927iJo1as-fBP7lsnvG1eC7sSh8Albak4fmy59w2FA/exec', {
+					const response = await fetch('https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec', {
 						method: 'POST',
 						body: JSON.stringify({
 							filename: file.name,
@@ -120,6 +123,8 @@ const ProductList = () => {
 			await addDoc(collection(db, 'products'), {
 				...formData,
 				createdAt: serverTimestamp(),
+				ownerId: owner.ownerId,
+				ownerEmail: owner.ownerEmail,
 				createdBy: auth.currentUser?.uid,
 				createdByEmail: auth.currentUser?.email
 			});
@@ -229,7 +234,7 @@ const ProductList = () => {
 			<header className="h-16 md:h-20 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between px-4 md:px-8 shrink-0 transition-colors duration-300">
 				<div className="flex items-center gap-3">
 					<button
-						onClick={() => navigate('/dashboard')}
+						onClick={() => navigate('/')}
 						className="size-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-[#1A237E] dark:hover:text-indigo-400 transition-all group"
 						title="Về Trang Chủ"
 					>

@@ -3,10 +3,13 @@ import { ArrowLeft, Search, Plus, Minus, Trash2, ShoppingCart, User, Package, Ma
 import { useNavigate, useParams } from 'react-router-dom';
 import { db, auth } from '../services/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, doc, getDoc, serverTimestamp, where, increment, writeBatch } from 'firebase/firestore';
+import { useOwner } from '../hooks/useOwner';
 
 const QuickOrder = () => {
 	const navigate = useNavigate();
 	const { id } = useParams();
+	const owner = useOwner();
+
 	const [products, setProducts] = useState<any[]>([]);
 	const [customers, setCustomers] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -33,11 +36,30 @@ const QuickOrder = () => {
 
 	const customerSearchRef = useRef<HTMLDivElement>(null);
 
-	// ... (useEffect for auth) ...
+	// Fetch Data (Products & Customers) based on Owner
+	useEffect(() => {
+		if (owner.loading || !owner.ownerId) return;
+
+		const qProd = query(collection(db, 'products'), where('ownerId', '==', owner.ownerId)); // Query by Owner
+		const unsubProd = onSnapshot(qProd, (snap) => {
+			setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+		});
+
+		const qCust = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId)); // Query by Owner
+		const unsubCust = onSnapshot(qCust, (snap) => {
+			setCustomers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+			setLoading(false);
+		});
+
+		return () => {
+			unsubProd();
+			unsubCust();
+		};
+	}, [owner.loading, owner.ownerId]);
 
 	// Fetch Order for Editing
 	useEffect(() => {
-		if (id && auth.currentUser && customers.length > 0) {
+		if (id && owner.ownerId && customers.length > 0) {
 			const fetchOrder = async () => {
 				setFetchingOrder(true);
 				try {
@@ -59,17 +81,31 @@ const QuickOrder = () => {
 							density: item.density || '',
 							maxStock: 0 // Will be updated if product still exists
 						})));
-						// ...
+
+						setOrderDate(data.orderDate || new Date().toISOString().split('T')[0]);
+						setOrderStatus(data.status || 'Đơn chốt');
+						setOrderNote(data.note || '');
+						setShippingFee(data.adjustmentValue || 0);
+						setDiscountAmt(data.discountValue || 0);
+
+						// Set Customer
+						const foundCust = customers.find(c => c.id === data.customerId);
+						if (foundCust) {
+							setSelectedCustomer(foundCust);
+							setSearchCustomerQuery(foundCust.name);
+						} else {
+							setSearchCustomerQuery(data.customerName || '');
+						}
 					}
 				} catch (err) {
-					// ...
+					console.error(err);
 				} finally {
 					setFetchingOrder(false);
 				}
 			};
 			fetchOrder();
 		}
-	}, [id, auth.currentUser, customers.length > 0]);
+	}, [id, owner.ownerId, customers.length]);
 
 	const addLineItem = () => {
 		setLineItems([...lineItems, { id: Date.now(), category: '', productId: '', name: '', qty: 1, price: 0, buyPrice: 0, unit: '', packaging: '', density: '', maxStock: 0 }]);
@@ -143,6 +179,9 @@ const QuickOrder = () => {
 				totalWeight: Number(totalWeight) || 0,
 				note: orderNote,
 				status: orderStatus,
+				// NEW FIELDS FOR OWNER TRACKING
+				ownerId: owner.ownerId,
+				ownerEmail: owner.ownerEmail,
 				createdBy: auth.currentUser?.uid || '',
 				createdByEmail: auth.currentUser?.email || ''
 			};
@@ -150,7 +189,6 @@ const QuickOrder = () => {
 			if (id) {
 				// If editing, we might need complex logic to revert old stock and deduct new stock. 
 				// For now, let's just update the order details without changing stock to avoid inconsistencies.
-				// Or, we could warn the user.
 				await updateDoc(doc(db, 'orders', id), {
 					...orderData,
 					updatedAt: serverTimestamp()
@@ -172,7 +210,7 @@ const QuickOrder = () => {
 					message: `Đơn hàng cho ${orderData.customerName} đã được tạo thành công: ${finalTotal.toLocaleString('vi-VN')} đ`,
 					type: 'order',
 					orderId: newOrderRef.id,
-					userId: auth.currentUser?.uid,
+					userId: owner.ownerId, // Notify the Owner
 					read: false,
 					createdAt: serverTimestamp()
 				});
@@ -210,7 +248,7 @@ const QuickOrder = () => {
 			<div className="max-w-[1000px] mx-auto mb-8 flex flex-col md:flex-row md:items-center justify-between gap-6 px-2">
 				<div className="flex items-center gap-4">
 					<button
-						onClick={() => navigate('/dashboard')}
+						onClick={() => navigate('/')}
 						className="size-12 shrink-0 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-[#1A237E] dark:hover:text-indigo-400 hover:border-[#1A237E]/20 dark:hover:border-indigo-400/20 transition-all active:scale-90"
 						title="Về Trang Chủ"
 					>

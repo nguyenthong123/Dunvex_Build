@@ -19,9 +19,12 @@
 
 @layer base {
   body {
-    @apply bg-gray-100 text-gray-900;
+    @apply bg-[#f8f9fb] text-slate-900;
     font-family: var(--font-sans);
     -webkit-tap-highlight-color: transparent;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
 }
 

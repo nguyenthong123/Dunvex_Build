@@ -6,8 +6,11 @@ import React, { useState, useEffect } from 'react';
 import { useNavigationConfig } from '../hooks/useNavigationConfig';
 import { Eye, EyeOff, TrendingUp, TrendingDown, AlertTriangle, Wallet } from 'lucide-react';
 
+import { useOwner } from '../hooks/useOwner';
+
 const Home = () => {
 	const navigate = useNavigate();
+	const owner = useOwner();
 	const { sidebarItems } = useNavigationConfig();
 	const [unreadCount, setUnreadCount] = useState(0);
 	const [showNotifications, setShowNotifications] = useState(false);
@@ -21,9 +24,9 @@ const Home = () => {
 	const [showProfit, setShowProfit] = useState(false);
 
 	useEffect(() => {
-		if (!auth.currentUser) return;
+		if (!auth.currentUser || owner.loading || !owner.ownerId) return;
 
-		// 1. Listen for unread count
+		// 1. Listen for unread count (User specific)
 		const qUnread = query(
 			collection(db, 'notifications'),
 			where('userId', '==', auth.currentUser.uid),
@@ -34,7 +37,7 @@ const Home = () => {
 			setUnreadCount(snapshot.size);
 		});
 
-		// 2. Listen for notification list (last 20)
+		// 2. Listen for notification list (User specific)
 		const qList = query(
 			collection(db, 'notifications'),
 			where('userId', '==', auth.currentUser.uid),
@@ -52,23 +55,23 @@ const Home = () => {
 			setNotifications(list);
 		});
 
-		// 3. Fetch Data for Dashboard Calculations
-		const qOrders = query(collection(db, 'orders'), where('createdBy', '==', auth.currentUser.uid));
+		// 3. Fetch Data for Dashboard Calculations (Owner specific)
+		const qOrders = query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId));
 		const unsubOrders = onSnapshot(qOrders, (snap) => {
 			setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })));
 		});
 
-		const qCust = query(collection(db, 'customers'), where('createdBy', '==', auth.currentUser.uid));
+		const qCust = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
 		const unsubCust = onSnapshot(qCust, (snap) => {
 			setCustomers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
 		});
 
-		const qPay = query(collection(db, 'payments'), where('createdBy', '==', auth.currentUser.uid));
+		const qPay = query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId));
 		const unsubPay = onSnapshot(qPay, (snap) => {
 			setPayments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
 		});
 
-		const qProd = query(collection(db, 'products'), where('createdBy', '==', auth.currentUser.uid));
+		const qProd = query(collection(db, 'products'), where('ownerId', '==', owner.ownerId));
 		const unsubProd = onSnapshot(qProd, (snap) => {
 			setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
 		});
@@ -81,7 +84,7 @@ const Home = () => {
 			unsubPay();
 			unsubProd();
 		};
-	}, []);
+	}, [owner.loading, owner.ownerId]);
 
 	const markAllAsRead = async () => {
 		if (!auth.currentUser) return;
@@ -247,15 +250,29 @@ const Home = () => {
 
 					<div className="h-8 w-px bg-slate-100 dark:bg-slate-800 mx-2"></div>
 
-					<div className="text-right hidden sm:block">
-						<p className="text-xs font-bold leading-none text-slate-900 dark:text-white">{auth.currentUser?.displayName || 'Người dùng'}</p>
-						<p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase font-black tracking-widest mt-0.5">Quản trị viên</p>
+					<div
+						onClick={() => navigate('/admin')}
+						className="flex items-center gap-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 p-2 rounded-xl transition-all group"
+						title="Quản trị doanh nghiệp"
+					>
+						<div className="text-right hidden sm:block">
+							<p className="text-xs font-bold leading-none text-slate-900 dark:text-white group-hover:text-[#1A237E] dark:group-hover:text-indigo-400 transition-colors">
+								{auth.currentUser?.displayName || 'Người dùng'}
+							</p>
+							<p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase font-black tracking-widest mt-0.5 group-hover:text-[#FF6D00] transition-colors">
+								{owner.loading ? '...' :
+									owner.role === 'admin' ? 'Quản Trị Viên' :
+										owner.role === 'sale' ? 'Nhân Viên Sale' :
+											owner.role === 'warehouse' ? 'Thủ Kho' :
+												owner.role === 'accountant' ? 'Kế Toán' : 'Nhân Viên'}
+							</p>
+						</div>
+						<img
+							alt="Profile"
+							className="size-10 rounded-full object-cover border-2 border-[#1A237E]/10 dark:border-indigo-400/20 group-hover:border-[#1A237E] dark:group-hover:border-indigo-400 transition-colors"
+							src={auth.currentUser?.photoURL || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=100"}
+						/>
 					</div>
-					<img
-						alt="Profile"
-						className="size-10 rounded-full object-cover border-2 border-[#1A237E]/10 dark:border-indigo-400/20"
-						src={auth.currentUser?.photoURL || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=100"}
-					/>
 				</div>
 			</header>
 
@@ -324,7 +341,7 @@ const Home = () => {
 							</div>
 
 							{showProfit && (
-								<div className="mb-6 bg-white/10 rounded-xl p-4 border border-white/5 animate-in fade-in slide-in-from-bottom-2">
+								<div className="mb-6 bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/5 animate-in fade-in slide-in-from-bottom-2">
 									<p className="text-[10px] text-white/50 uppercase font-bold mb-1">Lợi nhuận ước tính</p>
 									<div className="flex items-center gap-2">
 										<p className="text-2xl font-black text-green-400">
@@ -340,11 +357,11 @@ const Home = () => {
 							)}
 
 							<div className="flex gap-4">
-								<div className="bg-white/10 px-3 py-2 rounded-xl flex-1">
+								<div className="bg-white/10 backdrop-blur-md px-3 py-2 rounded-xl flex-1 border border-white/5">
 									<p className="text-[10px] text-white/50 uppercase font-bold">Đơn hàng</p>
 									<p className="text-lg font-bold">{todayOrders.length}</p>
 								</div>
-								<div className="bg-white/10 px-3 py-2 rounded-xl flex-1">
+								<div className="bg-white/10 backdrop-blur-md px-3 py-2 rounded-xl flex-1 border border-white/5">
 									<p className="text-[10px] text-white/50 uppercase font-bold">Tăng trưởng</p>
 									<p className="text-lg font-bold text-green-400 flex items-center gap-1">
 										<TrendingUp size={14} /> 12%
@@ -361,7 +378,7 @@ const Home = () => {
 							</h3>
 							<div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
 								{sidebarItems
-									.filter(item => item.path !== '/dashboard')
+									.filter(item => item.path !== '/')
 									.map((item) => (
 										<button
 											key={item.path}

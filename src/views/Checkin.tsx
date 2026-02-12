@@ -85,8 +85,11 @@ const MapUpdater = ({ center, sidebarExpanded }: { center: [number, number], sid
 };
 
 
+import { useOwner } from '../hooks/useOwner';
+
 const Checkin = () => {
     const navigate = useNavigate();
+    const owner = useOwner();
     const [customers, setCustomers] = useState<any[]>([]);
     const [recentCheckins, setRecentCheckins] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -163,11 +166,11 @@ const Checkin = () => {
     };
 
     useEffect(() => {
-        if (!auth.currentUser) return;
+        if (owner.loading || !owner.ownerId) return;
 
         const qCust = query(
             collection(db, 'customers'),
-            where('createdBy', '==', auth.currentUser.uid)
+            where('ownerId', '==', owner.ownerId)
         );
         const unsubCust = onSnapshot(qCust, (snapshot) => {
             setCustomers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -175,7 +178,7 @@ const Checkin = () => {
 
         const qCheck = query(
             collection(db, 'checkins'),
-            where('userId', '==', auth.currentUser.uid),
+            where('ownerId', '==', owner.ownerId),
             limit(100)
         );
         const unsubCheck = onSnapshot(qCheck, (snapshot) => {
@@ -202,7 +205,7 @@ const Checkin = () => {
             unsubCust();
             unsubCheck();
         };
-    }, []);
+    }, [owner.loading, owner.ownerId]);
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -215,7 +218,7 @@ const Checkin = () => {
             reader.onload = async () => {
                 const base64Data = (reader.result as string).split(',')[1];
                 try {
-                    const response = await fetch('https://script.google.com/macros/s/AKfycby6Bm4e2rkzn7y6Skkl9eYKqclc927iJo1as-fBP7lsnvG1eC7sSh8Albak4fmy59w2FA/exec', {
+                    const response = await fetch('https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec', {
                         method: 'POST',
                         body: JSON.stringify({
                             filename: `checkin_${Date.now()}_${file.name}`,
@@ -312,6 +315,8 @@ const Checkin = () => {
                 customerName: customer?.name || 'Vãng lai',
                 userId: auth.currentUser?.uid,
                 userEmail: auth.currentUser?.email,
+                ownerId: owner.ownerId,
+                ownerEmail: owner.ownerEmail,
                 createdAt: serverTimestamp()
             });
             setShowCheckinForm(false);
@@ -424,7 +429,7 @@ const Checkin = () => {
                 <div className="absolute top-6 left-6 flex flex-col gap-3 z-[1000]">
                     <div className="flex flex-col gap-2 mb-4">
                         <button
-                            onClick={() => navigate('/dashboard')}
+                            onClick={() => navigate('/')}
                             className="size-11 bg-[#1A237E] dark:bg-indigo-900 text-white rounded-2xl shadow-2xl flex items-center justify-center hover:bg-slate-900 dark:hover:bg-indigo-950 transition-all border border-white/20"
                             title="Về Trang Chủ"
                         >

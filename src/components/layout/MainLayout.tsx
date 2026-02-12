@@ -30,7 +30,22 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 					</button>
 				)}
 				<div className="flex-1 overflow-y-auto no-scrollbar">
-					{children}
+					<div className="min-h-full">
+						{children}
+					</div>
+
+					{/* Footer Spacer & Branding */}
+					<footer className="py-12 px-6 text-center border-t border-slate-50 dark:border-slate-800/50 mt-auto pb-32 md:pb-12 transition-colors duration-300">
+						<div className="flex flex-col items-center gap-2 opacity-30 dark:opacity-20 hover:opacity-100 transition-opacity duration-500">
+							<div className="size-8 bg-slate-400 dark:bg-slate-500 rounded-lg flex items-center justify-center mb-1">
+								<span className="material-symbols-outlined text-white text-lg">architecture</span>
+							</div>
+							<p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+								Dunvex<span className="text-slate-900 dark:text-white">Build</span> Management System
+							</p>
+							<p className="text-[8px] font-bold text-slate-400">© 2026 Developed by Antigravity AI Engine</p>
+						</div>
+					</footer>
 				</div>
 				<MobileNav />
 			</main>

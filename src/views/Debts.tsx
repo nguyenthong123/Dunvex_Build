@@ -30,15 +30,8 @@ import { useOwner } from '../hooks/useOwner';
 const Debts: React.FC = () => {
 	const navigate = useNavigate();
 	const owner = useOwner();
+
 	const [currentTime, setCurrentTime] = useState(new Date());
-
-	const handleLogout = async () => {
-		if (window.confirm("Bạn có chắc chắn muốn đăng xuất?")) {
-			await signOut(auth);
-			navigate('/login');
-		}
-	};
-
 	const [orders, setOrders] = useState<any[]>([]);
 	const [payments, setPayments] = useState<any[]>([]);
 	const [customers, setCustomers] = useState<any[]>([]);
@@ -54,6 +47,7 @@ const Debts: React.FC = () => {
 	// Modals/Editing
 	const [showPaymentForm, setShowPaymentForm] = useState(false);
 	const [unreadCount, setUnreadCount] = useState(0);
+
 
 	useEffect(() => {
 		if (!auth.currentUser) return;
@@ -336,35 +330,60 @@ const Debts: React.FC = () => {
 
 		setUploadingPaymentImage(true);
 		try {
-			const reader = new FileReader();
-			reader.readAsDataURL(file);
-			reader.onload = async () => {
-				const base64Data = (reader.result as string).split(',')[1];
-				try {
-					const response = await fetch('https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec', {
-						method: 'POST',
-						body: JSON.stringify({
-							filename: `payment_${Date.now()}_${file.name}`,
-							mimeType: file.type,
-							base64Data: base64Data
-						})
-					});
-					const data = await response.json();
-					if (data.status === 'success') {
-						setPaymentData(prev => ({ ...prev, proofImage: data.fileUrl }));
-					} else {
-						alert("Lỗi upload: " + (data.message || "Không xác định"));
-					}
-				} catch (err) {
-					console.error(err);
-					alert("Lỗi kết nối Drive.");
-				} finally {
-					setUploadingPaymentImage(false);
+			let base64Data = "";
+
+			// Safely read file using arrayBuffer (works on Safari)
+			if (file.arrayBuffer) {
+				const buffer = await file.arrayBuffer();
+				let binary = '';
+				const bytes = new Uint8Array(buffer);
+				const len = bytes.byteLength;
+				for (let i = 0; i < len; i++) {
+					binary += String.fromCharCode(bytes[i]);
 				}
-			};
-		} catch (error) {
+				base64Data = window.btoa(binary);
+			} else {
+				// Fallback (unlikely needed for modern browsers)
+				// @ts-ignore
+				const Reader = window.FileReader || FileReader;
+				if (Reader) {
+					const reader = new Reader();
+					base64Data = await new Promise((resolve, reject) => {
+						reader.onload = () => {
+							if (reader.result) resolve((reader.result as string).split(',')[1]);
+							else reject(new Error("Empty result"));
+						};
+						reader.onerror = reject;
+						reader.readAsDataURL(file);
+					});
+				} else {
+					throw new Error("Trình duyệt không hỗ trợ đọc file.");
+				}
+			}
+
+			const response = await fetch('https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec', {
+				method: 'POST',
+				redirect: 'follow',
+				headers: {
+					'Content-Type': 'text/plain;charset=utf-8',
+				},
+				body: JSON.stringify({
+					filename: `payment_${Date.now()}_${file.name}`,
+					mimeType: file.type,
+					base64Data: base64Data
+				})
+			});
+
+			const data = await response.json();
+			if (data.status === 'success') {
+				setPaymentData(prev => ({ ...prev, proofImage: data.fileUrl }));
+			} else {
+				alert("Lỗi upload: " + (data.message || "Không xác định"));
+			}
+		} catch (error: any) {
 			console.error(error);
-			alert("Lỗi xử lý tệp.");
+			alert(`Lỗi xử lý tệp: ${error.message}`);
+		} finally {
 			setUploadingPaymentImage(false);
 		}
 	};
@@ -382,6 +401,15 @@ const Debts: React.FC = () => {
 					...paymentData,
 					updatedAt: serverTimestamp()
 				});
+				// Log Update Payment
+				await addDoc(collection(db, 'audit_logs'), {
+					action: 'Cập nhật phiếu thu',
+					user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
+					userId: auth.currentUser?.uid,
+					ownerId: owner.ownerId,
+					details: `Đã cập nhật thu ${paymentData.amount.toLocaleString('vi-VN')} đ từ ${paymentData.customerName}`,
+					createdAt: serverTimestamp()
+				});
 				alert("Cập nhật phiếu thu thành công");
 			} else {
 				await addDoc(collection(db, 'payments'), {
@@ -391,6 +419,15 @@ const Debts: React.FC = () => {
 					ownerEmail: owner.ownerEmail,
 					createdBy: auth.currentUser?.uid,
 					createdByEmail: auth.currentUser?.email
+				});
+				// Log New Payment
+				await addDoc(collection(db, 'audit_logs'), {
+					action: 'Ghi nhận thu nợ',
+					user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
+					userId: auth.currentUser?.uid,
+					ownerId: owner.ownerId,
+					details: `Đã thu ${paymentData.amount.toLocaleString('vi-VN')} đ từ ${paymentData.customerName}`,
+					createdAt: serverTimestamp()
 				});
 				alert("Ghi nhận thu nợ thành công");
 			}
@@ -422,8 +459,24 @@ const Debts: React.FC = () => {
 			alert("Lỗi khi xóa phiếu thu");
 		}
 	};
+	const hasPermission = owner.role === 'admin' || (owner.accessRights?.debts_manage ?? true);
 
+	if (owner.loading) return null;
 
+	if (!hasPermission) {
+		return (
+			<div className="flex flex-col h-full bg-[#f8f9fb] dark:bg-slate-950 items-center justify-center text-center p-8 min-h-screen">
+				<div className="bg-orange-50 dark:bg-orange-900/20 p-6 rounded-full text-orange-500 mb-4">
+					<span className="material-symbols-outlined text-5xl">payments</span>
+				</div>
+				<h2 className="text-2xl font-black text-slate-800 dark:text-white uppercase mb-2">Quyền hạn hạn chế</h2>
+				<p className="text-slate-500 dark:text-slate-400 max-w-md">
+					Bạn không có quyền xem hoặc nhập công nợ. Vui lòng liên hệ Admin.
+				</p>
+				<button onClick={() => navigate('/')} className="mt-6 bg-[#1A237E] text-white px-6 py-2 rounded-xl font-bold">Quay lại</button>
+			</div>
+		);
+	}
 
 	return (
 		<div className="flex flex-col h-full bg-[#f8f9fa] dark:bg-slate-950 transition-colors duration-300">

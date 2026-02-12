@@ -9,7 +9,6 @@ const QuickOrder = () => {
 	const navigate = useNavigate();
 	const { id } = useParams();
 	const owner = useOwner();
-
 	const [products, setProducts] = useState<any[]>([]);
 	const [customers, setCustomers] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -35,6 +34,7 @@ const QuickOrder = () => {
 	const [discountAmt, setDiscountAmt] = useState(0);
 
 	const customerSearchRef = useRef<HTMLDivElement>(null);
+
 
 	// Fetch Data (Products & Customers) based on Owner
 	useEffect(() => {
@@ -193,6 +193,16 @@ const QuickOrder = () => {
 					...orderData,
 					updatedAt: serverTimestamp()
 				});
+
+				// Log Update
+				await addDoc(collection(db, 'audit_logs'), {
+					action: 'Cập nhật đơn hàng',
+					user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
+					userId: auth.currentUser?.uid,
+					ownerId: owner.ownerId,
+					details: `Đã cập nhật đơn hàng của ${orderData.customerName} - Tổng tiền: ${finalTotal.toLocaleString('vi-VN')} đ`,
+					createdAt: serverTimestamp()
+				});
 			} else {
 				orderData.createdAt = serverTimestamp();
 
@@ -226,6 +236,17 @@ const QuickOrder = () => {
 					}
 				});
 
+				// 4. Log Audit
+				const logRef = doc(collection(db, 'audit_logs'));
+				batch.set(logRef, {
+					action: 'Lên đơn hàng mới',
+					user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
+					userId: auth.currentUser?.uid,
+					ownerId: owner.ownerId,
+					details: `Đã tạo đơn hàng cho ${orderData.customerName} - Tổng tiền: ${finalTotal.toLocaleString('vi-VN')} đ`,
+					createdAt: serverTimestamp()
+				});
+
 				await batch.commit();
 			}
 			setShowSuccessModal(true);
@@ -241,6 +262,25 @@ const QuickOrder = () => {
 	);
 
 	const categories = Array.from(new Set(products.map(p => p.category).filter(Boolean)));
+
+	const hasOrderPermission = owner.role === 'admin' || (owner.accessRights?.orders_create ?? true);
+
+	if (owner.loading) return null;
+
+	if (!hasOrderPermission) {
+		return (
+			<div className="flex flex-col h-full bg-[#f8f9fb] dark:bg-slate-950 items-center justify-center text-center p-8 min-h-screen">
+				<div className="bg-red-50 dark:bg-red-900/20 p-6 rounded-full text-red-500 mb-4">
+					<ShoppingCart size={48} />
+				</div>
+				<h2 className="text-2xl font-black text-slate-800 dark:text-white uppercase mb-2">Quyền hạn hạn chế</h2>
+				<p className="text-slate-500 dark:text-slate-400 max-w-md">
+					Bạn không có quyền thực hiện thao tác Lên đơn hàng / Cập nhật đơn hàng. Vui lòng liên hệ Admin.
+				</p>
+				<button onClick={() => navigate(-1)} className="mt-6 bg-[#1A237E] text-white px-6 py-2 rounded-xl font-bold">Quay lại</button>
+			</div>
+		);
+	}
 
 	return (
 		<div className="min-h-screen bg-[#f8f9fb] dark:bg-slate-950 p-4 md:p-8 font-sans pb-32 md:pb-8 transition-colors duration-300">

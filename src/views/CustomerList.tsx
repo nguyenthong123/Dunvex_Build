@@ -8,6 +8,7 @@ import { useOwner } from '../hooks/useOwner';
 const CustomerList = () => {
 	const navigate = useNavigate();
 	const owner = useOwner();
+
 	const [customers, setCustomers] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [showAddForm, setShowAddForm] = useState(false);
@@ -31,6 +32,7 @@ const CustomerList = () => {
 	});
 
 	const [gettingLocation, setGettingLocation] = useState(false);
+
 
 	// Get unique types from existing customers for the suggestions
 	const customerTypes = Array.from(new Set([
@@ -115,6 +117,17 @@ const CustomerList = () => {
 				createdBy: auth.currentUser?.uid,
 				createdByEmail: auth.currentUser?.email
 			});
+
+			// Log Add Customer
+			await addDoc(collection(db, 'audit_logs'), {
+				action: 'Thêm khách hàng mới',
+				user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
+				userId: auth.currentUser?.uid,
+				ownerId: owner.ownerId,
+				details: `Đã thêm khách hàng: ${formData.name} - SĐT: ${formData.phone}`,
+				createdAt: serverTimestamp()
+			});
+
 			setShowAddForm(false);
 			resetForm();
 		} catch (error) {
@@ -132,6 +145,17 @@ const CustomerList = () => {
 				updatedAt: serverTimestamp(),
 				updatedBy: auth.currentUser?.uid
 			});
+
+			// Log Update Customer
+			await addDoc(collection(db, 'audit_logs'), {
+				action: 'Cập nhật khách hàng',
+				user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
+				userId: auth.currentUser?.uid,
+				ownerId: owner.ownerId,
+				details: `Đã cập nhật thông tin khách hàng: ${formData.name}`,
+				createdAt: serverTimestamp()
+			});
+
 			setShowEditForm(false);
 			resetForm();
 		} catch (error) {
@@ -143,7 +167,19 @@ const CustomerList = () => {
 	const handleDeleteCustomer = async (id: string) => {
 		if (window.confirm("Bạn có chắc chắn muốn xóa khách hàng này không?")) {
 			try {
+				const customerName = customers.find(c => c.id === id)?.name || 'Khách hàng';
 				await deleteDoc(doc(db, 'customers', id));
+
+				// Log Delete Customer
+				await addDoc(collection(db, 'audit_logs'), {
+					action: 'Xóa khách hàng',
+					user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
+					userId: auth.currentUser?.uid,
+					ownerId: owner.ownerId,
+					details: `Đã xóa khách hàng: ${customerName}`,
+					createdAt: serverTimestamp()
+				});
+
 				setShowDetail(false);
 			} catch (error) {
 				console.error("Error deleting customer:", error);
@@ -194,6 +230,25 @@ const CustomerList = () => {
 		c.phone?.includes(searchTerm) ||
 		c.email?.toLowerCase().includes(searchTerm.toLowerCase())
 	);
+
+	const hasManagePermission = owner.role === 'admin' || (owner.accessRights?.customers_manage ?? true);
+
+	if (owner.loading) return null;
+
+	if (!hasManagePermission) {
+		return (
+			<div className="flex flex-col h-full bg-[#f8f9fb] dark:bg-slate-950 items-center justify-center text-center p-8 min-h-screen">
+				<div className="bg-indigo-50 dark:bg-indigo-900/20 p-6 rounded-full text-indigo-500 mb-4">
+					<span className="material-symbols-outlined text-5xl">group</span>
+				</div>
+				<h2 className="text-2xl font-black text-slate-800 dark:text-white uppercase mb-2">Quyền hạn hạn chế</h2>
+				<p className="text-slate-500 dark:text-slate-400 max-w-md">
+					Bạn không có quyền quản lý danh sách khách hàng. Vui lòng liên hệ Admin.
+				</p>
+				<button onClick={() => navigate('/')} className="mt-6 bg-[#1A237E] text-white px-6 py-2 rounded-xl font-bold">Quay lại</button>
+			</div>
+		);
+	}
 
 	return (
 		<div className="flex flex-col h-full bg-[#f8f9fa] dark:bg-slate-950 transition-colors duration-300">

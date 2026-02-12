@@ -7,6 +7,7 @@ export interface OwnerState {
 	ownerEmail: string;
 	role: string;
 	isEmployee: boolean;
+	accessRights?: Record<string, boolean>;
 	loading: boolean;
 }
 
@@ -35,11 +36,13 @@ export const useOwner = () => {
 				const ownerId = data.ownerId || auth.currentUser?.uid;
 				const ownerEmail = data.ownerEmail || auth.currentUser?.email;
 				const role = data.role || 'admin';
+				const accessRights = data.accessRights;
 
 				setState({
 					ownerId,
 					ownerEmail,
 					role,
+					accessRights,
 					isEmployee: ownerId !== auth.currentUser?.uid,
 					loading: false
 				});

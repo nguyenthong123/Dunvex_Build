@@ -176,6 +176,31 @@ const Home = () => {
 	// 3. Stock Warnings
 	const lowStockProducts = products.filter(p => p.stock !== undefined && p.stock <= 10); // Warning threshold
 
+	// --- PERMISSION CHECK ---
+	const hasDashboardAccess = owner.role === 'admin' || (owner.accessRights?.dashboard ?? true);
+
+	if (owner.loading) return null;
+
+	if (!hasDashboardAccess) {
+		return (
+			<div className="flex flex-col h-full bg-[#f8f9fb] dark:bg-slate-950 items-center justify-center text-center p-8 min-h-screen">
+				<div className="bg-orange-50 dark:bg-orange-900/20 p-6 rounded-full text-orange-500 mb-4">
+					<span className="material-symbols-outlined text-5xl">lock</span>
+				</div>
+				<h2 className="text-2xl font-black text-slate-800 dark:text-white uppercase mb-2">Không có quyền truy cập</h2>
+				<p className="text-slate-500 dark:text-slate-400 max-w-md">
+					Bạn không có quyền xem bảng điều khiển tổng quan. Vui lòng liên hệ quản trị viên để cấp quyền `dashboard`.
+				</p>
+				<button
+					onClick={() => navigate('/orders')}
+					className="mt-6 bg-[#1A237E] text-white px-6 py-2 rounded-xl font-bold"
+				>
+					Đến trang Đơn hàng
+				</button>
+			</div>
+		);
+	}
+
 	return (
 		<div className="bg-[#f8f9fb] dark:bg-slate-950 min-h-screen transition-colors duration-300">
 			{/* HEADER */}

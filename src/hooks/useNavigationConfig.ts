@@ -1,4 +1,5 @@
 import { useLocation } from 'react-router-dom';
+import { useOwner } from './useOwner';
 
 export interface NavItem {
 	icon: string;
@@ -7,6 +8,7 @@ export interface NavItem {
 	isCenter?: boolean;
 	mobileOnly?: boolean;
 	desktopOnly?: boolean;
+	permissionKey?: string;
 }
 
 /**
@@ -16,6 +18,13 @@ export interface NavItem {
 export const useNavigationConfig = () => {
 	const location = useLocation();
 	const path = location.pathname;
+	const owner = useOwner();
+
+	const hasPermission = (key?: string) => {
+		if (!key) return true;
+		if (owner.role === 'admin') return true;
+		return owner.accessRights?.[key] ?? true; // Default to true if not explicitly set
+	};
 
 	// 1. Cấu hình nút cộng ở giữa thay đổi theo trang
 	const getCenterItem = (): NavItem => {
@@ -25,7 +34,8 @@ export const useNavigationConfig = () => {
 			return {
 				icon: 'add_shopping_cart',
 				label: 'Lên đơn',
-				path: '/quick-order'
+				path: '/quick-order',
+				permissionKey: 'orders_create'
 			};
 		}
 
@@ -33,7 +43,8 @@ export const useNavigationConfig = () => {
 			return {
 				icon: 'add_circle',
 				label: 'Thêm SP',
-				path: '/inventory?new=true'
+				path: '/inventory?new=true',
+				permissionKey: 'inventory_manage'
 			};
 		}
 
@@ -41,7 +52,8 @@ export const useNavigationConfig = () => {
 			return {
 				icon: 'person_add',
 				label: 'Thêm Khách',
-				path: '/customers?new=true'
+				path: '/customers?new=true',
+				permissionKey: 'customers_manage'
 			};
 		}
 
@@ -49,7 +61,8 @@ export const useNavigationConfig = () => {
 			return {
 				icon: 'payments',
 				label: 'Thu nợ',
-				path: '/debts?payment=true'
+				path: '/debts?payment=true',
+				permissionKey: 'debts_manage'
 			};
 		}
 
@@ -57,7 +70,8 @@ export const useNavigationConfig = () => {
 		return {
 			icon: 'add',
 			label: 'Checkin ngay',
-			path: '/checkin?new=true'
+			path: '/checkin?new=true',
+			permissionKey: 'checkin_create'
 		};
 
 	};
@@ -65,12 +79,12 @@ export const useNavigationConfig = () => {
 	// 2. Toàn bộ danh sách Menu trong hệ thống
 	const allItems: NavItem[] = [
 		{ icon: 'home', label: 'Trang chủ', path: '/' },
-		{ icon: 'receipt_long', label: 'Đơn hàng', path: '/orders' },
+		{ icon: 'receipt_long', label: 'Đơn hàng', path: '/orders', permissionKey: 'orders_view' },
 		{ ...getCenterItem(), isCenter: true },
-		{ icon: 'account_balance_wallet', label: 'Công nợ', path: '/debts' },
-		{ icon: 'history', label: 'Hoạt động', path: '/checkin?action=history' },
-		{ icon: 'group', label: 'Khách hàng', path: '/customers', desktopOnly: true },
-		{ icon: 'inventory_2', label: 'Sản phẩm', path: '/inventory', desktopOnly: true },
+		{ icon: 'account_balance_wallet', label: 'Công nợ', path: '/debts', permissionKey: 'debts_manage' },
+		{ icon: 'history', label: 'Hoạt động', path: '/checkin?action=history', permissionKey: 'checkin_create' },
+		{ icon: 'group', label: 'Khách hàng', path: '/customers', desktopOnly: true, permissionKey: 'customers_manage' },
+		{ icon: 'inventory_2', label: 'Sản phẩm', path: '/inventory', desktopOnly: true, permissionKey: 'inventory_view' },
 		{ icon: 'settings', label: 'Cài đặt', path: '/settings' },
 	];
 
@@ -84,60 +98,57 @@ export const useNavigationConfig = () => {
 
 	// Xử lý Dynamic Menu cho Mobile
 	const getMobileItems = () => {
+		let items: NavItem[] = [];
 		if (path === '/orders') {
-			return [
+			items = [
 				allItems[0], // Trang chủ
 				allItems[5], // Khách hàng (Thay cho Đơn hàng)
 				allItems[2], // Center (Lên đơn)
 				allItems[6], // Sản phẩm (Thay cho Công nợ)
 				getSlot5(),  // Cài đặt
 			];
-		}
-
-		if (path === '/inventory') {
-			return [
+		} else if (path === '/inventory') {
+			items = [
 				allItems[0], // Trang chủ
 				{ icon: 'inventory', label: 'Tồn kho', path: '/inventory' }, // Thay Đơn hàng bằng Tồn kho
 				allItems[2], // Center (Thêm SP)
 				allItems[5], // Khách hàng (Thay cho Công nợ)
 				getSlot5(),  // Cài đặt
 			];
-		}
-
-		if (path === '/debts') {
-			return [
+		} else if (path === '/debts') {
+			items = [
 				allItems[0], // Trang chủ
 				allItems[1], // Đơn hàng
 				allItems[2], // Center (Thu nợ)
 				allItems[5], // Khách hàng (Thay cho Công nợ)
 				getSlot5(),  // Cài đặt
 			];
-		}
-
-		if (path === '/') {
-			return [
+		} else if (path === '/') {
+			items = [
 				allItems[0], // Trang chủ
 				allItems[1], // Đơn hàng
 				allItems[2], // Center (Thu nợ)
 				allItems[4], // Hoạt động/Checkin (Thay cho Công nợ)
 				getSlot5(),  // Cài đặt
 			];
+		} else {
+			items = [
+				allItems[0], // Trang chủ
+				allItems[1], // Đơn hàng
+				allItems[2], // Center
+				allItems[3], // Công nợ
+				getSlot5(),  // Slot động
+			];
 		}
 
-		// Mặc định
-		return [
-			allItems[0], // Trang chủ
-			allItems[1], // Đơn hàng
-			allItems[2], // Center
-			allItems[3], // Công nợ
-			getSlot5(),  // Slot động
-		];
+		// Filter based on permissions
+		return items.filter(item => hasPermission(item.permissionKey));
 	};
 
 	const mobileItems = getMobileItems();
 
-	// Filter cho Sidebar (Hiện tất cả trừ nút Center)
-	const sidebarItems = allItems.filter(item => !item.isCenter);
+	// Filter cho Sidebar (Hiện tất cả trừ nút Center và filter theo quyền)
+	const sidebarItems = allItems.filter(item => !item.isCenter && hasPermission(item.permissionKey));
 
 	return {
 		navItems: mobileItems, // Mặc định cho MobileNav/BottomNav

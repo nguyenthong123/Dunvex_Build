@@ -6,7 +6,11 @@ import { useNavigationConfig } from '../../hooks/useNavigationConfig';
 import { Moon, Sun, LogOut } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 
-const Sidebar = () => {
+interface SidebarProps {
+	onToggle?: () => void;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ onToggle }) => {
 	const navigate = useNavigate();
 	const { sidebarItems, currentPath } = useNavigationConfig();
 	const { theme, toggleTheme } = useTheme();
@@ -21,7 +25,16 @@ const Sidebar = () => {
 	const menuItems = sidebarItems;
 
 	return (
-		<aside className="hidden md:flex flex-col h-screen bg-[#1A237E] dark:bg-slate-900 text-white transition-all duration-300 z-40 md:w-20 lg:w-64 flex-shrink-0 border-r border-white/10">
+		<aside className="hidden md:flex flex-col h-screen bg-[#1A237E] dark:bg-slate-900 text-white transition-all duration-300 z-40 md:w-20 lg:w-64 flex-shrink-0 border-r border-white/10 relative">
+			{/* Toggle Button Inside Sidebar */}
+			<button
+				onClick={onToggle}
+				className="absolute -right-3 top-20 z-50 size-6 bg-[#FF6D00] text-white rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
+				title="Ẩn Menu"
+			>
+				<span className="material-symbols-outlined text-xs">chevron_left</span>
+			</button>
+
 			<div className="h-20 flex items-center justify-center lg:justify-start lg:px-6 border-b border-white/10">
 				<div
 					className="size-10 bg-[#FF6D00] rounded-xl flex items-center justify-center shrink-0 shadow-lg cursor-pointer hover:scale-105 transition-transform"

@@ -90,6 +90,7 @@ import { useOwner } from '../hooks/useOwner';
 const Checkin = () => {
     const navigate = useNavigate();
     const owner = useOwner();
+
     const [customers, setCustomers] = useState<any[]>([]);
     const [recentCheckins, setRecentCheckins] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -113,6 +114,7 @@ const Checkin = () => {
     }, []);
 
     const { search } = useLocation();
+
     useEffect(() => {
         const params = new URLSearchParams(search);
         if (params.get('new') === 'true') {
@@ -213,35 +215,60 @@ const Checkin = () => {
 
         setUploading(true);
         try {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = async () => {
-                const base64Data = (reader.result as string).split(',')[1];
-                try {
-                    const response = await fetch('https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec', {
-                        method: 'POST',
-                        body: JSON.stringify({
-                            filename: `checkin_${Date.now()}_${file.name}`,
-                            mimeType: file.type,
-                            base64Data: base64Data
-                        })
-                    });
-                    const data = await response.json();
-                    if (data.status === 'success') {
-                        setFormData(prev => ({ ...prev, imageUrl: data.fileUrl }));
-                    } else {
-                        alert("Lỗi upload: " + (data.message || "Không xác định"));
-                    }
-                } catch (err) {
-                    console.error(err);
-                    alert("Lỗi kết nối Drive.");
-                } finally {
-                    setUploading(false);
+            let base64Data = "";
+
+            // Safely read file using arrayBuffer (works on Safari)
+            if (file.arrayBuffer) {
+                const buffer = await file.arrayBuffer();
+                let binary = '';
+                const bytes = new Uint8Array(buffer);
+                const len = bytes.byteLength;
+                for (let i = 0; i < len; i++) {
+                    binary += String.fromCharCode(bytes[i]);
                 }
-            };
-        } catch (error) {
+                base64Data = window.btoa(binary);
+            } else {
+                // Fallback (unlikely needed for modern browsers)
+                // @ts-ignore
+                const Reader = window.FileReader || FileReader;
+                if (Reader) {
+                    const reader = new Reader();
+                    base64Data = await new Promise((resolve, reject) => {
+                        reader.onload = () => {
+                            if (reader.result) resolve((reader.result as string).split(',')[1]);
+                            else reject(new Error("Empty result"));
+                        };
+                        reader.onerror = reject;
+                        reader.readAsDataURL(file);
+                    });
+                } else {
+                    throw new Error("Trình duyệt không hỗ trợ đọc file.");
+                }
+            }
+
+            const response = await fetch('https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec', {
+                method: 'POST',
+                redirect: 'follow',
+                headers: {
+                    'Content-Type': 'text/plain;charset=utf-8',
+                },
+                body: JSON.stringify({
+                    filename: `checkin_${Date.now()}_${file.name}`,
+                    mimeType: file.type,
+                    base64Data: base64Data
+                })
+            });
+
+            const data = await response.json();
+            if (data.status === 'success') {
+                setFormData(prev => ({ ...prev, imageUrl: data.fileUrl }));
+            } else {
+                alert("Lỗi upload: " + (data.message || "Không xác định"));
+            }
+        } catch (error: any) {
             console.error(error);
-            alert("Lỗi xử lý tệp.");
+            alert(`Lỗi xử lý tệp: ${error.message}`);
+        } finally {
             setUploading(false);
         }
     };
@@ -319,6 +346,16 @@ const Checkin = () => {
                 ownerEmail: owner.ownerEmail,
                 createdAt: serverTimestamp()
             });
+
+            // Log to Audit System
+            await addDoc(collection(db, 'audit_logs'), {
+                action: 'Check-in khách hàng',
+                user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
+                userId: auth.currentUser?.uid,
+                ownerId: owner.ownerId,
+                details: `Đã check-in tại ${customer?.name || 'Vãng lai'} - Mục đích: ${formData.purpose}`,
+                createdAt: serverTimestamp()
+            });
             setShowCheckinForm(false);
 
             setFormData({
@@ -338,6 +375,25 @@ const Checkin = () => {
             setLoading(false);
         }
     };
+
+    const hasPermission = owner.role === 'admin' || (owner.accessRights?.checkin_create ?? true);
+
+    if (owner.loading) return null;
+
+    if (!hasPermission) {
+        return (
+            <div className="flex flex-col h-full bg-[#f8f9fb] dark:bg-slate-950 items-center justify-center text-center p-8 min-h-screen">
+                <div className="bg-purple-50 dark:bg-purple-900/20 p-6 rounded-full text-purple-500 mb-4">
+                    <MapPin size={48} />
+                </div>
+                <h2 className="text-2xl font-black text-slate-800 dark:text-white uppercase mb-2">Quyền hạn hạn chế</h2>
+                <p className="text-slate-500 dark:text-slate-400 max-w-md">
+                    Bạn không có quyền thực hiện Check-in / Xem lịch sử check-in. Vui lòng liên hệ Admin.
+                </p>
+                <button onClick={() => navigate('/')} className="mt-6 bg-[#1A237E] text-white px-6 py-2 rounded-xl font-bold">Quay lại Trang chủ</button>
+            </div>
+        );
+    }
 
     return (
         <div className="flex-1 flex flex-col lg:flex-row relative overflow-hidden h-full">

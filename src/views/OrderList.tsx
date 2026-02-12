@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
-import { collection, query, orderBy, onSnapshot, updateDoc, doc, deleteDoc, serverTimestamp, where } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, updateDoc, doc, deleteDoc, serverTimestamp, where, addDoc } from 'firebase/firestore';
 import OrderTicket from '../components/OrderTicket';
 
 import { useOwner } from '../hooks/useOwner';
@@ -61,6 +61,17 @@ const OrderList = () => {
 				status: newStatus,
 				updatedAt: serverTimestamp()
 			});
+
+			// Log Status Update
+			const order = orders.find(o => o.id === id);
+			await addDoc(collection(db, 'audit_logs'), {
+				action: 'Cập nhật trạng thái đơn',
+				user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
+				userId: auth.currentUser?.uid,
+				ownerId: owner.ownerId,
+				details: `Đã đổi đơn hàng của ${order?.customerName || 'Khách'} sang: ${newStatus}`,
+				createdAt: serverTimestamp()
+			});
 		} catch (error) {
 			console.error("Error updating status:", error);
 			alert("Lỗi khi cập nhật trạng thái");
@@ -70,7 +81,19 @@ const OrderList = () => {
 	const deleteOrder = async (id: string) => {
 		if (window.confirm("Bạn có chắc chắn muốn xóa đơn hàng này?")) {
 			try {
+				const order = orders.find(o => o.id === id);
 				await deleteDoc(doc(db, 'orders', id));
+
+				// Log Delete Order
+				await addDoc(collection(db, 'audit_logs'), {
+					action: 'Xóa đơn hàng',
+					user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
+					userId: auth.currentUser?.uid,
+					ownerId: owner.ownerId,
+					details: `Đã xóa đơn hàng của ${order?.customerName || 'Khách'} - Trị giá: ${formatPrice(order?.totalAmount || 0)}`,
+					createdAt: serverTimestamp()
+				});
+
 				setShowDetail(false);
 			} catch (error) {
 				console.error("Error deleting order:", error);

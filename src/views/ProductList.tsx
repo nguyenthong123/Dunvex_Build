@@ -8,6 +8,7 @@ import { useOwner } from '../hooks/useOwner';
 const ProductList = () => {
 	const navigate = useNavigate();
 	const owner = useOwner();
+
 	const [products, setProducts] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [showAddForm, setShowAddForm] = useState(false);
@@ -33,6 +34,7 @@ const ProductList = () => {
 		packaging: '',
 		density: ''
 	});
+
 
 	// Get unique categories for suggestions
 	const categories = Array.from(new Set([
@@ -74,41 +76,74 @@ const ProductList = () => {
 		const file = e.target.files?.[0];
 		if (!file) return;
 
+		// Validation: check file size (max 5MB for GAS)
+		if (file.size > 5 * 1024 * 1024) {
+			alert("File quá lớn. Vui lòng chọn ảnh dưới 5MB.");
+			return;
+		}
+
 		setUploading(true);
 		try {
-			const reader = new FileReader();
-			reader.readAsDataURL(file);
-			reader.onload = async () => {
-				const base64Data = (reader.result as string).split(',')[1];
+			let base64Data = "";
 
-				try {
-					const response = await fetch('https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec', {
-						method: 'POST',
-						body: JSON.stringify({
-							filename: file.name,
-							mimeType: file.type,
-							base64Data: base64Data
-						})
-					});
-
-					const data = await response.json();
-					if (data.status === 'success') {
-						setFormData(prev => ({ ...prev, imageUrl: data.fileUrl }));
-					} else {
-						alert("Lỗi từ Drive: " + (data.message || "Không xác định"));
-					}
-				} catch (err: any) {
-					console.error("Fetch Error:", err);
-					// GAS often has CORS issues. If we can't read JSON, it might still have uploaded.
-					// But usually, we need the URL back.
-					alert("Lỗi kết nối đến Google Drive. Vui lòng kiểm tra cấu hình Script.");
-				} finally {
-					setUploading(false);
+			// Method 1: Try using arrayBuffer (Modern & Safari safe)
+			// This bypasses FileReader completely
+			if (file.arrayBuffer) {
+				const buffer = await file.arrayBuffer();
+				let binary = '';
+				const bytes = new Uint8Array(buffer);
+				const len = bytes.byteLength;
+				for (let i = 0; i < len; i++) {
+					binary += String.fromCharCode(bytes[i]);
 				}
-			};
+				base64Data = window.btoa(binary);
+			}
+			// Method 2: Fallback to manual FileReader if absolutely necessary (but we know it's broken for you)
+			else {
+				// @ts-ignore
+				const Reader = window.FileReader || FileReader;
+				if (Reader) {
+					const reader = new Reader();
+					base64Data = await new Promise((resolve, reject) => {
+						reader.onload = () => {
+							if (reader.result) resolve((reader.result as string).split(',')[1]);
+							else reject(new Error("Empty result"));
+						};
+						reader.onerror = reject;
+						reader.readAsDataURL(file);
+					});
+				} else {
+					throw new Error("Trình duyệt không hỗ trợ đọc file.");
+				}
+			}
+
+			// Perform Upload
+			const response = await fetch('https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec', {
+				method: 'POST',
+				redirect: 'follow',
+				headers: {
+					'Content-Type': 'text/plain;charset=utf-8',
+				},
+				body: JSON.stringify({
+					filename: file.name,
+					mimeType: file.type,
+					base64Data: base64Data
+				})
+			});
+
+			const data = await response.json();
+
+			if (data.status === 'success') {
+				setFormData(prev => ({ ...prev, imageUrl: data.fileUrl }));
+			} else {
+				console.error("GAS Error:", data);
+				alert("Lỗi từ Drive: " + (data.message || "Không xác định"));
+			}
+
 		} catch (error: any) {
-			console.error("Reader error:", error);
-			alert("Lỗi khi xử lý tệp ảnh.");
+			console.error("Upload Error:", error);
+			alert(`Lỗi upload: ${error.message}`);
+		} finally {
 			setUploading(false);
 		}
 	};
@@ -128,6 +163,17 @@ const ProductList = () => {
 				createdBy: auth.currentUser?.uid,
 				createdByEmail: auth.currentUser?.email
 			});
+
+			// Log Add Product
+			await addDoc(collection(db, 'audit_logs'), {
+				action: 'Thêm sản phẩm mới',
+				user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
+				userId: auth.currentUser?.uid,
+				ownerId: owner.ownerId,
+				details: `Đã thêm sản phẩm: ${formData.name} - Giá bán: ${formData.priceSell}`,
+				createdAt: serverTimestamp()
+			});
+
 			setShowAddForm(false);
 			resetForm();
 		} catch (error) {
@@ -144,6 +190,16 @@ const ProductList = () => {
 				...formData,
 				updatedAt: serverTimestamp(),
 				updatedBy: auth.currentUser?.uid
+			});
+
+			// Log Update Product
+			await addDoc(collection(db, 'audit_logs'), {
+				action: 'Cập nhật sản phẩm',
+				user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
+				userId: auth.currentUser?.uid,
+				ownerId: owner.ownerId,
+				details: `Đã cập nhật sản phẩm: ${formData.name}`,
+				createdAt: serverTimestamp()
 			});
 			setShowEditForm(false);
 			resetForm();
@@ -164,10 +220,16 @@ const ProductList = () => {
 		}
 	};
 
+	const generateSKU = () => {
+		const prefix = 'DV';
+		const randomPart = Math.floor(100000 + Math.random() * 900000).toString();
+		return `${prefix}-${randomPart}`;
+	};
+
 	const resetForm = () => {
 		setFormData({
 			name: '',
-			sku: '',
+			sku: generateSKU(),
 			category: 'Tôn lợp',
 			priceBuy: 0,
 			priceSell: 0,
@@ -229,6 +291,26 @@ const ProductList = () => {
 		return url;
 	};
 
+	const hasViewPermission = owner.role === 'admin' || (owner.accessRights?.inventory_view ?? true);
+	const hasManagePermission = owner.role === 'admin' || (owner.accessRights?.inventory_manage ?? true);
+
+	if (owner.loading) return null;
+
+	if (!hasViewPermission) {
+		return (
+			<div className="flex flex-col h-full bg-[#f8f9fb] dark:bg-slate-950 items-center justify-center text-center p-8 min-h-screen">
+				<div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-full text-blue-500 mb-4">
+					<span className="material-symbols-outlined text-5xl">inventory_2</span>
+				</div>
+				<h2 className="text-2xl font-black text-slate-800 dark:text-white uppercase mb-2">Quyền hạn hạn chế</h2>
+				<p className="text-slate-500 dark:text-slate-400 max-w-md">
+					Bạn không có quyền xem danh sách sản phẩm / kho. Vui lòng liên hệ Admin.
+				</p>
+				<button onClick={() => navigate('/')} className="mt-6 bg-[#1A237E] text-white px-6 py-2 rounded-xl font-bold">Quay lại</button>
+			</div>
+		);
+	}
+
 	return (
 		<div className="flex flex-col h-full bg-[#f8f9fa] dark:bg-slate-950 transition-colors duration-300">
 			<header className="h-16 md:h-20 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between px-4 md:px-8 shrink-0 transition-colors duration-300">
@@ -256,13 +338,15 @@ const ProductList = () => {
 						/>
 					</div>
 
-					<button
-						onClick={() => setShowAddForm(true)}
-						className="hidden md:flex bg-[#FF6D00] hover:bg-orange-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-orange-500/20 active:scale-95 transition-all items-center gap-2"
-					>
-						<span className="material-symbols-outlined text-xl">add</span>
-						<span>Thêm Mới</span>
-					</button>
+					{hasManagePermission && (
+						<button
+							onClick={() => setShowAddForm(true)}
+							className="hidden md:flex bg-[#FF6D00] hover:bg-orange-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-orange-500/20 active:scale-95 transition-all items-center gap-2"
+						>
+							<span className="material-symbols-outlined text-xl">add</span>
+							<span>Thêm Mới</span>
+						</button>
+					)}
 				</div>
 			</header>
 
@@ -331,14 +415,16 @@ const ProductList = () => {
 											</span>
 										</td>
 										<td className="py-4 px-6 text-right">
-											<div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-												<button onClick={() => openEdit(product)} className="p-2 text-slate-300 dark:text-slate-600 hover:text-[#1A237E] dark:hover:text-indigo-400 transition-colors">
-													<span className="material-symbols-outlined text-[20px]">edit</span>
-												</button>
-												<button onClick={() => handleDeleteProduct(product.id)} className="p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors">
-													<span className="material-symbols-outlined text-[20px]">delete</span>
-												</button>
-											</div>
+											{hasManagePermission && (
+												<div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+													<button onClick={() => openEdit(product)} className="p-2 text-slate-300 dark:text-slate-600 hover:text-[#1A237E] dark:hover:text-indigo-400 transition-colors">
+														<span className="material-symbols-outlined text-[20px]">edit</span>
+													</button>
+													<button onClick={() => handleDeleteProduct(product.id)} className="p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors">
+														<span className="material-symbols-outlined text-[20px]">delete</span>
+													</button>
+												</div>
+											)}
 										</td>
 									</tr>
 								))
@@ -472,13 +558,23 @@ const ProductList = () => {
 									</div>
 									<div>
 										<label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Mã SKU / Code</label>
-										<input
-											type="text"
-											placeholder="VD: TL-XN-045"
-											className="w-full bg-slate-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 rounded-xl py-3 px-4 text-[#1A237E] dark:text-indigo-300 font-medium focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-orange-500/20"
-											value={formData.sku}
-											onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-										/>
+										<div className="relative">
+											<input
+												type="text"
+												placeholder="Tự động tạo..."
+												className="w-full bg-slate-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 rounded-xl py-3 pl-4 pr-10 text-[#1A237E] dark:text-indigo-300 font-medium focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-orange-500/20"
+												value={formData.sku}
+												onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+											/>
+											<button
+												type="button"
+												className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full text-slate-400 hover:text-[#FF6D00] hover:bg-slate-100 dark:hover:bg-slate-700 transition-all active:rotate-180"
+												title="Tạo mã mới"
+												onClick={() => setFormData(prev => ({ ...prev, sku: generateSKU() }))}
+											>
+												<span className="material-symbols-outlined text-xl">autorenew</span>
+											</button>
+										</div>
 									</div>
 									<div>
 										<label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Đơn vị tính</label>

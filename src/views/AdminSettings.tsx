@@ -118,7 +118,17 @@ const AdminSettings = () => {
 				ownerId: owner.ownerId,
 				ownerEmail: owner.ownerEmail,
 				createdAt: serverTimestamp(),
-				inviterName: auth.currentUser?.displayName || auth.currentUser?.email
+				inviterName: auth.currentUser?.displayName || auth.currentUser?.email,
+				accessRights: {
+					dashboard: true,
+					orders_view: true,
+					orders_create: true,
+					checkin_create: true,
+					inventory_view: true,
+					inventory_manage: true,
+					customers_manage: true,
+					debts_manage: true
+				}
 			});
 
 			// 2. Log
@@ -235,54 +245,44 @@ const AdminSettings = () => {
 	return (
 		<div className="flex flex-col h-full bg-[#f8f9fb] dark:bg-slate-950 transition-colors duration-300">
 			{/* HEADER */}
-			<header className="h-16 md:h-20 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between px-4 md:px-8 shrink-0 transition-colors duration-300">
-				<div className="flex items-center gap-4">
+			<header className="h-16 md:h-20 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row items-center justify-between px-4 md:px-8 shrink-0 transition-colors duration-300">
+				<div className="flex items-center gap-4 py-2 md:py-0">
 					<h2 className="text-[#1A237E] dark:text-indigo-400 text-lg md:text-2xl font-black uppercase tracking-tight">Quản Trị Doanh Nghiệp</h2>
 				</div>
-			</header>
 
-			<div className="flex flex-1 overflow-hidden">
-				{/* SIDEBAR TABS */}
-				<div className="w-20 md:w-64 bg-white dark:bg-slate-900 border-r border-slate-100 dark:border-slate-800 flex flex-col py-6 gap-2">
+				{/* HORIZONTAL NAVIGATION */}
+				<nav className="flex items-center gap-1 md:gap-2 overflow-x-auto no-scrollbar py-2">
 					<TabItem
 						active={activeTab === 'general'}
 						onClick={() => setActiveTab('general')}
-						icon={<Settings size={20} />}
-						label="Cấu hình chung"
+						icon={<Settings size={18} />}
+						label="Cấu hình"
 					/>
 					<TabItem
 						active={activeTab === 'users'}
 						onClick={() => setActiveTab('users')}
-						icon={<Users size={20} />}
-						label="Quản lý Nhân sự"
+						icon={<Users size={18} />}
+						label="Nhân sự"
 					/>
 					<TabItem
 						active={activeTab === 'permissions'}
 						onClick={() => setActiveTab('permissions')}
-						icon={<Shield size={20} />}
-						label="Phân quyền Truy cập"
+						icon={<Shield size={18} />}
+						label="Phân quyền"
 					/>
 					<TabItem
 						active={activeTab === 'audit'}
 						onClick={() => setActiveTab('audit')}
-						icon={<Activity size={20} />}
-						label="Nhật ký Hoạt động"
+						icon={<Activity size={18} />}
+						label="Nhật ký"
 					/>
-					<div className="mt-auto px-4">
-						<div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl cursor-pointer" onClick={toggleTheme}>
-							<div className="flex items-center gap-3">
-								{theme === 'dark' ? <Sun className="text-yellow-500" size={20} /> : <Moon className="text-slate-500" size={20} />}
-								<span className="hidden md:block text-sm font-bold text-slate-600 dark:text-slate-300">
-									{theme === 'dark' ? 'Giao diện Sáng' : 'Giao diện Tối'}
-								</span>
-							</div>
-						</div>
-					</div>
-				</div>
+				</nav>
+			</header>
 
+			<div className="flex flex-1 flex-col overflow-hidden">
 				{/* CONTENT AREA */}
 				<div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
-					<div className="max-w-5xl mx-auto">
+					<div className="max-w-6xl mx-auto">
 
 						{/* --- TAB: GENERAL SETTINGS --- */}
 						{activeTab === 'general' && (
@@ -433,64 +433,112 @@ const AdminSettings = () => {
 									</div>
 								)}
 
-								<div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
-									<table className="w-full text-left">
-										<thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-400">
-											<tr>
-												<th className="px-6 py-4">Nhân viên</th>
-												<th className="px-6 py-4">Email</th>
-												<th className="px-6 py-4">Vai trò</th>
-												<th className="px-6 py-4">Trạng thái</th>
-												<th className="px-6 py-4 text-right">Hành động</th>
-											</tr>
-										</thead>
-										<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-											{userList.map((user) => (
-												<tr key={user.id} className="group hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-													<td className="px-6 py-4">
-														<div className="flex items-center gap-3">
-															<div className="size-8 rounded-full bg-slate-200 flex items-center justify-center font-bold text-xs text-slate-600">
-																{user.displayName?.[0] || 'U'}
-															</div>
-															<span className="font-bold text-sm text-slate-700 dark:text-white">{user.displayName || 'Unnamed'}</span>
-														</div>
-													</td>
-													<td className="px-6 py-4 text-sm font-medium text-slate-600 dark:text-slate-400">{user.email}</td>
-													<td className="px-6 py-4">
-														<select
-															className="bg-slate-100 dark:bg-slate-800 border-none rounded-lg text-xs font-bold px-2 py-1 outline-none cursor-pointer hover:bg-slate-200 dark:text-white"
-															value={user.role || 'sale'}
-															onChange={(e) => updateUserRole(user, e.target.value)}
-														>
-															<option value="sale">Sale</option>
-															<option value="warehouse">Kho</option>
-															<option value="accountant">Kế toán</option>
-															<option value="admin">Admin</option>
-														</select>
-													</td>
-													<td className="px-6 py-4">
-														<span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase ${user.status === 'banned' ? 'bg-red-100 text-red-600' :
-															user.status === 'pending' ? 'bg-orange-100 text-orange-600' :
-																'bg-green-100 text-green-600'
-															}`}>
-															{user.status === 'banned' ? 'Vô hiệu hóa' :
-																user.status === 'pending' ? 'Đang chờ' :
-																	'Hoạt động'}
-														</span>
-													</td>
-													<td className="px-6 py-4 text-right">
-														<button
-															onClick={() => deleteUser(user)}
-															className="text-slate-400 hover:text-red-500 transition-colors"
-															title="Xóa nhân viên"
-														>
-															<Trash2 size={18} />
-														</button>
-													</td>
+								<div className="bg-white dark:bg-slate-900 rounded-3xl md:rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+									{/* Desktop View */}
+									<div className="hidden md:block">
+										<table className="w-full text-left">
+											<thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-400">
+												<tr>
+													<th className="px-6 py-4">Nhân viên</th>
+													<th className="px-6 py-4">Email</th>
+													<th className="px-6 py-4">Vai trò</th>
+													<th className="px-6 py-4">Trạng thái</th>
+													<th className="px-6 py-4 text-right">Hành động</th>
 												</tr>
-											))}
-										</tbody>
-									</table>
+											</thead>
+											<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+												{userList.map((user) => (
+													<tr key={user.id} className="group hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+														<td className="px-6 py-4">
+															<div className="flex items-center gap-3">
+																<div className="size-8 rounded-full bg-slate-200 flex items-center justify-center font-bold text-xs text-slate-600">
+																	{user.displayName?.[0] || 'U'}
+																</div>
+																<span className="font-bold text-sm text-slate-700 dark:text-white">{user.displayName || 'Unnamed'}</span>
+															</div>
+														</td>
+														<td className="px-6 py-4 text-sm font-medium text-slate-600 dark:text-slate-400">{user.email}</td>
+														<td className="px-6 py-4">
+															<select
+																className="bg-slate-100 dark:bg-slate-800 border-none rounded-lg text-xs font-bold px-2 py-1 outline-none cursor-pointer hover:bg-slate-200 dark:text-white"
+																value={user.role || 'sale'}
+																onChange={(e) => updateUserRole(user, e.target.value)}
+															>
+																<option value="sale">Sale</option>
+																<option value="warehouse">Kho</option>
+																<option value="accountant">Kế toán</option>
+																<option value="admin">Admin</option>
+															</select>
+														</td>
+														<td className="px-6 py-4">
+															<span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase ${user.status === 'banned' ? 'bg-red-100 text-red-600' :
+																user.status === 'pending' ? 'bg-orange-100 text-orange-600' :
+																	'bg-green-100 text-green-600'
+																}`}>
+																{user.status === 'banned' ? 'Vô hiệu hóa' :
+																	user.status === 'pending' ? 'Đang chờ' :
+																		'Hoạt động'}
+															</span>
+														</td>
+														<td className="px-6 py-4 text-right">
+															<button
+																onClick={() => deleteUser(user)}
+																className="text-slate-400 hover:text-red-500 transition-colors"
+																title="Xóa nhân viên"
+															>
+																<Trash2 size={18} />
+															</button>
+														</td>
+													</tr>
+												))}
+											</tbody>
+										</table>
+									</div>
+
+									{/* Mobile View */}
+									<div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
+										{userList.map((user) => (
+											<div key={user.id} className="p-4 space-y-3">
+												<div className="flex items-center justify-between">
+													<div className="flex items-center gap-3">
+														<div className="size-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-bold text-sm text-indigo-600 dark:text-indigo-400">
+															{user.displayName?.[0] || 'U'}
+														</div>
+														<div>
+															<p className="font-bold text-slate-800 dark:text-white">{user.displayName || 'Unnamed'}</p>
+															<p className="text-xs text-slate-500">{user.email}</p>
+														</div>
+													</div>
+													<button
+														onClick={() => deleteUser(user)}
+														className="size-8 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 flex items-center justify-center"
+													>
+														<Trash2 size={16} />
+													</button>
+												</div>
+												<div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-50 dark:border-slate-800">
+													<select
+														className="flex-1 bg-slate-50 dark:bg-slate-800 border-none rounded-xl text-xs font-bold px-3 py-2 outline-none dark:text-white"
+														value={user.role || 'sale'}
+														onChange={(e) => updateUserRole(user, e.target.value)}
+													>
+														<option value="sale">Sale</option>
+														<option value="warehouse">Kho</option>
+														<option value="accountant">Kế toán</option>
+														<option value="admin">Admin</option>
+													</select>
+													<span className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase text-center min-w-[100px] ${user.status === 'banned' ? 'bg-red-50 text-red-600' :
+														user.status === 'pending' ? 'bg-orange-50 text-orange-600' :
+															'bg-green-50 text-green-600'
+														}`}>
+														{user.status === 'banned' ? 'Vô hiệu' :
+															user.status === 'pending' ? 'Chờ duyệt' :
+																'Hoạt động'}
+													</span>
+												</div>
+											</div>
+										))}
+									</div>
 								</div>
 							</div>
 						)}
@@ -505,61 +553,120 @@ const AdminSettings = () => {
 									</div>
 								</div>
 
-								<div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden overflow-x-auto">
-									<table className="w-full text-left min-w-[800px]">
-										<thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-400">
-											<tr>
-												<th className="px-6 py-4 sticky left-0 bg-slate-50 dark:bg-slate-800/50 z-10 w-[30%]">Nhân viên</th>
-												<th className="px-4 py-4 text-center w-[14%]">Tổng quan</th>
-												<th className="px-4 py-4 text-center w-[14%]">Đơn hàng</th>
-												<th className="px-4 py-4 text-center w-[14%]">Công nợ</th>
-												<th className="px-4 py-4 text-center w-[14%]">Kho/SP</th>
-												<th className="px-4 py-4 text-center w-[14%]">Khách hàng</th>
-											</tr>
-										</thead>
-										<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-											{userList.map((user) => (
-												<tr key={user.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-													<td className="px-6 py-4 sticky left-0 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800/50 transition-colors z-10 border-r border-slate-100 dark:border-slate-800">
-														<div className="flex items-center gap-3">
-															<div className="size-8 rounded-full bg-slate-200 flex items-center justify-center font-bold text-xs text-slate-600 shrink-0">
-																{user.displayName?.[0] || 'U'}
-															</div>
-															<div className="min-w-0">
-																<p className="font-bold text-sm text-slate-700 dark:text-white truncate">{user.displayName || 'Unnamed'}</p>
-																<p className="text-xs text-slate-500 truncate">{user.email}</p>
-																<span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-slate-100 dark:bg-slate-800 text-slate-500">
-																	{user.role}
-																</span>
-															</div>
-														</div>
-													</td>
-
-													{['dashboard', 'orders', 'debts', 'inventory', 'customers'].map(metric => (
-														<td key={metric} className="px-4 py-4 text-center align-middle">
-															<div
-																onClick={() => handleTogglePermission(user, metric)}
-																className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors duration-300 mx-auto ${(user.accessRights?.[metric] ?? true)
-																		? 'bg-green-500'
-																		: 'bg-slate-200 dark:bg-slate-700'
-																	}`}
-															>
-																<div className={`w-4 h-4 rounded-full bg-white shadow-sm transform transition-transform duration-300 ${(user.accessRights?.[metric] ?? true)
-																		? 'translate-x-6'
-																		: 'translate-x-0'
-																	}`} />
-															</div>
-														</td>
+								<div className="bg-white dark:bg-slate-900 rounded-3xl md:rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+									{/* Desktop View: Table */}
+									<div className="hidden md:block overflow-x-auto">
+										<table className="w-full text-left min-w-[1000px]">
+											<thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-400">
+												<tr>
+													<th className="px-6 py-4 sticky left-0 bg-slate-50 dark:bg-slate-800/50 z-10">Nhân viên</th>
+													{[
+														{ id: 'dashboard', label: 'Dashboard' },
+														{ id: 'orders_view', label: 'Xem Đơn' },
+														{ id: 'orders_create', label: 'Lên Đơn' },
+														{ id: 'checkin_create', label: 'Check-in' },
+														{ id: 'inventory_view', label: 'Xem Kho' },
+														{ id: 'inventory_manage', label: 'Quản SP' },
+														{ id: 'customers_manage', label: 'Quản Khách' },
+														{ id: 'debts_manage', label: 'Thu Nợ' }
+													].map(p => (
+														<th key={p.id} className="px-2 py-4 text-center text-[9px]">{p.label}</th>
 													))}
 												</tr>
-											))}
-											{userList.length === 0 && (
-												<tr>
-													<td colSpan={6} className="py-12 text-center text-slate-400 text-xs font-bold uppercase">Chưa có nhân viên nào</td>
-												</tr>
-											)}
-										</tbody>
-									</table>
+											</thead>
+											<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+												{userList.map((user) => (
+													<tr key={user.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+														<td className="px-6 py-4 sticky left-0 bg-white dark:bg-slate-900 z-10 border-r border-slate-100 dark:border-slate-800 min-w-[200px]">
+															<div className="flex items-center gap-3">
+																<div className="size-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-bold text-xs text-indigo-600">
+																	{user.displayName?.[0] || 'U'}
+																</div>
+																<div>
+																	<p className="font-bold text-sm text-slate-700 dark:text-white truncate">{user.displayName || 'Unnamed'}</p>
+																	<span className="text-[9px] font-black uppercase text-slate-400">{user.role}</span>
+																</div>
+															</div>
+														</td>
+
+														{[
+															'dashboard', 'orders_view', 'orders_create',
+															'checkin_create', 'inventory_view', 'inventory_manage',
+															'customers_manage', 'debts_manage'
+														].map(metric => (
+															<td key={metric} className="px-2 py-4 text-center">
+																<div
+																	onClick={() => handleTogglePermission(user, metric)}
+																	className={`w-10 h-5 rounded-full p-0.5 cursor-pointer transition-colors duration-300 mx-auto ${(user.accessRights?.[metric] ?? true)
+																		? 'bg-blue-600'
+																		: 'bg-slate-200 dark:bg-slate-700'
+																		}`}
+																>
+																	<div className={`w-4 h-4 rounded-full bg-white shadow-sm transform transition-transform duration-300 ${(user.accessRights?.[metric] ?? true)
+																		? 'translate-x-5'
+																		: 'translate-x-0'
+																		}`} />
+																</div>
+															</td>
+														))}
+													</tr>
+												))}
+											</tbody>
+										</table>
+									</div>
+
+									{/* Mobile View: Granular Cards */}
+									<div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
+										{userList.map((user) => (
+											<div key={user.id} className="p-5">
+												<div className="flex items-center gap-4 mb-6">
+													<div className="size-12 rounded-full bg-indigo-50 dark:bg-indigo-900/40 flex items-center justify-center font-black text-indigo-600 dark:text-indigo-400">
+														{user.displayName?.[0] || 'U'}
+													</div>
+													<div>
+														<h4 className="font-black text-slate-900 dark:text-white">{user.displayName}</h4>
+														<p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{user.role}</p>
+													</div>
+												</div>
+
+												<div className="grid grid-cols-1 gap-3">
+													{[
+														{ id: 'dashboard', label: 'Truy cập Tổng quan (Dashboard)' },
+														{ id: 'orders_view', label: 'Xem danh sách đơn hàng' },
+														{ id: 'orders_create', label: 'Tạo đơn hàng mới' },
+														{ id: 'checkin_create', label: 'Thực hiện Check-in' },
+														{ id: 'inventory_view', label: 'Xem danh sách sản phẩm' },
+														{ id: 'inventory_manage', label: 'Quản lý Sản phẩm (Thêm/Sửa/Xóa)' },
+														{ id: 'customers_manage', label: 'Quản lý Khách hàng' },
+														{ id: 'debts_manage', label: 'Nhập Công nợ / Thu tiền' }
+													].map(perm => (
+														<div
+															key={perm.id}
+															className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100/50 dark:border-slate-800"
+															onClick={() => handleTogglePermission(user, perm.id)}
+														>
+															<span className="text-xs font-bold text-slate-600 dark:text-slate-300">{perm.label}</span>
+															<div
+																className={`w-10 h-5 rounded-full p-0.5 transition-colors duration-300 shrink-0 ${(user.accessRights?.[perm.id] ?? true)
+																	? 'bg-green-500'
+																	: 'bg-slate-300 dark:bg-slate-700'
+																	}`}
+															>
+																<div className={`w-4 h-4 rounded-full bg-white transform transition-transform duration-300 ${(user.accessRights?.[perm.id] ?? true)
+																	? 'translate-x-5'
+																	: 'translate-x-0'
+																	}`} />
+															</div>
+														</div>
+													))}
+												</div>
+											</div>
+										))}
+									</div>
+
+									{userList.length === 0 && (
+										<div className="py-12 text-center text-slate-400 text-xs font-bold uppercase">Chưa có nhân viên nào</div>
+									)}
 								</div>
 							</div>
 						)}
@@ -572,44 +679,64 @@ const AdminSettings = () => {
 									<div className="text-xs font-bold text-slate-400 uppercase">50 hoạt động gần nhất</div>
 								</div>
 
-								<div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
-									<table className="w-full text-left">
-										<thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-400">
-											<tr>
-												<th className="px-6 py-4">Thời gian</th>
-												<th className="px-6 py-4">Người thực hiện</th>
-												<th className="px-6 py-4">Hành động</th>
-												<th className="px-6 py-4">Chi tiết</th>
-											</tr>
-										</thead>
-										<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-											{logs.map((log) => (
-												<tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-													<td className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 whitespace-nowrap">
-														{log.createdAt?.seconds ? new Date(log.createdAt.seconds * 1000).toLocaleString('vi-VN') : '---'}
-													</td>
-													<td className="px-6 py-4">
-														<div className="flex items-center gap-2">
-															<span className="font-bold text-sm text-[#1A237E] dark:text-indigo-400">{log.user || 'Unknown'}</span>
-														</div>
-													</td>
-													<td className="px-6 py-4">
-														<span className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300">
-															{log.action}
-														</span>
-													</td>
-													<td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400 max-w-xs truncate" title={log.details}>
-														{log.details}
-													</td>
-												</tr>
-											))}
-											{logs.length === 0 && (
+								<div className="bg-white dark:bg-slate-900 rounded-3xl md:rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+									{/* Desktop */}
+									<div className="hidden md:block">
+										<table className="w-full text-left">
+											<thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-400">
 												<tr>
-													<td colSpan={4} className="py-12 text-center text-slate-400 text-xs font-bold uppercase">Chưa có nhật ký nào</td>
+													<th className="px-6 py-4">Thời gian</th>
+													<th className="px-6 py-4">Người thực hiện</th>
+													<th className="px-6 py-4">Hành động</th>
+													<th className="px-6 py-4">Chi tiết</th>
 												</tr>
-											)}
-										</tbody>
-									</table>
+											</thead>
+											<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+												{logs.map((log) => (
+													<tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+														<td className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 whitespace-nowrap">
+															{log.createdAt?.seconds ? new Date(log.createdAt.seconds * 1000).toLocaleString('vi-VN') : '---'}
+														</td>
+														<td className="px-6 py-4">
+															<div className="flex items-center gap-2">
+																<span className="font-bold text-sm text-[#1A237E] dark:text-indigo-400">{log.user || 'Unknown'}</span>
+															</div>
+														</td>
+														<td className="px-6 py-4">
+															<span className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300">
+																{log.action}
+															</span>
+														</td>
+														<td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400 max-w-xs truncate" title={log.details}>
+															{log.details}
+														</td>
+													</tr>
+												))}
+											</tbody>
+										</table>
+									</div>
+
+									{/* Mobile */}
+									<div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
+										{logs.map((log) => (
+											<div key={log.id} className="p-4 space-y-2">
+												<div className="flex justify-between items-start">
+													<span className="text-[10px] font-bold text-slate-400">
+														{log.createdAt?.seconds ? new Date(log.createdAt.seconds * 1000).toLocaleString('vi-VN') : '---'}
+													</span>
+													<span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[9px] font-bold text-slate-600 dark:text-slate-300">
+														{log.action}
+													</span>
+												</div>
+												<p className="text-sm font-bold text-indigo-600 dark:text-indigo-400">{log.user}</p>
+												<p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">{log.details}</p>
+											</div>
+										))}
+									</div>
+
+									{(logs.length === 0) && (
+										<div className="py-12 text-center text-slate-400 text-xs font-bold uppercase">Chưa có nhật ký nào</div>
+									)}
 								</div>
 							</div>
 						)}
@@ -624,13 +751,13 @@ const AdminSettings = () => {
 const TabItem = ({ active, onClick, icon, label }: any) => (
 	<button
 		onClick={onClick}
-		className={`flex items-center gap-3 px-4 py-3 mx-2 rounded-xl transition-all font-bold text-sm group ${active
+		className={`flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-3 mx-1 md:mx-2 rounded-xl transition-all font-bold text-xs md:text-sm group shrink-0 ${active
 			? 'bg-[#1A237E] dark:bg-indigo-600 text-white shadow-lg shadow-blue-900/20'
 			: 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
 			}`}
 	>
 		<span className={active ? 'text-white' : 'text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white'}>{icon}</span>
-		<span className="hidden md:block">{label}</span>
+		<span>{label}</span>
 	</button>
 );
 

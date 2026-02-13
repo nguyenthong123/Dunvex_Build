@@ -14,6 +14,8 @@ import ProductList from './views/ProductList';
 import OrderList from './views/OrderList';
 import Checkin from './views/Checkin';
 import MainLayout from './components/layout/MainLayout';
+import Pricing from './views/Pricing';
+import NexusControl from './views/NexusControl';
 
 function App() {
 	const [currentUser, setCurrentUser] = useState<any>(null);
@@ -90,6 +92,16 @@ function App() {
 				<Route
 					path="/settings"
 					element={currentUser ? <MainLayout><AppSettings /></MainLayout> : <Navigate to="/login" />}
+				/>
+
+				{/* NEXUS CONTROL & PRICING */}
+				<Route
+					path="/pricing"
+					element={currentUser ? <Pricing /> : <Navigate to="/login" />}
+				/>
+				<Route
+					path="/nexus-control"
+					element={currentUser ? <NexusControl /> : <Navigate to="/login" />}
 				/>
 
 				{/* Catch all */}

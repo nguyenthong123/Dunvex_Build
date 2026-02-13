@@ -6,6 +6,8 @@ import { useNavigationConfig } from '../../hooks/useNavigationConfig';
 import { Moon, Sun, LogOut } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 
+import NotificationBell from '../NotificationBell';
+
 interface SidebarProps {
 	onToggle?: () => void;
 }
@@ -25,7 +27,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onToggle }) => {
 	const menuItems = sidebarItems;
 
 	return (
-		<aside className="hidden md:flex flex-col h-screen bg-[#1A237E] dark:bg-slate-900 text-white transition-all duration-300 z-40 md:w-20 lg:w-64 flex-shrink-0 border-r border-white/10 relative">
+		<aside className="hidden md:flex flex-col h-screen bg-gradient-to-b from-[#1A237E] to-[#0D1240] dark:from-slate-900 dark:to-slate-950 text-white transition-all duration-300 z-40 md:w-20 lg:w-64 flex-shrink-0 border-r border-white/5 relative">
 			{/* Toggle Button Inside Sidebar */}
 			<button
 				onClick={onToggle}
@@ -77,19 +79,22 @@ const Sidebar: React.FC<SidebarProps> = ({ onToggle }) => {
 			</div>
 
 			<div className="p-4 border-t border-white/10 space-y-2">
-				{/* Theme Toggle */}
-				<button
-					onClick={toggleTheme}
-					className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-white/70 hover:bg-white/10 hover:text-white transition-all group"
-				>
-					<div className="relative size-6 flex items-center justify-center">
-						<Sun className={`absolute transition-all duration-300 ${theme === 'dark' ? 'opacity-0 rotate-90 scale-0' : 'opacity-100 rotate-0 scale-100'}`} size={20} />
-						<Moon className={`absolute transition-all duration-300 ${theme === 'dark' ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 -rotate-90 scale-0'}`} size={20} />
-					</div>
-					<span className="hidden lg:block text-sm font-bold uppercase tracking-tight">
-						{theme === 'dark' ? 'Giao diện Sáng' : 'Giao diện Tối'}
-					</span>
-				</button>
+				{/* Notifications & Theme */}
+				<div className="flex items-center gap-2">
+					<NotificationBell />
+					<button
+						onClick={toggleTheme}
+						className="flex-1 flex items-center gap-3 px-3 py-3 rounded-xl text-white/70 hover:bg-white/10 hover:text-white transition-all group overflow-hidden"
+					>
+						<div className="relative size-6 flex items-center justify-center">
+							<Sun className={`absolute transition-all duration-300 ${theme === 'dark' ? 'opacity-0 rotate-90 scale-0' : 'opacity-100 rotate-0 scale-100'}`} size={20} />
+							<Moon className={`absolute transition-all duration-300 ${theme === 'dark' ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 -rotate-90 scale-0'}`} size={20} />
+						</div>
+						<span className="hidden lg:block text-sm font-bold uppercase tracking-tight">
+							{theme === 'dark' ? 'Giao diện Sáng' : 'Giao diện Tối'}
+						</span>
+					</button>
+				</div>
 
 				{/* User Profile / Logout */}
 				<div

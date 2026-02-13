@@ -33,5 +33,9 @@ dist-ssr
 # Build files
 build/
 temp/
+
+# Google Apps Scripts (Sensitive)
 upload_script.gs
-PROJECT_SITEMAP.md
+GAS_*
+*.gs
+!upload_script.gs.example

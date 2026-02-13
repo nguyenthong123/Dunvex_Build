@@ -299,12 +299,12 @@ const CustomerList = () => {
 				<div className="hidden md:block bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-800 overflow-hidden transition-colors duration-300">
 					<table className="w-full text-left">
 						<thead>
-							<tr className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-800">
-								<th className="py-4 px-6 text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider">Khách hàng</th>
-								<th className="py-4 px-6 text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider">Liên hệ</th>
-								<th className="py-4 px-6 text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider">Phân loại</th>
-								<th className="py-4 px-6 text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider text-center">Trạng thái</th>
-								<th className="py-4 px-6 text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider text-right">Hành động</th>
+							<tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
+								<th className="py-4 px-6 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest">Khách hàng</th>
+								<th className="py-4 px-6 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest">Liên hệ</th>
+								<th className="py-4 px-6 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest">Phân loại</th>
+								<th className="py-4 px-6 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest text-center">Trạng thái</th>
+								<th className="py-4 px-6 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest text-right">Hành động</th>
 							</tr>
 						</thead>
 						<tbody className="divide-y divide-gray-100 dark:divide-slate-800">
@@ -316,12 +316,12 @@ const CustomerList = () => {
 								<tr key={customer.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer" onClick={() => openDetail(customer)}>
 									<td className="py-4 px-6">
 										<div className="flex items-center gap-3">
-											<div className="size-10 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 flex items-center justify-center font-bold text-sm">
+											<div className="size-10 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 flex items-center justify-center font-black text-xs border border-blue-200 dark:border-blue-800">
 												{(customer.name?.[0] || 'K').toUpperCase()}
 											</div>
 											<div>
-												<div className="font-bold text-[#1A237E] dark:text-indigo-400">{customer.name}</div>
-												<div className="text-[10px] text-gray-400 dark:text-slate-500">#{customer.id.slice(-6)}</div>
+												<div className="font-black text-slate-900 dark:text-indigo-400 uppercase tracking-tight">{customer.name}</div>
+												<div className="text-[10px] text-slate-500 dark:text-slate-500 font-black tracking-widest">#{customer.id.slice(-6)}</div>
 											</div>
 										</div>
 									</td>
@@ -543,12 +543,12 @@ const CustomerList = () => {
 };
 
 const StatCard = ({ icon, label, value, color }: any) => (
-	<div className="bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-800 transition-colors duration-300">
+	<div className="bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 transition-colors duration-300">
 		<div className={`p-2 ${color} w-fit rounded-lg mb-2`}>
 			<span className="material-symbols-outlined text-lg">{icon}</span>
 		</div>
-		<p className="text-gray-400 dark:text-slate-500 text-[10px] font-bold uppercase tracking-wider">{label}</p>
-		<h3 className="text-xl font-black text-[#1A237E] dark:text-indigo-400 leading-none mt-1">{value}</h3>
+		<p className="text-slate-500 dark:text-slate-500 text-[10px] font-black uppercase tracking-widest">{label}</p>
+		<h3 className="text-xl font-black text-slate-900 dark:text-indigo-400 leading-none mt-1">{value}</h3>
 	</div>
 );
 

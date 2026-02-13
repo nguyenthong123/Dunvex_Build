@@ -75,9 +75,11 @@ const MapUpdater = ({ center, sidebarExpanded }: { center: [number, number], sid
     }, [center, map]);
 
     useEffect(() => {
+        // Safari needs a slightly longer delay or immediate trigger + delay
+        map.invalidateSize();
         const timer = setTimeout(() => {
             map.invalidateSize();
-        }, 500); // Match transition duration
+        }, 1000);
         return () => clearTimeout(timer);
     }, [map, sidebarExpanded]);
 
@@ -396,9 +398,9 @@ const Checkin = () => {
     }
 
     return (
-        <div className="flex-1 flex flex-col lg:flex-row relative overflow-hidden h-full">
+        <div className="flex-1 flex flex-col lg:flex-row relative overflow-hidden h-screen lg:h-full min-h-[500px]">
             {/* Map Area */}
-            <div className="relative flex-1 h-full w-full bg-[#e5e3df] dark:bg-slate-800 z-0 overflow-hidden transition-colors duration-300">
+            <div className="relative flex-1 h-[60vh] lg:h-full w-full bg-[#f0f2f5] dark:bg-slate-800 z-[1] overflow-hidden transition-colors duration-300 shadow-inner">
                 <MapContainer
                     center={mapCenter}
                     zoom={13}

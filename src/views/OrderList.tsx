@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 import { collection, query, orderBy, onSnapshot, updateDoc, doc, deleteDoc, serverTimestamp, where, addDoc } from 'firebase/firestore';
 import OrderTicket from '../components/OrderTicket';
+import UpgradeModal from '../components/UpgradeModal';
 
 import { useOwner } from '../hooks/useOwner';
 
@@ -128,7 +129,7 @@ const OrderList = () => {
 						<input
 							type="text"
 							placeholder="Tìm đơn hàng, khách..."
-							className="pl-10 pr-4 py-2.5 bg-gray-100 dark:bg-slate-800 border-none rounded-xl text-sm focus:ring-2 focus:ring-[#FF6D00]/30 w-64 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+							className="pl-10 pr-4 py-2.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-transparent rounded-xl text-sm font-black focus:ring-2 focus:ring-[#FF6D00]/30 w-64 transition-all text-slate-800 dark:text-slate-200 placeholder:text-slate-500 dark:placeholder:text-slate-500"
 							value={searchTerm}
 							onChange={(e) => setSearchTerm(e.target.value)}
 						/>
@@ -157,12 +158,12 @@ const OrderList = () => {
 				<div className="hidden md:block bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-800 overflow-hidden transition-colors duration-300">
 					<table className="w-full text-left">
 						<thead>
-							<tr className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-800">
-								<th className="py-4 px-6 text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider">Đơn hàng</th>
-								<th className="py-4 px-6 text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider">Khách hàng</th>
-								<th className="py-4 px-6 text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider text-center">Trạng thái</th>
-								<th className="py-4 px-6 text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider text-right">Tổng tiền</th>
-								<th className="py-4 px-6 text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider text-right">Hành động</th>
+							<tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
+								<th className="py-4 px-6 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-[0.1em]">Đơn hàng</th>
+								<th className="py-4 px-6 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-[0.1em]">Khách hàng</th>
+								<th className="py-4 px-6 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-[0.1em] text-center">Trạng thái</th>
+								<th className="py-4 px-6 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-[0.1em] text-right">Tổng tiền</th>
+								<th className="py-4 px-6 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-[0.1em] text-right">Hành động</th>
 							</tr>
 						</thead>
 						<tbody className="divide-y divide-gray-100 dark:divide-slate-800">
@@ -176,19 +177,19 @@ const OrderList = () => {
 									</div>
 								</td></tr>
 							) : filteredOrders.map((order) => (
-								<tr key={order.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer" onClick={() => { setSelectedOrder(order); setShowDetail(true); }}>
+								<tr key={order.id} className="hover:bg-slate-100/50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer" onClick={() => { setSelectedOrder(order); setShowDetail(true); }}>
 									<td className="py-4 px-6">
-										<div className="font-bold text-[#1A237E] dark:text-indigo-400">#{order.id.slice(0, 8).toUpperCase()}</div>
-										<div className="text-[10px] text-gray-400 dark:text-slate-500 font-bold">{new Date(order.createdAt?.seconds * 1000).toLocaleString('vi-VN')}</div>
+										<div className="font-black text-slate-900 dark:text-indigo-400">#{order.id.slice(0, 8).toUpperCase()}</div>
+										<div className="text-[10px] text-slate-500 dark:text-slate-500 font-black uppercase tracking-tighter">{new Date(order.createdAt?.seconds * 1000).toLocaleString('vi-VN')}</div>
 									</td>
 									<td className="py-4 px-6">
 										<div className="flex items-center gap-3">
-											<div className="size-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-bold text-xs text-[#1A237E] dark:text-indigo-400">
+											<div className="size-8 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center font-black text-xs text-slate-700 dark:text-indigo-400 border border-slate-300 dark:border-slate-700">
 												{order.customerName?.[0] || 'K'}
 											</div>
 											<div>
-												<div className="font-bold text-slate-700 dark:text-slate-200">{order.customerName || 'Khách vãng lai'}</div>
-												<div className="text-[10px] text-gray-400 dark:text-slate-500">{order.customerPhone || '---'}</div>
+												<div className="font-black text-slate-800 dark:text-slate-200">{order.customerName || 'Khách vãng lai'}</div>
+												<div className="text-[10px] text-slate-500 dark:text-slate-500 font-bold">{order.customerPhone || '---'}</div>
 											</div>
 										</div>
 									</td>
@@ -197,7 +198,7 @@ const OrderList = () => {
 											{order.status}
 										</span>
 									</td>
-									<td className="py-4 px-6 text-right font-black text-[#1A237E] dark:text-indigo-400">
+									<td className="py-4 px-6 text-right font-black text-slate-900 dark:text-indigo-400">
 										{formatPrice(order.totalAmount || 0)}
 									</td>
 									<td className="py-4 px-6 text-right">
@@ -253,22 +254,29 @@ const OrderList = () => {
 
 			{/* DETAIL MODAL (Ticket View) */}
 			{showDetail && selectedOrder && (
-				<OrderTicket
-					order={selectedOrder}
-					onClose={() => setShowDetail(false)}
-				/>
+				(owner.isPro || !owner.systemConfig.lock_free_orders) && !owner.manualLockOrders ? (
+					<OrderTicket
+						order={selectedOrder}
+						onClose={() => setShowDetail(false)}
+					/>
+				) : (
+					<UpgradeModal
+						onClose={() => setShowDetail(false)}
+						featureName="Phiếu chi tiết đơn hàng"
+					/>
+				)
 			)}
 		</div>
 	);
 };
 
 const StatCard = ({ icon, label, value, color }: any) => (
-	<div className="bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-800 transition-colors duration-300">
+	<div className="bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 transition-colors duration-300">
 		<div className={`p-2 ${color} w-fit rounded-lg mb-2`}>
 			<span className="material-symbols-outlined text-lg">{icon}</span>
 		</div>
-		<p className="text-gray-400 dark:text-slate-500 text-[10px] font-bold uppercase tracking-wider">{label}</p>
-		<h3 className="text-xl font-black text-[#1A237E] dark:text-indigo-400 leading-none mt-1">{value}</h3>
+		<p className="text-slate-500 dark:text-slate-500 text-[10px] font-black uppercase tracking-widest">{label}</p>
+		<h3 className="text-xl font-black text-slate-900 dark:text-indigo-400 leading-none mt-1">{value}</h3>
 	</div>
 );
 

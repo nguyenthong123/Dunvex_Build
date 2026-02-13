@@ -6,10 +6,10 @@
 @theme {
   --color-primary: #1a227f;
   --color-accent: #FF6D00;
-  --color-background-light: #f5f5f5;
-  --color-background-dark: #121320;
+  --color-background-light: #f0f2f5;
+  --color-background-dark: #0f101a;
   --color-surface-light: #ffffff;
-  --color-surface-dark: #1e1f2e;
+  --color-surface-dark: #1a1b26;
 
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
 
@@ -19,12 +19,13 @@
 
 @layer base {
   body {
-    @apply bg-[#f8f9fb] text-slate-900;
+    @apply bg-[#f0f2f5] text-slate-900 leading-relaxed;
     font-family: var(--font-sans);
     -webkit-tap-highlight-color: transparent;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    font-weight: 500;
   }
 }
 
@@ -38,7 +39,7 @@
   }
 
   .card {
-    @apply bg-white dark:bg-surface-dark rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-700;
+    @apply bg-white dark:bg-surface-dark rounded-2xl p-4 shadow-sm border border-slate-200 dark:border-slate-800;
   }
 
   /* Custom scrollbar */
@@ -54,4 +55,39 @@
   .mobile-container {
     @apply relative flex flex-col w-full max-w-[480px] h-screen overflow-hidden bg-background-light dark:bg-background-dark shadow-2xl;
   }
+
+  /* Safari Backdrop Blur Fix */
+  .glassmorphism {
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+  }
+
+  /* Leaflet Map Safari Fix */
+  .leaflet-container {
+    height: 100% !important;
+    width: 100% !important;
+    z-index: 1;
+    position: relative;
+    display: block !important;
+  }
+}
+
+@keyframes wiggle {
+
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+
+  25% {
+    transform: rotate(10deg);
+  }
+
+  75% {
+    transform: rotate(-10deg);
+  }
+}
+
+.animate-wiggle {
+  animation: wiggle 0.5s ease-in-out infinite;
 }

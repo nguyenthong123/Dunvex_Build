@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import MobileNav from './MobileNav';
+import NotificationBell from '../NotificationBell';
 
 interface MainLayoutProps {
 	children: React.ReactNode;
@@ -19,7 +20,20 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 	return (
 		<div className="bg-[#f8f9fa] dark:bg-slate-950 text-slate-900 dark:text-slate-100 h-screen w-full overflow-hidden flex flex-col md:flex-row font-['Manrope'] transition-colors duration-300">
 			{isSidebarVisible && <Sidebar onToggle={() => setIsSidebarVisible(false)} />}
+
 			<main className="flex-1 flex flex-col h-full overflow-hidden bg-white dark:bg-slate-900 relative transition-colors duration-300">
+				{/* MOBILE TOP BAR */}
+				<header className="md:hidden flex items-center justify-between px-6 py-4 border-b border-slate-50 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md sticky top-0 z-[50]" style={{ WebkitBackdropFilter: 'blur(12px)' }}>
+					<div className="flex items-center gap-2">
+						<div className="size-8 bg-[#FF6D00] rounded-lg flex items-center justify-center shadow-lg">
+							<span className="material-symbols-outlined text-white text-lg font-bold">architecture</span>
+						</div>
+						<h1 className="text-sm font-black uppercase tracking-tight">Dunvex<span className="text-[#FF6D00]">Build</span></h1>
+					</div>
+					<div className="bg-[#1A237E] p-1 rounded-xl">
+						<NotificationBell />
+					</div>
+				</header>
 				{!isSidebarVisible && (
 					<button
 						onClick={() => setIsSidebarVisible(true)}

@@ -4,6 +4,7 @@ import { auth, db } from '../services/firebase';
 import { signOut } from 'firebase/auth';
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, deleteDoc, doc, writeBatch, getDocs } from 'firebase/firestore';
 import { Filter, Download, PlusCircle, Printer, X, History, FileText, Edit2, Trash2, MapPin, Phone, Camera, Image } from 'lucide-react';
+import UpgradeModal from '../components/UpgradeModal';
 
 
 
@@ -53,11 +54,11 @@ const Debts: React.FC = () => {
 		if (!auth.currentUser) return;
 		const q = query(
 			collection(db, 'notifications'),
-			where('userId', '==', auth.currentUser.uid),
-			where('read', '==', false)
+			where('userId', '==', auth.currentUser.uid)
 		);
 		const unsubscribe = onSnapshot(q, (snapshot) => {
-			setUnreadCount(snapshot.size);
+			const unread = snapshot.docs.filter(d => !d.data().read).length;
+			setUnreadCount(unread);
 		});
 		return () => unsubscribe();
 	}, []);
@@ -76,13 +77,14 @@ const Debts: React.FC = () => {
 		if (!auth.currentUser) return;
 		const q = query(
 			collection(db, 'notifications'),
-			where('userId', '==', auth.currentUser.uid),
-			where('read', '==', false)
+			where('userId', '==', auth.currentUser.uid)
 		);
 		const snapshot = await getDocs(q);
 		const batch = writeBatch(db);
 		snapshot.docs.forEach((d) => {
-			batch.update(d.ref, { read: true });
+			if (!d.data().read) {
+				batch.update(d.ref, { read: true });
+			}
 		});
 		await batch.commit();
 	};
@@ -484,8 +486,8 @@ const Debts: React.FC = () => {
 			<header className="h-16 md:h-20 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between px-4 md:px-8 shrink-0 transition-colors duration-300">
 				<div className="flex items-center gap-4">
 					<div className="flex flex-col">
-						<h2 className="text-[#1A237E] dark:text-indigo-400 text-lg md:text-2xl font-black uppercase tracking-tight">Quản Lý Công Nợ</h2>
-						<p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest hidden md:block">
+						<h2 className="text-slate-900 dark:text-indigo-400 text-lg md:text-2xl font-black uppercase tracking-tight">Quản Lý Công Nợ</h2>
+						<p className="text-[10px] text-slate-500 dark:text-slate-500 font-black uppercase tracking-widest hidden md:block">
 							Cập nhật lúc: {currentTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} — {currentTime.toLocaleDateString('vi-VN')}
 						</p>
 					</div>
@@ -594,7 +596,7 @@ const Debts: React.FC = () => {
 							<div className="flex items-center gap-2 w-full md:w-auto">
 								<button
 									onClick={() => setShowFilterOptions(!showFilterOptions)}
-									className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${showFilterOptions ? 'bg-[#1A237E] dark:bg-indigo-600 text-white' : 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-100 dark:border-slate-800'}`}
+									className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${showFilterOptions ? 'bg-[#1A237E] dark:bg-indigo-600 text-white' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 shadow-sm'}`}
 								>
 									<Filter size={16} /> Lọc thời gian
 								</button>
@@ -633,12 +635,12 @@ const Debts: React.FC = () => {
 						<div className="overflow-x-auto">
 							<table className="w-full text-left">
 								<thead>
-									<tr className="bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
-										<th className="px-8 py-5 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Đối tác / Mã KH</th>
-										<th className="px-8 py-5 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-right">Tổng Mua</th>
-										<th className="px-8 py-5 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-right">Đã Trả</th>
-										<th className="px-8 py-5 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-right">Dư nợ hiện tại</th>
-										<th className="px-6 py-5 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-right">Hành động</th>
+									<tr className="bg-slate-100/50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
+										<th className="px-8 py-5 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest">Đối tác / Mã KH</th>
+										<th className="px-8 py-5 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest text-right">Tổng Mua</th>
+										<th className="px-8 py-5 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest text-right">Đã Trả</th>
+										<th className="px-8 py-5 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest text-right">Dư nợ hiện tại</th>
+										<th className="px-6 py-5 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest text-right">Hành động</th>
 									</tr>
 								</thead>
 								<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -650,18 +652,18 @@ const Debts: React.FC = () => {
 										<tr key={row.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer" onClick={() => openStatement(row)}>
 											<td className="px-8 py-5">
 												<div className="flex items-center gap-4">
-													<div className={`size-12 rounded-2xl bg-[#1A237E]/5 dark:bg-indigo-500/10 flex items-center justify-center text-[#1A237E] dark:text-indigo-400 font-black text-sm shrink-0 shadow-sm border border-slate-100 dark:border-slate-800`}>{row.initials}</div>
+													<div className={`size-12 rounded-2xl bg-[#1A237E]/10 dark:bg-indigo-500/10 flex items-center justify-center text-[#1A237E] dark:text-indigo-400 font-black text-sm shrink-0 shadow-sm border border-slate-200 dark:border-slate-800`}>{row.initials}</div>
 													<div>
-														<p className="text-sm font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight leading-tight">{row.name}</p>
-														<p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold mt-1 tracking-wider uppercase">{row.phone || row.id.slice(-6)}</p>
+														<p className="text-sm font-black text-slate-900 dark:text-indigo-400 uppercase tracking-tight leading-tight">{row.name}</p>
+														<p className="text-[10px] text-slate-500 dark:text-slate-500 font-black mt-1 tracking-wider uppercase">{row.phone || row.id.slice(-6)}</p>
 													</div>
 												</div>
 											</td>
 											<td className="px-8 py-5 text-right">
-												<span className="text-xs font-bold text-slate-500 dark:text-slate-400">{formatPrice(row.totalOrdersAmount)}</span>
+												<span className="text-xs font-black text-slate-600 dark:text-slate-400">{formatPrice(row.totalOrdersAmount)}</span>
 											</td>
 											<td className="px-8 py-5 text-right">
-												<span className="text-xs font-bold text-green-600 dark:text-green-400">{formatPrice(row.totalPaymentsAmount)}</span>
+												<span className="text-xs font-black text-green-700 dark:text-green-400">{formatPrice(row.totalPaymentsAmount)}</span>
 											</td>
 											<td className="px-8 py-5 text-right">
 												<span className={`text-sm font-black tracking-tight ${row.currentDebt > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-[#10b981] dark:text-emerald-400'}`}>
@@ -824,82 +826,83 @@ const Debts: React.FC = () => {
 
 			{/* DEBT STATEMENT MODAL */}
 			{showStatement && selectedCustomer && (
-				<div className="fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-xl flex items-center justify-center p-0 md:p-8">
-					<div className="bg-white dark:bg-slate-900 w-full max-w-4xl max-h-[95vh] md:max-h-[90vh] md:rounded-[3rem] shadow-2xl relative flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 transaction-colors duration-300">
-						{/* MODAL HEADER - STICKY FOR UI BUT HIDDEN FOR SCREENSHOT ONCE SCROLLED */}
-						<div className="flex-none bg-white dark:bg-slate-900 px-8 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between z-20 md:rounded-t-[3rem] print:hidden transition-colors duration-300">
-							<div className="flex items-center gap-3">
-								<div className="size-10 bg-indigo-50 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center">
-									<History size={20} />
+				((owner.isPro || !owner.systemConfig.lock_free_debts) && !owner.manualLockDebts) ? (
+					<div className="fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-xl flex items-center justify-center p-0 md:p-8">
+						<div className="bg-white dark:bg-slate-900 w-full max-w-4xl max-h-[95vh] md:max-h-[90vh] md:rounded-[3rem] shadow-2xl relative flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 transaction-colors duration-300">
+							{/* MODAL HEADER - STICKY FOR UI BUT HIDDEN FOR SCREENSHOT ONCE SCROLLED */}
+							<div className="flex-none bg-white dark:bg-slate-900 px-8 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between z-20 md:rounded-t-[3rem] print:hidden transition-colors duration-300">
+								<div className="flex items-center gap-3">
+									<div className="size-10 bg-indigo-50 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center">
+										<History size={20} />
+									</div>
+									<div>
+										<h3 className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white">Chi tiết công nợ</h3>
+										<p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest mt-0.5">{selectedCustomer.name}</p>
+									</div>
 								</div>
-								<div>
-									<h3 className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white">Chi tiết công nợ</h3>
-									<p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest mt-0.5">{selectedCustomer.name}</p>
-								</div>
-							</div>
-							<div className="flex items-center gap-2">
-								<button onClick={() => window.print()} className="h-10 px-4 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center gap-2 font-bold text-xs uppercase hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">
-									<Printer size={16} /> <span className="hidden md:inline">In phiếu</span>
-								</button>
-								<button onClick={() => setShowStatement(false)} className="size-10 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center transition-colors">
-									<X size={20} />
-								</button>
-							</div>
-						</div>
-
-						{/* DATE FILTER BAR FOR STATEMENT */}
-						<div className="flex-none bg-slate-50 dark:bg-slate-800/50 px-4 md:px-8 py-3 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4 z-10 print:hidden transition-colors duration-300">
-							<div className="flex items-center gap-4 w-full md:w-auto">
-								<span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest whitespace-nowrap">Lọc giao dịch:</span>
-								<div className="flex items-center gap-2 w-full">
-									<input
-										type="date"
-										value={statementFromDate}
-										onChange={(e) => setStatementFromDate(e.target.value)}
-										className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200"
-									/>
-									<span className="text-slate-300">-</span>
-									<input
-										type="date"
-										value={statementToDate}
-										onChange={(e) => setStatementToDate(e.target.value)}
-										className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200"
-									/>
-								</div>
-							</div>
-
-							{/* ZOOM CONTROLS */}
-							<div className="flex bg-white dark:bg-slate-900 rounded-lg p-1 border border-slate-200 dark:border-slate-700 shadow-sm">
-								{[0.6, 0.85, 1.0].map((v) => (
-									<button
-										key={v}
-										onClick={() => setStatementZoom(v)}
-										className={`px-3 py-1 rounded-md text-[10px] font-black transition-all ${statementZoom === v ? 'bg-[#1A237E] dark:bg-indigo-600 text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-									>
-										{v * 100}%
+								<div className="flex items-center gap-2">
+									<button onClick={() => window.print()} className="h-10 px-4 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center gap-2 font-bold text-xs uppercase hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">
+										<Printer size={16} /> <span className="hidden md:inline">In phiếu</span>
 									</button>
-								))}
+									<button onClick={() => setShowStatement(false)} className="size-10 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center transition-colors">
+										<X size={20} />
+									</button>
+								</div>
 							</div>
-						</div>
 
-						{/* SCROLLABLE DOCUMENT AREA */}
-						<div className="flex-1 overflow-y-auto bg-slate-100 dark:bg-slate-950/50 py-8 flex items-start justify-center scroll-smooth custom-scrollbar">
+							{/* DATE FILTER BAR FOR STATEMENT */}
+							<div className="flex-none bg-slate-50 dark:bg-slate-800/50 px-4 md:px-8 py-3 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4 z-10 print:hidden transition-colors duration-300">
+								<div className="flex items-center gap-4 w-full md:w-auto">
+									<span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest whitespace-nowrap">Lọc giao dịch:</span>
+									<div className="flex items-center gap-2 w-full">
+										<input
+											type="date"
+											value={statementFromDate}
+											onChange={(e) => setStatementFromDate(e.target.value)}
+											className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200"
+										/>
+										<span className="text-slate-300">-</span>
+										<input
+											type="date"
+											value={statementToDate}
+											onChange={(e) => setStatementToDate(e.target.value)}
+											className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200"
+										/>
+									</div>
+								</div>
 
-							{/* THE PAPER SHEET - Scalable Wrapper */}
-							<div
-								style={{
-									width: '800px',
-									transform: `scale(${statementScale * statementZoom})`,
-									transformOrigin: 'top center',
-									marginBottom: (statementScale * statementZoom) < 1 ? `-${(1 - (statementScale * statementZoom)) * 1200}px` : '0'
-								}}
-								className="flex-shrink-0 print-scale transition-transform duration-200"
-							>
-								<div className="bg-white w-[800px] shadow-2xl min-h-[1100px] p-12 mb-20 flex flex-col font-['Inter', sans-serif] relative text-sm text-slate-900 border border-gray-100">
+								{/* ZOOM CONTROLS */}
+								<div className="flex bg-white dark:bg-slate-900 rounded-lg p-1 border border-slate-200 dark:border-slate-700 shadow-sm">
+									{[0.6, 0.85, 1.0].map((v) => (
+										<button
+											key={v}
+											onClick={() => setStatementZoom(v)}
+											className={`px-3 py-1 rounded-md text-[10px] font-black transition-all ${statementZoom === v ? 'bg-[#1A237E] dark:bg-indigo-600 text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+										>
+											{v * 100}%
+										</button>
+									))}
+								</div>
+							</div>
 
-									{/* INJECT PRINT STYLES */}
-									<style>
-										{`
+							{/* SCROLLABLE DOCUMENT AREA */}
+							<div className="flex-1 overflow-y-auto bg-slate-100 dark:bg-slate-950/50 py-8 flex items-start justify-center scroll-smooth custom-scrollbar">
+
+								{/* THE PAPER SHEET - Scalable Wrapper */}
+								<div
+									style={{
+										width: '800px',
+										transform: `scale(${statementScale * statementZoom})`,
+										transformOrigin: 'top center',
+										marginBottom: (statementScale * statementZoom) < 1 ? `-${(1 - (statementScale * statementZoom)) * 1700}px` : '100px'
+									}}
+									className="flex-shrink-0 print-scale transition-transform duration-200"
+								>
+									<div className="bg-white w-[800px] shadow-[0_32px_96px_-12px_rgba(0,0,0,0.3)] min-h-[1141px] p-16 mb-20 flex flex-col font-['Inter', sans-serif] relative text-sm text-slate-900 border-2 border-slate-200">
+
+										{/* INJECT PRINT STYLES */}
+										<style>
+											{`
 											@media print {
 												.no-print { display: none !important; }
 												body { background: white !important; }
@@ -907,206 +910,213 @@ const Debts: React.FC = () => {
 												.fixed { position: static !important; overflow: visible !important; }
 											}
 										`}
-									</style>
+										</style>
 
-									{/* 2. Customer & Cycle Info Grid */}
-									{(() => {
-										const startVal = statementFromDate || '0000-00-00';
-										const endVal = statementToDate || '9999-99-99';
+										{/* 2. Customer & Cycle Info Grid */}
+										{(() => {
+											const startVal = statementFromDate || '0000-00-00';
+											const endVal = statementToDate || '9999-99-99';
 
-										// Normalized date extraction for grouping
-										const getNormDate = (tx: any) => {
-											if (tx.orderDate) return tx.orderDate; // "2026-02-10"
-											if (tx.date) return tx.date; // "2026-02-10"
+											// Normalized date extraction for grouping
+											const getNormDate = (tx: any) => {
+												if (tx.orderDate) return tx.orderDate; // "2026-02-10"
+												if (tx.date) return tx.date; // "2026-02-10"
 
-											let d;
-											if (tx.createdAt?.seconds) {
-												d = new Date(tx.createdAt.seconds * 1000);
-											} else if (tx.createdAt) {
-												d = new Date(tx.createdAt);
-											} else {
-												return '';
-											}
-
-											if (isNaN(d.getTime())) return '';
-
-											const year = d.getFullYear();
-											const month = String(d.getMonth() + 1).padStart(2, '0');
-											const day = String(d.getDate()).padStart(2, '0');
-											return `${year}-${month}-${day}`;
-										};
-
-										const allPossibleTx = [
-											...orders.filter(o => {
-												if (selectedCustomer.isGuest) {
-													return (!o.customerId || !registeredMap.has(o.customerId)) && (o.customerName === selectedCustomer.name || (!o.customerName && selectedCustomer.name === 'Khách vãng lai'));
+												let d;
+												if (tx.createdAt?.seconds) {
+													d = new Date(tx.createdAt.seconds * 1000);
+												} else if (tx.createdAt) {
+													d = new Date(tx.createdAt);
+												} else {
+													return '';
 												}
-												return o.customerId === selectedCustomer.id;
-											}).filter(o => o.status === 'Đơn chốt').map(o => ({ ...o, txType: 'order' })),
-											...payments.filter(p => {
-												if (selectedCustomer.isGuest) {
-													return (!p.customerId || !registeredMap.has(p.customerId)) && (p.customerName === selectedCustomer.name || (!p.customerName && selectedCustomer.name === 'Khách vãng lai'));
+
+												if (isNaN(d.getTime())) return '';
+
+												const year = d.getFullYear();
+												const month = String(d.getMonth() + 1).padStart(2, '0');
+												const day = String(d.getDate()).padStart(2, '0');
+												return `${year}-${month}-${day}`;
+											};
+
+											const allPossibleTx = [
+												...orders.filter(o => {
+													if (selectedCustomer.isGuest) {
+														return (!o.customerId || !registeredMap.has(o.customerId)) && (o.customerName === selectedCustomer.name || (!o.customerName && selectedCustomer.name === 'Khách vãng lai'));
+													}
+													return o.customerId === selectedCustomer.id;
+												}).filter(o => o.status === 'Đơn chốt').map(o => ({ ...o, txType: 'order' })),
+												...payments.filter(p => {
+													if (selectedCustomer.isGuest) {
+														return (!p.customerId || !registeredMap.has(p.customerId)) && (p.customerName === selectedCustomer.name || (!p.customerName && selectedCustomer.name === 'Khách vãng lai'));
+													}
+													return p.customerId === selectedCustomer.id;
+												}).map(p => ({ ...p, txType: 'payment' }))
+											];
+
+											// Calculate Opening Balance (all tx before 'startVal')
+											const openingBalance = allPossibleTx.reduce((sum, tx) => {
+												const txDate = getNormDate(tx);
+												if (txDate !== '' && txDate < startVal) {
+													return sum + Number(tx.totalAmount || 0) - Number(tx.amount || 0);
 												}
-												return p.customerId === selectedCustomer.id;
-											}).map(p => ({ ...p, txType: 'payment' }))
-										];
+												return sum;
+											}, 0);
 
-										// Calculate Opening Balance (all tx before 'startVal')
-										const openingBalance = allPossibleTx.reduce((sum, tx) => {
-											const txDate = getNormDate(tx);
-											if (txDate !== '' && txDate < startVal) {
-												return sum + Number(tx.totalAmount || 0) - Number(tx.amount || 0);
-											}
-											return sum;
-										}, 0);
+											// Current Transactions in cycle
+											const cycleTx = allPossibleTx.filter(tx => {
+												const txDate = getNormDate(tx);
+												return txDate >= startVal && txDate <= endVal;
+											}).sort((a, b) => {
+												const da = getNormDate(a);
+												const db = getNormDate(b);
+												if (da !== db) return da.localeCompare(db);
+												const ta = a.createdAt?.seconds || 0;
+												const tb = b.createdAt?.seconds || 0;
+												return ta - tb;
+											});
 
-										// Current Transactions in cycle
-										const cycleTx = allPossibleTx.filter(tx => {
-											const txDate = getNormDate(tx);
-											return txDate >= startVal && txDate <= endVal;
-										}).sort((a, b) => {
-											const da = getNormDate(a);
-											const db = getNormDate(b);
-											if (da !== db) return da.localeCompare(db);
-											const ta = a.createdAt?.seconds || 0;
-											const tb = b.createdAt?.seconds || 0;
-											return ta - tb;
-										});
+											const debitIncrease = cycleTx.filter(t => t.txType === 'order').reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
+											const creditDecrease = cycleTx.filter(t => t.txType === 'payment').reduce((sum, p) => sum + Number(p.amount || 0), 0);
+											const closingBalance = openingBalance + debitIncrease - creditDecrease;
 
-										const debitIncrease = cycleTx.filter(t => t.txType === 'order').reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
-										const creditDecrease = cycleTx.filter(t => t.txType === 'payment').reduce((sum, p) => sum + Number(p.amount || 0), 0);
-										const closingBalance = openingBalance + debitIncrease - creditDecrease;
-
-										return (
-											<>
-												{/* 1. Header */}
-												<div className="flex justify-between items-start mb-6 border-b-2 border-[#FFD600] pb-4">
-													<div>
-														<h1 className="text-[#FFD600] text-3xl font-bold uppercase mb-1 tracking-tight">PHIẾU BÁO CÔNG NỢ</h1>
-														<p className="text-slate-500 text-sm font-medium uppercase tracking-wide">Hệ thống quản lý Dunvex Digital</p>
+											return (
+												<>
+													{/* 1. Header */}
+													<div className="flex justify-between items-start mb-8 border-b-4 border-[#FFD600] pb-6">
+														<div>
+															<h1 className="text-[#d97706] text-4xl font-black uppercase mb-1 tracking-tighter">PHIẾU BÁO CÔNG NỢ</h1>
+															<p className="text-slate-900 text-sm font-black uppercase tracking-[0.2em]">Hệ thống quản lý Dunvex Digital</p>
+														</div>
+														<div className="text-right">
+															<p className="text-slate-900 font-black text-sm uppercase tracking-wider">Ngày báo: {new Date().toLocaleDateString('vi-VN')}</p>
+															<p className="text-slate-900 font-black text-sm uppercase tracking-wider mt-1">Mã KH: {selectedCustomer.id?.slice(-6).toUpperCase()}</p>
+														</div>
 													</div>
-													<div className="text-right">
-														<p className="text-slate-700 font-bold text-sm">Ngày báo: {new Date().toLocaleDateString('vi-VN')}</p>
-														<p className="text-slate-700 font-bold text-sm">Mã KH: {selectedCustomer.id?.slice(-6).toUpperCase()}</p>
+
+													<div className="mb-10">
+														<p className="text-slate-900 font-black text-xl leading-none">Kính gửi: <span className="font-black text-[#1A237E] uppercase">{selectedCustomer.businessName || selectedCustomer.name}</span></p>
+														<p className="text-slate-900 text-lg mt-3 font-medium">Chúng tôi xin thông báo tình trạng công nợ tính đến hiện tại như sau:</p>
 													</div>
-												</div>
 
-												<div className="mb-8">
-													<p className="text-slate-800 font-medium text-base">Kính gửi: <span className="font-bold text-[#1A237E] uppercase">{selectedCustomer.businessName || selectedCustomer.name}</span></p>
-													<p className="text-slate-600 text-base mt-1">Chúng tôi xin thông báo tình trạng công nợ tính đến hiện tại như sau:</p>
-												</div>
-
-												{/* 2. List of Orders (Includes Opening Balance) */}
-												<div className="mb-8">
-													<h3 className="flex items-center text-slate-800 font-bold text-base mb-3 pl-3 border-l-4 border-[#FFD600]">
-														1. Danh sách đơn hàng
-													</h3>
-													<div className="rounded-lg border border-slate-200 overflow-hidden">
-														<table className="w-full text-sm border-collapse">
-															<thead className="bg-[#EEF0F5] text-slate-700 font-bold">
-																<tr>
-																	<th className="py-3 px-4 text-left w-1/4">Ngày</th>
-																	<th className="py-3 px-4 text-left w-1/4">Mã đơn</th>
-																	<th className="py-3 px-4 text-right w-1/2">Giá trị</th>
-																</tr>
-															</thead>
-															<tbody className="text-slate-700 divide-y divide-slate-100">
-																{/* Opening Balance Row */}
-																<tr className="bg-[#FFFDF5] font-semibold text-slate-800">
-																	<td className="py-3 px-4">{statementFromDate ? formatDate(statementFromDate) : '---'}</td>
-																	<td className="py-3 px-4 uppercase text-[#d97706] text-xs tracking-wider">DƯ NỢ ĐẦU KỲ</td>
-																	<td className="py-3 px-4 text-right">{formatPrice(openingBalance)}</td>
-																</tr>
-																{/* Order Rows */}
-																{cycleTx.filter(t => t.txType === 'order').map((order, idx) => (
-																	<tr key={`ord-${idx}`} className="hover:bg-slate-50">
-																		<td className="py-3 px-4">{formatDate(order.orderDate || order.createdAt)}</td>
-																		<td className="py-3 px-4 font-medium text-[#1A237E]">{order.id?.slice(0, 8).toUpperCase()}</td>
-																		<td className="py-3 px-4 text-right font-medium">{formatPrice(order.totalAmount)}</td>
-																	</tr>
-																))}
-																{cycleTx.filter(t => t.txType === 'order').length === 0 && (
+													{/* 2. List of Orders (Includes Opening Balance) */}
+													<div className="mb-10">
+														<h3 className="flex items-center text-slate-900 font-black text-lg mb-4 pl-4 border-l-[6px] border-[#FFD600] uppercase tracking-tight">
+															1. Danh sách đơn hàng
+														</h3>
+														<div className="rounded-xl border-2 border-slate-300 overflow-hidden shadow-sm">
+															<table className="w-full text-sm border-collapse">
+																<thead className="bg-slate-200 text-slate-900 font-black uppercase tracking-widest text-[10px]">
 																	<tr>
-																		<td colSpan={3} className="py-4 text-center text-slate-400 italic text-xs">Không có đơn hàng mới trong kỳ</td>
+																		<th className="py-4 px-6 text-left w-1/4 border-r border-slate-300">Ngày</th>
+																		<th className="py-4 px-6 text-left w-1/4 border-r border-slate-300">Mã đơn</th>
+																		<th className="py-4 px-6 text-right w-1/2">Giá trị giao dịch</th>
 																	</tr>
-																)}
-																{/* Total Row */}
-																<tr className="bg-[#F8F9FA] font-bold border-t border-slate-200">
-																	<td colSpan={2} className="py-3 px-4 uppercase text-slate-800 text-xs shadow-sm">TỔNG CỘNG (ĐẦU KỲ + PHÁT SINH)</td>
-																	<td className="py-3 px-4 text-right text-rose-600 font-black">{formatPrice(openingBalance + debitIncrease)}</td>
-																</tr>
-															</tbody>
-														</table>
+																</thead>
+																<tbody className="text-slate-900 divide-y-2 divide-slate-200">
+																	{/* Opening Balance Row */}
+																	<tr className="bg-[#FFFCE0] font-black text-slate-900">
+																		<td className="py-4 px-6 border-r border-slate-300">{statementFromDate ? formatDate(statementFromDate) : '---'}</td>
+																		<td className="py-4 px-6 uppercase text-[#d97706] tracking-widest text-xs border-r border-slate-300">DƯ NỢ ĐẦU KỲ</td>
+																		<td className="py-4 px-6 text-right text-lg">{formatPrice(openingBalance)}</td>
+																	</tr>
+																	{/* Order Rows */}
+																	{cycleTx.filter(t => t.txType === 'order').map((order, idx) => (
+																		<tr key={`ord-${idx}`} className="hover:bg-slate-50 font-black">
+																			<td className="py-4 px-6 border-r border-slate-200">{formatDate(order.orderDate || order.createdAt)}</td>
+																			<td className="py-4 px-6 font-black text-[#1A237E] border-r border-slate-200 uppercase tracking-tighter">#{order.id?.slice(0, 8).toUpperCase()}</td>
+																			<td className="py-4 px-6 text-right text-base">{formatPrice(order.totalAmount)}</td>
+																		</tr>
+																	))}
+																	{cycleTx.filter(t => t.txType === 'order').length === 0 && (
+																		<tr>
+																			<td colSpan={3} className="py-4 text-center text-slate-400 italic text-xs">Không có đơn hàng mới trong kỳ</td>
+																		</tr>
+																	)}
+																	{/* Total Row */}
+																	<tr className="bg-slate-100 font-black border-t-2 border-slate-800">
+																		<td colSpan={2} className="py-5 px-6 uppercase text-slate-900 text-sm tracking-tight border-r border-slate-300">TỔNG CỘNG (ĐẦU KỲ + PHÁT SINH)</td>
+																		<td className="py-5 px-6 text-right text-2xl text-rose-700 leading-none">{formatPrice(openingBalance + debitIncrease)}</td>
+																	</tr>
+																</tbody>
+															</table>
+														</div>
 													</div>
-												</div>
 
-												{/* 3. Payment History */}
-												<div className="mb-10">
-													<h3 className="flex items-center text-slate-800 font-bold text-base mb-3 pl-3 border-l-4 border-emerald-500">
-														2. Lịch sử đã thanh toán
-													</h3>
-													<div className="rounded-lg border border-slate-200 overflow-hidden">
-														<table className="w-full text-sm border-collapse">
-															<thead className="bg-[#EEF0F5] text-slate-700 font-bold">
-																<tr>
-																	<th className="py-3 px-4 text-left w-1/4">Ngày</th>
-																	<th className="py-3 px-4 text-left w-1/2">Nội dung</th>
-																	<th className="py-3 px-4 text-right w-1/4">Số tiền</th>
-																</tr>
-															</thead>
-															<tbody className="text-slate-700 divide-y divide-slate-100">
-																{cycleTx.filter(t => t.txType === 'payment').map((pay, idx) => (
-																	<tr key={`pay-${idx}`} className="hover:bg-slate-50">
-																		<td className="py-3 px-4">{formatDate(pay.date || pay.createdAt)}</td>
-																		<td className="py-3 px-4">{pay.note || 'Thanh toán công nợ'}</td>
-																		<td className="py-3 px-4 text-right font-bold text-emerald-600">{formatPrice(pay.amount)}</td>
-																	</tr>
-																))}
-																{cycleTx.filter(t => t.txType === 'payment').length === 0 && (
+													{/* 3. Payment History */}
+													<div className="mb-12">
+														<h3 className="flex items-center text-slate-900 font-black text-lg mb-4 pl-4 border-l-[6px] border-emerald-500 uppercase tracking-tight">
+															2. Lịch sử đã thanh toán
+														</h3>
+														<div className="rounded-xl border-2 border-slate-300 overflow-hidden shadow-sm">
+															<table className="w-full text-sm border-collapse">
+																<thead className="bg-[#E9F5ED] text-slate-900 font-black uppercase tracking-widest text-[10px]">
 																	<tr>
-																		<td colSpan={3} className="py-4 text-center text-slate-400 italic text-xs">Chưa có thanh toán nào trong kỳ</td>
+																		<th className="py-4 px-6 text-left w-1/4 border-r border-slate-300">Ngày</th>
+																		<th className="py-4 px-6 text-left w-1/2 border-r border-slate-300">Nội dung</th>
+																		<th className="py-4 px-6 text-right w-1/4">Số tiền thu</th>
 																	</tr>
-																)}
-																{/* Total Payment Row */}
-																<tr className="bg-[#F8F9FA] font-bold border-t border-slate-200">
-																	<td colSpan={2} className="py-3 px-4 uppercase text-slate-800 text-xs">TỔNG ĐÃ THANH TOÁN TRONG KỲ</td>
-																	<td className="py-3 px-4 text-right text-emerald-600 font-black">{formatPrice(creditDecrease)}</td>
-																</tr>
-															</tbody>
-														</table>
+																</thead>
+																<tbody className="text-slate-900 divide-y-2 divide-slate-200">
+																	{/* Payment Rows */}
+																	{cycleTx.filter(t => t.txType === 'payment').map((pay, idx) => (
+																		<tr key={`pay-${idx}`} className="hover:bg-slate-50 font-black">
+																			<td className="py-4 px-6 border-r border-slate-200">{formatDate(pay.date || pay.createdAt)}</td>
+																			<td className="py-4 px-6 border-r border-slate-200 uppercase tracking-tighter text-xs">{pay.note || 'Thanh toán công nợ'}</td>
+																			<td className="py-4 px-6 text-right text-lg text-emerald-700">{formatPrice(pay.amount)}</td>
+																		</tr>
+																	))}
+																	{cycleTx.filter(t => t.txType === 'payment').length === 0 && (
+																		<tr>
+																			<td colSpan={3} className="py-4 text-center text-slate-400 italic text-xs">Chưa có thanh toán nào trong kỳ</td>
+																		</tr>
+																	)}
+																	{/* Total Payment Row */}
+																	<tr className="bg-slate-100 font-black border-t-2 border-slate-800">
+																		<td colSpan={2} className="py-5 px-6 uppercase text-slate-900 text-sm tracking-tight border-r border-slate-300">TỔNG ĐÃ THANH TOÁN TRONG KỲ</td>
+																		<td className="py-5 px-6 text-right text-2xl text-emerald-700 leading-none">{formatPrice(creditDecrease)}</td>
+																	</tr>
+																</tbody>
+															</table>
+														</div>
 													</div>
-												</div>
 
-												{/* 4. Final Summary Box */}
-												<div className="bg-[#FFD600] rounded-xl p-5 flex flex-row justify-between items-center mb-16 shadow-md shadow-yellow-500/20">
-													<span className="text-slate-900 font-bold uppercase text-lg tracking-tight">SỐ DƯ CÔNG NỢ CÒN LẠI</span>
-													<span className="text-slate-900 font-black text-3xl tracking-tighter">{formatPrice(closingBalance)}</span>
-												</div>
-
-												{/* 5. Signatures */}
-												<div className="flex justify-between px-10 mb-8 items-end">
-													<div className="text-center flex flex-col items-center">
-														<p className="font-bold text-slate-800 mb-20 text-base">Đại diện khách hàng</p>
-														<p className="text-slate-400 italic text-sm">(Ký và ghi rõ họ tên)</p>
+													{/* 4. Final Summary Box */}
+													<div className="bg-[#FFD600] border-4 border-slate-900 rounded-[2rem] p-8 flex flex-row justify-between items-center mb-20 shadow-2xl">
+														<span className="text-slate-900 font-black uppercase text-2xl tracking-tighter">SỐ DƯ CÔNG NỢ CÒN LẠI</span>
+														<span className="text-slate-900 font-black text-5xl tracking-tighter">{formatPrice(closingBalance)}</span>
 													</div>
-													<div className="text-center flex flex-col items-center">
-														<p className="font-bold text-slate-800 mb-20 text-base">Người lập phiếu</p>
-														<p className="font-black text-slate-800 uppercase text-base">{auth.currentUser?.displayName || 'Admin'}</p>
-													</div>
-												</div>
 
-												{/* Footer for print */}
-												<div className="hidden print:block text-center mt-8 pt-4 border-t border-slate-100">
-													<p className="text-[10px] text-slate-400 italic">Cảm ơn quý khách đã tin tưởng và hợp tác cùng Dunvex Build.</p>
-												</div>
-											</>
-										);
-									})()}
+													{/* 5. Signatures */}
+													<div className="flex justify-between px-10 mb-12 items-end">
+														<div className="text-center flex flex-col items-center">
+															<p className="font-black text-slate-900 mb-28 text-lg uppercase tracking-widest">Đại diện khách hàng</p>
+															<p className="text-slate-500 font-bold italic text-xs">(Ký và ghi rõ họ tên)</p>
+														</div>
+														<div className="text-center flex flex-col items-center">
+															<p className="font-black text-slate-900 mb-28 text-lg uppercase tracking-widest">Người lập phiếu</p>
+															<p className="font-black text-slate-900 uppercase text-xl underline decoration-4 decoration-[#FFD600] underline-offset-8">{auth.currentUser?.displayName || 'Admin'}</p>
+														</div>
+													</div>
+
+													{/* Footer for print */}
+													<div className="hidden print:block text-center mt-8 pt-4 border-t border-slate-100">
+														<p className="text-[10px] text-slate-400 italic">Cảm ơn quý khách đã tin tưởng và hợp tác cùng Dunvex Build.</p>
+													</div>
+												</>
+											);
+										})()}
+									</div>
 								</div>
 							</div>
 						</div>
 					</div>
-				</div>
+				) : (
+					<UpgradeModal
+						onClose={() => setShowStatement(false)}
+						featureName="Chi tiết công nợ khách hàng"
+					/>
+				)
 			)}
 		</div>
 	);

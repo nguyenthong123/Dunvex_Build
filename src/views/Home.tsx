@@ -26,33 +26,25 @@ const Home = () => {
 	useEffect(() => {
 		if (!auth.currentUser || owner.loading || !owner.ownerId) return;
 
-		// 1. Listen for unread count (User specific)
-		const qUnread = query(
+		const qNotif = query(
 			collection(db, 'notifications'),
-			where('userId', '==', auth.currentUser.uid),
-			where('read', '==', false)
+			where('userId', '==', auth.currentUser.uid)
 		);
 
-		const unsubscribeUnread = onSnapshot(qUnread, (snapshot) => {
-			setUnreadCount(snapshot.size);
-		});
-
-		// 2. Listen for notification list (User specific)
-		const qList = query(
-			collection(db, 'notifications'),
-			where('userId', '==', auth.currentUser.uid),
-			limit(20)
-		);
-
-		const unsubscribeList = onSnapshot(qList, (snapshot) => {
+		const unsubscribeNotif = onSnapshot(qNotif, (snapshot) => {
 			const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-			// Client-side sort to avoid index issues
-			list.sort((a: any, b: any) => {
+
+			// Unread count (Client-side)
+			const unread = list.filter((n: any) => !n.read).length;
+			setUnreadCount(unread);
+
+			// Sorted list (Client-side)
+			const sorted = [...list].sort((a: any, b: any) => {
 				const timeA = a.createdAt?.seconds || 0;
 				const timeB = b.createdAt?.seconds || 0;
 				return timeB - timeA;
 			});
-			setNotifications(list);
+			setNotifications(sorted.slice(0, 20));
 		});
 
 		// 3. Fetch Data for Dashboard Calculations (Owner specific)
@@ -77,8 +69,7 @@ const Home = () => {
 		});
 
 		return () => {
-			unsubscribeUnread();
-			unsubscribeList();
+			unsubscribeNotif();
 			unsubOrders();
 			unsubCust();
 			unsubPay();
@@ -90,13 +81,14 @@ const Home = () => {
 		if (!auth.currentUser) return;
 		const q = query(
 			collection(db, 'notifications'),
-			where('userId', '==', auth.currentUser.uid),
-			where('read', '==', false)
+			where('userId', '==', auth.currentUser.uid)
 		);
 		const snapshot = await getDocs(q);
 		const batch = writeBatch(db);
 		snapshot.docs.forEach((d) => {
-			batch.update(d.ref, { read: true });
+			if (!d.data().read) {
+				batch.update(d.ref, { read: true });
+			}
 		});
 		await batch.commit();
 	};
@@ -281,10 +273,10 @@ const Home = () => {
 						title="Quản trị doanh nghiệp"
 					>
 						<div className="text-right hidden sm:block">
-							<p className="text-xs font-bold leading-none text-slate-900 dark:text-white group-hover:text-[#1A237E] dark:group-hover:text-indigo-400 transition-colors">
+							<p className="text-xs font-black leading-none text-slate-900 dark:text-white group-hover:text-[#1A237E] dark:group-hover:text-indigo-400 transition-colors">
 								{auth.currentUser?.displayName || 'Người dùng'}
 							</p>
-							<p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase font-black tracking-widest mt-0.5 group-hover:text-[#FF6D00] transition-colors">
+							<p className="text-[10px] text-slate-500 dark:text-slate-500 uppercase font-black tracking-widest mt-1 group-hover:text-[#FF6D00] transition-colors">
 								{owner.loading ? '...' :
 									owner.role === 'admin' ? 'Quản Trị Viên' :
 										owner.role === 'sale' ? 'Nhân Viên Sale' :
@@ -311,8 +303,8 @@ const Home = () => {
 									<AlertTriangle size={24} />
 								</div>
 								<div>
-									<h4 className="text-sm font-bold dark:text-white">Cảnh báo tồn kho</h4>
-									<p className="text-xs text-slate-500 dark:text-slate-400">{lowStockProducts.length} sản phẩm dưới mức an toàn</p>
+									<h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">Cảnh báo tồn kho</h4>
+									<p className="text-xs text-slate-600 dark:text-slate-400 font-bold">{lowStockProducts.length} sản phẩm dưới mức an toàn</p>
 								</div>
 							</div>
 							<button onClick={() => navigate('/products')} className="text-xs font-bold text-[#FF6D00] px-3 py-1 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg">Kiểm tra</button>
@@ -426,8 +418,8 @@ const Home = () => {
 						<div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-200 flex-1">
 							<div className="flex justify-between items-center mb-8">
 								<div>
-									<h3 className="font-bold text-lg text-slate-900">Biểu đồ tăng trưởng doanh thu</h3>
-									<p className="text-xs text-slate-400">Dữ liệu tổng hợp theo thời gian thực</p>
+									<h3 className="font-black text-lg text-slate-900 dark:text-white uppercase tracking-tight">Biểu đồ tăng trưởng</h3>
+									<p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Dữ liệu tổng hợp theo thời gian thực</p>
 								</div>
 								<select className="bg-slate-100 border-none rounded-lg text-xs font-bold px-4 py-2 outline-none cursor-pointer">
 									<option>7 ngày qua</option>
@@ -452,7 +444,7 @@ const Home = () => {
 							</div>
 							<div className="overflow-x-auto">
 								<table className="w-full text-left font-['Inter']">
-									<thead className="bg-slate-50 text-[10px] uppercase font-black text-slate-400">
+									<thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] uppercase font-black text-slate-500 dark:text-slate-500 tracking-widest">
 										<tr>
 											<th className="px-6 py-4">Nhân viên / Khách</th>
 											<th className="px-6 py-4 hidden md:table-cell">Nội dung</th>
@@ -500,21 +492,21 @@ const Home = () => {
 };
 
 const ActivityRow = ({ icon, color, name, task, value, time }: any) => (
-	<tr className="hover:bg-slate-50 transition-colors">
+	<tr className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
 		<td className="px-6 py-4">
 			<div className="flex items-center gap-3">
-				<div className={`w-8 h-8 rounded-full ${color} flex items-center justify-center font-bold text-xs shadow-sm`}>{icon}</div>
-				<span className="text-sm font-black text-slate-700 uppercase tracking-tight">{name}</span>
+				<div className={`w-8 h-8 rounded-full ${color} flex items-center justify-center font-black text-[10px] shadow-sm`}>{icon}</div>
+				<span className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase tracking-tight">{name}</span>
 			</div>
 		</td>
 		<td className="px-6 py-4 hidden md:table-cell">
-			<span className="text-sm text-slate-500 font-medium">{task}</span>
+			<span className="text-sm text-slate-600 dark:text-slate-400 font-bold">{task}</span>
 		</td>
 		<td className="px-6 py-4">
-			<span className="text-sm font-black text-slate-900 tracking-tight">{value}</span>
+			<span className="text-sm font-black text-slate-900 dark:text-white tracking-tight">{value}</span>
 		</td>
 		<td className="px-6 py-4 text-right">
-			<span className="text-[10px] text-slate-400 font-bold uppercase">{time}</span>
+			<span className="text-[10px] text-slate-500 dark:text-slate-500 font-black uppercase tracking-tighter">{time}</span>
 		</td>
 	</tr>
 );

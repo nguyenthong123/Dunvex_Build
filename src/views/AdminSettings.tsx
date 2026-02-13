@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, User, Bell, Shield, Database, Globe, Moon, Sun, Users, Activity, FileText, Save, Plus, Trash2, Edit2, CheckCircle, XCircle } from 'lucide-react';
+import { Settings, User, Bell, Shield, Database, Globe, Moon, Sun, Users, Activity, FileText, Save, Plus, Trash2, Edit2, CheckCircle, XCircle, Crown, Clock, Rocket } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { collection, query, onSnapshot, doc, updateDoc, addDoc, serverTimestamp, orderBy, limit, deleteDoc, getDoc, setDoc, where } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
@@ -74,12 +74,17 @@ const AdminSettings = () => {
 		// Listen to Logs
 		const qLogs = query(
 			collection(db, 'audit_logs'),
-			where('ownerId', '==', owner.ownerId),
-			orderBy('createdAt', 'desc'),
-			limit(50)
+			where('ownerId', '==', owner.ownerId)
 		);
 		const unsubLogs = onSnapshot(qLogs, (snap) => {
-			setLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+			const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+			// Sort client-side
+			const sorted = data.sort((a: any, b: any) => {
+				const timeA = a.createdAt?.seconds || 0;
+				const timeB = b.createdAt?.seconds || 0;
+				return timeB - timeA;
+			});
+			setLogs(sorted.slice(0, 50));
 		});
 
 		return () => {
@@ -300,70 +305,70 @@ const AdminSettings = () => {
 
 									<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 										<div className="space-y-2">
-											<label className="text-xs font-bold text-slate-500 uppercase">Tên Công Ty / Cửa Hàng</label>
+											<label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Tên Công Ty / Cửa Hàng</label>
 											<input
 												type="text"
-												className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold text-slate-800 dark:text-white"
+												className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3.5 font-bold text-slate-800 dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none"
 												placeholder="VD: Cửa Hàng VLXD Dunvex"
 												value={companyInfo.name}
 												onChange={(e) => setCompanyInfo({ ...companyInfo, name: e.target.value })}
 											/>
 										</div>
 										<div className="space-y-2">
-											<label className="text-xs font-bold text-slate-500 uppercase">Mã số thuế</label>
+											<label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Mã số thuế</label>
 											<input
 												type="text"
-												className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold text-slate-800 dark:text-white"
+												className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3.5 font-bold text-slate-800 dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none"
 												placeholder="VD: 0312345678"
 												value={companyInfo.taxCode}
 												onChange={(e) => setCompanyInfo({ ...companyInfo, taxCode: e.target.value })}
 											/>
 										</div>
 										<div className="space-y-2 md:col-span-2">
-											<label className="text-xs font-bold text-slate-500 uppercase">Địa chỉ trụ sở</label>
+											<label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Địa chỉ trụ sở</label>
 											<input
 												type="text"
-												className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold text-slate-800 dark:text-white"
+												className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3.5 font-bold text-slate-800 dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none"
 												placeholder="VD: 123 Đường ABC, Quận 1, TP.HCM"
 												value={companyInfo.address}
 												onChange={(e) => setCompanyInfo({ ...companyInfo, address: e.target.value })}
 											/>
 										</div>
 										<div className="space-y-2">
-											<label className="text-xs font-bold text-slate-500 uppercase">Số điện thoại hotline</label>
+											<label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Số điện thoại hotline</label>
 											<input
 												type="text"
-												className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold text-slate-800 dark:text-white"
+												className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3.5 font-bold text-slate-800 dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none"
 												placeholder="VD: 0909 123 456"
 												value={companyInfo.phone}
 												onChange={(e) => setCompanyInfo({ ...companyInfo, phone: e.target.value })}
 											/>
 										</div>
 										<div className="space-y-2">
-											<label className="text-xs font-bold text-slate-500 uppercase">Email liên hệ</label>
+											<label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Email liên hệ</label>
 											<input
 												type="email"
-												className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold text-slate-800 dark:text-white"
+												className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3.5 font-bold text-slate-800 dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none"
 												placeholder="VD: contact@dunvex.com"
 												value={companyInfo.email}
 												onChange={(e) => setCompanyInfo({ ...companyInfo, email: e.target.value })}
 											/>
 										</div>
 										<div className="space-y-2">
-											<label className="text-xs font-bold text-slate-500 uppercase">Logo URL</label>
+											<label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Logo URL</label>
 											<input
 												type="text"
-												className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold text-slate-800 dark:text-white"
+												className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3.5 font-bold text-slate-800 dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none"
 												placeholder="https://..."
 												value={companyInfo.logoUrl}
 												onChange={(e) => setCompanyInfo({ ...companyInfo, logoUrl: e.target.value })}
 											/>
 										</div>
 										<div className="space-y-2">
-											<label className="text-xs font-bold text-slate-500 uppercase">VAT Mặc định (%)</label>
+											<label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">VAT Mặc định (%)</label>
 											<input
 												type="number"
-												className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold text-slate-800 dark:text-white"
+												className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3.5 font-bold text-slate-800 dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none"
 												value={companyInfo.defaultVat}
 												onChange={(e) => setCompanyInfo({ ...companyInfo, defaultVat: Number(e.target.value) })}
 											/>
@@ -379,6 +384,59 @@ const AdminSettings = () => {
 											<Save size={20} />
 											{loading ? 'Đang lưu...' : 'Lưu Thay Đổi'}
 										</button>
+									</div>
+								</div>
+
+								<div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800">
+									<div className="flex items-center gap-4 mb-6">
+										<div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-xl text-amber-600 dark:text-amber-400">
+											<Crown size={24} />
+										</div>
+										<div>
+											<h3 className="text-xl font-bold dark:text-white">Gói Dịch Vụ</h3>
+											<p className="text-sm text-slate-500 dark:text-slate-400">Quản lý trạng thái và thời gian sử dụng ứng dụng.</p>
+										</div>
+									</div>
+
+									<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+										<div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-700 flex items-center justify-between">
+											<div className="flex items-center gap-4">
+												<div className={`p-3 rounded-xl ${owner.isPro ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+													{owner.isPro ? <CheckCircle size={24} /> : <XCircle size={24} />}
+												</div>
+												<div>
+													<p className="text-xs font-black text-slate-400 uppercase tracking-widest">Trạng thái</p>
+													<p className="text-lg font-black text-slate-800 dark:text-white uppercase">
+														{owner.subscriptionStatus === 'active' ? 'Gói Vĩnh Viễn / Pro' :
+															owner.subscriptionStatus === 'trial' ? 'Bản dùng thử (Trial)' : 'Đã hết hạn'}
+													</p>
+												</div>
+											</div>
+											{!owner.isPro && (
+												<button
+													onClick={() => window.open('https://zalo.me/0909123456', '_blank')}
+													className="bg-[#1A237E] text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-800 transition-all flex items-center gap-1"
+												>
+													<Rocket size={14} /> Nâng cấp
+												</button>
+											)}
+										</div>
+
+										<div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-700 flex items-center gap-4">
+											<div className="p-3 rounded-xl bg-blue-50 text-blue-600">
+												<Clock size={24} />
+											</div>
+											<div>
+												<p className="text-xs font-black text-slate-400 uppercase tracking-widest">Thời gian còn lại</p>
+												<p className="text-lg font-black text-slate-800 dark:text-white uppercase whitespace-nowrap">
+													{owner.subscriptionStatus === 'active' ? 'Vô thời hạn' :
+														owner.trialEndsAt ? (() => {
+															const days = Math.ceil((owner.trialEndsAt.toDate() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+															return days > 0 ? `${days} Ngày` : '0 Ngày';
+														})() : 'Chưa thiết lập'}
+												</p>
+											</div>
+										</div>
 									</div>
 								</div>
 							</div>

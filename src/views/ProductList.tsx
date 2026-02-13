@@ -39,7 +39,31 @@ const ProductList = () => {
 	// Get unique categories for suggestions
 	const categories = Array.from(new Set([
 		'Tôn lợp', 'Xà gồ', 'Sắt hộp', 'Phụ kiện', 'Inox',
-		...products.map(p => p.category).filter(Boolean)
+		...products.map(p => {
+			// @ts-ignore
+			return p.category;
+		}).filter(Boolean)
+	]));
+
+	// Get unique units for suggestions
+	const units = Array.from(new Set([
+		'm2', 'tấm', 'cây', 'bộ', 'kg', 'mét', 'cuộn',
+		...products.map(p => p.unit).filter(Boolean)
+	]));
+
+	// Get unique specifications for suggestions
+	const specifications = Array.from(new Set([
+		...products.map(p => p.specification).filter(Boolean)
+	]));
+
+	// Get unique packagings for suggestions
+	const packagings = Array.from(new Set([
+		...products.map(p => p.packaging).filter(Boolean)
+	]));
+
+	// Get unique weights for suggestions
+	const densities = Array.from(new Set([
+		...products.map(p => p.density).filter(Boolean)
 	]));
 
 	useEffect(() => {
@@ -327,12 +351,12 @@ const ProductList = () => {
 				</div>
 
 				<div className="flex items-center gap-4">
-					<div className="hidden md:flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-full px-4 py-2 w-64 border border-transparent focus-within:border-blue-500 focus-within:bg-white dark:focus-within:bg-slate-900 transition-all">
-						<span className="material-symbols-outlined text-slate-400">search</span>
+					<div className="hidden md:flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-full px-4 py-2 w-64 border border-slate-200 dark:border-transparent focus-within:border-[#FF6D00] focus-within:bg-white dark:focus-within:bg-slate-900 transition-all">
+						<span className="material-symbols-outlined text-slate-500">search</span>
 						<input
 							type="text"
 							placeholder="Tìm kiếm sản phẩm..."
-							className="bg-transparent border-none outline-none w-full text-sm font-medium text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
+							className="bg-transparent border-none outline-none w-full text-sm font-black text-slate-900 dark:text-slate-200 placeholder:text-slate-500"
 							value={searchTerm}
 							onChange={(e) => setSearchTerm(e.target.value)}
 						/>
@@ -364,12 +388,12 @@ const ProductList = () => {
 				<div className="hidden md:block bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-800 overflow-hidden transition-colors duration-300">
 					<table className="w-full text-left">
 						<thead>
-							<tr className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-800">
-								<th className="py-4 px-6 text-xs font-bold text-gray-400 dark:text-slate-500 uppercase">Sản phẩm</th>
-								<th className="py-4 px-6 text-xs font-bold text-gray-400 dark:text-slate-500 uppercase">Giá bán</th>
-								<th className="py-4 px-6 text-xs font-bold text-gray-400 dark:text-slate-500 uppercase">Tồn kho</th>
-								<th className="py-4 px-6 text-xs font-bold text-gray-400 dark:text-slate-500 uppercase">Danh mục</th>
-								<th className="py-4 px-6 text-xs font-bold text-gray-400 dark:text-slate-500 uppercase text-right">Hành động</th>
+							<tr className="bg-slate-100/50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
+								<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Sản phẩm</th>
+								<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Giá bán</th>
+								<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Tồn kho</th>
+								<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Danh mục</th>
+								<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-right">Hành động</th>
 							</tr>
 						</thead>
 						<tbody className="divide-y divide-gray-100 dark:divide-slate-800">
@@ -395,8 +419,8 @@ const ProductList = () => {
 													)}
 												</div>
 												<div>
-													<div className="font-bold text-[#1A237E] dark:text-indigo-400">{product.name}</div>
-													<div className="text-[10px] text-gray-400 dark:text-slate-500 uppercase tracking-wider">{product.sku || '#' + product.id.slice(-6).toUpperCase()}</div>
+													<div className="font-black text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-indigo-400 transition-colors">{product.name}</div>
+													<div className="text-[10px] text-slate-400 dark:text-slate-500 uppercase font-black tracking-widest">{product.sku || '#' + product.id.slice(-6).toUpperCase()}</div>
 												</div>
 											</div>
 										</td>
@@ -481,8 +505,8 @@ const ProductList = () => {
 
 			{/* ADD/EDIT MODAL */}
 			{(showAddForm || showEditForm) && (
-				<div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-[#1A237E]/80 dark:bg-black/80 backdrop-blur-sm">
-					<div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] md:max-h-[85vh] transition-colors duration-300">
+				<div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/80 backdrop-blur-md transition-all duration-500" style={{ WebkitBackdropFilter: 'blur(12px)' }}>
+					<div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] md:max-h-[85vh] border border-white/20 dark:border-slate-800 transition-all duration-300">
 						<div className="px-6 py-4 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between sticky top-0 z-10 transition-colors duration-300">
 							<h3 className="text-xl font-black text-[#1A237E] dark:text-indigo-400">
 								{showEditForm ? 'Cập Nhật Sản Phẩm' : 'Thêm Sản Phẩm Mới'}
@@ -546,29 +570,29 @@ const ProductList = () => {
 
 								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 									<div className="md:col-span-2">
-										<label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Tên sản phẩm *</label>
+										<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Tên sản phẩm *</label>
 										<input
 											required
 											type="text"
 											placeholder="VD: Tôn lạnh màu xanh ngọc 0.45"
-											className="w-full bg-slate-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 rounded-xl py-3 px-4 text-[#1A237E] dark:text-indigo-300 font-medium focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+											className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-slate-900 dark:text-white font-bold placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
 											value={formData.name}
 											onChange={(e) => setFormData({ ...formData, name: e.target.value })}
 										/>
 									</div>
 									<div>
-										<label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Mã SKU / Code</label>
+										<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Mã SKU / Code</label>
 										<div className="relative">
 											<input
 												type="text"
 												placeholder="Tự động tạo..."
-												className="w-full bg-slate-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 rounded-xl py-3 pl-4 pr-10 text-[#1A237E] dark:text-indigo-300 font-medium focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-orange-500/20"
+												className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 pl-4 pr-12 text-slate-900 dark:text-white font-bold placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
 												value={formData.sku}
 												onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
 											/>
 											<button
 												type="button"
-												className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full text-slate-400 hover:text-[#FF6D00] hover:bg-slate-100 dark:hover:bg-slate-700 transition-all active:rotate-180"
+												className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full text-slate-400 hover:text-orange-500 transition-all"
 												title="Tạo mã mới"
 												onClick={() => setFormData(prev => ({ ...prev, sku: generateSKU() }))}
 											>
@@ -577,32 +601,35 @@ const ProductList = () => {
 										</div>
 									</div>
 									<div>
-										<label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Đơn vị tính</label>
+										<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Đơn vị tính</label>
 										<input
-											type="text"
-											placeholder="VD: m2, tấm, cây..."
-											className="w-full bg-slate-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 rounded-xl py-3 px-4 text-[#1A237E] dark:text-indigo-300 font-medium focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-orange-500/20"
+											list="product-units"
+											placeholder="Chọn hoặc nhập mới..."
+											className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-slate-900 dark:text-white font-bold placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
 											value={formData.unit}
 											onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
 										/>
+										<datalist id="product-units">
+											{units.map(u => <option key={u} value={u} />)}
+										</datalist>
 									</div>
 								</div>
 
 								<div className="grid grid-cols-2 gap-4">
 									<div>
-										<label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Giá nhập</label>
+										<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Giá nhập</label>
 										<input
 											type="number"
-											className="w-full bg-slate-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 rounded-xl py-3 px-4 text-[#1A237E] dark:text-indigo-300 font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-orange-500/20"
+											className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-slate-900 dark:text-white font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
 											value={formData.priceBuy === 0 ? '' : formData.priceBuy}
 											onChange={(e) => setFormData({ ...formData, priceBuy: e.target.value === '' ? 0 : Number(e.target.value) })}
 										/>
 									</div>
 									<div>
-										<label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Giá bán</label>
+										<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Giá bán</label>
 										<input
 											type="number"
-											className="w-full bg-slate-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 rounded-xl py-3 px-4 text-blue-600 dark:text-blue-400 font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-orange-500/20"
+											className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-blue-600 dark:text-blue-400 font-black focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
 											value={formData.priceSell === 0 ? '' : formData.priceSell}
 											onChange={(e) => setFormData({ ...formData, priceSell: e.target.value === '' ? 0 : Number(e.target.value) })}
 										/>
@@ -611,19 +638,19 @@ const ProductList = () => {
 
 								<div className="grid grid-cols-2 gap-4">
 									<div>
-										<label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Số lượng tồn</label>
+										<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Số lượng tồn</label>
 										<input
 											type="number"
-											className="w-full bg-slate-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 rounded-xl py-3 px-4 text-[#1A237E] dark:text-indigo-300 font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-orange-500/20"
+											className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-slate-900 dark:text-white font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
 											value={formData.stock === 0 ? '' : formData.stock}
 											onChange={(e) => setFormData({ ...formData, stock: e.target.value === '' ? 0 : Number(e.target.value) })}
 										/>
 									</div>
 									<div>
-										<label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Danh mục</label>
+										<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Danh mục</label>
 										<input
 											list="product-categories"
-											className="w-full bg-slate-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 rounded-xl py-3 px-4 text-[#1A237E] dark:text-indigo-300 font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-orange-500/20"
+											className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-slate-900 dark:text-white font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
 											value={formData.category}
 											onChange={(e) => setFormData({ ...formData, category: e.target.value })}
 										/>
@@ -634,43 +661,52 @@ const ProductList = () => {
 								</div>
 								<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 									<div>
-										<label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Quy cách</label>
+										<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Quy cách</label>
 										<input
-											type="text"
+											list="product-specs"
 											placeholder="VD: 1.2 x 2.4m"
-											className="w-full bg-slate-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 rounded-xl py-3 px-4 text-[#1A237E] dark:text-indigo-300 font-medium focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-orange-500/20"
+											className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-slate-900 dark:text-white font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
 											value={formData.specification}
 											onChange={(e) => setFormData({ ...formData, specification: e.target.value })}
 										/>
+										<datalist id="product-specs">
+											{specifications.map(s => <option key={s} value={s} />)}
+										</datalist>
 									</div>
 									<div>
-										<label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Đóng gói</label>
+										<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Đóng gói</label>
 										<input
-											type="text"
+											list="product-packs"
 											placeholder="VD: Kiện 50 tấm"
-											className="w-full bg-slate-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 rounded-xl py-3 px-4 text-[#1A237E] dark:text-indigo-300 font-medium focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-orange-500/20"
+											className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-slate-900 dark:text-white font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
 											value={formData.packaging}
 											onChange={(e) => setFormData({ ...formData, packaging: e.target.value })}
 										/>
+										<datalist id="product-packs">
+											{packagings.map(p => <option key={p} value={p} />)}
+										</datalist>
 									</div>
 									<div>
-										<label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Trọng lượng</label>
+										<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Trọng lượng</label>
 										<input
-											type="text"
+											list="product-weights"
 											placeholder="VD: 25kg/tấm"
-											className="w-full bg-slate-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 rounded-xl py-3 px-4 text-[#1A237E] dark:text-indigo-300 font-medium focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-orange-500/20"
+											className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-slate-900 dark:text-white font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
 											value={formData.density}
 											onChange={(e) => setFormData({ ...formData, density: e.target.value })}
 										/>
+										<datalist id="product-weights">
+											{densities.map(d => <option key={d} value={d} />)}
+										</datalist>
 									</div>
 								</div>
 
 								<div>
-									<label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Ghi chú sản phẩm</label>
+									<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Ghi chú sản phẩm</label>
 									<textarea
 										rows={3}
 										placeholder="..."
-										className="w-full bg-slate-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 rounded-xl py-3 px-4 text-[#1A237E] dark:text-indigo-300 font-medium focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+										className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-slate-900 dark:text-white font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
 										value={formData.note}
 										onChange={(e) => setFormData({ ...formData, note: e.target.value })}
 									></textarea>

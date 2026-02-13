@@ -74,7 +74,6 @@ const OrderList = () => {
 				createdAt: serverTimestamp()
 			});
 		} catch (error) {
-			console.error("Error updating status:", error);
 			alert("Lỗi khi cập nhật trạng thái");
 		}
 	};
@@ -97,7 +96,6 @@ const OrderList = () => {
 
 				setShowDetail(false);
 			} catch (error) {
-				console.error("Error deleting order:", error);
 				alert("Lỗi khi xóa đơn hàng");
 			}
 		}

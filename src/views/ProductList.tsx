@@ -160,12 +160,10 @@ const ProductList = () => {
 			if (data.status === 'success') {
 				setFormData(prev => ({ ...prev, imageUrl: data.fileUrl }));
 			} else {
-				console.error("GAS Error:", data);
 				alert("Lỗi từ Drive: " + (data.message || "Không xác định"));
 			}
 
 		} catch (error: any) {
-			console.error("Upload Error:", error);
 			alert(`Lỗi upload: ${error.message}`);
 		} finally {
 			setUploading(false);
@@ -201,7 +199,6 @@ const ProductList = () => {
 			setShowAddForm(false);
 			resetForm();
 		} catch (error) {
-			console.error("Error adding product:", error);
 			alert("Lỗi khi thêm sản phẩm");
 		}
 	};
@@ -228,7 +225,6 @@ const ProductList = () => {
 			setShowEditForm(false);
 			resetForm();
 		} catch (error) {
-			console.error("Error updating product:", error);
 			alert("Lỗi khi cập nhật sản phẩm");
 		}
 	};
@@ -238,7 +234,6 @@ const ProductList = () => {
 			try {
 				await deleteDoc(doc(db, 'products', id));
 			} catch (error) {
-				console.error("Error deleting product:", error);
 				alert("Lỗi khi xóa sản phẩm");
 			}
 		}

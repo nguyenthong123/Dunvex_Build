@@ -61,12 +61,11 @@ const CustomerList = () => {
 					setFormData(prev => ({ ...prev, address: data.display_name }));
 				}
 			} catch (err) {
-				console.error("Geocoding error:", err);
+				// Silent fail or handle appropriately
 			} finally {
 				setGettingLocation(false);
 			}
 		}, (error) => {
-			console.error(error);
 			alert("Không thể lấy vị trí. Vui lòng cấp quyền truy cập GPS.");
 			setGettingLocation(false);
 		});
@@ -131,7 +130,6 @@ const CustomerList = () => {
 			setShowAddForm(false);
 			resetForm();
 		} catch (error) {
-			console.error("Error adding customer:", error);
 			alert("Lỗi khi thêm khách hàng");
 		}
 	};
@@ -159,7 +157,6 @@ const CustomerList = () => {
 			setShowEditForm(false);
 			resetForm();
 		} catch (error) {
-			console.error("Error updating customer:", error);
 			alert("Lỗi khi cập nhật khách hàng");
 		}
 	};
@@ -182,7 +179,6 @@ const CustomerList = () => {
 
 				setShowDetail(false);
 			} catch (error) {
-				console.error("Error deleting customer:", error);
 				alert("Lỗi khi xóa khách hàng");
 			}
 		}

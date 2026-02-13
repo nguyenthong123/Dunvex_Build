@@ -38,7 +38,7 @@ const NotificationBell = () => {
 		try {
 			await updateDoc(doc(db, 'notifications', id), { read: true });
 		} catch (error) {
-			console.error("Error marking read:", error);
+			// Failed to mark read
 		}
 	};
 

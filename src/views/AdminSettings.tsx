@@ -105,7 +105,6 @@ const AdminSettings = () => {
 			}, { merge: true }); // Merge to avoid overwriting other fields if any
 			alert("Đã lưu cấu hình thành công!");
 		} catch (error) {
-			console.error("Error saving settings:", error);
 			alert("Lỗi khi lưu cấu hình");
 		} finally {
 			setLoading(false);
@@ -158,14 +157,13 @@ const AdminSettings = () => {
 					})
 				});
 			} catch (emailErr) {
-				console.error("Failed to send invite email:", emailErr);
+				// Failed to send invite email
 			}
 
 			setShowAddUser(false);
 			setNewUser({ email: '', role: 'sale', displayName: '' });
 			alert(`Đã thêm quyền truy cập và gửi email mời cho ${newUser.email}`);
 		} catch (error) {
-			console.error("Error adding user:", error);
 			alert("Lỗi khi thêm nhân viên");
 		} finally {
 			setLoading(false);
@@ -189,7 +187,7 @@ const AdminSettings = () => {
 				createdAt: serverTimestamp()
 			});
 		} catch (error) {
-			console.error("Error updating role:", error);
+			// Failed to update role
 		}
 	};
 
@@ -211,7 +209,7 @@ const AdminSettings = () => {
 				createdAt: serverTimestamp()
 			});
 		} catch (error) {
-			console.error("Error deleting user:", error);
+			// Failed to delete user
 		}
 	};
 
@@ -226,7 +224,6 @@ const AdminSettings = () => {
 				[`accessRights.${resource}`]: newVal
 			});
 		} catch (error) {
-			console.error("Error toggling permission:", error);
 			alert("Không thể cập nhật quyền hạn.");
 		}
 	};

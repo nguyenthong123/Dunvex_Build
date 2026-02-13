@@ -383,7 +383,6 @@ const Debts: React.FC = () => {
 				alert("Lỗi upload: " + (data.message || "Không xác định"));
 			}
 		} catch (error: any) {
-			console.error(error);
 			alert(`Lỗi xử lý tệp: ${error.message}`);
 		} finally {
 			setUploadingPaymentImage(false);
@@ -445,7 +444,6 @@ const Debts: React.FC = () => {
 				proofImage: ''
 			});
 		} catch (error) {
-			console.error("Error saving payment:", error);
 			alert("Lỗi khi lưu phiếu thu");
 		}
 	};
@@ -457,7 +455,6 @@ const Debts: React.FC = () => {
 			await deleteDoc(doc(db, 'payments', id));
 			alert("Đã xóa phiếu thu");
 		} catch (error) {
-			console.error("Error deleting payment:", error);
 			alert("Lỗi khi xóa phiếu thu");
 		}
 	};

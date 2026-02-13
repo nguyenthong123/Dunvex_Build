@@ -63,13 +63,18 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 - [x] **Cải thiện độ tương phản Safari**: Bật chế độ làm mượt font-smoothing và làm đậm các hiệu ứng mờ (blur) để nội dung dễ đọc hơn trên nền trắng của Safari.
 - [x] **Thực thi phân quyền toàn diện**: Đã áp dụng cho Dashboard, Đơn hàng, Kho hàng, Khách hàng, Công nợ và Check-in.
 - [x] **Quản lý Gói dịch vụ (Subscription)**: Tích hợp hệ thống kiểm soát dùng thử (Trial) và khóa tính năng cao cấp (Pro).
+- [x] **Dọn dẹp mã nguồn (Cleanup)**: Đã gỡ bỏ toàn bộ console.log/error dư thừa và tối ưu hóa logic state/effects.
 
 ### 📝 Cần làm tiếp (To-do)
-- [ ] **Lọc theo ngày**: Hoàn thiện bộ lọc ngày thực tế cho các báo cáo doanh thu và bảng kê công nợ.
-- [ ] **In phiếu đơn hàng**: Hoàn thiện giao diện in phiếu đơn hàng & Xuất file PDF gửi qua Zalo.
-- [ ] **PWA Support**: Tích hợp để cài đặt ứng dụng vào màn hình chính điện thoại.
-- [ ] **Báo cáo lợi nhuận**: Tự động tính lợi nhuận dựa trên giá vốn và giá bán thực tế.
-- [ ] **Dọn dẹp mã nguồn**: Xóa các console.log dư thừa và tối ưu hóa các hook useEffect.
+- [ ] **Lọc theo ngày (Date Filtering)**: Hoàn thiện bộ lọc ngày thực tế cho các báo cáo doanh thu và bảng kê công nợ.
+- [ ] **In phiếu & Xuất PDF**: Hoàn thiện giao diện in phiếu đơn hàng & Xuất file PDF/Ảnh gửi qua Zalo/Messenger.
+- [ ] **PWA Support**: Tích hợp Service Worker để cài đặt ứng dụng vào màn hình chính và thông báo đẩy (Push Notifications).
+- [ ] **Báo cáo tài chính nâng cao**: Tự động tính lợi nhuận ròng, biên lợi nhuận bách phân và dự báo dòng tiền.
+- [ ] **QR Code Scanning**: Tích hợp quét mã QR sản phẩm để lên đơn nhanh và kiểm kho bằng camera điện thoại.
+- [ ] **Quản lý Kho (Advanced)**: Thêm lịch sử nhập/xuất kho chi tiết và cảnh báo hàng tồn kho thấp (Low stock alert).
+- [ ] **Nhập liệu hàng loạt (Bulk Import)**: Chức năng nhập danh sách Khách hàng và Sản phẩm từ file Excel (xlsx/csv).
+- [ ] **Lịch sử Thanh toán**: Theo dõi chi tiết các đợt trả nợ của khách hàng gắn liền với từng mã đơn cụ thể.
+- [ ] **Chế độ Offline**: Lưu trữ dữ liệu cơ bản local (Cache) để có thể xem thông tin khi mất kết nối mạng tạm thời.
 
 
 *Ghi chú: File `upload_script.gs` đã được cập nhật logic gửi email.*

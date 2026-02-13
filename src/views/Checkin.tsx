@@ -268,7 +268,6 @@ const Checkin = () => {
                 alert("Lỗi upload: " + (data.message || "Không xác định"));
             }
         } catch (error: any) {
-            console.error(error);
             alert(`Lỗi xử lý tệp: ${error.message}`);
         } finally {
             setUploading(false);
@@ -305,7 +304,6 @@ const Checkin = () => {
                 }
             },
             (error) => {
-                console.error(error);
                 alert("Không thể lấy vị trí. Vui lòng cho phép truy cập GPS.");
                 setGettingLocation(false);
             },
@@ -371,7 +369,6 @@ const Checkin = () => {
             });
             alert("Checkin thành công!");
         } catch (error) {
-            console.error(error);
             alert("Lỗi lưu dữ liệu.");
         } finally {
             setLoading(false);

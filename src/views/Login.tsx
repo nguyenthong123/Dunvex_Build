@@ -25,7 +25,6 @@ const Login = () => {
 				// Case 1: User has a pending invitation
 				// We overwrite/update their role and ownerId to match the invitation
 				const inviteData = inviteSnap.data();
-				console.log("Found invitation, consuming invite to join owner:", inviteData.ownerId);
 
 				await setDoc(userRef, {
 					uid: user.uid,
@@ -64,10 +63,9 @@ const Login = () => {
 				}, { merge: true });
 			}
 
-			console.log("Logged in successfully:", user.displayName);
+			// Logged in successfully
 			navigate('/');
 		} catch (error) {
-			console.error("Login Error:", error);
 			alert("Đăng nhập thất bại. Vui lòng thử lại.");
 		}
 	};

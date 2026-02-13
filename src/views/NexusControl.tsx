@@ -149,7 +149,6 @@ const NexusControl = () => {
 
 			alert("Đã duyệt thanh toán và kích hoạt tài khoản!");
 		} catch (error) {
-			console.error("Error approving payment:", error);
 			alert("Lỗi khi duyệt thanh toán.");
 		}
 	};
@@ -177,7 +176,7 @@ const NexusControl = () => {
 
 			alert("Đã từ chối/thu hồi yêu cầu.");
 		} catch (error) {
-			console.error("Error rejecting payment:", error);
+			// Failed to reject payment
 		}
 	};
 
@@ -189,7 +188,7 @@ const NexusControl = () => {
 			}, { merge: true });
 			setSystemConfig({ ...systemConfig, [flag]: newVal });
 		} catch (error) {
-			console.error("Error updating system config:", error);
+			// Failed to update system config
 		}
 	};
 
@@ -217,7 +216,7 @@ const NexusControl = () => {
 				createdAt: serverTimestamp()
 			});
 		} catch (error) {
-			console.error("Error updating user lock:", error);
+			// Failed to update user lock
 		}
 	};
 

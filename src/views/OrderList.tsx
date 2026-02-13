@@ -37,9 +37,9 @@ const OrderList = () => {
 	}, [owner.loading, owner.ownerId]);
 
 	const filteredOrders = orders.filter(order =>
-		(order.customerName?.toLowerCase().includes(searchTerm.toLowerCase())) ||
-		(order.id?.toLowerCase().includes(searchTerm.toLowerCase())) ||
-		(order.customerPhone?.includes(searchTerm))
+		(String(order.customerName || '').toLowerCase().includes(searchTerm.toLowerCase())) ||
+		(String(order.id || '').toLowerCase().includes(searchTerm.toLowerCase())) ||
+		(String(order.customerPhone || '').includes(searchTerm))
 	);
 
 	const getStatusColor = (status: string) => {

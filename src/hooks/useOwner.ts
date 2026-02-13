@@ -30,7 +30,7 @@ export const useOwner = () => {
 		role: 'admin',
 		isEmployee: false,
 		loading: true,
-		isPro: true, // Default to true until checked
+		isPro: true,
 		subscriptionStatus: 'active',
 		systemConfig: {
 			lock_free_orders: false,
@@ -45,93 +45,137 @@ export const useOwner = () => {
 			return;
 		}
 
-		const userRef = doc(db, 'users', auth.currentUser.uid);
+		// Initial pieces of data
+		let userData: any = null;
+		let settingsData: any = null;
+		let configData: any = null;
+		let isUserReady = false;
+		let isConfigReady = false;
 
-		// 1. Listen to User document for base info
-		const unsubscribeUser = onSnapshot(userRef, (userSnap) => {
-			if (userSnap.exists()) {
-				const userData = userSnap.data();
-				const ownerId = userData.ownerId || auth.currentUser?.uid;
-				const ownerEmail = userData.ownerEmail || auth.currentUser?.email;
-				const role = userData.role || 'admin';
-				const accessRights = userData.accessRights;
+		const updateUserState = () => {
+			// Basic Info from User (Must have)
+			if (!userData) return;
 
-				// New: Per-user flags direct from users collection
-				const manualLockOrdersUser = userData.manualLockOrders || false; // Still check per-user as fallback
-				const manualLockDebtsUser = userData.manualLockDebts || false;
-				const userIsPro = userData.isPro || false;
+			const uid = auth.currentUser?.uid;
+			const ownerId = userData.ownerId || uid;
+			const ownerEmail = userData.ownerEmail || auth.currentUser?.email;
+			const role = userData.role || 'admin';
+			const accessRights = userData.accessRights;
+			const userIsPro = userData.isPro || false;
 
-				// 2. Listen to Settings document for Subscription info (Company-wide)
-				if (ownerId) {
-					const settingsRef = doc(db, 'settings', ownerId);
-					const unsubscribeSettings = onSnapshot(settingsRef, (settingsSnap) => {
-						let isPro = userIsPro; // Use per-user pro status if available
-						let subscriptionStatus: 'trial' | 'active' | 'expired' = 'active';
-						let trialEndsAt = null;
+			// Info from Settings (Optional/Defaults)
+			let isPro = userIsPro;
+			let subscriptionStatus: 'trial' | 'active' | 'expired' = 'active';
+			let trialEndsAt = null;
+			let subscriptionExpiresAt = null;
+			let manualLockOrders = userData.manualLockOrders || false;
+			let manualLockDebts = userData.manualLockDebts || false;
 
-						if (settingsSnap.exists()) {
-							const settingsData = settingsSnap.data();
-							subscriptionStatus = settingsData.subscriptionStatus || 'trial';
-							trialEndsAt = settingsData.trialEndsAt;
+			if (settingsData) {
+				subscriptionStatus = settingsData.subscriptionStatus || 'trial';
+				trialEndsAt = settingsData.trialEndsAt;
+				subscriptionExpiresAt = settingsData.subscriptionExpiresAt;
 
-							if (subscriptionStatus === 'active') isPro = true;
-							else if (subscriptionStatus === 'trial') {
-								if (trialEndsAt && trialEndsAt.toDate() < new Date()) {
-									isPro = false;
-									subscriptionStatus = 'expired';
-								} else {
-									isPro = true;
-								}
-							} else isPro = false;
-						}
+				if (subscriptionStatus === 'active') isPro = true;
+				else if (subscriptionStatus === 'trial') {
+					if (trialEndsAt && trialEndsAt.toDate() < new Date()) {
+						isPro = false;
+						subscriptionStatus = 'expired';
+					} else {
+						isPro = true;
+					}
+				} else isPro = false;
 
-						const sData = settingsSnap.exists() ? settingsSnap.data() : {};
-						const subscriptionExpiresAt = sData.subscriptionExpiresAt || null;
-						// Priority: Manual lock from company settings > Individual user lock
-						const manualLockOrders = sData.manualLockOrders || manualLockOrdersUser;
-						const manualLockDebts = sData.manualLockDebts || manualLockDebtsUser;
-
-						// 3. Listen to System Config (Nexus Control flags)
-						const configRef = doc(db, 'system_config', 'main');
-						const unsubscribeConfig = onSnapshot(configRef, (configSnap) => {
-							const systemConfig = configSnap.exists()
-								? configSnap.data() as any
-								: { lock_free_orders: false, lock_free_debts: false, maintenance_mode: false };
-
-							setState(prev => ({
-								...prev,
-								ownerId,
-								ownerEmail,
-								role,
-								accessRights,
-								isEmployee: ownerId !== auth.currentUser?.uid,
-								loading: false,
-								isPro,
-								subscriptionStatus,
-								trialEndsAt,
-								subscriptionExpiresAt,
-								manualLockOrders,
-								manualLockDebts,
-								systemConfig
-							}));
-						});
-
-						return () => {
-							unsubscribeSettings();
-							unsubscribeConfig();
-						};
-					});
-
-					return () => unsubscribeSettings();
-				}
-			} else {
-				// Fallback
-				setState(prev => ({ ...prev, loading: false }));
+				manualLockOrders = settingsData.manualLockOrders || manualLockOrders;
+				manualLockDebts = settingsData.manualLockDebts || manualLockDebts;
 			}
+
+			// Info from Nexus (Must have defaults)
+			const systemConfig = configData || {
+				lock_free_orders: false,
+				lock_free_debts: false,
+				maintenance_mode: false
+			};
+
+			setState({
+				ownerId,
+				ownerEmail,
+				role,
+				accessRights,
+				isEmployee: ownerId !== uid,
+				loading: false,
+				isPro,
+				subscriptionStatus,
+				trialEndsAt,
+				subscriptionExpiresAt,
+				manualLockOrders,
+				manualLockDebts,
+				systemConfig
+			});
+		};
+
+		// 1. Listen to User
+		const userRef = doc(db, 'users', auth.currentUser.uid);
+		const unsubUser = onSnapshot(userRef, (doc) => {
+			userData = doc.exists() ? doc.data() : { role: 'admin' };
+			isUserReady = true;
+			// Trigger update
+			updateUserState();
+		}, (err) => {
+			console.error("useOwner: User snapshot error", err);
+			isUserReady = true;
+			updateUserState();
 		});
 
-		return () => unsubscribeUser();
+		// 2. Listen to Global Config
+		const configRef = doc(db, 'system_config', 'main');
+		const unsubConfig = onSnapshot(configRef, (doc) => {
+			configData = doc.exists() ? doc.data() : null;
+			isConfigReady = true;
+			updateUserState();
+		}, (err) => {
+			isConfigReady = true;
+			updateUserState();
+		});
+
+		// 3. Listen to Settings (Wait for userData to know ownerId)
+		let unsubSettings: any = null;
+
+		// We use a separate effect logic or watcher for ownerId
+		// Since we want to stay inside one effect for cleanup, we can't easily wait
+		// But we can check userData in a loop or just start listening once userData arrives
+
+		const checkSettings = () => {
+			if (userData && !unsubSettings) {
+				const ownerId = userData.ownerId || auth.currentUser?.uid;
+				if (ownerId) {
+					const settingsRef = doc(db, 'settings', ownerId);
+					unsubSettings = onSnapshot(settingsRef, (doc) => {
+						settingsData = doc.exists() ? doc.data() : null;
+						updateUserState();
+					}, (err) => {
+						updateUserState();
+					});
+				}
+			}
+		};
+
+		// Polling-ish logic or just call it every time userData updates
+		const interval = setInterval(() => {
+			if (userData) {
+				checkSettings();
+				clearInterval(interval);
+			}
+		}, 100);
+
+		return () => {
+			unsubUser();
+			unsubConfig();
+			if (unsubSettings) unsubSettings();
+			clearInterval(interval);
+		};
 	}, [auth.currentUser]);
 
 	return state;
 };
+

@@ -256,8 +256,8 @@ const QuickOrder = () => {
 	};
 
 	const filteredCustomers = customers.filter(c =>
-		c.name?.toLowerCase().includes(searchCustomerQuery.toLowerCase()) ||
-		c.phone?.includes(searchCustomerQuery)
+		String(c.name || '').toLowerCase().includes(searchCustomerQuery.toLowerCase()) ||
+		String(c.phone || '').includes(searchCustomerQuery)
 	);
 
 	const categories = Array.from(new Set(products.map(p => p.category).filter(Boolean)));

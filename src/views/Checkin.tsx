@@ -71,15 +71,15 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
 const MapUpdater = ({ center, sidebarExpanded }: { center: [number, number], sidebarExpanded: boolean }) => {
     const map = useMap();
     useEffect(() => {
-        map.setView(center, map.getZoom());
+        const zoom = map.getZoom() || 13;
+        map.setView(center, zoom);
     }, [center, map]);
 
     useEffect(() => {
-        // Safari needs a slightly longer delay or immediate trigger + delay
-        map.invalidateSize();
+        // Map needs a moment to initialize before invalidating size
         const timer = setTimeout(() => {
             map.invalidateSize();
-        }, 1000);
+        }, 300);
         return () => clearTimeout(timer);
     }, [map, sidebarExpanded]);
 
@@ -88,6 +88,15 @@ const MapUpdater = ({ center, sidebarExpanded }: { center: [number, number], sid
 
 
 import { useOwner } from '../hooks/useOwner';
+
+// Map instance tracker to get L.Map in v5
+const MapInstanceTracker = ({ setMapInstance }: { setMapInstance: (map: L.Map) => void }) => {
+    const map = useMap();
+    useEffect(() => {
+        if (map) setMapInstance(map);
+    }, [map, setMapInstance]);
+    return null;
+};
 
 const Checkin = () => {
     const navigate = useNavigate();
@@ -276,7 +285,7 @@ const Checkin = () => {
 
     const handleGetLocation = () => {
         if (!navigator.geolocation) {
-            alert("Trình duyệt không hỗ trợ định vị.");
+            alert("Trình duyệt của bạn không hỗ trợ định vị GPS.");
             return;
         }
 
@@ -284,30 +293,44 @@ const Checkin = () => {
         navigator.geolocation.getCurrentPosition(
             async (position) => {
                 const { latitude, longitude } = position.coords;
+
                 setFormData(prev => ({
                     ...prev,
                     location: { lat: latitude, lng: longitude }
                 }));
-                setMapCenter([latitude, longitude]);
-                mapInstance?.flyTo([latitude, longitude], 16);
 
+                // Priority: Use mapInstance for animated transition
+                if (mapInstance) {
+                    mapInstance.flyTo([latitude, longitude], 17, {
+                        duration: 1.5
+                    });
+                } else {
+                    setMapCenter([latitude, longitude]);
+                }
 
-                // Get address using Nominatim (free)
+                // Reverse geocoding
                 try {
                     const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`);
                     const data = await response.json();
-                    setFormData(prev => ({ ...prev, address: data.display_name }));
+                    if (data && data.display_name) {
+                        setFormData(prev => ({ ...prev, address: data.display_name }));
+                    }
                 } catch (err) {
-                    setFormData(prev => ({ ...prev, address: `Tọa độ: ${latitude}, ${longitude}` }));
+                    console.error("Geocoding failed:", err);
+                    setFormData(prev => ({ ...prev, address: `Tọa độ: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}` }));
                 } finally {
                     setGettingLocation(false);
                 }
             },
             (error) => {
-                alert("Không thể lấy vị trí. Vui lòng cho phép truy cập GPS.");
                 setGettingLocation(false);
+                let msg = "Không thể lấy vị trí.";
+                if (error.code === 1) msg = "Vui lòng cấp quyền truy cập vị trí (GPS) trên trình duyệt.";
+                else if (error.code === 2) msg = "Không tìm thấy tín hiệu GPS. Hãy thử di chuyển ra chỗ thoáng.";
+                else if (error.code === 3) msg = "Hết thời gian tìm vị trí. Vui lòng thử lại.";
+                alert(msg);
             },
-            { enableHighAccuracy: true }
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
     };
 
@@ -395,17 +418,16 @@ const Checkin = () => {
     }
 
     return (
-        <div className="flex-1 flex flex-col lg:flex-row relative overflow-hidden h-screen lg:h-full min-h-[500px]">
+        <div className="flex-1 flex flex-col lg:flex-row relative overflow-hidden h-screen min-h-[600px] bg-slate-50 dark:bg-slate-950">
             {/* Map Area */}
-            <div className="relative flex-1 h-[60vh] lg:h-full w-full bg-[#f0f2f5] dark:bg-slate-800 z-[1] overflow-hidden transition-colors duration-300 shadow-inner">
+            <div className="relative flex-1 h-[50vh] lg:h-screen w-full bg-slate-100 dark:bg-slate-800 z-[1] overflow-hidden transition-colors duration-300">
                 <MapContainer
                     center={mapCenter}
                     zoom={13}
-                    style={{ height: '100%', width: '100%' }}
+                    style={{ height: '100%', width: '100%', minHeight: '100%' }}
                     zoomControl={false}
-                    ref={setMapInstance}
                 >
-
+                    <MapInstanceTracker setMapInstance={setMapInstance} />
                     <TileLayer
                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'

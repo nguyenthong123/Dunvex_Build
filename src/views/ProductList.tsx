@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, where } from 'firebase/firestore';
+import BulkImport from '../components/shared/BulkImport';
 
 import { useOwner } from '../hooks/useOwner';
 
@@ -12,11 +13,13 @@ const ProductList = () => {
 	const [products, setProducts] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [showAddForm, setShowAddForm] = useState(false);
+	const [showImport, setShowImport] = useState(false);
 	const [showEditForm, setShowEditForm] = useState(false);
 	const [showDetail, setShowDetail] = useState(false);
 	const [selectedProduct, setSelectedProduct] = useState<any>(null);
 	const [searchTerm, setSearchTerm] = useState('');
 	const [uploading, setUploading] = useState(false);
+	const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
 	// Form state
 	const [formData, setFormData] = useState({
@@ -229,8 +232,8 @@ const ProductList = () => {
 		}
 	};
 
-	const handleDeleteProduct = async (id: string) => {
-		if (window.confirm("Bạn có chắc chắn muốn xóa sản phẩm này không?")) {
+	const handleDeleteProduct = async (id: string, bypassConfirm = false) => {
+		if (bypassConfirm || window.confirm("Bạn có chắc chắn muốn xóa sản phẩm này không?")) {
 			try {
 				await deleteDoc(doc(db, 'products', id));
 			} catch (error) {
@@ -290,8 +293,8 @@ const ProductList = () => {
 	};
 
 	const filteredProducts = products.filter(product =>
-		product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-		(product.sku && product.sku.toLowerCase().includes(searchTerm.toLowerCase()))
+		String(product.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+		String(product.sku || '').toLowerCase().includes(searchTerm.toLowerCase())
 	);
 
 	const formatPrice = (price: number) => {
@@ -358,16 +361,37 @@ const ProductList = () => {
 					</div>
 
 					{hasManagePermission && (
-						<button
-							onClick={() => setShowAddForm(true)}
-							className="hidden md:flex bg-[#FF6D00] hover:bg-orange-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-orange-500/20 active:scale-95 transition-all items-center gap-2"
-						>
-							<span className="material-symbols-outlined text-xl">add</span>
-							<span>Thêm Mới</span>
-						</button>
+						<>
+							<button
+								onClick={() => setShowImport(true)}
+								className="hidden md:flex bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-5 py-2.5 rounded-xl font-bold border border-slate-200 dark:border-slate-800 active:scale-95 transition-all items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-700"
+							>
+								<span className="material-symbols-outlined">file_upload</span>
+								<span>Nhập Excel</span>
+							</button>
+							<button
+								onClick={() => setShowAddForm(true)}
+								className="hidden md:flex bg-[#FF6D00] hover:bg-orange-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-orange-500/20 active:scale-95 transition-all items-center gap-2"
+							>
+								<span className="material-symbols-outlined text-xl">add</span>
+								<span>Thêm Mới</span>
+							</button>
+						</>
 					)}
 				</div>
 			</header>
+
+			{showImport && (
+				<BulkImport
+					type="products"
+					ownerId={owner.ownerId}
+					ownerEmail={owner.ownerEmail}
+					onClose={() => setShowImport(false)}
+					onSuccess={() => {
+						// Optional: refresh data or show success message
+					}}
+				/>
+			)}
 
 			{/* CONTENT */}
 			<div className="flex-1 p-4 md:p-8 overflow-y-auto custom-scrollbar">
@@ -436,12 +460,34 @@ const ProductList = () => {
 										<td className="py-4 px-6 text-right">
 											{hasManagePermission && (
 												<div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-													<button onClick={() => openEdit(product)} className="p-2 text-slate-300 dark:text-slate-600 hover:text-[#1A237E] dark:hover:text-indigo-400 transition-colors">
-														<span className="material-symbols-outlined text-[20px]">edit</span>
-													</button>
-													<button onClick={() => handleDeleteProduct(product.id)} className="p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors">
-														<span className="material-symbols-outlined text-[20px]">delete</span>
-													</button>
+													{deleteConfirmId === product.id ? (
+														<div className="flex items-center gap-1 bg-rose-50 dark:bg-rose-900/20 p-1 rounded-lg border border-rose-100 dark:border-rose-900/30 animate-in fade-in zoom-in duration-200">
+															<button
+																onClick={() => setDeleteConfirmId(null)}
+																className="px-2 py-1 text-[10px] font-bold text-slate-500 hover:text-slate-700 bg-white dark:bg-slate-800 rounded shadow-sm"
+															>
+																Hủy
+															</button>
+															<button
+																onClick={() => {
+																	handleDeleteProduct(product.id, true);
+																	setDeleteConfirmId(null);
+																}}
+																className="px-2 py-1 text-[10px] font-bold text-white bg-rose-500 hover:bg-rose-600 rounded shadow-sm"
+															>
+																Xác nhận
+															</button>
+														</div>
+													) : (
+														<>
+															<button onClick={() => openEdit(product)} className="p-2 text-slate-300 dark:text-slate-600 hover:text-[#1A237E] dark:hover:text-indigo-400 transition-colors">
+																<span className="material-symbols-outlined text-[20px]">edit</span>
+															</button>
+															<button onClick={() => setDeleteConfirmId(product.id)} className="p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors">
+																<span className="material-symbols-outlined text-[20px]">delete</span>
+															</button>
+														</>
+													)}
 												</div>
 											)}
 										</td>

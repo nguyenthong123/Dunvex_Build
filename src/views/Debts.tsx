@@ -285,10 +285,10 @@ const Debts: React.FC = () => {
 			currentDebt,
 			lastTx: allTx[0]?.date || null,
 			hasStatusOrders: statusFilter === 'Tất cả' ? (customerOrders.length > 0 || customerPayments.length > 0) : customerOrders.some(o => o.status === statusFilter),
-			initials: customer.name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || 'KH'
+			initials: String(customer.name || '').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || 'KH'
 		};
 	}).filter((item: any) => {
-		const matchesName = !searchTerm || item.name?.toLowerCase().includes(searchTerm.toLowerCase());
+		const matchesName = !searchTerm || String(item.name || '').toLowerCase().includes(searchTerm.toLowerCase());
 		const matchesStatus = item.hasStatusOrders;
 
 		if (!matchesStatus) return false;

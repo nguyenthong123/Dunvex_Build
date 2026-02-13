@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, where } from 'firebase/firestore';
+import BulkImport from '../components/shared/BulkImport';
 
 import { useOwner } from '../hooks/useOwner';
 
@@ -12,10 +13,12 @@ const CustomerList = () => {
 	const [customers, setCustomers] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [showAddForm, setShowAddForm] = useState(false);
+	const [showImport, setShowImport] = useState(false);
 	const [showEditForm, setShowEditForm] = useState(false);
 	const [showDetail, setShowDetail] = useState(false);
 	const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
 	const [searchTerm, setSearchTerm] = useState('');
+	const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
 	// Form state
 	const [formData, setFormData] = useState({
@@ -161,8 +164,8 @@ const CustomerList = () => {
 		}
 	};
 
-	const handleDeleteCustomer = async (id: string) => {
-		if (window.confirm("Bạn có chắc chắn muốn xóa khách hàng này không?")) {
+	const handleDeleteCustomer = async (id: string, bypassConfirm = false) => {
+		if (bypassConfirm || window.confirm("Bạn có chắc chắn muốn xóa khách hàng này không?")) {
 			try {
 				const customerName = customers.find(c => c.id === id)?.name || 'Khách hàng';
 				await deleteDoc(doc(db, 'customers', id));
@@ -222,9 +225,9 @@ const CustomerList = () => {
 	};
 
 	const filteredCustomers = customers.filter(c =>
-		c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-		c.phone?.includes(searchTerm) ||
-		c.email?.toLowerCase().includes(searchTerm.toLowerCase())
+		String(c.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+		String(c.phone || '').includes(searchTerm) ||
+		String(c.email || '').toLowerCase().includes(searchTerm.toLowerCase())
 	);
 
 	const hasManagePermission = owner.role === 'admin' || (owner.accessRights?.customers_manage ?? true);
@@ -272,6 +275,13 @@ const CustomerList = () => {
 						/>
 					</div>
 					<button
+						onClick={() => setShowImport(true)}
+						className="hidden md:flex bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-4 py-2.5 rounded-xl font-bold border border-slate-200 dark:border-slate-800 transition-all items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-700"
+					>
+						<span className="material-symbols-outlined">file_upload</span>
+						<span className="hidden sm:inline">Nhập Excel</span>
+					</button>
+					<button
 						onClick={() => { resetForm(); setShowAddForm(true); }}
 						className="bg-[#FF6D00] hover:bg-orange-600 text-white px-4 py-2.5 rounded-xl font-bold shadow-lg shadow-orange-500/20 transition-all flex items-center gap-2"
 					>
@@ -280,6 +290,18 @@ const CustomerList = () => {
 					</button>
 				</div>
 			</header>
+
+			{showImport && (
+				<BulkImport
+					type="customers"
+					ownerId={owner.ownerId}
+					ownerEmail={owner.ownerEmail}
+					onClose={() => setShowImport(false)}
+					onSuccess={() => {
+						// Optional: refresh data or show success message
+					}}
+				/>
+			)}
 
 			{/* CONTENT */}
 			<div className="flex-1 p-4 md:p-8 overflow-y-auto custom-scrollbar">
@@ -334,12 +356,34 @@ const CustomerList = () => {
 									</td>
 									<td className="py-4 px-6 text-right">
 										<div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-											<button onClick={() => openEdit(customer)} className="p-2 text-slate-300 dark:text-slate-600 hover:text-blue-500 dark:hover:text-blue-400 transition-colors">
-												<span className="material-symbols-outlined text-[20px]">edit</span>
-											</button>
-											<button onClick={() => handleDeleteCustomer(customer.id)} className="p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors">
-												<span className="material-symbols-outlined text-[20px]">delete</span>
-											</button>
+											{deleteConfirmId === customer.id ? (
+												<div className="flex items-center gap-1 bg-rose-50 dark:bg-rose-900/20 p-1 rounded-lg border border-rose-100 dark:border-rose-900/30 animate-in fade-in zoom-in duration-200">
+													<button
+														onClick={() => setDeleteConfirmId(null)}
+														className="px-2 py-1 text-[10px] font-bold text-slate-500 hover:text-slate-700 bg-white dark:bg-slate-800 rounded shadow-sm"
+													>
+														Hủy
+													</button>
+													<button
+														onClick={() => {
+															handleDeleteCustomer(customer.id, true);
+															setDeleteConfirmId(null);
+														}}
+														className="px-2 py-1 text-[10px] font-bold text-white bg-rose-500 hover:bg-rose-600 rounded shadow-sm"
+													>
+														Xác nhận
+													</button>
+												</div>
+											) : (
+												<>
+													<button onClick={() => openEdit(customer)} className="p-2 text-slate-300 dark:text-slate-600 hover:text-blue-500 dark:hover:text-blue-400 transition-colors">
+														<span className="material-symbols-outlined text-[20px]">edit</span>
+													</button>
+													<button onClick={() => setDeleteConfirmId(customer.id)} className="p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors">
+														<span className="material-symbols-outlined text-[20px]">delete</span>
+													</button>
+												</>
+											)}
 										</div>
 									</td>
 								</tr>

@@ -85,6 +85,7 @@ export const useNavigationConfig = () => {
 		{ icon: 'history', label: 'Hoạt động', path: '/checkin?action=history', permissionKey: 'checkin_create' },
 		{ icon: 'group', label: 'Khách hàng', path: '/customers', desktopOnly: true, permissionKey: 'customers_manage' },
 		{ icon: 'inventory_2', label: 'Sản phẩm', path: '/inventory', desktopOnly: true, permissionKey: 'inventory_view' },
+		{ icon: 'request_quote', label: 'Báo giá', path: '/price-list' },
 		{ icon: 'settings', label: 'Cài đặt', path: '/settings' },
 	];
 
@@ -129,6 +130,14 @@ export const useNavigationConfig = () => {
 				allItems[1], // Đơn hàng
 				allItems[2], // Center (Thu nợ)
 				allItems[4], // Hoạt động/Checkin (Thay cho Công nợ)
+				getSlot5(),  // Cài đặt
+			];
+		} else if (path === '/customers') {
+			items = [
+				allItems[0], // Trang chủ
+				allItems[1], // Đơn hàng
+				allItems[2], // Center (Thêm Khách)
+				{ icon: 'search', label: 'Tìm kiếm', path: '/customers?search=true' }, // Thay Công nợ bằng Tìm kiếm
 				getSlot5(),  // Cài đặt
 			];
 		} else {

@@ -22,6 +22,8 @@ const CustomerList = () => {
 	const [showMap, setShowMap] = useState(false);
 	const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
 	const [searchTerm, setSearchTerm] = useState('');
+	const [showMobileSearch, setShowMobileSearch] = useState(false);
+	const searchInputRef = React.useRef<HTMLInputElement>(null);
 	const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
 	// Form state
@@ -115,7 +117,16 @@ const CustomerList = () => {
 			setShowAddForm(true);
 			navigate('/customers', { replace: true });
 		}
+		if (params.get('search') === 'true') {
+			setShowMobileSearch(true);
+		}
 	}, [search, navigate]);
+
+	useEffect(() => {
+		if (showMobileSearch && searchInputRef.current) {
+			searchInputRef.current.focus();
+		}
+	}, [showMobileSearch]);
 
 	const handleAddCustomer = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -239,6 +250,7 @@ const CustomerList = () => {
 
 	const filteredCustomers = customers.filter(c =>
 		String(c.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+		String(c.businessName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
 		String(c.phone || '').includes(searchTerm) ||
 		String(c.email || '').toLowerCase().includes(searchTerm.toLowerCase())
 	);
@@ -264,52 +276,90 @@ const CustomerList = () => {
 
 	return (
 		<div className="flex flex-col h-full bg-[#f8f9fa] dark:bg-slate-950 transition-colors duration-300">
-			<header className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 h-16 md:h-20 flex items-center justify-between px-4 md:px-8 shrink-0 transition-colors duration-300">
-				<div className="flex items-center gap-3">
-					<button
-						onClick={() => navigate('/')}
-						className="size-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-[#1A237E] dark:hover:text-indigo-400 transition-all group"
-						title="Về Trang Chủ"
-					>
-						<span className="material-symbols-outlined text-xl group-hover:rotate-[-45deg] transition-transform">home</span>
-					</button>
-					<div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
-					<h2 className="text-lg md:text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight">Khách Hàng</h2>
-				</div>
-				<div className="flex items-center gap-4">
-					<div className="hidden md:relative md:block">
-						<span className="material-symbols-outlined absolute left-3 top-2.5 text-gray-400 dark:text-gray-500">search</span>
-						<input
-							type="text"
-							placeholder="Tìm khách hàng..."
-							className="pl-10 pr-4 py-2.5 bg-gray-100 dark:bg-slate-800 border-none rounded-xl text-sm focus:ring-2 focus:ring-[#FF6D00]/30 w-64 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-							value={searchTerm}
-							onChange={(e) => setSearchTerm(e.target.value)}
-						/>
+			<header className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 h-16 md:h-20 flex items-center justify-between px-4 md:px-8 shrink-0 transition-colors duration-300 relative">
+				{!showMobileSearch ? (
+					<>
+						<div className="flex items-center gap-3">
+							<button
+								onClick={() => navigate('/')}
+								className="size-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-[#1A237E] dark:hover:text-indigo-400 transition-all group"
+								title="Về Trang Chủ"
+							>
+								<span className="material-symbols-outlined text-xl group-hover:rotate-[-45deg] transition-transform">home</span>
+							</button>
+							<div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
+							<h2 className="text-lg md:text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight">Khách Hàng</h2>
+						</div>
+						<div className="flex items-center gap-2 md:gap-4">
+							{/* Search on Desktop */}
+							<div className="hidden md:relative md:block">
+								<span className="material-symbols-outlined absolute left-3 top-2.5 text-gray-400 dark:text-gray-500">search</span>
+								<input
+									type="text"
+									placeholder="Tìm khách hàng..."
+									className="pl-10 pr-4 py-2.5 bg-gray-100 dark:bg-slate-800 border-none rounded-xl text-sm focus:ring-2 focus:ring-[#FF6D00]/30 w-64 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+									value={searchTerm}
+									onChange={(e) => setSearchTerm(e.target.value)}
+								/>
+							</div>
+
+							{/* Search Trigger for Mobile */}
+							<button
+								onClick={() => setShowMobileSearch(true)}
+								className="md:hidden size-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400"
+							>
+								<span className="material-symbols-outlined">search</span>
+							</button>
+
+							<button
+								onClick={() => setShowImport(true)}
+								className="hidden md:flex bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-4 py-2.5 rounded-xl font-bold border border-slate-200 dark:border-slate-800 transition-all items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-700"
+							>
+								<span className="material-symbols-outlined">file_upload</span>
+								<span className="hidden sm:inline">Nhập Excel</span>
+							</button>
+							<button
+								onClick={() => setShowMap(true)}
+								className="size-10 rounded-xl bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center text-[#FF6D00] hover:bg-[#FF6D00] hover:text-white transition-all shadow-lg shadow-orange-500/10"
+								title="Xem bản đồ"
+							>
+								<span className="material-symbols-outlined">map</span>
+							</button>
+							<div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
+							<button
+								onClick={() => { resetForm(); setShowAddForm(true); }}
+								className="bg-[#FF6D00] hover:bg-orange-600 text-white px-3 md:px-4 py-2.5 rounded-xl font-bold shadow-lg shadow-orange-500/20 transition-all flex items-center gap-2"
+							>
+								<span className="material-symbols-outlined">person_add</span>
+								<span className="hidden md:inline">Thêm mới</span>
+							</button>
+						</div>
+					</>
+				) : (
+					<div className="flex items-center gap-3 w-full animate-in slide-in-from-right-4 duration-300">
+						<div className="relative flex-1">
+							<span className="material-symbols-outlined absolute left-3 top-2.5 text-[#FF6D00]">search</span>
+							<input
+								ref={searchInputRef}
+								type="text"
+								placeholder="Nhập tên, SĐT hoặc cơ sở..."
+								className="w-full pl-10 pr-4 py-3 bg-slate-100 dark:bg-slate-800 border-none rounded-2xl text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/30"
+								value={searchTerm}
+								onChange={(e) => setSearchTerm(e.target.value)}
+							/>
+						</div>
+						<button
+							onClick={() => {
+								setShowMobileSearch(false);
+								setSearchTerm('');
+								navigate('/customers', { replace: true });
+							}}
+							className="size-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 font-bold"
+						>
+							Đóng
+						</button>
 					</div>
-					<button
-						onClick={() => setShowImport(true)}
-						className="hidden md:flex bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-4 py-2.5 rounded-xl font-bold border border-slate-200 dark:border-slate-800 transition-all items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-700"
-					>
-						<span className="material-symbols-outlined">file_upload</span>
-						<span className="hidden sm:inline">Nhập Excel</span>
-					</button>
-					<button
-						onClick={() => setShowMap(true)}
-						className="size-10 rounded-xl bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center text-[#FF6D00] hover:bg-[#FF6D00] hover:text-white transition-all shadow-lg shadow-orange-500/10"
-						title="Xem bản đồ"
-					>
-						<span className="material-symbols-outlined">map</span>
-					</button>
-					<div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
-					<button
-						onClick={() => { resetForm(); setShowAddForm(true); }}
-						className="bg-[#FF6D00] hover:bg-orange-600 text-white px-4 py-2.5 rounded-xl font-bold shadow-lg shadow-orange-500/20 transition-all flex items-center gap-2"
-					>
-						<span className="material-symbols-outlined">person_add</span>
-						<span className="hidden sm:inline">Thêm mới</span>
-					</button>
-				</div>
+				)}
 			</header>
 
 			{showImport && (

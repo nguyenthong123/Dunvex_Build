@@ -225,13 +225,32 @@ const QuickOrder = () => {
 					createdAt: serverTimestamp()
 				});
 
-				// 3. Deduct Stock
+				// 3. Deduct Stock & Create Inventory Logs
 				validItems.forEach(item => {
 					// Only decrement for saved products (have productId from DB)
 					if (item.productId) {
-						const prodRef = doc(db, 'products', item.productId);
+						// Check if this product is linked to another for inventory
+						const sourceProduct = products.find(p => p.id === item.productId);
+						const stockProductId = sourceProduct?.linkedProductId || item.productId;
+
+						const prodRef = doc(db, 'products', stockProductId);
 						batch.update(prodRef, {
 							stock: increment(-item.qty)
+						});
+
+						// Add Inventory Log
+						const invLogRef = doc(collection(db, 'inventory_logs'));
+						batch.set(invLogRef, {
+							productId: stockProductId,
+							orderId: newOrderRef.id,
+							customerName: orderData.customerName,
+							productName: item.name,
+							type: 'out',
+							qty: item.qty,
+							note: `Xuất đơn hàng cho ${orderData.customerName}`,
+							ownerId: owner.ownerId,
+							user: auth.currentUser?.displayName || auth.currentUser?.email,
+							createdAt: serverTimestamp()
 						});
 					}
 				});

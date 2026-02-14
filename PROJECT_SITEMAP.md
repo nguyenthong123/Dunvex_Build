@@ -77,14 +77,17 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Tối ưu không gian**: Thêm nút thu gọn/mở rộng danh sách phân loại để không che khuất bản đồ.
     - **Định vị hiện tại (My Location)**: Chế độ định vị thực tế với chấm xanh nhấp nháy, giúp người dùng biết vị trí đứng so với các điểm khách hàng xung quanh.
     - **Chống lỗi (Stability)**: Cơ chế bảo vệ 3 lớp chống crash khi dữ liệu tải chậm hoặc định dạng sai.
+- [x] **Quản lý Kho nâng cao (Inventory Pro)**: Tích hợp cơ chế liên kết sản phẩm (Linked Products) cho phép nhiều mã giá dùng chung 1 kho. Hệ thống tự động trừ kho từ sản phẩm gốc khi bán sản phẩm liên kết.
+- [x] **Lịch sử Giao dịch Kho (Inventory Logs)**: Ghi lại chi tiết mọi biến động kho: Nhập khởi tạo, Xuất đơn hàng, Điều chuyển và Đối soát.
+- [x] **Điều chuyển Kho nội bộ**: Cho phép luân chuyển số lượng giữa các mặt hàng khác nhau với nhật ký đối soát chi tiết.
+- [x] **Đối soát & Kiểm kho Định kỳ**: Hệ thống kiểm kê thực tế, tự động tính chênh lệch và cập nhật số dư kho với lý do điều chỉnh cụ thể.
+- [x] **Nâng cấp Bảo mật (Security Pro)**: Tối ưu hóa CSP, chặn Clickjacking và XSS theo tiêu chuẩn Mozilla HTTP Observatory thông qua `vercel.json`.
 
 ### 📝 Cần làm tiếp (To-do)
 - [ ] **PWA Support**: Tích hợp Service Worker để cài đặt ứng dụng vào màn hình chính và thông báo đẩy (Push Notifications).
 - [ ] **Báo cáo tài chính nâng cao**: Chuyển đổi các biểu đồ tĩnh sang dữ liệu thực, tự động tính lợi nhuận ròng và dự báo dòng tiền.
 - [ ] **QR Code Scanning**: Tích hợp quét mã QR sản phẩm để lên đơn nhanh và kiểm kho bằng camera điện thoại.
-- [ ] **Quản lý Kho (Advanced)**: Thêm lịch sử nhập/xuất kho chi tiết (Inventory Logs) và quản lý chuyển kho nội bộ.
 - [ ] **Tự động hóa chăm sóc khách hàng**: Gửi thông báo nhắc nợ tự động qua SMS/Zalo API khi tới ngày đến hạn.
-- [ ] **Hệ thống Kiểm kho Định kỳ**: Tính năng đối soát số lượng thực tế trong kho và số lượng trên phần mềm.
 - [ ] **Chế độ Offline**: Lưu trữ dữ liệu cơ bản local (Cache) để có thể xem thông tin khi mất kết nối mạng tạm thời.
 
 *Ghi chú: File `upload_script.gs` đã được cập nhật logic gửi email.*

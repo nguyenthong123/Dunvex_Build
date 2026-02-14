@@ -34,6 +34,10 @@ const AdminSettings = () => {
 		lastSyncAt: null as any
 	});
 	const [syncing, setSyncing] = useState(false);
+	const [syncRange, setSyncRange] = useState({
+		start: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
+		end: new Date().toISOString().split('T')[0]
+	});
 	const [systemConfig, setSystemConfig] = useState<any>({ lock_free_sheets: false });
 
 	// User Management
@@ -197,10 +201,18 @@ const AdminSettings = () => {
 
 		setSyncing(true);
 		try {
+			const startTimestamp = new Date(syncRange.start + 'T00:00:00');
+			const endTimestamp = new Date(syncRange.end + 'T23:59:59');
+
 			const [prodSnap, custSnap, orderSnap] = await Promise.all([
 				getDocs(query(collection(db, 'products'), where('ownerId', '==', owner.ownerId))),
 				getDocs(query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId))),
-				getDocs(query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId)))
+				getDocs(query(
+					collection(db, 'orders'),
+					where('ownerId', '==', owner.ownerId),
+					where('createdAt', '>=', startTimestamp),
+					where('createdAt', '<=', endTimestamp)
+				))
 			]);
 
 			const dataToSync = {
@@ -336,6 +348,27 @@ const AdminSettings = () => {
 												<div className="text-right">
 													<p className="text-[10px] font-black text-slate-400">ID: {companyInfo.spreadsheetId?.slice(0, 8)}...</p>
 													<p className="text-[10px] font-bold text-emerald-500">Cập nhật: {companyInfo.lastSyncAt ? new Date(companyInfo.lastSyncAt.seconds * 1000).toLocaleDateString() : 'Never'}</p>
+												</div>
+											</div>
+
+											<div className="grid grid-cols-2 gap-4 pt-2">
+												<div className="space-y-1">
+													<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Từ ngày</label>
+													<input
+														type="date"
+														className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs font-bold dark:text-white outline-none focus:ring-2 focus:ring-green-500/20"
+														value={syncRange.start}
+														onChange={(e) => setSyncRange({ ...syncRange, start: e.target.value })}
+													/>
+												</div>
+												<div className="space-y-1">
+													<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Đến ngày</label>
+													<input
+														type="date"
+														className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs font-bold dark:text-white outline-none focus:ring-2 focus:ring-green-500/20"
+														value={syncRange.end}
+														onChange={(e) => setSyncRange({ ...syncRange, end: e.target.value })}
+													/>
 												</div>
 											</div>
 											<button onClick={handleSheetSync} disabled={syncing || isSyncLocked} className="w-full bg-[#1A237E] dark:bg-indigo-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 enabled:hover:bg-blue-800 transition-all disabled:opacity-50">

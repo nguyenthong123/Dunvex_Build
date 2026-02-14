@@ -72,6 +72,11 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 - [x] **Lọc theo ngày (Date Filtering)**: Đã hoàn thiện bộ lọc ngày thực tế cho danh sách công nợ và bảng kê chi tiết khách hàng.
 - [x] **In phiếu & Xuất PDF**: Đã tích hợp tính năng in phiếu báo nợ trực tiếp và tối ưu hóa tỷ lệ (Scaling/Zoom) để chụp ảnh gửi Zalo/Messenger sắc nét.
 - [x] **Số dư đầu kỳ & Lịch sử Công nợ**: Đã hiển thị chính xác số dư đầu kỳ dựa trên khoảng thời gian lọc và liệt kê chi tiết lịch sử giao dịch/thanh toán.
+- [x] **Bản đồ Khách hàng Thông minh**: 
+    - **Lọc thông minh**: Tự động nhận diện tất cả loại khách hàng từ dữ liệu và tạo bảng chú thích lọc (Legend) linh hoạt.
+    - **Tối ưu không gian**: Thêm nút thu gọn/mở rộng danh sách phân loại để không che khuất bản đồ.
+    - **Định vị hiện tại (My Location)**: Chế độ định vị thực tế với chấm xanh nhấp nháy, giúp người dùng biết vị trí đứng so với các điểm khách hàng xung quanh.
+    - **Chống lỗi (Stability)**: Cơ chế bảo vệ 3 lớp chống crash khi dữ liệu tải chậm hoặc định dạng sai.
 
 ### 📝 Cần làm tiếp (To-do)
 - [ ] **PWA Support**: Tích hợp Service Worker để cài đặt ứng dụng vào màn hình chính và thông báo đẩy (Push Notifications).

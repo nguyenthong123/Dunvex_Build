@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, where } from 'firebase/firestore';
 import BulkImport from '../components/shared/BulkImport';
+import CustomerMap from '../components/CustomerMap';
 
 import { useOwner } from '../hooks/useOwner';
 import { useScroll } from '../context/ScrollContext';
@@ -18,6 +19,7 @@ const CustomerList = () => {
 	const [showImport, setShowImport] = useState(false);
 	const [showEditForm, setShowEditForm] = useState(false);
 	const [showDetail, setShowDetail] = useState(false);
+	const [showMap, setShowMap] = useState(false);
 	const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
 	const [searchTerm, setSearchTerm] = useState('');
 	const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -40,10 +42,19 @@ const CustomerList = () => {
 
 
 	// Get unique types from existing customers for the suggestions
-	const customerTypes = Array.from(new Set([
-		'Chủ nhà', 'Nhà thầu', 'Kiến trúc sư', 'Đại lý',
-		...customers.map(c => c.type).filter(Boolean)
-	]));
+	const baseTypes = [
+		'Chủ nhà', 'Thầu Thợ', 'Cửa Hàng', 'Cửa hàng nhựa',
+		'Cửa hàng weber', 'Cửa hàng keo dán gach', 'Cửa hàng kim khí',
+		'Cửa hàng điện nước', 'Nhà Máy Tôn', 'Nhà Phân Phối',
+		'Nhà phân phối nhôm kính', 'Kho đá hoa cương', 'Kho phân phối nhôm',
+		'Đối Thủ', 'Area Sales Representative'
+	];
+
+	const dynamicTypes = Array.isArray(customers)
+		? Array.from(new Set(customers.map(c => c.type))).filter(t => t && !baseTypes.includes(t))
+		: [];
+
+	const customerTypes = [...baseTypes, ...dynamicTypes];
 
 	const handleGetLocation = () => {
 		setGettingLocation(true);
@@ -284,6 +295,14 @@ const CustomerList = () => {
 						<span className="hidden sm:inline">Nhập Excel</span>
 					</button>
 					<button
+						onClick={() => setShowMap(true)}
+						className="size-10 rounded-xl bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center text-[#FF6D00] hover:bg-[#FF6D00] hover:text-white transition-all shadow-lg shadow-orange-500/10"
+						title="Xem bản đồ"
+					>
+						<span className="material-symbols-outlined">map</span>
+					</button>
+					<div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
+					<button
 						onClick={() => { resetForm(); setShowAddForm(true); }}
 						className="bg-[#FF6D00] hover:bg-orange-600 text-white px-4 py-2.5 rounded-xl font-bold shadow-lg shadow-orange-500/20 transition-all flex items-center gap-2"
 					>
@@ -312,7 +331,9 @@ const CustomerList = () => {
 					<StatCard icon="group" label="Tổng khách" value={customers.length.toString()} color="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400" />
 					<StatCard icon="person_add" label="Khách mới" value="12" color="bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400" />
 					<StatCard icon="verified" label="VIP" value="5" color="bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400" />
-					<StatCard icon="location_on" label="Vị trí" value="8" color="bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400" />
+					<div onClick={() => setShowMap(true)} className="cursor-pointer">
+						<StatCard icon="location_on" label="Vị trí" value={customers.filter(c => c.lat && c.lng).length.toString()} color="bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400" />
+					</div>
 				</div>
 
 				{/* Desktop Table */}
@@ -592,6 +613,14 @@ const CustomerList = () => {
 								)}
 
 								<div className="flex flex-col sm:flex-row gap-3 pt-4 pb-2">
+									{selectedCustomer.lat && selectedCustomer.lng && (
+										<button
+											onClick={() => { setShowDetail(false); setShowMap(true); }}
+											className="flex-1 bg-green-500 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-green-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 h-14"
+										>
+											<span className="material-symbols-outlined text-lg">map</span> Xem vị trí
+										</button>
+									)}
 									<button
 										onClick={() => { setShowDetail(false); openEdit(selectedCustomer); }}
 										className="flex-1 bg-[#1A237E] dark:bg-indigo-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 h-14"
@@ -610,7 +639,12 @@ const CustomerList = () => {
 					</div>
 				</div>
 			)}
-
+			{showMap && (
+				<CustomerMap
+					customers={customers}
+					onClose={() => setShowMap(false)}
+				/>
+			)}
 		</div>
 	);
 };

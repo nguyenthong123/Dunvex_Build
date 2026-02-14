@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Search, Plus, Minus, Trash2, ShoppingCart, User, Package, MapPin, Truck, FileText, ChevronDown, X, Layers, CheckCircle, Mail, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Search, Plus, Minus, Trash2, ShoppingCart, User, Package, MapPin, Truck, FileText, ChevronDown, X, Layers, CheckCircle, Mail, RotateCcw, QrCode } from 'lucide-react';
+import QRScanner from '../components/shared/QRScanner';
 import { useNavigate, useParams } from 'react-router-dom';
 import { db, auth } from '../services/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, doc, getDoc, serverTimestamp, where, increment, writeBatch } from 'firebase/firestore';
@@ -15,6 +16,7 @@ const QuickOrder = () => {
 	const [fetchingOrder, setFetchingOrder] = useState(false);
 	const [sendEmail, setSendEmail] = useState(false);
 	const [showSuccessModal, setShowSuccessModal] = useState(false);
+	const [showScanner, setShowScanner] = useState(false);
 
 	// Form state
 	const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
@@ -135,6 +137,36 @@ const QuickOrder = () => {
 			}
 		}
 		setLineItems(newItems);
+	};
+
+	const handleQRScan = (sku: string) => {
+		const product = products.find(p => p.sku === sku);
+		if (product) {
+			// Find first empty item or add new one
+			const emptyIdx = lineItems.findIndex(item => !item.productId);
+			if (emptyIdx !== -1) {
+				updateLineItem(emptyIdx, 'productId', product.id);
+			} else {
+				setLineItems([
+					...lineItems,
+					{
+						id: Date.now(),
+						category: product.category || '',
+						productId: product.id,
+						name: product.name,
+						qty: 1,
+						price: product.priceSell,
+						buyPrice: product.priceBuy || 0,
+						unit: product.unit,
+						packaging: product.packaging,
+						density: product.density,
+						maxStock: product.stock || 0
+					}
+				]);
+			}
+		} else {
+			alert(`Không tìm thấy sản phẩm với mã SKU: ${sku}`);
+		}
 	};
 
 	const subTotal = lineItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 0), 0);
@@ -526,6 +558,14 @@ const QuickOrder = () => {
 							<Plus size={16} strokeWidth={3} />
 							+ THÊM SẢN PHẨM
 						</button>
+
+						<button
+							onClick={() => setShowScanner(true)}
+							className="w-full py-4 mt-3 border-2 border-dashed border-blue-100 dark:border-blue-900/30 rounded-2xl text-blue-600 font-black text-xs uppercase tracking-[2px] flex items-center justify-center gap-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all active:scale-[0.99]"
+						>
+							<QrCode size={16} strokeWidth={3} />
+							+ QUÉT MÃ QR (SKU)
+						</button>
 					</div>
 				</div>
 
@@ -664,6 +704,13 @@ const QuickOrder = () => {
 						</div>
 					</div>
 				</div>
+			)}
+
+			{showScanner && (
+				<QRScanner
+					onScan={handleQRScan}
+					onClose={() => setShowScanner(false)}
+				/>
 			)}
 		</div>
 	);

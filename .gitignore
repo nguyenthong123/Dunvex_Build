@@ -39,3 +39,5 @@ upload_script.gs
 GAS_*
 *.gs
 !upload_script.gs.example
+# Project Roadmap/Internal
+PROJECT_SITEMAP.md

@@ -3,6 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, where, writeBatch, increment } from 'firebase/firestore';
 import BulkImport from '../components/shared/BulkImport';
+import QRScanner from '../components/shared/QRScanner';
+import { QrCode } from 'lucide-react';
 
 import { useOwner } from '../hooks/useOwner';
 
@@ -42,6 +44,8 @@ const ProductList = () => {
 		qty: 1,
 		note: ''
 	});
+	const [showScanner, setShowScanner] = useState(false);
+	const [lastScannedSku, setLastScannedSku] = useState<string | null>(null);
 
 	const [formData, setFormData] = useState({
 		name: '',
@@ -448,6 +452,22 @@ const ProductList = () => {
 			alert("Đã cập nhật số liệu kho thực tế thành công!");
 		} catch (error) {
 			alert("Lỗi khi thực hiện đối soát kho");
+		}
+	};
+
+	const handleAuditQRScan = (sku: string) => {
+		const product = products.find(p => p.sku === sku);
+		if (product) {
+			const currentCount = auditCounts[product.id] ?? product.stock;
+			setAuditCounts({ ...auditCounts, [product.id]: currentCount + 1 });
+			setLastScannedSku(sku);
+
+			// Show a brief success toast/feedback
+			setTimeout(() => {
+				setLastScannedSku(null);
+			}, 2000);
+		} else {
+			alert(`Không tìm thấy sản phẩm với mã SKU: ${sku}`);
 		}
 	};
 
@@ -1249,6 +1269,26 @@ const ProductList = () => {
 								</button>
 							</div>
 
+							<div className="bg-slate-50 dark:bg-slate-800 px-8 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+								<div className="flex items-center gap-2">
+									<button
+										onClick={() => setShowScanner(true)}
+										className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2 shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
+									>
+										<QrCode size={16} />
+										QUÉT MÃ SKU
+									</button>
+									{lastScannedSku && (
+										<span className="text-[10px] font-black text-green-500 uppercase tracking-widest animate-pulse">
+											✓ Đã nhận: {lastScannedSku} (+1)
+										</span>
+									)}
+								</div>
+								<div className="hidden md:block text-[10px] font-black text-slate-400 uppercase tracking-widest">
+									Sử dụng camera để quét mã vạch sản phẩm
+								</div>
+							</div>
+
 							<div className="flex-1 overflow-y-auto p-8">
 								<div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-2xl border border-blue-100 dark:border-blue-900/20 mb-6 flex items-start gap-3">
 									<span className="material-symbols-outlined text-blue-600 dark:text-blue-400 mt-0.5">info</span>
@@ -1332,6 +1372,14 @@ const ProductList = () => {
 							</div>
 						</div>
 					</div>
+				)}
+
+				{showScanner && (
+					<QRScanner
+						onScan={handleAuditQRScan}
+						onClose={() => setShowScanner(false)}
+						title="Quét Đối Soát Kho"
+					/>
 				)}
 			</div>
 		</div>

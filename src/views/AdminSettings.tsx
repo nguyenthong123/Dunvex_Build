@@ -1,8 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, User, Bell, Shield, Database, Globe, Moon, Sun, Users, Activity, FileText, Save, Plus, Trash2, Edit2, CheckCircle, XCircle, Crown, Clock, Rocket } from 'lucide-react';
+import {
+	Settings, User, Bell, Shield, Database, Globe, Moon, Sun, Users, Activity,
+	FileText, Save, Plus, Trash2, Edit2, CheckCircle, XCircle, Crown, Clock,
+	Rocket, Lock, RefreshCcw, ExternalLink
+} from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
-import { collection, query, onSnapshot, doc, updateDoc, addDoc, serverTimestamp, orderBy, limit, deleteDoc, getDoc, setDoc, where } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
+import {
+	collection, query, onSnapshot, doc, updateDoc, addDoc, serverTimestamp,
+	orderBy, limit, deleteDoc, getDoc, setDoc, where, getDocs
+} from 'firebase/firestore';
 
 import { useOwner } from '../hooks/useOwner';
 
@@ -20,8 +27,14 @@ const AdminSettings = () => {
 		email: '',
 		taxCode: '',
 		logoUrl: '',
-		defaultVat: 10
+		defaultVat: 10,
+		spreadsheetId: '',
+		spreadsheetUrl: '',
+		manualLockSheets: false,
+		lastSyncAt: null as any
 	});
+	const [syncing, setSyncing] = useState(false);
+	const [systemConfig, setSystemConfig] = useState<any>({ lock_free_sheets: false });
 
 	// User Management
 	const [activeEmployees, setActiveEmployees] = useState<any[]>([]);
@@ -55,42 +68,41 @@ const AdminSettings = () => {
 		const qUsers = query(collection(db, 'users'), where('ownerId', '==', owner.ownerId));
 		const unsubUsers = onSnapshot(qUsers, (snap) => {
 			const users = snap.docs.map(d => ({ id: d.id, ...d.data(), status: 'active' })) as any[];
-			// Filter out the owner themselves
 			setActiveEmployees(users.filter(u => u.uid !== owner.ownerId));
 		});
 
-		// 2. Listen to Pending Invites (Permissions)
+		// 2. Listen to Pending Invites
 		const qPerms = query(collection(db, 'permissions'), where('ownerId', '==', owner.ownerId));
 		const unsubPerms = onSnapshot(qPerms, (snap) => {
 			const invites = snap.docs.map(d => ({
-				id: d.id, // email is the id for permissions
+				id: d.id,
 				...d.data(),
-				displayName: d.data().email, // Use email as name for pending
+				displayName: d.data().email,
 				status: 'pending'
 			}));
 			setPendingInvites(invites);
 		});
 
 		// Listen to Logs
-		const qLogs = query(
-			collection(db, 'audit_logs'),
-			where('ownerId', '==', owner.ownerId)
-		);
+		const qLogs = query(collection(db, 'audit_logs'), where('ownerId', '==', owner.ownerId));
 		const unsubLogs = onSnapshot(qLogs, (snap) => {
 			const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-			// Sort client-side
-			const sorted = data.sort((a: any, b: any) => {
-				const timeA = a.createdAt?.seconds || 0;
-				const timeB = b.createdAt?.seconds || 0;
-				return timeB - timeA;
-			});
+			const sorted = data.sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 			setLogs(sorted.slice(0, 50));
+		});
+
+		// 3. Listen to System Config
+		const unsubConfig = onSnapshot(doc(db, 'system_config', 'main'), (snap) => {
+			if (snap.exists()) {
+				setSystemConfig(snap.data());
+			}
 		});
 
 		return () => {
 			unsubUsers();
 			unsubPerms();
 			unsubLogs();
+			unsubConfig();
 		};
 	}, [owner.loading, owner.ownerId]);
 
@@ -102,7 +114,7 @@ const AdminSettings = () => {
 				...companyInfo,
 				updatedAt: serverTimestamp(),
 				updatedBy: auth.currentUser?.uid
-			}, { merge: true }); // Merge to avoid overwriting other fields if any
+			}, { merge: true });
 			alert("Đã lưu cấu hình thành công!");
 		} catch (error) {
 			alert("Lỗi khi lưu cấu hình");
@@ -115,7 +127,6 @@ const AdminSettings = () => {
 		if (!newUser.email) return alert("Vui lòng nhập email");
 		setLoading(true);
 		try {
-			// 1. Create Permission/Invite Doc
 			await setDoc(doc(db, 'permissions', newUser.email), {
 				email: newUser.email,
 				role: newUser.role,
@@ -135,34 +146,18 @@ const AdminSettings = () => {
 				}
 			});
 
-			// 2. Log
 			await addDoc(collection(db, 'audit_logs'), {
 				action: 'Mời nhân viên mới',
 				user: auth.currentUser?.displayName || auth.currentUser?.email,
 				userId: auth.currentUser?.uid,
-				ownerId: owner.ownerId, // Log for owner
+				ownerId: owner.ownerId,
 				details: `Đã cấp quyền cho email ${newUser.email} - Quyền: ${newUser.role}`,
 				createdAt: serverTimestamp()
 			});
 
-			// 3. Send Email Notification (via Google Apps Script)
-			try {
-				await fetch('https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec', {
-					method: 'POST',
-					body: JSON.stringify({
-						action: 'invite_user',
-						email: newUser.email,
-						role: newUser.role,
-						inviterName: auth.currentUser?.displayName || 'Quản Trị Viên'
-					})
-				});
-			} catch (emailErr) {
-				// Failed to send invite email
-			}
-
 			setShowAddUser(false);
 			setNewUser({ email: '', role: 'sale', displayName: '' });
-			alert(`Đã thêm quyền truy cập và gửi email mời cho ${newUser.email}`);
+			alert(`Đã thêm quyền truy cập cho ${newUser.email}`);
 		} catch (error) {
 			alert("Lỗi khi thêm nhân viên");
 		} finally {
@@ -177,18 +172,7 @@ const AdminSettings = () => {
 			} else {
 				await updateDoc(doc(db, 'users', user.id), { role: newRole });
 			}
-
-			await addDoc(collection(db, 'audit_logs'), {
-				action: 'Cập nhật quyền nhân viên',
-				user: auth.currentUser?.displayName,
-				userId: auth.currentUser?.uid,
-				ownerId: owner.ownerId,
-				details: `Đã đổi quyền user ${user.email} thành ${newRole}`,
-				createdAt: serverTimestamp()
-			});
-		} catch (error) {
-			// Failed to update role
-		}
+		} catch (error) { }
 	};
 
 	const deleteUser = async (user: any) => {
@@ -199,604 +183,255 @@ const AdminSettings = () => {
 			} else {
 				await deleteDoc(doc(db, 'users', user.id));
 			}
+		} catch (error) { }
+	};
 
-			await addDoc(collection(db, 'audit_logs'), {
-				action: 'Xóa nhân viên',
-				user: auth.currentUser?.displayName,
-				userId: auth.currentUser?.uid,
-				ownerId: owner.ownerId,
-				details: `Đã xóa nhân viên ${user.email}`,
-				createdAt: serverTimestamp()
+	const handleSheetSync = async () => {
+		if (!owner.ownerId || !owner.ownerEmail) return;
+
+		const isLocked = (systemConfig.lock_free_sheets && !owner.isPro) || companyInfo.manualLockSheets;
+		if (isLocked) {
+			alert("Tính năng này đã bị khóa bởi hệ thống hoặc quản trị viên.");
+			return;
+		}
+
+		setSyncing(true);
+		try {
+			const [prodSnap, custSnap, orderSnap] = await Promise.all([
+				getDocs(query(collection(db, 'products'), where('ownerId', '==', owner.ownerId))),
+				getDocs(query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId))),
+				getDocs(query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId)))
+			]);
+
+			const dataToSync = {
+				products: prodSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+				customers: custSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+				orders: orderSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+			};
+
+			const response = await fetch('https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec', {
+				method: 'POST',
+				body: JSON.stringify({
+					action: 'sync_to_sheets',
+					ownerEmail: owner.ownerEmail,
+					spreadsheetId: companyInfo.spreadsheetId || '',
+					data: dataToSync
+				})
 			});
-		} catch (error) {
-			// Failed to delete user
+
+			const result = await response.json();
+			if (result.status === 'success') {
+				await updateDoc(doc(db, 'settings', owner.ownerId), {
+					spreadsheetId: result.spreadsheetId,
+					spreadsheetUrl: result.spreadsheetUrl,
+					lastSyncAt: serverTimestamp()
+				});
+
+				setCompanyInfo(prev => ({
+					...prev,
+					spreadsheetId: result.spreadsheetId,
+					spreadsheetUrl: result.spreadsheetUrl,
+					lastSyncAt: { seconds: Math.floor(Date.now() / 1000) }
+				}));
+
+				alert("Đồng bộ dữ liệu thành công!");
+			} else {
+				throw new Error(result.message);
+			}
+		} catch (error: any) {
+			alert("Lỗi đồng bộ: " + error.message);
+		} finally {
+			setSyncing(false);
 		}
 	};
 
-
 	const handleTogglePermission = async (user: any, resource: string) => {
-		const currentVal = user.accessRights?.[resource] ?? true; // Default access is TRUE
+		const currentVal = user.accessRights?.[resource] ?? true;
 		const newVal = !currentVal;
 		const collectionName = user.status === 'pending' ? 'permissions' : 'users';
-
 		try {
 			await updateDoc(doc(db, collectionName, user.id), {
 				[`accessRights.${resource}`]: newVal
 			});
-		} catch (error) {
-			alert("Không thể cập nhật quyền hạn.");
-		}
+		} catch (error) { }
 	};
 
 	if (owner.loading) return null;
+	if (owner.role !== 'admin') return <div className="p-10 text-center uppercase font-black">Truy cập bị từ chối</div>;
 
-	if (owner.role !== 'admin') {
-		return (
-			<div className="flex flex-col h-full bg-[#f8f9fb] dark:bg-slate-950 items-center justify-center text-center p-8">
-				<div className="bg-red-50 dark:bg-red-900/20 p-6 rounded-full text-red-500 mb-4">
-					<Shield size={48} />
-				</div>
-				<h2 className="text-2xl font-black text-slate-800 dark:text-white uppercase mb-2">Quyền truy cập bị từ chối</h2>
-				<p className="text-slate-500 dark:text-slate-400 max-w-md">
-					Bạn không có quyền truy cập vào trang quản trị hệ thống. Vui lòng liên hệ với người quản lý của bạn.
-				</p>
-			</div>
-		);
-	}
+	const isSyncLocked = (systemConfig.lock_free_sheets && !owner.isPro) || companyInfo.manualLockSheets;
 
 	return (
 		<div className="flex flex-col h-full bg-[#f8f9fb] dark:bg-slate-950 transition-colors duration-300">
-			{/* HEADER */}
-			<header className="h-16 md:h-20 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row items-center justify-between px-4 md:px-8 shrink-0 transition-colors duration-300">
+			<header className="h-16 md:h-20 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row items-center justify-between px-4 md:px-8 shrink-0">
 				<div className="flex items-center gap-4 py-2 md:py-0">
-					<h2 className="text-[#1A237E] dark:text-indigo-400 text-lg md:text-2xl font-black uppercase tracking-tight">Quản Trị Doanh Nghiệp</h2>
+					<h2 className="text-[#1A237E] dark:text-indigo-400 text-lg md:text-2xl font-black uppercase tracking-tight">Quản Trị Hệ Thống</h2>
 				</div>
-
-				{/* HORIZONTAL NAVIGATION */}
 				<nav className="flex items-center gap-1 md:gap-2 overflow-x-auto no-scrollbar py-2">
-					<TabItem
-						active={activeTab === 'general'}
-						onClick={() => setActiveTab('general')}
-						icon={<Settings size={18} />}
-						label="Cấu hình"
-					/>
-					<TabItem
-						active={activeTab === 'users'}
-						onClick={() => setActiveTab('users')}
-						icon={<Users size={18} />}
-						label="Nhân sự"
-					/>
-					<TabItem
-						active={activeTab === 'permissions'}
-						onClick={() => setActiveTab('permissions')}
-						icon={<Shield size={18} />}
-						label="Phân quyền"
-					/>
-					<TabItem
-						active={activeTab === 'audit'}
-						onClick={() => setActiveTab('audit')}
-						icon={<Activity size={18} />}
-						label="Nhật ký"
-					/>
+					<TabItem active={activeTab === 'general'} onClick={() => setActiveTab('general')} icon={<Settings size={18} />} label="Cấu hình" />
+					<TabItem active={activeTab === 'users'} onClick={() => setActiveTab('users')} icon={<Users size={18} />} label="Nhân sự" />
+					<TabItem active={activeTab === 'permissions'} onClick={() => setActiveTab('permissions')} icon={<Shield size={18} />} label="Phân quyền" />
+					<TabItem active={activeTab === 'audit'} onClick={() => setActiveTab('audit')} icon={<Activity size={18} />} label="Nhật ký" />
 				</nav>
 			</header>
 
-			<div className="flex flex-1 flex-col overflow-hidden">
-				{/* CONTENT AREA */}
-				<div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
-					<div className="max-w-6xl mx-auto">
-
-						{/* --- TAB: GENERAL SETTINGS --- */}
-						{activeTab === 'general' && (
-							<div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-								<div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800">
-									<div className="flex items-center gap-4 mb-6">
-										<div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-xl text-blue-600 dark:text-blue-400">
-											<Globe size={24} />
-										</div>
-										<div>
-											<h3 className="text-xl font-bold dark:text-white">Thông tin Doanh nghiệp</h3>
-											<p className="text-sm text-slate-500 dark:text-slate-400">Thông tin này sẽ hiển thị trên phiếu in và hóa đơn.</p>
-										</div>
+			<div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
+				<div className="max-w-6xl mx-auto">
+					{activeTab === 'general' && (
+						<div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+							<div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800">
+								<div className="flex items-center gap-4 mb-6">
+									<div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-xl text-blue-600 dark:text-blue-400">
+										<Globe size={24} />
 									</div>
-
-									<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-										<div className="space-y-2">
-											<label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Tên Công Ty / Cửa Hàng</label>
-											<input
-												type="text"
-												className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3.5 font-bold text-slate-800 dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none"
-												placeholder="VD: Cửa Hàng VLXD Dunvex"
-												value={companyInfo.name}
-												onChange={(e) => setCompanyInfo({ ...companyInfo, name: e.target.value })}
-											/>
-										</div>
-										<div className="space-y-2">
-											<label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Mã số thuế</label>
-											<input
-												type="text"
-												className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3.5 font-bold text-slate-800 dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none"
-												placeholder="VD: 0312345678"
-												value={companyInfo.taxCode}
-												onChange={(e) => setCompanyInfo({ ...companyInfo, taxCode: e.target.value })}
-											/>
-										</div>
-										<div className="space-y-2 md:col-span-2">
-											<label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Địa chỉ trụ sở</label>
-											<input
-												type="text"
-												className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3.5 font-bold text-slate-800 dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none"
-												placeholder="VD: 123 Đường ABC, Quận 1, TP.HCM"
-												value={companyInfo.address}
-												onChange={(e) => setCompanyInfo({ ...companyInfo, address: e.target.value })}
-											/>
-										</div>
-										<div className="space-y-2">
-											<label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Số điện thoại hotline</label>
-											<input
-												type="text"
-												className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3.5 font-bold text-slate-800 dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none"
-												placeholder="VD: 0909 123 456"
-												value={companyInfo.phone}
-												onChange={(e) => setCompanyInfo({ ...companyInfo, phone: e.target.value })}
-											/>
-										</div>
-										<div className="space-y-2">
-											<label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Email liên hệ</label>
-											<input
-												type="email"
-												className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3.5 font-bold text-slate-800 dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none"
-												placeholder="VD: contact@dunvex.com"
-												value={companyInfo.email}
-												onChange={(e) => setCompanyInfo({ ...companyInfo, email: e.target.value })}
-											/>
-										</div>
-										<div className="space-y-2">
-											<label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Logo URL</label>
-											<input
-												type="text"
-												className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3.5 font-bold text-slate-800 dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none"
-												placeholder="https://..."
-												value={companyInfo.logoUrl}
-												onChange={(e) => setCompanyInfo({ ...companyInfo, logoUrl: e.target.value })}
-											/>
-										</div>
-										<div className="space-y-2">
-											<label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">VAT Mặc định (%)</label>
-											<input
-												type="number"
-												className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3.5 font-bold text-slate-800 dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none"
-												value={companyInfo.defaultVat}
-												onChange={(e) => setCompanyInfo({ ...companyInfo, defaultVat: Number(e.target.value) })}
-											/>
-										</div>
-									</div>
-
-									<div className="mt-8 flex justify-end">
-										<button
-											onClick={handleSaveSettings}
-											disabled={loading}
-											className="flex items-center gap-2 bg-[#1A237E] dark:bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-[#0D47A1] transition-colors shadow-lg shadow-blue-900/20 disabled:opacity-50"
-										>
-											<Save size={20} />
-											{loading ? 'Đang lưu...' : 'Lưu Thay Đổi'}
-										</button>
+									<div>
+										<h3 className="text-xl font-bold dark:text-white">Thông tin Doanh nghiệp</h3>
+										<p className="text-sm text-slate-500 dark:text-slate-400">Hiển thị trên phiếu in và hóa đơn.</p>
 									</div>
 								</div>
-
-								<div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800">
-									<div className="flex items-center gap-4 mb-6">
-										<div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-xl text-amber-600 dark:text-amber-400">
-											<Crown size={24} />
-										</div>
-										<div>
-											<h3 className="text-xl font-bold dark:text-white">Gói Dịch Vụ</h3>
-											<p className="text-sm text-slate-500 dark:text-slate-400">Quản lý trạng thái và thời gian sử dụng ứng dụng.</p>
-										</div>
-									</div>
-
-									<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-										<div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-700 flex items-center justify-between">
-											<div className="flex items-center gap-4">
-												<div className={`p-3 rounded-xl ${owner.isPro ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-													{owner.isPro ? <CheckCircle size={24} /> : <XCircle size={24} />}
-												</div>
-												<div>
-													<p className="text-xs font-black text-slate-400 uppercase tracking-widest">Trạng thái</p>
-													<p className="text-lg font-black text-slate-800 dark:text-white uppercase">
-														{owner.subscriptionStatus === 'active' ? 'Gói Vĩnh Viễn / Pro' :
-															owner.subscriptionStatus === 'trial' ? 'Bản dùng thử (Trial)' : 'Đã hết hạn'}
-													</p>
-												</div>
-											</div>
-											{!owner.isPro && (
-												<button
-													onClick={() => window.open('https://zalo.me/0909123456', '_blank')}
-													className="bg-[#1A237E] text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-800 transition-all flex items-center gap-1"
-												>
-													<Rocket size={14} /> Nâng cấp
-												</button>
-											)}
-										</div>
-
-										<div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-700 flex items-center gap-4">
-											<div className="p-3 rounded-xl bg-blue-50 text-blue-600">
-												<Clock size={24} />
-											</div>
-											<div>
-												<p className="text-xs font-black text-slate-400 uppercase tracking-widest">Thời gian còn lại</p>
-												<p className="text-lg font-black text-slate-800 dark:text-white uppercase whitespace-nowrap">
-													{owner.subscriptionStatus === 'active' ? 'Vô thời hạn' :
-														owner.trialEndsAt ? (() => {
-															const days = Math.ceil((owner.trialEndsAt.toDate() - new Date().getTime()) / (1000 * 60 * 60 * 24));
-															return days > 0 ? `${days} Ngày` : '0 Ngày';
-														})() : 'Chưa thiết lập'}
-												</p>
-											</div>
-										</div>
-									</div>
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+									<InputSection label="Tên Công Ty" value={companyInfo.name} onChange={(v: string) => setCompanyInfo({ ...companyInfo, name: v })} />
+									<InputSection label="Mã số thuế" value={companyInfo.taxCode} onChange={(v: string) => setCompanyInfo({ ...companyInfo, taxCode: v })} />
+									<InputSection label="Địa chỉ" value={companyInfo.address} onChange={(v: string) => setCompanyInfo({ ...companyInfo, address: v })} fullWidth />
+									<InputSection label="Hotline" value={companyInfo.phone} onChange={(v: string) => setCompanyInfo({ ...companyInfo, phone: v })} />
+									<InputSection label="Email" value={companyInfo.email} onChange={(v: string) => setCompanyInfo({ ...companyInfo, email: v })} />
 								</div>
-							</div>
-						)}
-
-						{/* --- TAB: USER MANAGEMENT --- */}
-						{activeTab === 'users' && (
-							<div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-								<div className="flex justify-between items-center">
-									<h2 className="text-xl font-black uppercase text-slate-800 dark:text-white tracking-tight">Danh sách nhân viên</h2>
-									<button
-										onClick={() => setShowAddUser(true)}
-										className="flex items-center gap-2 bg-[#FF6D00] text-white px-4 py-2 rounded-xl font-bold text-xs uppercase hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/20"
-									>
-										<Plus size={16} /> Thêm nhân viên
+								<div className="mt-8 flex justify-end">
+									<button onClick={handleSaveSettings} disabled={loading} className="flex items-center gap-2 bg-[#1A237E] dark:bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:opacity-90 transition-all disabled:opacity-50">
+										<Save size={20} /> {loading ? 'Đang lưu...' : 'Lưu Thay Đổi'}
 									</button>
 								</div>
-
-								{showAddUser && (
-									<div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 mb-6">
-										<h3 className="font-bold text-lg mb-4 dark:text-white">Thêm nhân viên mới</h3>
-										<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-											<input
-												type="text"
-												placeholder="Tên hiển thị"
-												className="bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold text-sm dark:text-white"
-												value={newUser.displayName}
-												onChange={(e) => setNewUser({ ...newUser, displayName: e.target.value })}
-											/>
-											<input
-												type="email"
-												placeholder="Email đăng nhập (Google)"
-												className="bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold text-sm dark:text-white"
-												value={newUser.email}
-												onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-											/>
-											<select
-												className="bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold text-sm dark:text-white"
-												value={newUser.role}
-												onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
-											>
-												<option value="sale">Nhân viên Sale</option>
-												<option value="warehouse">Thủ kho</option>
-												<option value="accountant">Kế toán</option>
-												<option value="admin">Quản trị viên (Admin)</option>
-											</select>
-										</div>
-										<div className="flex justify-end gap-3 mt-4">
-											<button onClick={() => setShowAddUser(false)} className="px-4 py-2 text-slate-500 font-bold text-sm hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">Hủy</button>
-											<button onClick={handleAddUser} className="px-4 py-2 bg-[#1A237E] text-white font-bold text-sm rounded-lg hover:bg-[#0D47A1]">Xác nhận</button>
-										</div>
-									</div>
-								)}
-
-								<div className="bg-white dark:bg-slate-900 rounded-3xl md:rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
-									{/* Desktop View */}
-									<div className="hidden md:block">
-										<table className="w-full text-left">
-											<thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-400">
-												<tr>
-													<th className="px-6 py-4">Nhân viên</th>
-													<th className="px-6 py-4">Email</th>
-													<th className="px-6 py-4">Vai trò</th>
-													<th className="px-6 py-4">Trạng thái</th>
-													<th className="px-6 py-4 text-right">Hành động</th>
-												</tr>
-											</thead>
-											<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-												{userList.map((user) => (
-													<tr key={user.id} className="group hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-														<td className="px-6 py-4">
-															<div className="flex items-center gap-3">
-																<div className="size-8 rounded-full bg-slate-200 flex items-center justify-center font-bold text-xs text-slate-600">
-																	{user.displayName?.[0] || 'U'}
-																</div>
-																<span className="font-bold text-sm text-slate-700 dark:text-white">{user.displayName || 'Unnamed'}</span>
-															</div>
-														</td>
-														<td className="px-6 py-4 text-sm font-medium text-slate-600 dark:text-slate-400">{user.email}</td>
-														<td className="px-6 py-4">
-															<select
-																className="bg-slate-100 dark:bg-slate-800 border-none rounded-lg text-xs font-bold px-2 py-1 outline-none cursor-pointer hover:bg-slate-200 dark:text-white"
-																value={user.role || 'sale'}
-																onChange={(e) => updateUserRole(user, e.target.value)}
-															>
-																<option value="sale">Sale</option>
-																<option value="warehouse">Kho</option>
-																<option value="accountant">Kế toán</option>
-																<option value="admin">Admin</option>
-															</select>
-														</td>
-														<td className="px-6 py-4">
-															<span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase ${user.status === 'banned' ? 'bg-red-100 text-red-600' :
-																user.status === 'pending' ? 'bg-orange-100 text-orange-600' :
-																	'bg-green-100 text-green-600'
-																}`}>
-																{user.status === 'banned' ? 'Vô hiệu hóa' :
-																	user.status === 'pending' ? 'Đang chờ' :
-																		'Hoạt động'}
-															</span>
-														</td>
-														<td className="px-6 py-4 text-right">
-															<button
-																onClick={() => deleteUser(user)}
-																className="text-slate-400 hover:text-red-500 transition-colors"
-																title="Xóa nhân viên"
-															>
-																<Trash2 size={18} />
-															</button>
-														</td>
-													</tr>
-												))}
-											</tbody>
-										</table>
-									</div>
-
-									{/* Mobile View */}
-									<div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
-										{userList.map((user) => (
-											<div key={user.id} className="p-4 space-y-3">
-												<div className="flex items-center justify-between">
-													<div className="flex items-center gap-3">
-														<div className="size-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-bold text-sm text-indigo-600 dark:text-indigo-400">
-															{user.displayName?.[0] || 'U'}
-														</div>
-														<div>
-															<p className="font-bold text-slate-800 dark:text-white">{user.displayName || 'Unnamed'}</p>
-															<p className="text-xs text-slate-500">{user.email}</p>
-														</div>
-													</div>
-													<button
-														onClick={() => deleteUser(user)}
-														className="size-8 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 flex items-center justify-center"
-													>
-														<Trash2 size={16} />
-													</button>
-												</div>
-												<div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-50 dark:border-slate-800">
-													<select
-														className="flex-1 bg-slate-50 dark:bg-slate-800 border-none rounded-xl text-xs font-bold px-3 py-2 outline-none dark:text-white"
-														value={user.role || 'sale'}
-														onChange={(e) => updateUserRole(user, e.target.value)}
-													>
-														<option value="sale">Sale</option>
-														<option value="warehouse">Kho</option>
-														<option value="accountant">Kế toán</option>
-														<option value="admin">Admin</option>
-													</select>
-													<span className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase text-center min-w-[100px] ${user.status === 'banned' ? 'bg-red-50 text-red-600' :
-														user.status === 'pending' ? 'bg-orange-50 text-orange-600' :
-															'bg-green-50 text-green-600'
-														}`}>
-														{user.status === 'banned' ? 'Vô hiệu' :
-															user.status === 'pending' ? 'Chờ duyệt' :
-																'Hoạt động'}
-													</span>
-												</div>
-											</div>
-										))}
-									</div>
-								</div>
 							</div>
-						)}
 
-						{/* --- TAB: PERMISSIONS --- */}
-						{activeTab === 'permissions' && (
-							<div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-								<div className="flex justify-between items-center mb-6">
-									<div>
-										<h2 className="text-xl font-black uppercase text-slate-800 dark:text-white tracking-tight">Phân quyền Truy cập</h2>
-										<p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Bật/tắt quyền truy cập các chức năng cho từng nhân viên.</p>
+							<div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800">
+								<div className="flex items-center gap-4 mb-6">
+									<div className="bg-emerald-50 dark:bg-emerald-900/20 p-3 rounded-xl text-emerald-600 dark:text-emerald-400">
+										<FileText size={24} />
 									</div>
+									<div>
+										<h3 className="text-xl font-bold dark:text-white">Sao lưu Google Sheets</h3>
+										<p className="text-sm text-slate-500 dark:text-slate-400">Tự động đẩy toàn bộ dữ liệu từ Firestore về Google Sheets.</p>
+									</div>
+									{isSyncLocked && (
+										<div className="ml-auto bg-rose-500/10 text-rose-500 px-3 py-1 rounded-lg flex items-center gap-1.5 animate-pulse">
+											<Lock size={14} />
+											<span className="text-[10px] font-black">BỊ KHÓA</span>
+										</div>
+									)}
 								</div>
 
-								<div className="bg-white dark:bg-slate-900 rounded-3xl md:rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
-									{/* Desktop View: Table */}
-									<div className="hidden md:block overflow-x-auto">
-										<table className="w-full text-left min-w-[1000px]">
-											<thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-400">
-												<tr>
-													<th className="px-6 py-4 sticky left-0 bg-slate-50 dark:bg-slate-800/50 z-10">Nhân viên</th>
-													{[
-														{ id: 'dashboard', label: 'Dashboard' },
-														{ id: 'orders_view', label: 'Xem Đơn' },
-														{ id: 'orders_create', label: 'Lên Đơn' },
-														{ id: 'checkin_create', label: 'Check-in' },
-														{ id: 'inventory_view', label: 'Xem Kho' },
-														{ id: 'inventory_manage', label: 'Quản SP' },
-														{ id: 'customers_manage', label: 'Quản Khách' },
-														{ id: 'debts_manage', label: 'Thu Nợ' }
-													].map(p => (
-														<th key={p.id} className="px-2 py-4 text-center text-[9px]">{p.label}</th>
-													))}
-												</tr>
-											</thead>
-											<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-												{userList.map((user) => (
-													<tr key={user.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-														<td className="px-6 py-4 sticky left-0 bg-white dark:bg-slate-900 z-10 border-r border-slate-100 dark:border-slate-800 min-w-[200px]">
-															<div className="flex items-center gap-3">
-																<div className="size-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-bold text-xs text-indigo-600">
-																	{user.displayName?.[0] || 'U'}
-																</div>
-																<div>
-																	<p className="font-bold text-sm text-slate-700 dark:text-white truncate">{user.displayName || 'Unnamed'}</p>
-																	<span className="text-[9px] font-black uppercase text-slate-400">{user.role}</span>
-																</div>
-															</div>
-														</td>
-
-														{[
-															'dashboard', 'orders_view', 'orders_create',
-															'checkin_create', 'inventory_view', 'inventory_manage',
-															'customers_manage', 'debts_manage'
-														].map(metric => (
-															<td key={metric} className="px-2 py-4 text-center">
-																<div
-																	onClick={() => handleTogglePermission(user, metric)}
-																	className={`w-10 h-5 rounded-full p-0.5 cursor-pointer transition-colors duration-300 mx-auto ${(user.accessRights?.[metric] ?? true)
-																		? 'bg-blue-600'
-																		: 'bg-slate-200 dark:bg-slate-700'
-																		}`}
-																>
-																	<div className={`w-4 h-4 rounded-full bg-white shadow-sm transform transition-transform duration-300 ${(user.accessRights?.[metric] ?? true)
-																		? 'translate-x-5'
-																		: 'translate-x-0'
-																		}`} />
-																</div>
-															</td>
-														))}
-													</tr>
-												))}
-											</tbody>
-										</table>
-									</div>
-
-									{/* Mobile View: Granular Cards */}
-									<div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
-										{userList.map((user) => (
-											<div key={user.id} className="p-5">
-												<div className="flex items-center gap-4 mb-6">
-													<div className="size-12 rounded-full bg-indigo-50 dark:bg-indigo-900/40 flex items-center justify-center font-black text-indigo-600 dark:text-indigo-400">
-														{user.displayName?.[0] || 'U'}
+								<div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-700">
+									{companyInfo.spreadsheetUrl ? (
+										<div className="space-y-4">
+											<div className="flex items-center justify-between">
+												<div className="flex items-center gap-3">
+													<div className="size-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center text-green-600 dark:text-green-400">
+														<Database size={20} />
 													</div>
 													<div>
-														<h4 className="font-black text-slate-900 dark:text-white">{user.displayName}</h4>
-														<p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{user.role}</p>
+														<p className="text-xs font-black text-slate-400 uppercase tracking-widest">File liên kết</p>
+														<a href={companyInfo.spreadsheetUrl} target="_blank" rel="noreferrer" className="text-sm font-bold text-blue-600 hover:underline flex items-center gap-1">Mở Sheets <ExternalLink size={12} /></a>
 													</div>
 												</div>
+												<div className="text-right">
+													<p className="text-[10px] font-black text-slate-400">ID: {companyInfo.spreadsheetId?.slice(0, 8)}...</p>
+													<p className="text-[10px] font-bold text-emerald-500">Cập nhật: {companyInfo.lastSyncAt ? new Date(companyInfo.lastSyncAt.seconds * 1000).toLocaleDateString() : 'Never'}</p>
+												</div>
+											</div>
+											<button onClick={handleSheetSync} disabled={syncing || isSyncLocked} className="w-full bg-[#1A237E] dark:bg-indigo-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 enabled:hover:bg-blue-800 transition-all disabled:opacity-50">
+												{syncing ? <><RefreshCcw size={18} className="animate-spin" /> Đang đồng bộ...</> : isSyncLocked ? <><Lock size={18} /> TÍNH NĂNG ĐÃ BỊ KHÓA</> : <><Rocket size={18} /> CẬP NHẬT DỮ LIỆU NGAY</>}
+											</button>
+										</div>
+									) : (
+										<div className="text-center py-6">
+											<p className="text-slate-500 text-sm mb-6">Bạn chưa tạo file sao lưu. Hệ thống sẽ tự động khởi tạo file mới cho bạn.</p>
+											<button onClick={handleSheetSync} disabled={syncing || isSyncLocked} className="bg-[#00a859] text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2 mx-auto">
+												{syncing ? <><RefreshCcw size={20} className="animate-spin" /> Đang thiết lập...</> : isSyncLocked ? <><Lock size={20} /> TÍNH NĂNG ĐÃ BỊ KHÓA</> : <><Plus size={20} /> KHỞI TẠO FILE SAO LƯU</>}
+											</button>
+										</div>
+									)}
+								</div>
+							</div>
 
-												<div className="grid grid-cols-1 gap-3">
-													{[
-														{ id: 'dashboard', label: 'Truy cập Tổng quan (Dashboard)' },
-														{ id: 'orders_view', label: 'Xem danh sách đơn hàng' },
-														{ id: 'orders_create', label: 'Tạo đơn hàng mới' },
-														{ id: 'checkin_create', label: 'Thực hiện Check-in' },
-														{ id: 'inventory_view', label: 'Xem danh sách sản phẩm' },
-														{ id: 'inventory_manage', label: 'Quản lý Sản phẩm (Thêm/Sửa/Xóa)' },
-														{ id: 'customers_manage', label: 'Quản lý Khách hàng' },
-														{ id: 'debts_manage', label: 'Nhập Công nợ / Thu tiền' }
-													].map(perm => (
-														<div
-															key={perm.id}
-															className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100/50 dark:border-slate-800"
-															onClick={() => handleTogglePermission(user, perm.id)}
-														>
-															<span className="text-xs font-bold text-slate-600 dark:text-slate-300">{perm.label}</span>
-															<div
-																className={`w-10 h-5 rounded-full p-0.5 transition-colors duration-300 shrink-0 ${(user.accessRights?.[perm.id] ?? true)
-																	? 'bg-green-500'
-																	: 'bg-slate-300 dark:bg-slate-700'
-																	}`}
-															>
-																<div className={`w-4 h-4 rounded-full bg-white transform transition-transform duration-300 ${(user.accessRights?.[perm.id] ?? true)
-																	? 'translate-x-5'
-																	: 'translate-x-0'
-																	}`} />
-															</div>
+							<div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800">
+								<div className="flex items-center gap-4 mb-6">
+									<div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-xl text-amber-600 dark:text-amber-400">
+										<Crown size={24} />
+									</div>
+									<div>
+										<h3 className="text-xl font-bold dark:text-white">Gói Dịch Vụ</h3>
+									</div>
+								</div>
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+									<div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl flex items-center gap-4">
+										<div className={`p-3 rounded-xl ${owner.isPro ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>{owner.isPro ? <CheckCircle /> : <XCircle />}</div>
+										<div>
+											<p className="text-xs font-black text-slate-400 uppercase tracking-widest">Loại tài khoản</p>
+											<p className="text-lg font-black text-slate-800 dark:text-white uppercase">{owner.isPro ? 'Premium Pro' : 'Free Trial'}</p>
+										</div>
+									</div>
+									<div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl flex items-center gap-4">
+										<div className="p-3 rounded-xl bg-blue-50 text-blue-600"><Clock /></div>
+										<div>
+											<p className="text-xs font-black text-slate-400 uppercase tracking-widest">Thời gian còn lại</p>
+											<p className="text-lg font-black text-slate-800 dark:text-white">{owner.subscriptionStatus === 'active' ? 'Vô thời hạn' : 'Dùng thử'}</p>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+					)}
+
+					{activeTab === 'users' && <UserManagement userList={userList} onAdd={() => setShowAddUser(true)} onUpdateRole={updateUserRole} onDelete={deleteUser} showAdd={showAddUser} onShowAdd={setShowAddUser} newUser={newUser} setNewUser={setNewUser} handleAddUser={handleAddUser} />}
+
+					{activeTab === 'permissions' && (
+						<div className="space-y-6">
+							<div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-x-auto">
+								<table className="w-full text-left min-w-[1000px]">
+									<thead>
+										<tr className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-400">
+											<th className="px-6 py-4">Nhân viên</th>
+											{['Dashboard', 'Xem Đơn', 'Lên Đơn', 'Check-in', 'Xem Kho', 'Quản SP', 'Khách hàng', 'Thu Nợ'].map(h => <th key={h} className="px-2 py-4 text-center">{h}</th>)}
+										</tr>
+									</thead>
+									<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+										{userList.map(u => (
+											<tr key={u.id}>
+												<td className="px-6 py-4 font-bold text-sm text-slate-700 dark:text-white">{u.displayName || u.email}</td>
+												{['dashboard', 'orders_view', 'orders_create', 'checkin_create', 'inventory_view', 'inventory_manage', 'customers_manage', 'debts_manage'].map(p => (
+													<td key={p} className="px-2 py-4">
+														<div onClick={() => handleTogglePermission(u, p)} className={`w-10 h-5 rounded-full p-0.5 cursor-pointer mx-auto transition-colors ${u.accessRights?.[p] ?? true ? 'bg-blue-600' : 'bg-slate-200 dark:bg-slate-700'}`}>
+															<div className={`w-4 h-4 rounded-full bg-white transform transition-transform ${u.accessRights?.[p] ?? true ? 'translate-x-5' : 'translate-x-0'}`} />
 														</div>
-													))}
-												</div>
-											</div>
-										))}
-									</div>
-
-									{userList.length === 0 && (
-										<div className="py-12 text-center text-slate-400 text-xs font-bold uppercase">Chưa có nhân viên nào</div>
-									)}
-								</div>
-							</div>
-						)}
-
-						{/* --- TAB: AUDIT LOGS --- */}
-						{activeTab === 'audit' && (
-							<div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-								<div className="flex justify-between items-center mb-6">
-									<h2 className="text-xl font-black uppercase text-slate-800 dark:text-white tracking-tight">Nhật ký Hoạt động</h2>
-									<div className="text-xs font-bold text-slate-400 uppercase">50 hoạt động gần nhất</div>
-								</div>
-
-								<div className="bg-white dark:bg-slate-900 rounded-3xl md:rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
-									{/* Desktop */}
-									<div className="hidden md:block">
-										<table className="w-full text-left">
-											<thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-400">
-												<tr>
-													<th className="px-6 py-4">Thời gian</th>
-													<th className="px-6 py-4">Người thực hiện</th>
-													<th className="px-6 py-4">Hành động</th>
-													<th className="px-6 py-4">Chi tiết</th>
-												</tr>
-											</thead>
-											<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-												{logs.map((log) => (
-													<tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-														<td className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 whitespace-nowrap">
-															{log.createdAt?.seconds ? new Date(log.createdAt.seconds * 1000).toLocaleString('vi-VN') : '---'}
-														</td>
-														<td className="px-6 py-4">
-															<div className="flex items-center gap-2">
-																<span className="font-bold text-sm text-[#1A237E] dark:text-indigo-400">{log.user || 'Unknown'}</span>
-															</div>
-														</td>
-														<td className="px-6 py-4">
-															<span className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300">
-																{log.action}
-															</span>
-														</td>
-														<td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400 max-w-xs truncate" title={log.details}>
-															{log.details}
-														</td>
-													</tr>
+													</td>
 												))}
-											</tbody>
-										</table>
-									</div>
-
-									{/* Mobile */}
-									<div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
-										{logs.map((log) => (
-											<div key={log.id} className="p-4 space-y-2">
-												<div className="flex justify-between items-start">
-													<span className="text-[10px] font-bold text-slate-400">
-														{log.createdAt?.seconds ? new Date(log.createdAt.seconds * 1000).toLocaleString('vi-VN') : '---'}
-													</span>
-													<span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[9px] font-bold text-slate-600 dark:text-slate-300">
-														{log.action}
-													</span>
-												</div>
-												<p className="text-sm font-bold text-indigo-600 dark:text-indigo-400">{log.user}</p>
-												<p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">{log.details}</p>
-											</div>
+											</tr>
 										))}
-									</div>
-
-									{(logs.length === 0) && (
-										<div className="py-12 text-center text-slate-400 text-xs font-bold uppercase">Chưa có nhật ký nào</div>
-									)}
-								</div>
+									</tbody>
+								</table>
 							</div>
-						)}
+						</div>
+					)}
 
-					</div>
+					{activeTab === 'audit' && (
+						<div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+							<div className="p-6 border-b border-slate-50 dark:border-slate-800">
+								<h3 className="font-bold dark:text-white">Nhật ký hoạt động hệ thống</h3>
+							</div>
+							<div className="divide-y divide-slate-50 dark:divide-slate-800 overflow-y-auto max-h-[600px]">
+								{logs.map(log => (
+									<div key={log.id} className="p-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+										<div className="flex justify-between items-start mb-1">
+											<span className="text-xs font-black text-indigo-600 uppercase tracking-widest">{log.action}</span>
+											<span className="text-[10px] text-slate-400 font-bold">{log.createdAt?.toDate ? log.createdAt.toDate().toLocaleString() : 'Just now'}</span>
+										</div>
+										<p className="text-xs text-slate-600 dark:text-slate-400 font-medium">{log.details}</p>
+										<p className="text-[10px] text-slate-400 mt-1 uppercase font-black tracking-tighter">Thực hiện bởi: {log.user}</p>
+									</div>
+								))}
+							</div>
+						</div>
+					)}
 				</div>
 			</div>
 		</div>
@@ -804,16 +439,73 @@ const AdminSettings = () => {
 };
 
 const TabItem = ({ active, onClick, icon, label }: any) => (
-	<button
-		onClick={onClick}
-		className={`flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-3 mx-1 md:mx-2 rounded-xl transition-all font-bold text-xs md:text-sm group shrink-0 ${active
-			? 'bg-[#1A237E] dark:bg-indigo-600 text-white shadow-lg shadow-blue-900/20'
-			: 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
-			}`}
-	>
-		<span className={active ? 'text-white' : 'text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white'}>{icon}</span>
-		<span>{label}</span>
+	<button onClick={onClick} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${active ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
+		{icon} <span>{label}</span>
 	</button>
+);
+
+const InputSection = ({ label, value, onChange, fullWidth = false, type = 'text' }: any) => (
+	<div className={`space-y-2 ${fullWidth ? 'md:col-span-2' : ''}`}>
+		<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</label>
+		<input type={type} className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" value={value} onChange={e => onChange(e.target.value)} />
+	</div>
+);
+
+const UserManagement = ({ userList, showAdd, onShowAdd, newUser, setNewUser, handleAddUser, onUpdateRole, onDelete }: any) => (
+	<div className="space-y-6">
+		<div className="flex justify-between items-center">
+			<h2 className="text-xl font-black uppercase text-slate-800 dark:text-white tracking-tight">Danh sách nhân sự</h2>
+			<button onClick={() => onShowAdd(true)} className="flex items-center gap-2 bg-[#FF6D00] text-white px-4 py-2 rounded-xl font-bold text-xs uppercase hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/20"><Plus size={16} /> Thêm nhân viên</button>
+		</div>
+		{showAdd && (
+			<div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 mb-6">
+				<h3 className="font-bold text-lg mb-4 dark:text-white">Mời nhân viên mới</h3>
+				<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+					<input type="text" placeholder="Tên hiển thị" className="bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold text-sm dark:text-white" value={newUser.displayName} onChange={e => setNewUser({ ...newUser, displayName: e.target.value })} />
+					<input type="email" placeholder="Email Google" className="bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold text-sm dark:text-white" value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })} />
+					<select className="bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold text-sm dark:text-white" value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })}>
+						<option value="sale">Nhân viên Sale</option>
+						<option value="warehouse">Thủ kho</option>
+						<option value="accountant">Kế toán</option>
+						<option value="admin">Quản trị viên</option>
+					</select>
+				</div>
+				<div className="flex justify-end gap-3 mt-4">
+					<button onClick={() => onShowAdd(false)} className="px-4 py-2 text-slate-500 font-bold text-sm">Hủy</button>
+					<button onClick={handleAddUser} className="px-4 py-2 bg-indigo-600 text-white font-bold text-sm rounded-lg">Gửi lời mời</button>
+				</div>
+			</div>
+		)}
+		<div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+			<table className="w-full text-left">
+				<thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-400">
+					<tr><th className="px-6 py-4">Họ tên</th><th className="px-6 py-4">Email</th><th className="px-6 py-4">Vai trò</th><th className="px-6 py-4">Trạng thái</th><th className="px-6 py-4 text-right">#</th></tr>
+				</thead>
+				<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+					{userList.map((user: any) => (
+						<tr key={user.id}>
+							<td className="px-6 py-4 font-bold text-sm dark:text-white">{user.displayName || 'Guest'}</td>
+							<td className="px-6 py-4 text-sm text-slate-500">{user.email}</td>
+							<td className="px-6 py-4">
+								<select className="bg-transparent border-none text-xs font-bold outline-none cursor-pointer dark:text-white" value={user.role || 'sale'} onChange={e => onUpdateRole(user, e.target.value)}>
+									<option value="sale">Sale</option>
+									<option value="warehouse">Kho</option>
+									<option value="accountant">Kế toán</option>
+									<option value="admin">Admin</option>
+								</select>
+							</td>
+							<td className="px-6 py-4">
+								<span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase ${user.status === 'active' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'}`}>{user.status}</span>
+							</td>
+							<td className="px-6 py-4 text-right">
+								<button onClick={() => onDelete(user)} className="text-slate-400 hover:text-red-500"><Trash2 size={16} /></button>
+							</td>
+						</tr>
+					))}
+				</tbody>
+			</table>
+		</div>
+	</div>
 );
 
 export default AdminSettings;

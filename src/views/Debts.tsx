@@ -27,10 +27,12 @@ interface DataRow {
 }
 
 import { useOwner } from '../hooks/useOwner';
+import { useScroll } from '../context/ScrollContext';
 
 const Debts: React.FC = () => {
 	const navigate = useNavigate();
 	const owner = useOwner();
+	const { isNavVisible } = useScroll();
 
 	const [currentTime, setCurrentTime] = useState(new Date());
 	const [orders, setOrders] = useState<any[]>([]);
@@ -525,11 +527,11 @@ const Debts: React.FC = () => {
 				</div>
 			</header>
 
-			{/* Scrollable Content */}
-			<div className="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 custom-scrollbar">
+			{/* Content Area */}
+			<div className="flex-1 p-4 md:p-8">
 				<div className="max-w-7xl mx-auto flex flex-col gap-6 md:gap-8">
-					{/* KPI Cards Section */}
-					<div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
+					{/* KPI Cards Section - Intelligent hiding on mobile */}
+					<div className={`grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 transition-all duration-500 origin-top overflow-hidden ${!isNavVisible ? 'max-h-0 opacity-0 mb-0 scale-y-90 pointer-events-none' : 'max-h-[500px] opacity-100 mb-0'}`}>
 						{/* KPI Card 1 */}
 						<div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border-l-[6px] border-[#10b981] relative overflow-hidden group transition-colors duration-300">
 							<div className="absolute right-0 top-1/2 -translate-y-1/2 p-4 opacity-10 group-hover:scale-110 transition-transform">
@@ -539,7 +541,7 @@ const Debts: React.FC = () => {
 								<p className="text-slate-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Tổng Phải thu</p>
 								<p className="text-[#1A237E] dark:text-indigo-400 text-2xl lg:text-3xl font-black tracking-tighter">{formatPrice(totalReceivable)}</p>
 								<p className="text-[10px] font-black text-[#10b981] mt-2 flex items-center gap-1 uppercase">
-									<span className="material-symbols-outlined text-xs">arrow_upward</span> {aggregatedData.length} KHÁCH HÀNG
+									<span className="material-symbols-outlined text-xs">arrow_upward</span> {aggregatedData.filter(i => i.currentDebt > 0).length} KH ĐANG NỢ
 								</p>
 							</div>
 						</div>

@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import MobileNav from './MobileNav';
 import NotificationBell from '../NotificationBell';
+import { useScroll } from '../../context/ScrollContext';
 
 interface MainLayoutProps {
 	children: React.ReactNode;
 }
 
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
+	const { isNavVisible, handleScroll } = useScroll();
 	const [isSidebarVisible, setIsSidebarVisible] = useState(() => {
 		const saved = localStorage.getItem('sidebar-visible');
 		return saved === null ? true : saved === 'true';
@@ -22,8 +24,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 			{isSidebarVisible && <Sidebar onToggle={() => setIsSidebarVisible(false)} />}
 
 			<main className="flex-1 flex flex-col h-full overflow-hidden bg-white dark:bg-slate-900 relative transition-colors duration-300">
-				{/* MOBILE TOP BAR */}
-				<header className="md:hidden flex items-center justify-between px-6 py-4 border-b border-slate-50 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md sticky top-0 z-[50]" style={{ WebkitBackdropFilter: 'blur(12px)' }}>
+				{/* MOBILE TOP BAR - Intelligent hiding */}
+				<header
+					className={`md:hidden flex items-center justify-between px-6 py-4 border-b border-slate-50 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md fixed top-0 left-0 right-0 z-[50] transition-transform duration-500 ${isNavVisible ? 'translate-y-0' : '-translate-y-full'}`}
+					style={{ WebkitBackdropFilter: 'blur(12px)' }}
+				>
 					<div className="flex items-center gap-2">
 						<div className="size-8 bg-[#FF6D00] rounded-lg flex items-center justify-center shadow-lg">
 							<span className="material-symbols-outlined text-white text-lg font-bold">architecture</span>
@@ -34,6 +39,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 						<NotificationBell />
 					</div>
 				</header>
+
 				{!isSidebarVisible && (
 					<button
 						onClick={() => setIsSidebarVisible(true)}
@@ -43,7 +49,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 						<span className="material-symbols-outlined text-2xl group-hover:rotate-90 transition-transform">menu</span>
 					</button>
 				)}
-				<div className="flex-1 overflow-y-auto no-scrollbar">
+
+				<div
+					onScroll={handleScroll}
+					className="flex-1 overflow-y-auto no-scrollbar pt-16 md:pt-0"
+				>
 					<div className="min-h-full">
 						{children}
 					</div>
@@ -61,6 +71,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 						</div>
 					</footer>
 				</div>
+
 				<MobileNav />
 			</main>
 		</div>

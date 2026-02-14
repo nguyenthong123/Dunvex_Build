@@ -48,8 +48,8 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 - **Cơ sở dữ liệu**: Firebase Firestore (Real-time).
 - **Lưu trữ ảnh**: Google Drive (Thumbnail sync).
 - **Xác thực**: Firebase Auth.
-- **Phân quyền (RBAC)**: Thực thi nghiêm ngặt trên toàn bộ Router và Component. Nhân viên không có quyền sẽ thấy màn hình thông báo chuyên nghiệp.
-- **Index**: Đã cấu hình Composite Index cho `audit_logs` để truy vấn mượt mà theo `ownerId` và `createdAt`.
+- **Phân quyền (RBAC)**: Thực thi nghiêm ngặt trên toàn bộ Router và Component.
+- **Bảo mật HTTP (Standard A+)**: Đã triển khai CSP, XFO, HSTS qua `vercel.json` để ngăn chặn XSS và Clickjacking.
 - **Backend Script**: Google Apps Script xử lý upload và email mời nhân viên.
 
 ---
@@ -66,15 +66,20 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 - [x] **Tích hợp Mã Chuyển Khoản**: Tự động tạo và hiển thị mã chuyển khoản (DVX...) trong QR thanh toán và quản lý yêu cầu nạp tiền (Nexus Control).
 - [x] **Thực thi phân quyền toàn diện**: Đã áp dụng cho Dashboard, Đơn hàng, Kho hàng, Khách hàng, Công nợ và Check-in.
 - [x] **Quản lý Gói dịch vụ (Subscription)**: Tích hợp hệ thống kiểm soát dùng thử (Trial) và khóa tính năng cao cấp (Pro).
+- [x] **Hệ thống Điều hướng Thông minh (Mobile UX)**: Tự động ẩn Thanh điều hướng (Bottom Nav) và Top Bar khi cuộn xuống để tối ưu diện tích hiển thị trên điện thoại.
+- [x] **Tối ưu Chi tiết Khách hàng**: Chuyển đổi sang dạng Bottom Sheet mượt mà trên di động, hỗ trợ gọi điện trực tiếp từ ứng dụng.
+- [x] **Bảo mật chuẩn A+**: Triển khai toàn diện CSP, XFO, HSTS, Referrer-Policy thông qua `vercel.json`.
+- [x] **Lọc theo ngày (Date Filtering)**: Đã hoàn thiện bộ lọc ngày thực tế cho danh sách công nợ và bảng kê chi tiết khách hàng.
+- [x] **In phiếu & Xuất PDF**: Đã tích hợp tính năng in phiếu báo nợ trực tiếp và tối ưu hóa tỷ lệ (Scaling/Zoom) để chụp ảnh gửi Zalo/Messenger sắc nét.
+- [x] **Số dư đầu kỳ & Lịch sử Công nợ**: Đã hiển thị chính xác số dư đầu kỳ dựa trên khoảng thời gian lọc và liệt kê chi tiết lịch sử giao dịch/thanh toán.
 
 ### 📝 Cần làm tiếp (To-do)
-- [ ] **Lọc theo ngày (Date Filtering)**: Hoàn thiện bộ lọc ngày thực tế cho các báo cáo doanh thu và bảng kê công nợ.
-- [ ] **In phiếu & Xuất PDF**: Hoàn thiện giao diện in phiếu đơn hàng & Xuất file PDF/Ảnh gửi qua Zalo/Messenger.
 - [ ] **PWA Support**: Tích hợp Service Worker để cài đặt ứng dụng vào màn hình chính và thông báo đẩy (Push Notifications).
-- [ ] **Báo cáo tài chính nâng cao**: Tự động tính lợi nhuận ròng, biên lợi nhuận bách phân và dự báo dòng tiền.
+- [ ] **Báo cáo tài chính nâng cao**: Chuyển đổi các biểu đồ tĩnh sang dữ liệu thực, tự động tính lợi nhuận ròng và dự báo dòng tiền.
 - [ ] **QR Code Scanning**: Tích hợp quét mã QR sản phẩm để lên đơn nhanh và kiểm kho bằng camera điện thoại.
-- [ ] **Quản lý Kho (Advanced)**: Thêm lịch sử nhập/xuất kho chi tiết và cảnh báo hàng tồn kho thấp (Low stock alert).
-- [ ] **Lịch sử Thanh toán**: Theo dõi chi tiết các đợt trả nợ của khách hàng gắn liền với từng mã đơn cụ thể.
+- [ ] **Quản lý Kho (Advanced)**: Thêm lịch sử nhập/xuất kho chi tiết (Inventory Logs) và quản lý chuyển kho nội bộ.
+- [ ] **Tự động hóa chăm sóc khách hàng**: Gửi thông báo nhắc nợ tự động qua SMS/Zalo API khi tới ngày đến hạn.
+- [ ] **Hệ thống Kiểm kho Định kỳ**: Tính năng đối soát số lượng thực tế trong kho và số lượng trên phần mềm.
 - [ ] **Chế độ Offline**: Lưu trữ dữ liệu cơ bản local (Cache) để có thể xem thông tin khi mất kết nối mạng tạm thời.
 
 *Ghi chú: File `upload_script.gs` đã được cập nhật logic gửi email.*

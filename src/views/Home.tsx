@@ -194,7 +194,7 @@ const Home = () => {
 	}
 
 	return (
-		<div className="bg-[#f8f9fb] dark:bg-slate-950 min-h-screen transition-colors duration-300">
+		<div className="bg-[#f8f9fb] dark:bg-slate-950 transition-colors duration-300">
 			{/* HEADER */}
 			<header className="h-16 md:h-20 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between px-4 md:px-8 shrink-0 relative z-20 transition-colors duration-300">
 				<h2 className="text-lg md:text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight">Tổng Quan Hệ Thống</h2>

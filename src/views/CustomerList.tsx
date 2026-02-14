@@ -5,10 +5,12 @@ import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, update
 import BulkImport from '../components/shared/BulkImport';
 
 import { useOwner } from '../hooks/useOwner';
+import { useScroll } from '../context/ScrollContext';
 
 const CustomerList = () => {
 	const navigate = useNavigate();
 	const owner = useOwner();
+	const { isNavVisible } = useScroll();
 
 	const [customers, setCustomers] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -304,9 +306,9 @@ const CustomerList = () => {
 			)}
 
 			{/* CONTENT */}
-			<div className="flex-1 p-4 md:p-8 overflow-y-auto custom-scrollbar">
-				{/* Stats Cards */}
-				<div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+			<div className="flex-1 p-4 md:p-8">
+				{/* Stats Cards - Intelligent hiding on mobile */}
+				<div className={`grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8 transition-all duration-500 origin-top overflow-hidden ${!isNavVisible ? 'max-h-0 mb-0 opacity-0 pointer-events-none scale-y-90' : 'max-h-96 opacity-100'}`}>
 					<StatCard icon="group" label="Tổng khách" value={customers.length.toString()} color="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400" />
 					<StatCard icon="person_add" label="Khách mới" value="12" color="bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400" />
 					<StatCard icon="verified" label="VIP" value="5" color="bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400" />
@@ -520,57 +522,87 @@ const CustomerList = () => {
 				</div>
 			)}
 
-			{/* DETAIL MODAL */}
+			{/* DETAIL MODAL - Optimized for Mobile (Bottom Sheet) & Desktop (Centered Modal) */}
 			{showDetail && selectedCustomer && (
-				<div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-[#1A237E]/80 dark:bg-black/80 backdrop-blur-sm">
-					<div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden transition-colors duration-300">
-						<div className="px-8 py-10 flex flex-col items-center text-center relative overflow-hidden">
-							<div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-blue-50/50 dark:from-blue-900/20 to-transparent"></div>
-							<button onClick={() => setShowDetail(false)} className="absolute top-6 right-6 p-2 text-slate-300 hover:text-red-500 transition-all">
-								<span className="material-symbols-outlined">close</span>
+				<div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm transition-all duration-500 overflow-hidden">
+					{/* Overlay Backdrop - Click to close */}
+					<div className="absolute inset-0" onClick={() => setShowDetail(false)}></div>
+
+					<div className="bg-white dark:bg-slate-900 w-full sm:max-w-lg rounded-t-[2.5rem] sm:rounded-[3rem] shadow-2xl relative z-10 transition-all duration-500 animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-0 sm:zoom-in-95 max-h-[95vh] overflow-y-auto custom-scrollbar border-t sm:border border-white/20 dark:border-slate-800">
+
+						{/* Notch for Bottom Sheet handle */}
+						<div className="w-12 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full mx-auto mt-4 mb-2 sm:hidden"></div>
+
+						<div className="px-6 sm:px-10 py-6 sm:py-10 flex flex-col items-center text-center relative overflow-hidden">
+							<div className="absolute top-0 left-0 w-full h-40 bg-gradient-to-b from-[#1A237E]/5 dark:from-indigo-500/5 to-transparent pointer-events-none"></div>
+
+							<button onClick={() => setShowDetail(false)} className="absolute top-4 sm:top-6 right-4 sm:right-6 p-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-rose-500 transition-all shadow-sm">
+								<span className="material-symbols-outlined text-xl">close</span>
 							</button>
 
-							<div className="size-24 rounded-full bg-[#1A237E] dark:bg-indigo-600 text-white flex items-center justify-center text-3xl font-black mb-4 shadow-xl ring-4 ring-white dark:ring-slate-800 relative z-10">
+							<div className="size-20 sm:size-28 rounded-[2rem] bg-[#1A237E] dark:bg-indigo-600 text-white flex items-center justify-center text-3xl sm:text-4xl font-black mb-6 shadow-2xl shadow-blue-500/30 ring-8 ring-white dark:ring-slate-900 relative z-10">
 								{(selectedCustomer.name?.[0] || 'K').toUpperCase()}
 							</div>
-							<h3 className="text-2xl font-black text-[#1A237E] dark:text-indigo-400 mb-1 relative z-10">{selectedCustomer.name}</h3>
-							{selectedCustomer.businessName && (
-								<p className="text-sm font-bold text-slate-500 dark:text-slate-400 mb-2 relative z-10">🏢 {selectedCustomer.businessName}</p>
-							)}
-							<div className="px-4 py-1.5 bg-orange-50 dark:bg-orange-900/20 text-[#FF6D00] dark:text-orange-400 text-[10px] font-black rounded-full uppercase tracking-widest mb-6 relative z-10">
+
+							<div className="space-y-1 mb-2 relative z-10">
+								<h3 className="text-2xl sm:text-3xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight">{selectedCustomer.name}</h3>
+								{selectedCustomer.businessName && (
+									<p className="text-sm font-black text-slate-500 dark:text-slate-400 mb-2 relative z-10 flex items-center justify-center gap-1.5">
+										<span className="material-symbols-outlined text-base">domain</span>
+										{selectedCustomer.businessName}
+									</p>
+								)}
+							</div>
+
+							<div className="px-4 py-1.5 bg-orange-50 dark:bg-orange-900/20 text-[#FF6D00] dark:text-orange-400 text-[10px] font-black rounded-full uppercase tracking-widest mb-8 relative z-10 shadow-sm border border-orange-100 dark:border-orange-500/20">
 								{selectedCustomer.type}
 							</div>
 
-							<div className="w-full grid grid-cols-2 gap-4 mb-8">
-								<div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 flex flex-col items-center">
-									<p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1 tracking-widest">Liên hệ</p>
-									<p className="font-bold text-[#1A237E] dark:text-indigo-300">{selectedCustomer.phone}</p>
+							<div className="w-full grid grid-cols-2 gap-3 sm:gap-4 mb-6 text-center">
+								<div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-3xl border border-slate-100 dark:border-slate-800 flex flex-col items-center shadow-sm">
+									<p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest">Liên hệ</p>
+									<a href={`tel:${selectedCustomer.phone}`} className="font-black text-[#1A237E] dark:text-indigo-300 text-sm hover:underline">{selectedCustomer.phone}</a>
 								</div>
-								<div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 flex flex-col items-center">
-									<p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1 tracking-widest">Trạng thái</p>
-									<p className="font-bold text-green-600 dark:text-green-400">{selectedCustomer.status}</p>
+								<div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-3xl border border-slate-100 dark:border-slate-800 flex flex-col items-center shadow-sm">
+									<p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest">Trạng thái</p>
+									<div className="flex items-center gap-1.5">
+										<div className={`size-1.5 rounded-full ${selectedCustomer.status === 'Hoạt động' ? 'bg-green-500 animate-pulse' : 'bg-slate-400'}`}></div>
+										<p className="font-black text-green-600 dark:text-green-400 text-sm">{selectedCustomer.status}</p>
+									</div>
 								</div>
 							</div>
 
 							<div className="w-full space-y-4 text-left">
-								<div className="bg-slate-50 dark:bg-slate-800 p-5 rounded-2xl border border-slate-100 dark:border-slate-700 relative group">
-									<p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Địa chỉ công trình</p>
-									<p className="text-sm font-bold text-slate-700 dark:text-slate-300 leading-relaxed">{selectedCustomer.address || 'Chưa cung cấp'}</p>
+								<div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 relative group">
+									<p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest flex items-center gap-1.5">
+										<span className="material-symbols-outlined text-sm">location_on</span>
+										Địa chỉ công trình
+									</p>
+									<p className="text-sm font-bold text-slate-700 dark:text-white leading-relaxed">{selectedCustomer.address || 'Chưa cung cấp'}</p>
 								</div>
 
 								{selectedCustomer.note && (
-									<div className="bg-blue-50/50 dark:bg-blue-900/10 p-5 rounded-2xl border border-blue-100/50 dark:border-blue-900/30">
-										<p className="text-[10px] font-black text-blue-400 uppercase mb-2 tracking-widest">Ghi chú nhu cầu</p>
-										<p className="text-sm font-bold text-blue-800 dark:text-blue-300 leading-relaxed italic">"{selectedCustomer.note}"</p>
+									<div className="bg-[#1A237E]/5 dark:bg-indigo-500/5 p-5 rounded-3xl border border-[#1A237E]/10 dark:border-indigo-500/20">
+										<p className="text-[10px] font-black text-[#1A237E]/40 dark:text-indigo-400/40 uppercase mb-2 tracking-widest flex items-center gap-1.5">
+											<span className="material-symbols-outlined text-sm">notes</span>
+											Ghi chú nhu cầu
+										</p>
+										<p className="text-sm font-bold text-slate-600 dark:text-slate-300 leading-relaxed italic">"{selectedCustomer.note}"</p>
 									</div>
 								)}
 
-								<div className="grid grid-cols-2 gap-3 pt-6">
-									<button onClick={() => { setShowDetail(false); openEdit(selectedCustomer); }} className="flex-1 bg-[#1A237E] dark:bg-indigo-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-2">
-										<span className="material-symbols-outlined text-sm">edit_square</span> Sửa hồ sơ
+								<div className="flex flex-col sm:flex-row gap-3 pt-4 pb-2">
+									<button
+										onClick={() => { setShowDetail(false); openEdit(selectedCustomer); }}
+										className="flex-1 bg-[#1A237E] dark:bg-indigo-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 h-14"
+									>
+										<span className="material-symbols-outlined text-lg">edit_square</span> Sửa hồ sơ
 									</button>
-									<button onClick={() => handleDeleteCustomer(selectedCustomer.id)} className="flex-1 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-red-100 dark:hover:bg-red-900/30 transition-all active:scale-95 flex items-center justify-center gap-2">
-										<span className="material-symbols-outlined text-sm">delete</span> Xóa khách
+									<button
+										onClick={() => handleDeleteCustomer(selectedCustomer.id)}
+										className="flex-1 bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-900/30 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all active:scale-95 flex items-center justify-center gap-2 h-14"
+									>
+										<span className="material-symbols-outlined text-lg">delete</span> Xóa khách
 									</button>
 								</div>
 							</div>
@@ -578,6 +610,7 @@ const CustomerList = () => {
 					</div>
 				</div>
 			)}
+
 		</div>
 	);
 };

@@ -132,7 +132,12 @@ const Login = () => {
 
 			if (errorCode === 'auth/invalid-action-code' || errorMsg.includes('invalid action')) {
 				alert(`Lỗi cấu hình: ${errorMsg}\n\nCách sửa: Bạn hãy vào Google Cloud Console, chọn API Key và gỡ bỏ tất cả "API restrictions" (chọn None) để thử lại nhé.`);
-			} else if (error.code !== 'auth/popup-closed-by-user' && error.code !== 'auth/cancelled-popup-request') {
+			} else if (errorCode === 'auth/popup-closed-by-user' || errorCode === 'auth/cancelled-popup-request' || errorMsg.includes('Cross-Origin-Opener-Policy')) {
+				// Fallback to redirect if popup fails or is blocked by COOP
+				console.log("Popup failed, falling back to redirect...");
+				setLoginStatus('Popup bị chặn, đang chuyển hướng...');
+				await signInWithRedirect(auth, googleProvider);
+			} else {
 				alert(`Đăng nhập thất bại.\nMã lỗi: ${errorCode}\nChi tiết: ${errorMsg}`);
 			}
 		}

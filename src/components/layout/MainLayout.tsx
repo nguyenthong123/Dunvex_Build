@@ -25,20 +25,22 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
 			<main className="flex-1 flex flex-col h-full overflow-hidden bg-white dark:bg-slate-900 relative transition-colors duration-300">
 				{/* MOBILE TOP BAR - Intelligent hiding */}
-				<header
-					className="md:hidden flex items-center justify-between px-6 py-4 border-b border-slate-50 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md fixed top-0 left-0 right-0 z-[50]"
-					style={{ WebkitBackdropFilter: 'blur(12px)' }}
-				>
-					<div className="flex items-center gap-2">
-						<div className="size-8 bg-[#FF6D00] rounded-lg flex items-center justify-center shadow-lg">
-							<span className="material-symbols-outlined text-white text-lg font-bold">architecture</span>
+				{!window.location.pathname.includes('/price-list') && (
+					<header
+						className="md:hidden flex items-center justify-between px-6 py-4 border-b border-slate-50 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md fixed top-0 left-0 right-0 z-[50]"
+						style={{ WebkitBackdropFilter: 'blur(12px)' }}
+					>
+						<div className="flex items-center gap-2">
+							<div className="size-8 bg-[#FF6D00] rounded-lg flex items-center justify-center shadow-lg">
+								<span className="material-symbols-outlined text-white text-lg font-bold">architecture</span>
+							</div>
+							<h1 className="text-sm font-black uppercase tracking-tight">Dunvex<span className="text-[#FF6D00]">Build</span></h1>
 						</div>
-						<h1 className="text-sm font-black uppercase tracking-tight">Dunvex<span className="text-[#FF6D00]">Build</span></h1>
-					</div>
-					<div className="bg-[#1A237E] p-1 rounded-xl">
-						<NotificationBell />
-					</div>
-				</header>
+						<div className="bg-[#1A237E] p-1 rounded-xl">
+							<NotificationBell />
+						</div>
+					</header>
+				)}
 
 				{!isSidebarVisible && (
 					<button

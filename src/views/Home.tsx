@@ -21,7 +21,9 @@ const Home = () => {
 	const [customers, setCustomers] = useState<any[]>([]);
 	const [payments, setPayments] = useState<any[]>([]);
 	const [products, setProducts] = useState<any[]>([]);
+	const [auditLogs, setAuditLogs] = useState<any[]>([]);
 	const [showProfit, setShowProfit] = useState(false);
+	const [chartFilter, setChartFilter] = useState('7days');
 
 	useEffect(() => {
 		if (!auth.currentUser || owner.loading || !owner.ownerId) return;
@@ -68,12 +70,23 @@ const Home = () => {
 			setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
 		});
 
+		const qAudit = query(
+			collection(db, 'audit_logs'),
+			where('ownerId', '==', owner.ownerId),
+			orderBy('createdAt', 'desc'),
+			limit(10)
+		);
+		const unsubAudit = onSnapshot(qAudit, (snap) => {
+			setAuditLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+		});
+
 		return () => {
 			unsubscribeNotif();
 			unsubOrders();
 			unsubCust();
 			unsubPay();
 			unsubProd();
+			unsubAudit();
 		};
 	}, [owner.loading, owner.ownerId]);
 
@@ -118,6 +131,10 @@ const Home = () => {
 		}
 	};
 
+	const formatPrice = (price: number) => {
+		return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
+	};
+
 	// --- CALCULATIONS ---
 
 	// 1. Revenue & Profit Today
@@ -148,6 +165,52 @@ const Home = () => {
 		const finalProfit = itemsProfit - (o.discountValue || 0);
 		return sum + finalProfit;
 	}, 0);
+
+	// 1.1 Revenue & Profit This Month
+	const startOfMonth = new Date();
+	startOfMonth.setDate(1);
+	startOfMonth.setHours(0, 0, 0, 0);
+
+	const thisMonthOrders = orders.filter(o => {
+		const d = o.createdAt?.seconds ? new Date(o.createdAt.seconds * 1000) : new Date(o.orderDate);
+		return d >= startOfMonth && o.status === 'Đơn chốt';
+	});
+
+	const revenueThisMonth = thisMonthOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+	const profitThisMonth = thisMonthOrders.reduce((sum, o) => {
+		const itemsProfit = (o.items || []).reduce((pSum: number, item: any) => {
+			const sell = Number(item.price) || 0;
+			const buy = Number(item.buyPrice) || 0;
+			const qty = Number(item.qty) || 0;
+			return pSum + ((sell - buy) * qty);
+		}, 0);
+		return sum + (itemsProfit - (o.discountValue || 0));
+	}, 0);
+
+	// 1.2 Chart Data (Last 7 Days)
+	const getChartData = () => {
+		const data = [];
+		for (let i = 6; i >= 0; i--) {
+			const d = new Date();
+			d.setDate(d.getDate() - i);
+			const dateStr = d.toISOString().split('T')[0];
+
+			const dayRevenue = orders.filter(o => {
+				const od = o.createdAt?.seconds ? new Date(o.createdAt.seconds * 1000).toISOString().split('T')[0] : o.orderDate;
+				return od === dateStr && o.status === 'Đơn chốt';
+			}).reduce((s, o) => s + (o.totalAmount || 0), 0);
+
+			data.push({
+				label: i === 0 ? 'Hôm nay' : `${d.getDate()}/${d.getMonth() + 1}`,
+				value: dayRevenue,
+				isToday: i === 0
+			});
+		}
+		return data;
+	};
+
+	const chartData = getChartData();
+	const maxRevenue = Math.max(...chartData.map(d => d.value), 1000000);
 
 	// 2. Debt Warnings
 	// Calculate debt for each customer
@@ -419,28 +482,33 @@ const Home = () => {
 							<div className="flex justify-between items-center mb-8">
 								<div>
 									<h3 className="font-black text-lg text-slate-900 dark:text-white uppercase tracking-tight">Biểu đồ tăng trưởng</h3>
-									<p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Dữ liệu tổng hợp theo thời gian thực</p>
+									<p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Doanh thu 7 ngày gần nhất</p>
 								</div>
-								<select className="bg-slate-100 border-none rounded-lg text-xs font-bold px-4 py-2 outline-none cursor-pointer">
-									<option>7 ngày qua</option>
-									<option>Tháng này</option>
-								</select>
+								<div className="flex items-center gap-2">
+									<div className="size-3 rounded-full bg-[#FF6D00]"></div>
+									<span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Hôm nay</span>
+								</div>
 							</div>
 							<div className="h-48 w-full flex items-end justify-between gap-2 lg:gap-4 px-2">
-								{[40, 65, 50, 85, 70, 95].map((height, i) => (
-									<div key={i} className="flex-1 bg-slate-100 rounded-t-xl relative group" style={{ height: `${height}%` }}>
-										<div className={`absolute bottom-0 w-full rounded-t-xl transition-all ${i === 5 ? 'bg-[#FF6D00] shadow-lg shadow-orange-200' : 'bg-[#1A237E] opacity-20 group-hover:opacity-40'}`} style={{ height: '100%' }}></div>
-										{i === 5 && <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Hôm nay</div>}
+								{chartData.map((day, i) => (
+									<div key={i} className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-t-xl relative group" style={{ height: `${Math.max((day.value / maxRevenue) * 100, 5)}%` }}>
+										<div className={`absolute bottom-0 w-full rounded-t-xl transition-all ${day.isToday ? 'bg-[#FF6D00] shadow-lg shadow-orange-500/20' : 'bg-[#1A237E] opacity-20 group-hover:opacity-40'}`} style={{ height: '100%' }}></div>
+										<div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] py-1.5 px-2 rounded-lg opacity-0 group-hover:opacity-100 transition-all whitespace-nowrap z-10 pointer-events-none">
+											{day.label}: {formatPrice(day.value)}
+										</div>
+										<div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[9px] font-black text-slate-400 uppercase truncate w-full text-center">
+											{day.label}
+										</div>
 									</div>
 								))}
 							</div>
 						</div>
 
 						{/* Recent Activity List */}
-						<div className="bg-white rounded-[2rem] overflow-hidden shadow-sm border border-slate-200">
-							<div className="p-6 border-b border-slate-100 flex justify-between items-center">
-								<h3 className="font-bold text-slate-900">Hoạt động mới nhất</h3>
-								<button className="text-xs font-bold text-[#1A237E] flex items-center gap-1">Xem tất cả <span className="material-symbols-outlined text-xs">arrow_forward</span></button>
+						<div className="bg-white dark:bg-slate-900 rounded-[2rem] overflow-hidden shadow-sm border border-slate-200 dark:border-slate-800">
+							<div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+								<h3 className="font-bold text-slate-900 dark:text-white">Hoạt động mới nhất</h3>
+								<button onClick={() => navigate('/admin?tab=audit')} className="text-xs font-bold text-[#1A237E] dark:text-indigo-400 flex items-center gap-1">Xem tất cả <span className="material-symbols-outlined text-xs">arrow_forward</span></button>
 							</div>
 							<div className="overflow-x-auto">
 								<table className="w-full text-left font-['Inter']">
@@ -452,35 +520,51 @@ const Home = () => {
 											<th className="px-6 py-4 text-right">Thời gian</th>
 										</tr>
 									</thead>
-									<tbody className="divide-y divide-slate-50">
-										<ActivityRow icon="NV" color="bg-blue-100 text-blue-600" name="Nguyễn Văn A" task="Tạo đơn hàng #HD2901" value="+12.5tr" time="2p trước" />
-										<ActivityRow icon="KH" color="bg-green-100 text-green-600" name="Trần Thị B" task="Thanh toán công nợ" value="+5.2tr" time="15p trước" />
-										<ActivityRow icon="K" color="bg-purple-100 text-purple-600" name="Kho Tổng" task="Nhập kho Xi măng HT" value="500 bao" time="32p trước" />
+									<tbody className="divide-y divide-slate-50 dark:divide-slate-800">
+										{auditLogs.length === 0 ? (
+											<tr>
+												<td colSpan={4} className="px-6 py-12 text-center text-slate-400 text-xs font-medium">Chưa có hoạt động nào được ghi nhận</td>
+											</tr>
+										) : auditLogs.slice(0, 5).map((log) => (
+											<ActivityRow
+												key={log.id}
+												icon={log.user?.[0] || 'NV'}
+												color="bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300"
+												name={log.user || 'Hệ thống'}
+												task={log.action}
+												value={log.details?.split('-')[1] || ''}
+												time={formatTimeAgo(log.createdAt)}
+											/>
+										))}
 									</tbody>
 								</table>
 							</div>
 						</div>
 
 						{/* Profit Report */}
-						<div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-200">
+						<div className="bg-white dark:bg-slate-900 rounded-[2rem] p-6 shadow-sm border border-slate-200 dark:border-slate-800">
 							<div className="flex justify-between items-start mb-6">
 								<div>
-									<h3 className="font-bold text-lg text-slate-900">Lợi Nhuận Gộp (Ước Tính)</h3>
-									<p className="text-xs text-slate-400">Tự động tính dựa trên giá nhập & giá bán</p>
+									<h3 className="font-bold text-lg text-slate-900 dark:text-white leading-tight uppercase tracking-tight">Lợi Nhuận Gộp (Ước Tính)</h3>
+									<p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Tự động tính dựa trên giá nhập & giá bán</p>
 								</div>
-								<div className="bg-green-50 text-green-600 px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1">
+								<div className="bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1">
 									<TrendingUp size={14} /> +8.5%
 								</div>
 							</div>
 
 							<div className="grid grid-cols-2 gap-4">
-								<div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-									<p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Hôm nay</p>
-									<p className="text-xl font-black text-slate-800">1.250.000 <span className="text-[10px] font-bold text-slate-400">VND</span></p>
+								<div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-800">
+									<p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase font-black tracking-widest mb-1.5">Hôm nay</p>
+									<p className="text-xl font-black text-slate-800 dark:text-white tracking-tighter">
+										{formatPrice(profitToday)}
+									</p>
 								</div>
-								<div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-									<p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Tháng này</p>
-									<p className="text-xl font-black text-slate-800">45.800.000 <span className="text-[10px] font-bold text-slate-400">VND</span></p>
+								<div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-800">
+									<p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase font-black tracking-widest mb-1.5">Tháng này</p>
+									<p className="text-xl font-black text-slate-800 dark:text-white tracking-tighter">
+										{formatPrice(profitThisMonth)}
+									</p>
 								</div>
 							</div>
 						</div>

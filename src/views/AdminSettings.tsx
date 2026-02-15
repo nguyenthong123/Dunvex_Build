@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
 	Settings, User, Bell, Shield, Database, Globe, Moon, Sun, Users, Activity,
 	FileText, Save, Plus, Trash2, Edit2, CheckCircle, XCircle, Crown, Clock,
@@ -16,6 +17,8 @@ import { useOwner } from '../hooks/useOwner';
 const AdminSettings = () => {
 	const { theme, toggleTheme } = useTheme();
 	const owner = useOwner();
+	const navigate = useNavigate();
+	const { search } = useLocation();
 	const [activeTab, setActiveTab] = useState('general');
 	const [loading, setLoading] = useState(false);
 
@@ -109,6 +112,14 @@ const AdminSettings = () => {
 			unsubConfig();
 		};
 	}, [owner.loading, owner.ownerId]);
+
+	useEffect(() => {
+		const params = new URLSearchParams(search);
+		const tab = params.get('tab');
+		if (tab) {
+			setActiveTab(tab);
+		}
+	}, [search]);
 
 	const handleSaveSettings = async () => {
 		if (!owner.ownerId) return;

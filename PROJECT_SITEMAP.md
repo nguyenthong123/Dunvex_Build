@@ -96,9 +96,13 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Phân trang (Pagination)**: Áp dụng cho danh sách Sản phẩm (10 mục/trang), giúp tăng tốc độ tải và giao diện gọn gàng. Tự động reset về trang 1 khi tìm kiếm.
     - **Tìm kiếm Mobile 1-chạm**: Tích hợp nút tìm kiếm trực tiếp vào thanh điều hướng dưới cùng cho các trang Sản phẩm và Đơn hàng. Tự động focus và mở bàn phím ngay khi nhấn.
     - **Điều hướng theo ngữ cảnh**: Tùy chỉnh menu di động linh hoạt: Trang Khách hàng có nút "Bản đồ", trang Kho có nút "Lịch sử kho", tất cả các module chính đều tích hợp sẵn nút "Nhập Excel" nhanh.
+- [x] **Báo cáo & Phân tích thời gian thực (Dashboard Live)**: 
+    - **Doanh thu & Lợi nhuận**: Tự động tính toán Doanh thu và Lợi nhuận gộp (giá bán - giá nhập) theo ngày và theo tháng từ dữ liệu thực tế của Firestore.
+    - **Biểu đồ Tăng trưởng**: Chuyển đổi biểu đồ tĩnh sang biểu đồ động, hiển thị doanh thu 7 ngày gần nhất với cơ chế tự động cân bằng tỷ lệ (Auto-scale).
+    - **Nhật ký Hoạt động (Home Activity)**: Hiển thị 5 hoạt động mới nhất của nhân viên ngay tại trang chủ, hỗ trợ nhảy nhanh đến nhật ký chi tiết trong phần Quản trị thông qua tham số URL (?tab=audit).
 
 ### 📝 Cần làm tiếp (To-do)
-- [ ] **Báo cáo & Phân tích thông minh (Dashboard Pro)**: Chuyển đổi biểu đồ sang dữ liệu thực, tự động tính lợi nhuận gộp và cảnh báo hàng sắp hết kho.
+- [ ] **Báo cáo & Phân tích thông minh (Dashboard Pro)**: Cảnh báo hàng sắp hết kho dựa trên tốc độ bán hàng và dự báo doanh số.
 - [ ] **Tự động hóa quy trình (Automation)**: Gửi thông báo nhắc nợ qua Zalo/SMS API và tích hợp nút chia sẻ hóa đơn nhanh cho khách hàng.
 - [ ] **PWA & Offline Support**: Cài đặt ứng dụng vào màn hình chính và hỗ trợ xem dữ liệu cơ bản khi mất kết nối mạng.
 - [ ] **Quản lý Tài chính nâng cao**: Thêm sổ quỹ nội bộ quản lý chi phí vận hành và báo cáo phân loại tuổi nợ (30-60-90 ngày).

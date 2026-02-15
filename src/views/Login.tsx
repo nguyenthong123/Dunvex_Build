@@ -128,37 +128,35 @@ const Login = () => {
 	const handleGoogleLogin = async () => {
 		try {
 			setIsLoggingIn(true);
-			setLoginStatus('Khởi tạo đăng nhập...');
-			console.log("Login trigger started...");
+			setLoginStatus('Đang mở cửa sổ đăng nhập...');
+			console.log("Login trigger started (Popup Mode)...");
 
-			// Detect environment
-			const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-			const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-			const isInAppBrowser = /FBAN|FBAV|Instagram|Zalo|Line|Zalo/i.test(navigator.userAgent);
-
-			console.log("Env info:", { isLocalhost, isMobile, isInAppBrowser });
-
-			// Force REDIRECT for production for most stability
-			if (!isLocalhost || isMobile || isInAppBrowser) {
-				console.log("Using signInWithRedirect for stability...");
-				setLoginStatus('Đang chuyển hướng đến Google...');
-				await signInWithRedirect(auth, googleProvider);
-			} else {
-				console.log("Using signInWithPopup...");
-				setLoginStatus('Đang mở cửa sổ đăng nhập...');
+			// Luôn ưu tiên Popup vì Redirect đang bị lỗi 404 trên Firebase của bạn
+			try {
 				const result = await signInWithPopup(auth, googleProvider);
 				if (result.user) {
+					console.log("Popup login success:", result.user.email);
 					await processUserLogin(result.user);
+				}
+			} catch (popupError: any) {
+				console.error("Popup Error:", popupError);
+
+				// Nếu bị chặn popup hoặc lỗi môi trường, mới thử Redirect
+				if (popupError.code === 'auth/popup-blocked' || popupError.code === 'auth/cancelled-popup-request') {
+					setLoginStatus('Đang thử lại bằng phương thức chuyển hướng...');
+					await signInWithRedirect(auth, googleProvider);
+				} else {
+					throw popupError;
 				}
 			}
 		} catch (error: any) {
-			console.error("Login trigger error details:", error);
+			console.error("Login fatal error details:", error);
 			setIsLoggingIn(false);
 
 			const errorMsg = error.message || "Lỗi không xác định";
 			const errorCode = error.code || "no-code";
 
-			alert(`Đăng nhập thất bại: ${errorCode}\n${errorMsg}\n\nHướng dẫn: Hãy đảm bảo bạn đã thêm 'dunvex-build.vercel.app' vào Authorized Domains trong Firebase Console.`);
+			alert(`Đăng nhập thất bại: ${errorCode}\n\nLưu ý: Nếu trình duyệt chặn cửa sổ bật lên, bạn hãy chọn "Luôn cho phép" (Always allow popups) cho trang web này nhé.`);
 			setLoginStatus('');
 		}
 	};

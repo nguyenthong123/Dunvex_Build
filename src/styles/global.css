@@ -43,32 +43,26 @@
   }
 
   /* Custom scrollbar */
-  .hide-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+  .custom-scrollbar::-webkit-scrollbar {
+    height: 4px;
+    width: 4px;
   }
 
-  .hide-scrollbar::-webkit-scrollbar {
-    display: none;
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-transparent;
   }
 
-  .mobile-container {
-    @apply relative flex flex-col w-full max-w-[480px] h-screen overflow-hidden bg-background-light dark:bg-background-dark shadow-2xl;
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-slate-200 dark:bg-slate-700 rounded-full;
   }
 
-  /* Safari Backdrop Blur Fix */
-  .glassmorphism {
-    backdrop-filter: blur(16px) saturate(180%);
-    -webkit-backdrop-filter: blur(16px) saturate(180%);
+  /* Sticky Column Shadow Effect */
+  .sticky-shadow {
+    box-shadow: 10px 0 15px -10px rgba(0, 0, 0, 0.1);
   }
 
-  /* Leaflet Map Safari Fix */
-  .leaflet-container {
-    height: 100% !important;
-    width: 100% !important;
-    z-index: 1;
-    position: relative;
-    display: block !important;
+  .dark .sticky-shadow {
+    box-shadow: 10px 0 15px -10px rgba(0, 0, 0, 0.4);
   }
 }
 

@@ -262,7 +262,7 @@ const PriceList = () => {
 	return (
 		<div className="flex flex-col min-h-screen bg-slate-100 dark:bg-slate-950 transition-colors duration-300 print:bg-white print:p-0">
 			{/* Header Actions - Hidden on Print */}
-			<header className="h-14 md:h-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 md:px-8 shrink-0 sticky top-0 md:top-0 z-50 print:hidden transition-all duration-300">
+			<header className="h-14 md:h-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 md:px-8 shrink-0 relative md:sticky top-0 z-[40] print:hidden transition-all duration-300">
 				<div className="flex items-center gap-3 md:gap-4 flex-1 truncate">
 					<button
 						onClick={() => viewMode === 'detail' ? setViewMode('list') : navigate('/')}

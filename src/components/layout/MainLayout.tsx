@@ -54,7 +54,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
 				<div
 					onScroll={handleScroll}
-					className="flex-1 overflow-y-auto no-scrollbar pt-16 md:pt-0"
+					className={`flex-1 overflow-y-auto no-scrollbar md:pt-0 ${window.location.pathname.includes('/price-list') ? 'pt-0' : 'pt-16'}`}
 				>
 					<div className="min-h-full">
 						{children}

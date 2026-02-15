@@ -23,7 +23,9 @@ function App() {
 	const [loading, setLoading] = useState(true);
 
 	useEffect(() => {
+		console.log("App: Monitoring Auth State...");
 		const unsubscribe = onAuthStateChanged(auth, (user) => {
+			console.log("App: Auth state changed. User:", user ? user.email : "NULL");
 			setCurrentUser(user);
 			setLoading(false);
 		});

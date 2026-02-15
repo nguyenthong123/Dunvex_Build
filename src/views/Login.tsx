@@ -56,14 +56,18 @@ const Login = () => {
 					lastLogin: serverTimestamp()
 				}, { merge: true });
 			}
-			setLoginStatus('Thành công! Đang chuyển hướng...');
+			setLoginStatus('Thành công! Đang vào hệ thống...');
+			console.log("Login success! Navigating to home...");
+			// Use immediate navigation followed by a fallback
+			navigate('/');
 			setTimeout(() => {
-				if (window.location.pathname === '/login') {
-					navigate('/');
+				if (window.location.pathname.includes('/login')) {
+					window.location.href = '/';
 				}
-			}, 800);
+			}, 500);
 		} catch (err: any) {
-			console.error("processUserLogin error:", err);
+			console.error("processUserLogin fatal error:", err);
+			alert(`Lỗi lưu dữ liệu: ${err.message}\nKiểm tra Firestore Rules hoặc kết nối mạng.`);
 			setLoginStatus('Lỗi đồng bộ: ' + (err.code || err.message));
 			setIsLoggingIn(false);
 		}

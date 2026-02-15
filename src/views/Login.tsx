@@ -224,6 +224,12 @@ const Login = () => {
 							<span>{isLoggingIn ? (loginStatus || 'Đang xử lý...') : 'Đăng nhập với Google'}</span>
 						</button>
 
+						{!import.meta.env.VITE_FIREBASE_API_KEY && (
+							<div className="p-4 bg-rose-50 border-2 border-rose-200 rounded-xl text-rose-600 text-xs font-bold animate-bounce">
+								⚠️ CẢNH BÁO: Bạn chưa cấu hình Environment Variables trên Vercel. Vui lòng thêm VITE_FIREBASE_API_KEY vào cài đặt dự án.
+							</div>
+						)}
+
 						{loginStatus && (
 							<div className="space-y-3 w-full">
 								<p className="text-center text-[11px] font-bold text-indigo-600 dark:text-indigo-400 animate-pulse bg-indigo-50 dark:bg-indigo-900/20 py-2 rounded-lg border border-indigo-100 dark:border-indigo-800">

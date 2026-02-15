@@ -230,35 +230,21 @@ const Login = () => {
 							<span>{isLoggingIn ? (loginStatus || 'Đang xử lý...') : 'Đăng nhập với Google'}</span>
 						</button>
 
-						{!import.meta.env.VITE_FIREBASE_API_KEY && (
-							<div className="p-4 bg-rose-50 border-2 border-rose-200 rounded-xl text-rose-600 text-xs font-bold animate-bounce">
-								⚠️ CẢNH BÁO: Bạn chưa cấu hình Environment Variables trên Vercel. Vui lòng thêm VITE_FIREBASE_API_KEY vào cài đặt dự án.
-							</div>
-						)}
-
 						{loginStatus && (
-							<div className="space-y-3 w-full">
-								<p className="text-center text-[11px] font-bold text-indigo-600 dark:text-indigo-400 animate-pulse bg-indigo-50 dark:bg-indigo-900/20 py-2 rounded-lg border border-indigo-100 dark:border-indigo-800">
-									{loginStatus}
-								</p>
-								{isLoggingIn && (
-									<button
-										onClick={() => navigate('/')}
-										className="w-full text-[10px] font-black text-slate-400 hover:text-[#1A237E] uppercase tracking-widest underline"
-									>
-										Vào trang chủ ngay (Bỏ qua chờ)
-									</button>
-								)}
-							</div>
+							<p className="text-center text-[11px] font-bold text-indigo-600 dark:text-indigo-400 animate-pulse bg-indigo-50 dark:bg-indigo-900/20 py-2 rounded-lg border border-indigo-100 dark:border-indigo-800">
+								{loginStatus}
+							</p>
 						)}
 
 						<div className="relative flex py-4 items-center">
-							<div className="flex-grow border-t border-slate-200 dark:border-slate-700"></div>
-							<span className="flex-shrink-0 mx-4 text-slate-400 dark:text-slate-500 text-[11px] font-bold uppercase tracking-widest">DUNVEX</span>
-							<div className="flex-grow border-t border-slate-200 dark:border-slate-700"></div>
+							<div className="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
+							<span className="flex-shrink mx-4 text-[10px] font-bold text-slate-400 uppercase tracking-[3px]">Dunvex</span>
+							<div className="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
 						</div>
 
-						<p className="text-center text-slate-400 dark:text-slate-500 text-xs">Phần mềm quản lý VLXD chuyên biệt</p>
+						<p className="text-center text-xs text-slate-500 dark:text-slate-400 font-medium">
+							Phần mềm quản lý VLXD chuyên biệt
+						</p>
 					</div>
 
 					<div className="mt-10 p-4 rounded-xl bg-[#FF6D00]/5 dark:bg-[#FF6D00]/10 border border-[#FF6D00]/20 dark:border-[#FF6D00]/30 flex gap-3 items-start">

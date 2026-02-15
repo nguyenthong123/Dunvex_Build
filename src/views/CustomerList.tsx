@@ -120,6 +120,14 @@ const CustomerList = () => {
 		if (params.get('search') === 'true') {
 			setShowMobileSearch(true);
 		}
+		if (params.get('map') === 'true') {
+			setShowMap(true);
+			navigate('/customers', { replace: true });
+		}
+		if (params.get('import') === 'true') {
+			setShowImport(true);
+			navigate('/customers', { replace: true });
+		}
 	}, [search, navigate]);
 
 	useEffect(() => {

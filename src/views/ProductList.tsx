@@ -1,22 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, where, writeBatch, increment } from 'firebase/firestore';
 import BulkImport from '../components/shared/BulkImport';
-import QRScanner from '../components/shared/QRScanner';
-import { QrCode } from 'lucide-react';
 
 import { useOwner } from '../hooks/useOwner';
 
-const ProdStatCard = ({ icon, label, value, color }: any) => (
-	<div className="bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-800 transition-colors duration-300">
-		<div className={`p-2 ${color} w-fit rounded-lg mb-2`}>
-			<span className="material-symbols-outlined text-lg">{icon}</span>
-		</div>
-		<p className="text-gray-400 dark:text-slate-500 text-[10px] font-bold uppercase tracking-wider">{label}</p>
-		<h3 className="text-xl font-black text-[#1A237E] dark:text-indigo-400">{value}</h3>
-	</div>
-);
 
 const ProductList = () => {
 	const navigate = useNavigate();
@@ -34,18 +23,10 @@ const ProductList = () => {
 	const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 	const [activeTab, setActiveTab] = useState<'products' | 'logs'>('products');
 	const [inventoryLogs, setInventoryLogs] = useState<any[]>([]);
-	const [showTransferModal, setShowTransferModal] = useState(false);
-	const [showAuditModal, setShowAuditModal] = useState(false);
-	const [auditCounts, setAuditCounts] = useState<{ [key: string]: number }>({});
-	const [auditReasons, setAuditReasons] = useState<{ [key: string]: string }>({});
-	const [transferData, setTransferData] = useState({
-		fromProductId: '',
-		toProductId: '',
-		qty: 1,
-		note: ''
-	});
-	const [showScanner, setShowScanner] = useState(false);
-	const [lastScannedSku, setLastScannedSku] = useState<string | null>(null);
+	const [currentPage, setCurrentPage] = useState(1);
+	const [showMobileSearch, setShowMobileSearch] = useState(false);
+	const itemsPerPage = 10;
+	const searchRef = useRef<HTMLInputElement>(null);
 
 	const [formData, setFormData] = useState({
 		name: '',
@@ -140,10 +121,24 @@ const ProductList = () => {
 		const params = new URLSearchParams(search);
 		if (params.get('new') === 'true') {
 			setShowAddForm(true);
-			// Optional: clean up URL
+			navigate('/inventory', { replace: true });
+		} else if (params.get('tab') === 'logs') {
+			setActiveTab('logs');
+			navigate('/inventory', { replace: true });
+		} else if (params.get('import') === 'true') {
+			setShowImport(true);
+			navigate('/inventory', { replace: true });
+		} else if (params.get('search') === 'focus') {
+			setShowMobileSearch(true);
+			setActiveTab('products');
+			setTimeout(() => searchRef.current?.focus(), 200);
 			navigate('/inventory', { replace: true });
 		}
 	}, [search, navigate]);
+
+	useEffect(() => {
+		setCurrentPage(1);
+	}, [searchTerm]);
 
 	const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
@@ -221,14 +216,14 @@ const ProductList = () => {
 
 	// Helper to compute stats from logs
 	const getProductInventoryStats = (productId: string) => {
-		const logs = inventoryLogs.filter(l => l.productId === productId || l.targetProductId === productId);
+		const logs = inventoryLogs.filter(l => l.productId === productId);
 
 		const totalImport = logs
-			.filter(l => l.type === 'init' || (l.type === 'audit' && l.diffType === 'increase') || (l.type === 'transfer' && l.targetProductId === productId))
+			.filter(l => l.type === 'init' || (l.type === 'audit' && l.diffType === 'increase'))
 			.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
 
 		const totalExport = logs
-			.filter(l => l.type === 'out' || (l.type === 'audit' && l.diffType === 'decrease') || (l.type === 'transfer' && l.productId === productId))
+			.filter(l => l.type === 'out' || (l.type === 'audit' && l.diffType === 'decrease'))
 			.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
 
 		return { import: totalImport, export: totalExport };
@@ -384,132 +379,6 @@ const ProductList = () => {
 		setSelectedProduct(null);
 	};
 
-	const handleInternalTransfer = async (e: React.FormEvent) => {
-		e.preventDefault();
-		if (!transferData.fromProductId || !transferData.toProductId || transferData.qty <= 0) {
-			alert("Vui lòng nhập đầy đủ thông tin điều chuyển");
-			return;
-		}
-
-		try {
-			const batch = writeBatch(db);
-			const fromRef = doc(db, 'products', transferData.fromProductId);
-			const toRef = doc(db, 'products', transferData.toProductId);
-
-			const fromProd = products.find(p => p.id === transferData.fromProductId);
-			const toProd = products.find(p => p.id === transferData.toProductId);
-
-			batch.update(fromRef, { stock: increment(-transferData.qty) });
-			batch.update(toRef, { stock: increment(transferData.qty) });
-
-			// Logs
-			const logRefDetail = doc(collection(db, 'inventory_logs'));
-			batch.set(logRefDetail, {
-				type: 'transfer',
-				productId: transferData.fromProductId,
-				targetProductId: transferData.toProductId,
-				productName: fromProd?.name,
-				targetProductName: toProd?.name,
-				qty: transferData.qty,
-				note: transferData.note || `Điều chuyển nội bộ: ${fromProd?.name} -> ${toProd?.name}`,
-				ownerId: owner.ownerId,
-				user: auth.currentUser?.displayName || auth.currentUser?.email,
-				createdAt: serverTimestamp()
-			});
-
-			// Audit Log
-			const auditRef = doc(collection(db, 'audit_logs'));
-			batch.set(auditRef, {
-				action: 'Điều chuyển kho',
-				user: auth.currentUser?.displayName || auth.currentUser?.email,
-				ownerId: owner.ownerId,
-				details: `Điều chuyển ${transferData.qty} ${fromProd?.unit} từ ${fromProd?.name} sang ${toProd?.name}`,
-				createdAt: serverTimestamp()
-			});
-
-			await batch.commit();
-			setShowTransferModal(false);
-			setTransferData({ fromProductId: '', toProductId: '', qty: 1, note: '' });
-			alert("Điều chuyển kho thành công!");
-		} catch (error) {
-			alert("Lỗi khi điều chuyển kho");
-		}
-	};
-
-	const handleExecuteAudit = async (e: React.FormEvent) => {
-		e.preventDefault();
-		const discrepancies = Object.keys(auditCounts).filter(id => {
-			const product = products.find(p => p.id === id);
-			return product && (auditCounts[id] !== product.stock);
-		});
-
-		if (discrepancies.length === 0) {
-			alert("Không có thay đổi nào so với tồn hệ thống.");
-			setShowAuditModal(false);
-			return;
-		}
-
-		try {
-			const batch = writeBatch(db);
-
-			discrepancies.forEach(id => {
-				const product = products.find(p => p.id === id);
-				const physicalCount = auditCounts[id];
-				const diff = physicalCount - product.stock;
-
-				// Update Stock
-				batch.update(doc(db, 'products', id), { stock: physicalCount });
-
-				// Inventory Log
-				const logRef = doc(collection(db, 'inventory_logs'));
-				batch.set(logRef, {
-					type: 'audit',
-					productId: id,
-					productName: product.name,
-					qty: Math.abs(diff),
-					diffType: diff > 0 ? 'increase' : 'decrease',
-					note: auditReasons[id] || `Đối soát định kỳ: ${diff > 0 ? '+' : ''}${diff} ${product.unit}`,
-					ownerId: owner.ownerId,
-					user: auth.currentUser?.displayName || auth.currentUser?.email,
-					createdAt: serverTimestamp()
-				});
-			});
-
-			// Audit Log
-			const auditRef = doc(collection(db, 'audit_logs'));
-			batch.set(auditRef, {
-				action: 'Đối soát kho định kỳ',
-				user: auth.currentUser?.displayName || auth.currentUser?.email,
-				ownerId: owner.ownerId,
-				details: `Đã đối soát và điều chỉnh ${discrepancies.length} mã hàng`,
-				createdAt: serverTimestamp()
-			});
-
-			await batch.commit();
-			setShowAuditModal(false);
-			setAuditCounts({});
-			setAuditReasons({});
-			alert("Đã cập nhật số liệu kho thực tế thành công!");
-		} catch (error) {
-			alert("Lỗi khi thực hiện đối soát kho");
-		}
-	};
-
-	const handleAuditQRScan = (sku: string) => {
-		const product = products.find(p => p.sku === sku);
-		if (product) {
-			const currentCount = auditCounts[product.id] ?? product.stock;
-			setAuditCounts({ ...auditCounts, [product.id]: currentCount + 1 });
-			setLastScannedSku(sku);
-
-			// Show a brief success toast/feedback
-			setTimeout(() => {
-				setLastScannedSku(null);
-			}, 2000);
-		} else {
-			alert(`Không tìm thấy sản phẩm với mã SKU: ${sku}`);
-		}
-	};
 
 	const openEdit = (product: any) => {
 		setSelectedProduct(product);
@@ -540,6 +409,12 @@ const ProductList = () => {
 	const filteredProducts = products.filter(product =>
 		String(product.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
 		String(product.sku || '').toLowerCase().includes(searchTerm.toLowerCase())
+	);
+
+	const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
+	const paginatedProducts = filteredProducts.slice(
+		(currentPage - 1) * itemsPerPage,
+		currentPage * itemsPerPage
 	);
 
 	const formatPrice = (price: number) => {
@@ -612,6 +487,7 @@ const ProductList = () => {
 					<div className="hidden md:flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-full px-4 py-2 w-64 border border-slate-200 dark:border-transparent focus-within:border-[#FF6D00] focus-within:bg-white dark:focus-within:bg-slate-900 transition-all">
 						<span className="material-symbols-outlined text-slate-500 text-lg">search</span>
 						<input
+							ref={searchRef}
 							type="text"
 							placeholder="Tìm tên, mã SKU..."
 							className="bg-transparent border-none outline-none w-full text-sm font-black text-slate-900 dark:text-slate-200 placeholder:text-slate-500"
@@ -622,22 +498,6 @@ const ProductList = () => {
 
 					{hasManagePermission && (
 						<div className="flex items-center gap-2">
-							<button
-								onClick={() => setShowAuditModal(true)}
-								className="hidden md:flex bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-4 py-2.5 rounded-xl font-bold border border-slate-200 dark:border-slate-800 active:scale-95 transition-all items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-700"
-								title="Đối soát kho thực tế"
-							>
-								<span className="material-symbols-outlined">fact_check</span>
-								<span>Đối soát</span>
-							</button>
-							<button
-								onClick={() => setShowTransferModal(true)}
-								className="hidden md:flex bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-4 py-2.5 rounded-xl font-bold border border-slate-200 dark:border-slate-800 active:scale-95 transition-all items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-700"
-								title="Điều chuyển nội bộ"
-							>
-								<span className="material-symbols-outlined">sync_alt</span>
-								<span>Điều chuyển</span>
-							</button>
 							<button
 								onClick={() => setShowImport(true)}
 								className="hidden md:flex bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-4 py-2.5 rounded-xl font-bold border border-slate-200 dark:border-slate-800 active:scale-95 transition-all items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-700"
@@ -671,12 +531,34 @@ const ProductList = () => {
 
 			{/* CONTENT */}
 			<div className="flex-1 p-4 md:p-8 overflow-y-auto custom-scrollbar">
-				{/* Stats */}
-				<div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-					<ProdStatCard icon="inventory_2" label="Tổng sản phẩm" value={products.length.toString()} color="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400" />
-					<ProdStatCard icon="production_quantity_limits" label="Sắp hết hàng" value={products.filter(p => p.stock <= 5).length.toString()} color="bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400" />
-					<ProdStatCard icon="history" label="Giao dịch kho" value={inventoryLogs.length.toString()} color="bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400" />
-				</div>
+
+				{/* Mobile Search Bar - Conditional */}
+				{showMobileSearch && activeTab === 'products' && (
+					<div className="md:hidden mb-6 animate-in slide-in-from-top duration-300">
+						<div className="flex items-center gap-3 bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-200 dark:border-slate-800">
+							<span className="material-symbols-outlined text-slate-400">search</span>
+							<input
+								ref={searchRef}
+								type="text"
+								placeholder="Nhập tên hoặc mã SKU..."
+								className="flex-1 bg-transparent border-none outline-none text-sm font-bold text-slate-900 dark:text-white"
+								value={searchTerm}
+								onChange={(e) => setSearchTerm(e.target.value)}
+							/>
+							{searchTerm && (
+								<button onClick={() => setSearchTerm('')} className="text-slate-300">
+									<span className="material-symbols-outlined text-lg">cancel</span>
+								</button>
+							)}
+							<button
+								onClick={() => setShowMobileSearch(false)}
+								className="text-blue-500 font-bold text-xs"
+							>
+								Đóng
+							</button>
+						</div>
+					</div>
+				)}
 
 				{/* Main Content Area */}
 				{activeTab === 'products' ? (
@@ -686,67 +568,59 @@ const ProductList = () => {
 							<table className="w-full text-left">
 								<thead>
 									<tr className="bg-slate-100/50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
-										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Sản phẩm</th>
+										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Mã SKU / Code</th>
+										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Tên sản phẩm</th>
 										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Nhập kho</th>
 										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Xuất kho</th>
-										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Tồn cuối</th>
-										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Giá bán</th>
+										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Còn lại</th>
 										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-right">Hành động</th>
 									</tr>
 								</thead>
 								<tbody className="divide-y divide-gray-100 dark:divide-slate-800">
 									{loading ? (
-										<tr><td colSpan={5} className="py-8 text-center text-slate-400 dark:text-slate-500">Đang tải dữ liệu...</td></tr>
-									) : filteredProducts.length === 0 ? (
-										<tr><td colSpan={5} className="py-8 text-center text-slate-400 dark:text-slate-500">Không tìm thấy sản phẩm nào</td></tr>
+										<tr><td colSpan={6} className="py-8 text-center text-slate-400 dark:text-slate-500">Đang tải dữ liệu...</td></tr>
+									) : paginatedProducts.length === 0 ? (
+										<tr><td colSpan={6} className="py-8 text-center text-slate-400 dark:text-slate-500">Không tìm thấy sản phẩm nào</td></tr>
 									) : (
-										filteredProducts.map((product) => (
+										paginatedProducts.map((product) => (
 											<tr key={product.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer" onClick={() => openDetail(product)}>
 												<td className="py-4 px-6">
-													<div className="flex items-center gap-3">
-														<div className="size-12 rounded-lg bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 flex items-center justify-center font-bold text-sm overflow-hidden border border-gray-100 dark:border-slate-700">
-															{product.imageUrl ? (
-																<img
-																	src={getImageUrl(product.imageUrl)}
-																	alt={product.name}
-																	className="size-full object-cover"
-																	referrerPolicy="no-referrer"
-																/>
-															) : (
-																<span className="material-symbols-outlined">package_2</span>
-															)}
-														</div>
-														<div>
-															<div className="font-black text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-indigo-400 transition-colors">{product.name}</div>
-															<div className="text-[10px] text-slate-400 dark:text-slate-500 uppercase font-black tracking-widest">{product.sku || '#' + product.id.slice(-6).toUpperCase()}</div>
-														</div>
+													<span className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+														{product.sku || '#' + product.id.slice(-6).toUpperCase()}
+													</span>
+												</td>
+												<td className="py-4 px-6">
+													<div className="font-black text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-indigo-400 transition-colors">
+														{product.name}
+													</div>
+													<div className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest mt-0.5 opacity-60">
+														{product.category}
 													</div>
 												</td>
-												<td className="py-4 px-6 text-center">
+												<td className="py-4 px-6 text-center bg-slate-50/50 dark:bg-slate-800/30">
 													<div className="flex flex-col items-center">
-														<span className="text-sm font-bold text-slate-700 dark:text-slate-300">
+														<span className="text-sm font-black text-slate-600 dark:text-slate-300">
 															{getProductInventoryStats(product.id).import}
 														</span>
-														<span className="text-[9px] text-slate-400 uppercase font-black tracking-widest">Tổng nhập</span>
+														<span className="text-[9px] text-slate-400 uppercase font-black tracking-widest">{product.unit}</span>
 													</div>
 												</td>
 												<td className="py-4 px-6 text-center">
 													<div className="flex flex-col items-center">
-														<span className="text-sm font-bold text-rose-500 dark:text-rose-400">
+														<span className="text-sm font-black text-orange-600 dark:text-orange-400">
 															{getProductInventoryStats(product.id).export}
 														</span>
-														<span className="text-[9px] text-slate-400 uppercase font-black tracking-widest">Tổng xuất</span>
+														<span className="text-[9px] text-slate-400 uppercase font-black tracking-widest">{product.unit}</span>
 													</div>
 												</td>
-												<td className="py-4 px-6 text-center">
+												<td className="py-4 px-6 text-center bg-indigo-50/30 dark:bg-indigo-900/10">
 													<div className="flex flex-col items-center">
-														<span className={`text-base font-black ${product.stock <= 5 ? 'text-orange-500' : 'text-[#1A237E] dark:text-indigo-400'}`}>
+														<span className={`text-base font-black ${product.stock <= 5 ? 'text-rose-500' : 'text-[#1A237E] dark:text-indigo-400'}`}>
 															{product.stock}
 														</span>
 														<span className="text-[9px] text-slate-400 uppercase font-black tracking-widest">{product.unit}</span>
 													</div>
 												</td>
-												<td className="py-4 px-6 text-center font-bold text-blue-600 dark:text-blue-400">{formatPrice(product.priceSell)}</td>
 												<td className="py-4 px-6 text-right">
 													{hasManagePermission && (
 														<div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
@@ -789,8 +663,8 @@ const ProductList = () => {
 						</div>
 
 						{/* Grid - Mobile */}
-						<div className="md:hidden grid grid-cols-1 gap-4 pb-20">
-							{filteredProducts.map((product) => (
+						<div className="md:hidden grid grid-cols-1 gap-4 pb-4">
+							{paginatedProducts.map((product) => (
 								<div key={product.id} className="bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-slate-800" onClick={() => openDetail(product)}>
 									<div className="flex justify-between items-start mb-4">
 										<div className="flex items-center gap-3">
@@ -807,8 +681,11 @@ const ProductList = () => {
 												)}
 											</div>
 											<div>
-												<h3 className="font-bold text-[#1A237E] dark:text-indigo-400">{product.name}</h3>
-												<p className="text-xs text-slate-400 dark:text-slate-500">{product.sku || 'Không có mã'}</p>
+												<h3 className="font-bold text-[#1A237E] dark:text-indigo-400 leading-tight">{product.name}</h3>
+												<div className="text-[9px] text-slate-400 dark:text-slate-500 font-black uppercase tracking-widest mt-0.5">
+													{product.category}
+												</div>
+												<p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{product.sku || 'Không có mã'}</p>
 											</div>
 										</div>
 										<div className="flex flex-col items-end gap-2" onClick={(e) => e.stopPropagation()}>
@@ -832,6 +709,61 @@ const ProductList = () => {
 								</div>
 							))}
 						</div>
+
+						{/* Pagination Controls */}
+						{totalPages > 1 && (
+							<div className="mt-8 mb-12 flex flex-col md:flex-row items-center justify-between gap-4">
+								<p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+									Hiển thị {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredProducts.length)} trên tổng {filteredProducts.length} sản phẩm
+								</p>
+								<div className="flex items-center gap-1">
+									<button
+										onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+										disabled={currentPage === 1}
+										className="size-10 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:border-blue-500 transition-all"
+									>
+										<span className="material-symbols-outlined">chevron_left</span>
+									</button>
+									<div className="flex items-center gap-1 mx-2">
+										{[...Array(totalPages)].map((_, i) => {
+											const pageNum = i + 1;
+											// Show first, last, and pages around current
+											if (
+												pageNum === 1 ||
+												pageNum === totalPages ||
+												(pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
+											) {
+												return (
+													<button
+														key={pageNum}
+														onClick={() => setCurrentPage(pageNum)}
+														className={`size-10 rounded-xl font-bold text-xs transition-all border ${currentPage === pageNum
+															? 'bg-[#1A237E] text-white border-[#1A237E] shadow-lg shadow-blue-500/20'
+															: 'bg-white dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-slate-800 hover:border-blue-500'
+															}`}
+													>
+														{pageNum}
+													</button>
+												);
+											} else if (
+												pageNum === currentPage - 2 ||
+												pageNum === currentPage + 2
+											) {
+												return <span key={pageNum} className="text-slate-300">...</span>;
+											}
+											return null;
+										})}
+									</div>
+									<button
+										onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+										disabled={currentPage === totalPages}
+										className="size-10 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:border-blue-500 transition-all"
+									>
+										<span className="material-symbols-outlined">chevron_right</span>
+									</button>
+								</div>
+							</div>
+						)}
 					</>
 				) : (
 					/* LOGS VIEW */
@@ -866,13 +798,11 @@ const ProductList = () => {
 														}`}>
 														{log.type === 'in' ? 'Nhập kho' :
 															log.type === 'out' ? 'Xuất đơn' :
-																log.type === 'transfer' ? 'Điều chuyển' :
-																	log.type === 'audit' ? 'Đối soát' : 'Khởi tạo'}
+																log.type === 'audit' ? (log.diffType === 'increase' ? 'Nhập thêm' : 'Điều chỉnh giảm') : 'Khởi tạo'}
 													</span>
 												</td>
 												<td className="py-4 px-6 font-bold text-slate-900 dark:text-white">
 													{log.productName}
-													{log.targetProductName && <span className="text-slate-400 font-normal mx-2">→ {log.targetProductName}</span>}
 												</td>
 												<td className={`py-4 px-6 font-black ${log.type === 'in' || (log.type === 'audit' && log.diffType === 'increase') ? 'text-green-600' : 'text-orange-600'
 													}`}>
@@ -1207,206 +1137,7 @@ const ProductList = () => {
 					</div>
 				)}
 
-				{/* TRANSFER MODAL */}
-				{showTransferModal && (
-					<div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
-						<div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden border border-white/20">
-							<div className="px-6 py-4 bg-[#1A237E] text-white flex items-center justify-between">
-								<h3 className="text-lg font-black uppercase">Điều chuyển Kho nội bộ</h3>
-								<button onClick={() => setShowTransferModal(false)} className="text-white/60 hover:text-white">
-									<span className="material-symbols-outlined">close</span>
-								</button>
-							</div>
-							<form onSubmit={handleInternalTransfer} className="p-6 space-y-6">
-								<div className="space-y-4">
-									<div>
-										<label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Từ mặt hàng (Nguồn)</label>
-										<select
-											required
-											className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 rounded-xl py-3 px-4 font-bold dark:text-white"
-											value={transferData.fromProductId}
-											onChange={(e) => setTransferData({ ...transferData, fromProductId: e.target.value })}
-										>
-											<option value="">Chọn nguồn...</option>
-											{products.filter(p => !p.linkedProductId).map(p => (
-												<option key={p.id} value={p.id}>{p.name} (Tồn: {p.stock})</option>
-											))}
-										</select>
-									</div>
-									<div className="flex justify-center">
-										<span className="material-symbols-outlined text-slate-300">expand_more</span>
-									</div>
-									<div>
-										<label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Đến mặt hàng (Đích)</label>
-										<select
-											required
-											className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 rounded-xl py-3 px-4 font-bold dark:text-white"
-											value={transferData.toProductId}
-											onChange={(e) => setTransferData({ ...transferData, toProductId: e.target.value })}
-										>
-											<option value="">Chọn đích...</option>
-											{products.filter(p => !p.linkedProductId && p.id !== transferData.fromProductId).map(p => (
-												<option key={p.id} value={p.id}>{p.name} (Tồn: {p.stock})</option>
-											))}
-										</select>
-									</div>
-									<div className="grid grid-cols-2 gap-4">
-										<div>
-											<label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Số lượng chuyển</label>
-											<input
-												type="number"
-												required
-												className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 rounded-xl py-3 px-4 font-black text-blue-600"
-												value={transferData.qty}
-												onChange={(e) => setTransferData({ ...transferData, qty: Number(e.target.value) })}
-											/>
-										</div>
-										<div>
-											<label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Lý do / Ghi chú</label>
-											<input
-												type="text"
-												className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 rounded-xl py-3 px-4 font-medium dark:text-white"
-												placeholder="..."
-												value={transferData.note}
-												onChange={(e) => setTransferData({ ...transferData, note: e.target.value })}
-											/>
-										</div>
-									</div>
-								</div>
-								<button type="submit" className="w-full bg-[#FF6D00] text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-orange-500/20 active:scale-95 transition-all">
-									XÁC NHẬN ĐIỀU CHUYỂN
-								</button>
-							</form>
-						</div>
-					</div>
-				)}
-
-				{/* AUDIT MODAL */}
-				{showAuditModal && (
-					<div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md">
-						<div className="bg-white dark:bg-slate-900 w-full max-w-4xl rounded-[2.5rem] shadow-2xl overflow-hidden border border-white/20 flex flex-col max-h-[90vh]">
-							<div className="px-8 py-6 bg-[#1A237E] text-white flex items-center justify-between sticky top-0 z-10">
-								<div>
-									<h3 className="text-xl font-black uppercase tracking-tight">Đối soát & Kiểm kho định kỳ</h3>
-									<p className="text-xs text-blue-200 font-bold mt-1 uppercase tracking-widest">Cập nhật số liệu tồn kho thực tế</p>
-								</div>
-								<button onClick={() => setShowAuditModal(false)} className="size-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
-									<span className="material-symbols-outlined italic">close</span>
-								</button>
-							</div>
-
-							<div className="bg-slate-50 dark:bg-slate-800 px-8 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-								<div className="flex items-center gap-2">
-									<button
-										onClick={() => setShowScanner(true)}
-										className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2 shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
-									>
-										<QrCode size={16} />
-										QUÉT MÃ SKU
-									</button>
-									{lastScannedSku && (
-										<span className="text-[10px] font-black text-green-500 uppercase tracking-widest animate-pulse">
-											✓ Đã nhận: {lastScannedSku} (+1)
-										</span>
-									)}
-								</div>
-								<div className="hidden md:block text-[10px] font-black text-slate-400 uppercase tracking-widest">
-									Sử dụng camera để quét mã vạch sản phẩm
-								</div>
-							</div>
-
-							<div className="flex-1 overflow-y-auto p-8">
-								<div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-2xl border border-blue-100 dark:border-blue-900/20 mb-6 flex items-start gap-3">
-									<span className="material-symbols-outlined text-blue-600 dark:text-blue-400 mt-0.5">info</span>
-									<p className="text-xs font-bold text-blue-800 dark:text-blue-300 leading-relaxed uppercase">
-										Ghi chú: Nhập số lượng thực tế đếm được tại kho vào cột "Thực tế". Hệ thống sẽ tự động tính toán chênh lệch và cập nhật số dư kho sau khi bạn nhấn "Xác nhận cập nhật".
-									</p>
-								</div>
-
-								<div className="bg-white dark:bg-slate-950 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
-									<table className="w-full text-left">
-										<thead>
-											<tr className="bg-slate-50 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800">
-												<th className="py-4 px-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Sản phẩm</th>
-												<th className="py-4 px-6 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Tồn hệ thống</th>
-												<th className="py-4 px-6 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Thực tế</th>
-												<th className="py-4 px-6 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Chênh lệch</th>
-												<th className="py-4 px-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Lý do điều chỉnh</th>
-											</tr>
-										</thead>
-										<tbody className="divide-y divide-slate-50 dark:divide-slate-900">
-											{products.filter(p => !p.linkedProductId).map((product) => {
-												const physical = auditCounts[product.id] ?? product.stock;
-												const diff = physical - product.stock;
-												return (
-													<tr key={product.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-colors">
-														<td className="py-4 px-6">
-															<div className="font-black text-[#1A237E] dark:text-indigo-400 text-sm">{product.name}</div>
-															<div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{product.sku}</div>
-														</td>
-														<td className="py-4 px-6 text-center font-bold text-slate-700 dark:text-slate-300 bg-slate-50/30 dark:bg-slate-800/20">
-															{product.stock} <span className="text-[10px]">{product.unit}</span>
-														</td>
-														<td className="py-4 px-6">
-															<input
-																type="number"
-																className="w-24 mx-auto block bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg py-1.5 px-2 text-center font-black text-blue-600 focus:ring-2 focus:ring-blue-500/20 outline-none"
-																value={auditCounts[product.id] ?? product.stock}
-																onChange={(e) => setAuditCounts({ ...auditCounts, [product.id]: Number(e.target.value) })}
-															/>
-														</td>
-														<td className="py-4 px-6 text-center">
-															{diff !== 0 ? (
-																<span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase ${diff > 0 ? 'bg-green-50 text-green-600 border border-green-100' : 'bg-red-50 text-red-600 border border-red-100'}`}>
-																	{diff > 0 ? '+' : ''}{diff} {product.unit}
-																</span>
-															) : (
-																<span className="text-slate-300 font-bold">khớp</span>
-															)}
-														</td>
-														<td className="py-4 px-6">
-															<input
-																type="text"
-																placeholder="Nhập lý do nếu có chênh lệch..."
-																className={`w-full bg-transparent border-b ${diff !== 0 ? 'border-orange-200 dark:border-orange-900/30' : 'border-transparent'} py-1 text-xs font-medium dark:text-slate-400 focus:border-blue-500 transition-all outline-none`}
-																value={auditReasons[product.id] || ''}
-																onChange={(e) => setAuditReasons({ ...auditReasons, [product.id]: e.target.value })}
-															/>
-														</td>
-													</tr>
-												);
-											})}
-										</tbody>
-									</table>
-								</div>
-							</div>
-
-							<div className="px-8 py-6 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between sticky bottom-0 z-10">
-								<div className="flex items-center gap-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">
-									<div>Tổng mục kiểm: <span className="text-slate-900 dark:text-white">{products.filter(p => !p.linkedProductId).length}</span></div>
-									<div>Có chênh lệch: <span className="text-[#FF6D00]">{Object.keys(auditCounts).filter(id => auditCounts[id] !== products.find(p => p.id === id)?.stock).length}</span></div>
-								</div>
-								<div className="flex items-center gap-3">
-									<button onClick={() => setShowAuditModal(false)} className="px-6 py-3 rounded-2xl font-black text-xs text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">HUỶ BỎ</button>
-									<button
-										onClick={handleExecuteAudit}
-										className="px-8 py-3 bg-[#FF6D00] hover:bg-orange-600 text-white rounded-2xl font-black text-xs shadow-xl shadow-orange-500/20 active:scale-95 transition-all uppercase tracking-widest"
-									>
-										XÁC NHẬN CẬP NHẬT
-									</button>
-								</div>
-							</div>
-						</div>
-					</div>
-				)}
-
-				{showScanner && (
-					<QRScanner
-						onScan={handleAuditQRScan}
-						onClose={() => setShowScanner(false)}
-						title="Quét Đối Soát Kho"
-					/>
-				)}
+				{/* LOGS MODALS REMOVED */}
 			</div>
 		</div>
 	);

@@ -106,15 +106,15 @@ export const useNavigationConfig = () => {
 				allItems[5], // Khách hàng (Thay cho Đơn hàng)
 				allItems[2], // Center (Lên đơn)
 				allItems[6], // Sản phẩm (Thay cho Công nợ)
-				getSlot5(),  // Cài đặt
+				{ icon: 'search', label: 'Tìm đơn', path: '/orders?search=focus' }, // Thay Báo giá bằng Tìm đơn hàng
 			];
 		} else if (path === '/inventory') {
 			items = [
 				allItems[0], // Trang chủ
-				{ icon: 'inventory_2', label: 'Sản phẩm', path: '/inventory' }, // Thay Đơn hàng bằng Sản phẩm
+				{ icon: 'search', label: 'Tìm kiếm', path: '/inventory?search=focus' }, // Thay Sản phẩm bằng Tìm kiếm
 				allItems[2], // Center (Thêm SP)
-				allItems[5], // Khách hàng (Thay cho Công nợ)
-				getSlot5(),  // Cài đặt
+				{ icon: 'history', label: 'Lịch sử kho', path: '/inventory?tab=logs' }, // Thay Khách hàng bằng Lịch sử kho
+				{ icon: 'upload_file', label: 'Nhập Excel', path: '/inventory?import=true' }, // Thay Báo giá bằng Nhập Excel
 			];
 		} else if (path === '/debts') {
 			items = [
@@ -135,10 +135,10 @@ export const useNavigationConfig = () => {
 		} else if (path === '/customers') {
 			items = [
 				allItems[0], // Trang chủ
-				allItems[1], // Đơn hàng
+				{ icon: 'map', label: 'Bản đồ', path: '/customers?map=true' }, // Thay Đơn hàng bằng Bản đồ
 				allItems[2], // Center (Thêm Khách)
-				{ icon: 'search', label: 'Tìm kiếm', path: '/customers?search=true' }, // Thay Công nợ bằng Tìm kiếm
-				getSlot5(),  // Cài đặt
+				{ icon: 'search', label: 'Tìm kiếm', path: '/customers?search=true' }, // Giữ Tìm kiếm
+				{ icon: 'upload_file', label: 'Nhập Excel', path: '/customers?import=true' }, // Thay Hoạt động bằng Nhập Excel
 			];
 		} else {
 			items = [

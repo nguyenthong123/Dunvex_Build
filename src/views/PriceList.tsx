@@ -493,7 +493,7 @@ const PriceList = () => {
 													{headers.map((header, idx) => (
 														<th
 															key={idx}
-															className="py-6 px-4 text-[12px] font-black text-slate-950 uppercase tracking-[0.2em] border-b border-slate-100 whitespace-nowrap"
+															className="py-6 px-4 text-[12px] font-black text-slate-950 uppercase tracking-[0.2em] border-b border-slate-100 whitespace-normal break-words"
 														>
 															{header}
 														</th>
@@ -507,7 +507,7 @@ const PriceList = () => {
 														{headers.map((header, colIdx) => (
 															<td
 																key={colIdx}
-																className={`py-6 px-4 text-[13px] font-bold ${colIdx === 0 ? 'text-[#1A237E] leading-relaxed w-[350px]' : 'text-slate-500 whitespace-nowrap'}`}
+																className={`py-6 px-4 text-[13px] font-bold whitespace-normal break-words ${colIdx === 0 ? 'text-[#1A237E] leading-relaxed w-[350px]' : 'text-slate-500'}`}
 															>
 																{row[header]?.toLocaleString() || '---'}
 															</td>

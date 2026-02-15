@@ -1,72 +1,103 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, googleProvider, db } from '../services/firebase';
-import { signInWithPopup } from 'firebase/auth';
+import { signInWithPopup, signInWithRedirect, getRedirectResult } from 'firebase/auth';
 import { doc, getDoc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 
 const Login = () => {
 	const navigate = useNavigate();
+	const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+	// Tách logic xử lý User vào một hàm dùng chung
+	const processUserLogin = async (user: any) => {
+		const userRef = doc(db, 'users', user.uid);
+		const inviteRef = doc(db, 'permissions', user.email || 'unknown');
+
+		const [userSnap, inviteSnap] = await Promise.all([
+			getDoc(userRef),
+			getDoc(inviteRef)
+		]);
+
+		if (inviteSnap.exists()) {
+			const inviteData = inviteSnap.data();
+			await setDoc(userRef, {
+				uid: user.uid,
+				displayName: user.displayName,
+				email: user.email,
+				photoURL: user.photoURL,
+				role: inviteData.role || 'sale',
+				ownerId: inviteData.ownerId,
+				ownerEmail: inviteData.ownerEmail,
+				lastLogin: serverTimestamp(),
+				createdAt: userSnap.exists() ? userSnap.data().createdAt : new Date().toISOString()
+			}, { merge: true });
+			await deleteDoc(inviteRef);
+		} else if (!userSnap.exists()) {
+			await setDoc(userRef, {
+				uid: user.uid,
+				displayName: user.displayName,
+				email: user.email,
+				photoURL: user.photoURL,
+				role: 'admin',
+				ownerId: user.uid,
+				ownerEmail: user.email,
+				createdAt: new Date().toISOString()
+			});
+		} else {
+			await setDoc(userRef, {
+				displayName: user.displayName,
+				photoURL: user.photoURL,
+				lastLogin: serverTimestamp()
+			}, { merge: true });
+		}
+		navigate('/');
+	};
+
+	// Kiểm tra kết quả redirect khi component mount
+	useEffect(() => {
+		const checkRedirectResult = async () => {
+			try {
+				const result = await getRedirectResult(auth);
+				if (result?.user) {
+					setIsLoggingIn(true);
+					await processUserLogin(result.user);
+				}
+			} catch (error: any) {
+				console.error("Redirect login error:", error);
+				if (error.code === 'auth/internal-error' || error.message.includes('missing initial state')) {
+					// Don't alert immediately, let user try again
+				}
+			} finally {
+				setIsLoggingIn(false);
+			}
+		};
+		checkRedirectResult();
+	}, []);
 
 	const handleGoogleLogin = async () => {
 		try {
-			const result = await signInWithPopup(auth, googleProvider);
-			const user = result.user;
+			setIsLoggingIn(true);
 
-			// Save/Check user in Firestore
-			const userRef = doc(db, 'users', user.uid);
-			const inviteRef = doc(db, 'permissions', user.email || 'unknown');
+			// Detect if mobile (especially in-app browsers)
+			const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+			const isInAppBrowser = /FBAN|FBAV|Instagram|Zalo|Line/i.test(navigator.userAgent);
 
-			// Fetch both concurrently
-			const [userSnap, inviteSnap] = await Promise.all([
-				getDoc(userRef),
-				getDoc(inviteRef)
-			]);
-
-			if (inviteSnap.exists()) {
-				// Case 1: User has a pending invitation
-				// We overwrite/update their role and ownerId to match the invitation
-				const inviteData = inviteSnap.data();
-
-				await setDoc(userRef, {
-					uid: user.uid,
-					displayName: user.displayName,
-					email: user.email,
-					photoURL: user.photoURL,
-					role: inviteData.role || 'sale',
-					ownerId: inviteData.ownerId,
-					ownerEmail: inviteData.ownerEmail,
-					lastLogin: serverTimestamp(),
-					// Preserve creation date if it was an existing user re-joining
-					createdAt: userSnap.exists() ? userSnap.data().createdAt : new Date().toISOString()
-				}, { merge: true });
-
-				// Delete the permission doc since it's now consumed/activated
-				await deleteDoc(inviteRef);
-
-			} else if (!userSnap.exists()) {
-				// Case 2: New User, No Invitation -> Default to Business Owner (Admin)
-				await setDoc(userRef, {
-					uid: user.uid,
-					displayName: user.displayName,
-					email: user.email,
-					photoURL: user.photoURL,
-					role: 'admin',
-					ownerId: user.uid,
-					ownerEmail: user.email,
-					createdAt: new Date().toISOString()
-				});
+			if (isMobile || isInAppBrowser) {
+				// Use Redirect for mobile to avoid popup blocking/missing state issues
+				await signInWithRedirect(auth, googleProvider);
 			} else {
-				// Case 3: Existing User, No Invitation -> Just update basic info
-				await setDoc(userRef, {
-					displayName: user.displayName,
-					photoURL: user.photoURL,
-					lastLogin: serverTimestamp()
-				}, { merge: true });
+				// Use Popup for desktop
+				const result = await signInWithPopup(auth, googleProvider);
+				if (result.user) {
+					await processUserLogin(result.user);
+				}
 			}
-
-			// Logged in successfully
-			navigate('/');
-		} catch (error) {
-			alert("Đăng nhập thất bại. Vui lòng thử lại.");
+		} catch (error: any) {
+			console.error("Login error:", error);
+			setIsLoggingIn(false);
+			if (error.code !== 'auth/popup-closed-by-user' && error.code !== 'auth/cancelled-popup-request') {
+				alert("Đăng nhập thất bại. Vui lòng thử lại bằng trình duyệt Chrome hoặc Safari chính thức.");
+			}
 		}
 	};
 
@@ -123,15 +154,20 @@ const Login = () => {
 					<div className="w-full space-y-4">
 						<button
 							onClick={handleGoogleLogin}
-							className="w-full flex items-center justify-center gap-3 bg-white dark:bg-slate-800 border-2 border-[#1A237E]/10 dark:border-slate-700 hover:border-[#1A237E] dark:hover:border-indigo-500 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold h-14 rounded-xl transition-all duration-300 group shadow-sm"
+							disabled={isLoggingIn}
+							className={`w-full flex items-center justify-center gap-3 bg-white dark:bg-slate-800 border-2 border-[#1A237E]/10 dark:border-slate-700 hover:border-[#1A237E] dark:hover:border-indigo-500 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold h-14 rounded-xl transition-all duration-300 group shadow-sm ${isLoggingIn ? 'opacity-70 cursor-not-allowed' : ''}`}
 						>
-							<svg className="w-6 h-6" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-								<path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"></path>
-								<path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"></path>
-								<path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.84z" fill="#FBBC05"></path>
-								<path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1c-4.75 0-8.77 2.84-10.57 6.94l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"></path>
-							</svg>
-							<span>Đăng nhập với Google</span>
+							{isLoggingIn ? (
+								<div className="w-5 h-5 border-2 border-[#1A237E] border-t-transparent rounded-full animate-spin"></div>
+							) : (
+								<svg className="w-6 h-6" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+									<path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"></path>
+									<path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"></path>
+									<path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.84z" fill="#FBBC05"></path>
+									<path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1c-4.75 0-8.77 2.84-10.57 6.94l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"></path>
+								</svg>
+							)}
+							<span>{isLoggingIn ? 'Đang kiểm tra...' : 'Đăng nhập với Google'}</span>
 						</button>
 
 						<div className="relative flex py-4 items-center">

@@ -7,101 +7,127 @@ import { doc, getDoc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firest
 const Login = () => {
 	const navigate = useNavigate();
 	const [isLoggingIn, setIsLoggingIn] = useState(false);
+	const [loginStatus, setLoginStatus] = useState('');
 
 	// Tách logic xử lý User vào một hàm dùng chung
 	const processUserLogin = async (user: any) => {
-		const userRef = doc(db, 'users', user.uid);
-		const inviteRef = doc(db, 'permissions', user.email || 'unknown');
+		try {
+			setLoginStatus('Đang đồng bộ dữ liệu hệ thống...');
+			const userRef = doc(db, 'users', user.uid);
+			const inviteRef = doc(db, 'permissions', user.email || 'unknown');
 
-		const [userSnap, inviteSnap] = await Promise.all([
-			getDoc(userRef),
-			getDoc(inviteRef)
-		]);
+			const [userSnap, inviteSnap] = await Promise.all([
+				getDoc(userRef),
+				getDoc(inviteRef)
+			]);
 
-		if (inviteSnap.exists()) {
-			const inviteData = inviteSnap.data();
-			await setDoc(userRef, {
-				uid: user.uid,
-				displayName: user.displayName,
-				email: user.email,
-				photoURL: user.photoURL,
-				role: inviteData.role || 'sale',
-				ownerId: inviteData.ownerId,
-				ownerEmail: inviteData.ownerEmail,
-				lastLogin: serverTimestamp(),
-				createdAt: userSnap.exists() ? userSnap.data().createdAt : new Date().toISOString()
-			}, { merge: true });
-			await deleteDoc(inviteRef);
-		} else if (!userSnap.exists()) {
-			await setDoc(userRef, {
-				uid: user.uid,
-				displayName: user.displayName,
-				email: user.email,
-				photoURL: user.photoURL,
-				role: 'admin',
-				ownerId: user.uid,
-				ownerEmail: user.email,
-				createdAt: new Date().toISOString()
-			});
-		} else {
-			await setDoc(userRef, {
-				displayName: user.displayName,
-				photoURL: user.photoURL,
-				lastLogin: serverTimestamp()
-			}, { merge: true });
+			if (inviteSnap.exists()) {
+				setLoginStatus('Phát hiện lời mời tham gia...');
+				const inviteData = inviteSnap.data();
+				await setDoc(userRef, {
+					uid: user.uid,
+					displayName: user.displayName,
+					email: user.email,
+					photoURL: user.photoURL,
+					role: inviteData.role || 'sale',
+					ownerId: inviteData.ownerId,
+					ownerEmail: inviteData.ownerEmail,
+					lastLogin: serverTimestamp(),
+					createdAt: userSnap.exists() ? userSnap.data().createdAt : new Date().toISOString()
+				}, { merge: true });
+				await deleteDoc(inviteRef);
+			} else if (!userSnap.exists()) {
+				setLoginStatus('Khởi tạo tài khoản Admin mới...');
+				await setDoc(userRef, {
+					uid: user.uid,
+					displayName: user.displayName,
+					email: user.email,
+					photoURL: user.photoURL,
+					role: 'admin',
+					ownerId: user.uid,
+					ownerEmail: user.email,
+					createdAt: new Date().toISOString()
+				});
+			} else {
+				setLoginStatus('Cập nhật thông tin đăng nhập...');
+				await setDoc(userRef, {
+					displayName: user.displayName,
+					photoURL: user.photoURL,
+					lastLogin: serverTimestamp()
+				}, { merge: true });
+			}
+			setLoginStatus('Thành công! Đang chuyển hướng...');
+			setTimeout(() => {
+				if (window.location.pathname === '/login') {
+					navigate('/');
+				}
+			}, 800);
+		} catch (err: any) {
+			console.error("processUserLogin error:", err);
+			setLoginStatus('Lỗi đồng bộ: ' + (err.code || err.message));
+			setIsLoggingIn(false);
 		}
-		navigate('/');
 	};
 
 	// Kiểm tra kết quả redirect khi component mount
 	useEffect(() => {
+		let isMounted = true;
+
 		const checkRedirectResult = async () => {
 			try {
 				const result = await getRedirectResult(auth);
-				if (result?.user) {
+				if (result?.user && isMounted) {
 					setIsLoggingIn(true);
 					await processUserLogin(result.user);
 				}
 			} catch (error: any) {
-				console.error("Redirect login error:", error);
-				if (error.code === 'auth/internal-error' || error.message.includes('missing initial state')) {
-					// Don't alert immediately, let user try again
-				}
-			} finally {
-				setIsLoggingIn(false);
+				console.error("Redirect check error:", error);
 			}
 		};
 		checkRedirectResult();
-	}, []);
+
+		// Dự phòng: Nếu Firebase Auth đã có user (vừa redirect xong và auth state đã kịp update)
+		const unsubscribe = auth.onAuthStateChanged((user) => {
+			if (user && !isLoggingIn && isMounted) {
+				setIsLoggingIn(true);
+				processUserLogin(user);
+			}
+		});
+
+		return () => {
+			isMounted = false;
+			unsubscribe();
+		};
+	}, [isLoggingIn]);
 
 	const handleGoogleLogin = async () => {
 		try {
 			setIsLoggingIn(true);
+			setLoginStatus('Đang kết nối với Google...');
 
 			// Detect if mobile (especially in-app browsers)
 			const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 			const isInAppBrowser = /FBAN|FBAV|Instagram|Zalo|Line/i.test(navigator.userAgent);
 
 			if (isMobile || isInAppBrowser) {
-				// Use Redirect for mobile to avoid popup blocking/missing state issues
+				setLoginStatus('Vui lòng đợi chuyển hướng...');
 				await signInWithRedirect(auth, googleProvider);
 			} else {
-				// Use Popup for desktop
 				const result = await signInWithPopup(auth, googleProvider);
 				if (result.user) {
 					await processUserLogin(result.user);
 				}
 			}
 		} catch (error: any) {
-			console.error("Login error:", error);
+			console.error("Login trigger error:", error);
 			setIsLoggingIn(false);
+			setLoginStatus('');
 
-			// Show more detailed error message to help debug
 			const errorMsg = error.message || "Lỗi không xác định";
 			const errorCode = error.code || "no-code";
 
 			if (error.code !== 'auth/popup-closed-by-user' && error.code !== 'auth/cancelled-popup-request') {
-				alert(`Đăng nhập thất bại.\nMã lỗi: ${errorCode}\nChi tiết: ${errorMsg}\n\nHãy thử lại bằng trình duyệt Chrome/Safari và không sử dụng Tab ẩn danh.`);
+				alert(`Đăng nhập thất bại.\nMã lỗi: ${errorCode}\nChi tiết: ${errorMsg}`);
 			}
 		}
 	};
@@ -160,7 +186,7 @@ const Login = () => {
 						<button
 							onClick={handleGoogleLogin}
 							disabled={isLoggingIn}
-							className={`w-full flex items-center justify-center gap-3 bg-white dark:bg-slate-800 border-2 border-[#1A237E]/10 dark:border-slate-700 hover:border-[#1A237E] dark:hover:border-indigo-500 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold h-14 rounded-xl transition-all duration-300 group shadow-sm ${isLoggingIn ? 'opacity-70 cursor-not-allowed' : ''}`}
+							className={`w-full flex items-center justify-center gap-3 bg-white dark:bg-slate-800 border-2 border-[#1A237E]/10 dark:border-slate-700 hover:border-[#1A237E] dark:hover:border-indigo-500 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold h-14 rounded-xl transition-all duration-300 group shadow-sm ${isLoggingIn ? 'opacity-70 cursor-not-allowed border-indigo-500' : ''}`}
 						>
 							{isLoggingIn ? (
 								<div className="w-5 h-5 border-2 border-[#1A237E] border-t-transparent rounded-full animate-spin"></div>
@@ -172,8 +198,14 @@ const Login = () => {
 									<path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1c-4.75 0-8.77 2.84-10.57 6.94l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"></path>
 								</svg>
 							)}
-							<span>{isLoggingIn ? 'Đang kiểm tra...' : 'Đăng nhập với Google'}</span>
+							<span>{isLoggingIn ? (loginStatus || 'Đang xử lý...') : 'Đăng nhập với Google'}</span>
 						</button>
+
+						{loginStatus && (
+							<p className="text-center text-[11px] font-bold text-indigo-600 dark:text-indigo-400 animate-pulse bg-indigo-50 dark:bg-indigo-900/20 py-2 rounded-lg border border-indigo-100 dark:border-indigo-800">
+								{loginStatus}
+							</p>
+						)}
 
 						<div className="relative flex py-4 items-center">
 							<div className="flex-grow border-t border-slate-200 dark:border-slate-700"></div>

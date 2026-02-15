@@ -356,10 +356,10 @@ const PriceList = () => {
 			<main className={`flex-1 ${viewMode === 'detail' ? 'p-0 md:p-8' : 'p-4 md:p-12'} print:p-0 overflow-x-hidden transition-all duration-300`}>
 				{viewMode === 'list' ? (
 					<div className="max-w-4xl mx-auto space-y-6">
-						<div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+						<div className="flex flex-col md:flex-row md:items-center justify-between gap-3 px-1">
 							<div>
-								<h3 className="text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tight">Danh sách vừa lưu</h3>
-								<p className="text-sm font-bold text-slate-400 uppercase tracking-widest mt-1">Quản lý các bản báo giá của bạn</p>
+								<h3 className="text-lg md:text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tight">Danh sách vừa lưu</h3>
+								<p className="text-[10px] md:text-sm font-bold text-slate-400 uppercase tracking-widest mt-1">Quản lý các bản báo giá của bạn</p>
 							</div>
 						</div>
 
@@ -383,36 +383,36 @@ const PriceList = () => {
 									<div
 										key={list.id}
 										onClick={() => handleSelectList(list)}
-										className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl hover:border-indigo-500/30 transition-all group cursor-pointer flex items-center justify-between"
+										className="bg-white dark:bg-slate-900 p-4 md:p-6 rounded-2xl md:rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl hover:border-indigo-500/30 transition-all group cursor-pointer flex items-center justify-between"
 									>
 										<div className="flex items-center gap-5">
-											<div className="size-14 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center text-indigo-500 group-hover:bg-indigo-600 group-hover:text-white transition-colors shadow-inner">
-												<FileSpreadsheet size={28} />
+											<div className="size-10 md:size-14 bg-slate-50 dark:bg-slate-800 rounded-xl md:rounded-2xl flex items-center justify-center text-indigo-500 group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-inner shrink-0">
+												<FileSpreadsheet className="w-5 h-5 md:w-7 md:h-7" />
 											</div>
-											<div>
-												<h4 className="font-black text-slate-800 dark:text-white text-lg group-hover:text-indigo-600 transition-colors">{list.title}</h4>
-												<div className="flex items-center gap-4 mt-1">
-													<div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-														<Calendar size={12} />
-														{list.updatedAt?.seconds ? new Date(list.updatedAt.seconds * 1000).toLocaleString('vi-VN') : 'Vừa xong'}
+											<div className="min-w-0">
+												<h4 className="font-black text-slate-800 dark:text-white text-sm md:text-lg group-hover:text-indigo-600 transition-colors truncate pr-2">{list.title}</h4>
+												<div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+													<div className="flex items-center gap-1 text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-tighter md:tracking-widest">
+														<Calendar size={10} className="md:w-3 md:h-3" />
+														{list.updatedAt?.seconds ? new Date(list.updatedAt.seconds * 1000).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' }) : 'Vừa xong'}
 													</div>
-													<div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-														<User size={12} />
+													<div className="flex items-center gap-1 text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-tighter md:tracking-widest">
+														<User size={10} className="md:w-3 md:h-3" />
 														{list.updatedBy?.split('@')[0] || 'Admin'}
 													</div>
 												</div>
 											</div>
 										</div>
-										<div className="flex items-center gap-3">
+										<div className="flex items-center gap-2">
 											<button
 												onClick={(e) => handleDeleteList(e, list.id)}
-												className="size-10 rounded-xl bg-rose-50 dark:bg-rose-900/10 text-rose-500 hover:bg-rose-500 hover:text-white transition-all flex items-center justify-center shadow-sm"
+												className="size-8 md:size-10 rounded-lg md:rounded-xl bg-rose-50 dark:bg-rose-900/10 text-rose-500 hover:bg-rose-500 hover:text-white transition-all flex items-center justify-center shadow-sm shrink-0"
 												title="Xóa báo giá"
 											>
-												<Trash2 size={18} />
+												<Trash2 size={16} className="md:w-[18px] md:h-[18px]" />
 											</button>
-											<div className="size-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 group-hover:translate-x-1 transition-all">
-												<ChevronRight size={20} />
+											<div className="size-8 md:size-10 rounded-lg md:rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 group-hover:translate-x-1 transition-all shrink-0 hidden sm:flex">
+												<ChevronRight size={18} />
 											</div>
 										</div>
 									</div>

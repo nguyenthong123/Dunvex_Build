@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, googleProvider, db } from '../services/firebase';
-import { signInWithPopup, signInWithRedirect, getRedirectResult } from 'firebase/auth';
+import { signInWithPopup, signInWithRedirect, getRedirectResult, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { doc, getDoc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 
 const Login = () => {
@@ -88,24 +88,32 @@ const Login = () => {
 		const checkRedirectResult = async () => {
 			console.log("Checking redirect result...");
 			try {
+				// Đảm bảo persistence được thiết lập lại
+				await setPersistence(auth, browserLocalPersistence);
+
 				const result = await getRedirectResult(auth);
-				console.log("Redirect result:", result);
+				console.log("Redirect result detail:", result);
+
 				if (result?.user && isMounted) {
-					console.log("User detected from redirect:", result.user.email);
+					console.log("SUCCESS: User detected from redirect:", result.user.email);
 					setIsLoggingIn(true);
 					await processUserLogin(result.user);
 				}
 			} catch (error: any) {
 				console.error("Redirect check error details:", error);
-				alert("Lỗi sau khi chuyển hướng: " + error.message);
+				// Nếu lỗi do session bị mất, alert cho người dùng
+				if (error.code === 'auth/internal-error' || error.code === 'auth/network-request-failed') {
+					alert("Lỗi mạng hoặc Cookie: Vui lòng kiểm tra kết nối và thử lại.");
+				}
 			}
 		};
 		checkRedirectResult();
 
-		// Dự phòng: Nếu Firebase Auth đã có user
-		const unsubscribe = auth.onAuthStateChanged((user) => {
-			console.log("Auth state changed:", user ? user.email : "null");
+		// Sử dụng onIdTokenChanged để bắt token ngay khi nó được làm mới sau redirect
+		const unsubscribe = auth.onIdTokenChanged((user) => {
+			console.log("Auth State (Token Changed):", user ? user.email : "NULL");
 			if (user && !isLoggingIn && isMounted) {
+				console.log("Active session found! Auto-processing login...");
 				setIsLoggingIn(true);
 				processUserLogin(user);
 			}

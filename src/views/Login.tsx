@@ -66,10 +66,18 @@ const Login = () => {
 				}
 			}, 500);
 		} catch (err: any) {
-			console.error("processUserLogin fatal error:", err);
-			alert(`Lỗi lưu dữ liệu: ${err.message}\nKiểm tra Firestore Rules hoặc kết nối mạng.`);
-			setLoginStatus('Lỗi đồng bộ: ' + (err.code || err.message));
-			setIsLoggingIn(false);
+			console.error("processUserLogin error (may be Firestore Rules):", err);
+			// SILENT FAIL and NAVIGATE: 
+			// Even if Firestore write fails, if we have the auth user, let them in!
+			// This prevents getting stuck on login due to DB permission issues.
+			setLoginStatus('Đăng nhập thành công (Cảnh báo: Lỗi đồng bộ DB)');
+			console.log("Navigating to home despite DB error...");
+			navigate('/');
+			setTimeout(() => {
+				if (window.location.pathname.includes('/login')) {
+					window.location.href = '/';
+				}
+			}, 800);
 		}
 	};
 
@@ -217,9 +225,19 @@ const Login = () => {
 						</button>
 
 						{loginStatus && (
-							<p className="text-center text-[11px] font-bold text-indigo-600 dark:text-indigo-400 animate-pulse bg-indigo-50 dark:bg-indigo-900/20 py-2 rounded-lg border border-indigo-100 dark:border-indigo-800">
-								{loginStatus}
-							</p>
+							<div className="space-y-3 w-full">
+								<p className="text-center text-[11px] font-bold text-indigo-600 dark:text-indigo-400 animate-pulse bg-indigo-50 dark:bg-indigo-900/20 py-2 rounded-lg border border-indigo-100 dark:border-indigo-800">
+									{loginStatus}
+								</p>
+								{isLoggingIn && (
+									<button
+										onClick={() => navigate('/')}
+										className="w-full text-[10px] font-black text-slate-400 hover:text-[#1A237E] uppercase tracking-widest underline"
+									>
+										Vào trang chủ ngay (Bỏ qua chờ)
+									</button>
+								)}
+							</div>
 						)}
 
 						<div className="relative flex py-4 items-center">

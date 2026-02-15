@@ -95,8 +95,13 @@ const Login = () => {
 		} catch (error: any) {
 			console.error("Login error:", error);
 			setIsLoggingIn(false);
+
+			// Show more detailed error message to help debug
+			const errorMsg = error.message || "Lỗi không xác định";
+			const errorCode = error.code || "no-code";
+
 			if (error.code !== 'auth/popup-closed-by-user' && error.code !== 'auth/cancelled-popup-request') {
-				alert("Đăng nhập thất bại. Vui lòng thử lại bằng trình duyệt Chrome hoặc Safari chính thức.");
+				alert(`Đăng nhập thất bại.\nMã lỗi: ${errorCode}\nChi tiết: ${errorMsg}\n\nHãy thử lại bằng trình duyệt Chrome/Safari và không sử dụng Tab ẩn danh.`);
 			}
 		}
 	};

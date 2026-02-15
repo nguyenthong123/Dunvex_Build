@@ -74,20 +74,25 @@ const Login = () => {
 		let isMounted = true;
 
 		const checkRedirectResult = async () => {
+			console.log("Checking redirect result...");
 			try {
 				const result = await getRedirectResult(auth);
+				console.log("Redirect result:", result);
 				if (result?.user && isMounted) {
+					console.log("User detected from redirect:", result.user.email);
 					setIsLoggingIn(true);
 					await processUserLogin(result.user);
 				}
 			} catch (error: any) {
-				console.error("Redirect check error:", error);
+				console.error("Redirect check error details:", error);
+				alert("Lỗi sau khi chuyển hướng: " + error.message);
 			}
 		};
 		checkRedirectResult();
 
-		// Dự phòng: Nếu Firebase Auth đã có user (vừa redirect xong và auth state đã kịp update)
+		// Dự phòng: Nếu Firebase Auth đã có user
 		const unsubscribe = auth.onAuthStateChanged((user) => {
+			console.log("Auth state changed:", user ? user.email : "null");
 			if (user && !isLoggingIn && isMounted) {
 				setIsLoggingIn(true);
 				processUserLogin(user);
@@ -103,43 +108,38 @@ const Login = () => {
 	const handleGoogleLogin = async () => {
 		try {
 			setIsLoggingIn(true);
-			setLoginStatus('Đang kết nối với Google...');
+			setLoginStatus('Khởi tạo đăng nhập...');
+			console.log("Login trigger started...");
 
 			// Detect environment
 			const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 			const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-			const isInAppBrowser = /FBAN|FBAV|Instagram|Zalo|Line/i.test(navigator.userAgent);
+			const isInAppBrowser = /FBAN|FBAV|Instagram|Zalo|Line|Zalo/i.test(navigator.userAgent);
 
-			// Localhost/Desktop should always use Popup for stability
-			if (isLocalhost || (!isMobile && !isInAppBrowser)) {
+			console.log("Env info:", { isLocalhost, isMobile, isInAppBrowser });
+
+			// Force REDIRECT for production for most stability
+			if (!isLocalhost || isMobile || isInAppBrowser) {
+				console.log("Using signInWithRedirect for stability...");
+				setLoginStatus('Đang chuyển hướng đến Google...');
+				await signInWithRedirect(auth, googleProvider);
+			} else {
+				console.log("Using signInWithPopup...");
 				setLoginStatus('Đang mở cửa sổ đăng nhập...');
 				const result = await signInWithPopup(auth, googleProvider);
 				if (result.user) {
 					await processUserLogin(result.user);
 				}
-			} else {
-				// Use Redirect for mobile devices/in-app browsers
-				setLoginStatus('Đang chuyển hướng đến Google...');
-				await signInWithRedirect(auth, googleProvider);
 			}
 		} catch (error: any) {
-			console.error("Login trigger error:", error);
+			console.error("Login trigger error details:", error);
 			setIsLoggingIn(false);
-			setLoginStatus('');
 
 			const errorMsg = error.message || "Lỗi không xác định";
 			const errorCode = error.code || "no-code";
 
-			if (errorCode === 'auth/invalid-action-code' || errorMsg.includes('invalid action')) {
-				alert(`Lỗi cấu hình: ${errorMsg}\n\nCách sửa: Bạn hãy vào Google Cloud Console, chọn API Key và gỡ bỏ tất cả "API restrictions" (chọn None) để thử lại nhé.`);
-			} else if (errorCode === 'auth/popup-closed-by-user' || errorCode === 'auth/cancelled-popup-request' || errorMsg.includes('Cross-Origin-Opener-Policy')) {
-				// Fallback to redirect if popup fails or is blocked by COOP
-				console.log("Popup failed, falling back to redirect...");
-				setLoginStatus('Popup bị chặn, đang chuyển hướng...');
-				await signInWithRedirect(auth, googleProvider);
-			} else {
-				alert(`Đăng nhập thất bại.\nMã lỗi: ${errorCode}\nChi tiết: ${errorMsg}`);
-			}
+			alert(`Đăng nhập thất bại: ${errorCode}\n${errorMsg}\n\nHướng dẫn: Hãy đảm bảo bạn đã thêm 'dunvex-build.vercel.app' vào Authorized Domains trong Firebase Console.`);
+			setLoginStatus('');
 		}
 	};
 
@@ -247,9 +247,12 @@ const Login = () => {
 					</div>
 				</div>
 
-				<p className="mt-8 text-[11px] text-slate-400 dark:text-slate-500 font-medium uppercase tracking-[2px]">
-					© 2024 Dunvex Build Technology Solutions
-				</p>
+				{/* Diagnostic Info Footer */}
+				<div className="mt-8 text-[9px] text-slate-400 dark:text-slate-600 font-mono text-center flex flex-col gap-1 opacity-50">
+					<p>© 2024 Dunvex Build Technology Solutions</p>
+					<p>Domain: {window.location.hostname} • API: {import.meta.env.VITE_FIREBASE_API_KEY ? 'Set' : 'Missing'}</p>
+					<p>UA: {navigator.userAgent.slice(0, 50)}...</p>
+				</div>
 			</div>
 
 			{/* Online Status Badge (LG only) */}

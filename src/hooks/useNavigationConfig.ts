@@ -86,6 +86,7 @@ export const useNavigationConfig = () => {
 		{ icon: 'group', label: 'Khách hàng', path: '/customers', desktopOnly: true, permissionKey: 'customers_manage' },
 		{ icon: 'inventory_2', label: 'Sản phẩm', path: '/inventory', desktopOnly: true, permissionKey: 'inventory_view' },
 		{ icon: 'request_quote', label: 'Báo giá', path: '/price-list' },
+		{ icon: 'school', label: 'Đào tạo', path: '/khoa-dao-tao' },
 		{ icon: 'settings', label: 'Cài đặt', path: '/settings' },
 	];
 

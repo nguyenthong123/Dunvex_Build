@@ -218,18 +218,40 @@ const AdminSettings = () => {
 			const [prodSnap, custSnap, orderSnap] = await Promise.all([
 				getDocs(query(collection(db, 'products'), where('ownerId', '==', owner.ownerId))),
 				getDocs(query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId))),
-				getDocs(query(
-					collection(db, 'orders'),
-					where('ownerId', '==', owner.ownerId),
-					where('createdAt', '>=', startTimestamp),
-					where('createdAt', '<=', endTimestamp)
-				))
+				getDocs(query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId)))
 			]);
+
+			const syncOrders = orderSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter((o: any) => {
+				if (!o.createdAt) return false;
+				const createdDate = o.createdAt.toDate ? o.createdAt.toDate() : new Date(o.createdAt);
+				return createdDate >= startTimestamp && createdDate <= endTimestamp;
+			});
+
+			const orderDetails: any[] = [];
+			syncOrders.forEach((order: any) => {
+				if (Array.isArray(order.items)) {
+					order.items.forEach((item: any) => {
+						orderDetails.push({
+							orderId: order.id,
+							orderDate: order.orderDate,
+							customerName: order.customerName,
+							productName: item.name,
+							qty: item.qty,
+							price: item.price,
+							unit: item.unit,
+							total: (item.qty || 0) * (item.price || 0),
+							category: item.category,
+							packaging: item.packaging
+						});
+					});
+				}
+			});
 
 			const dataToSync = {
 				products: prodSnap.docs.map(d => ({ id: d.id, ...d.data() })),
 				customers: custSnap.docs.map(d => ({ id: d.id, ...d.data() })),
-				orders: orderSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+				orders: syncOrders,
+				orderDetails: orderDetails
 			};
 
 			const response = await fetch('https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec', {

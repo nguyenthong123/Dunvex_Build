@@ -30,7 +30,11 @@ Dưới đây là sơ đồ tóm tắt các trang và luồng dữ liệu chính
     - Quản lý lịch sử nhiều bản báo giá (Firestore), hỗ trợ Lưu/Xóa linh hoạt.
     - Chế độ "Desktop trên Mobile" & Thu phóng (60%-100%) để chụp ảnh toàn bộ bảng giá.
     - Giao diện in ấn Premium, tự động khớp thông tin doanh nghiệp.
-
+- **Hệ thống Đào tạo (`/khoa-dao-tao`)** 🎓:
+    - **Hands-on Practice**: Thực hành trực tiếp trên dữ liệu thật của chính người dùng.
+    - **Môi trường Interactive Lab**: Chia đôi màn hình, hướng dẫn chi tiết từng bước.
+    - **Real-time Scoring**: Tự động chấm điểm bằng cách truy vấn dữ liệu thực tế gắn với `ownerId`.
+    - **Chứng chỉ Digital**: Cấp chứng chỉ ngay sau khi hoàn thành các nhiệm vụ trong bài Lab.
 ---
 
 ## 2. Hệ thống Giao diện & Điều hướng (Nâng cấp 🚀)
@@ -100,6 +104,11 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Doanh thu & Lợi nhuận**: Tự động tính toán Doanh thu và Lợi nhuận gộp (giá bán - giá nhập) theo ngày và theo tháng từ dữ liệu thực tế của Firestore.
     - **Biểu đồ Tăng trưởng**: Chuyển đổi biểu đồ tĩnh sang biểu đồ động, hiển thị doanh thu 7 ngày gần nhất với cơ chế tự động cân bằng tỷ lệ (Auto-scale).
     - **Nhật ký Hoạt động (Home Activity)**: Hiển thị 5 hoạt động mới nhất của nhân viên ngay tại trang chủ, hỗ trợ nhảy nhanh đến nhật ký chi tiết trong phần Quản trị thông qua tham số URL (?tab=audit).
+- [x] **Đào tạo & Hệ thống Chứng chỉ (Training & Certification)**:
+    - **Lab 04 (Đối soát & Tài chính)**: Hoàn thiện bài thực hành cuối cùng về ghi nhận thu nợ, đồng bộ và đối soát dữ liệu trên Google Sheets thông qua câu hỏi trắc nghiệm động (Dynamic Quizzes) quét dữ liệu thực.
+    - **Hệ thống Chứng chỉ (Badges System)**: Kích hoạt hệ thống huy chương (Nhập môn -> Bậc thầy) tự động mở khóa dựa trên tổng điểm kỹ năng thực tế tích lũy từ các bài Lab.
+    - **Real-time Scoring**: Tích hợp cơ chế chấm điểm và tự động lưu (Auto-save) tiến độ vào Firestore, đồng bộ hiển thị điểm số và huy chương ngay tại trang danh mục đào tạo.
+    - **Tối ưu Mobile (Responsive Training)**: Khắc phục triệt để lỗi tràn dòng cho các mã ID dài, tối ưu sidebar hướng dẫn dạng stack linh hoạt cho điện thoại, đảm bảo trải nghiệm đào tạo mượt mà trên mọi thiết bị.
 
 ### 📝 Cần làm tiếp (To-do)
 - [ ] **Báo cáo & Phân tích thông minh (Dashboard Pro)**: Cảnh báo hàng sắp hết kho dựa trên tốc độ bán hàng và dự báo doanh số.

@@ -17,6 +17,8 @@ import MainLayout from './components/layout/MainLayout';
 import Pricing from './views/Pricing';
 import NexusControl from './views/NexusControl';
 import PriceList from './views/PriceList';
+import TrainingCatalog from './views/TrainingCatalog';
+import TrainingLab from './views/TrainingLab';
 
 function App() {
 	const [currentUser, setCurrentUser] = useState<any>(null);
@@ -109,6 +111,14 @@ function App() {
 				<Route
 					path="/price-list"
 					element={currentUser ? <MainLayout><PriceList /></MainLayout> : <Navigate to="/login" />}
+				/>
+				<Route
+					path="/khoa-dao-tao"
+					element={currentUser ? <MainLayout><TrainingCatalog /></MainLayout> : <Navigate to="/login" />}
+				/>
+				<Route
+					path="/khoa-dao-tao/:id"
+					element={currentUser ? <TrainingLab /> : <Navigate to="/login" />}
 				/>
 
 				{/* Catch all */}

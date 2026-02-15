@@ -111,7 +111,7 @@ export const useNavigationConfig = () => {
 		} else if (path === '/inventory') {
 			items = [
 				allItems[0], // Trang chủ
-				{ icon: 'inventory', label: 'Tồn kho', path: '/inventory' }, // Thay Đơn hàng bằng Tồn kho
+				{ icon: 'inventory_2', label: 'Sản phẩm', path: '/inventory' }, // Thay Đơn hàng bằng Sản phẩm
 				allItems[2], // Center (Thêm SP)
 				allItems[5], // Khách hàng (Thay cho Công nợ)
 				getSlot5(),  // Cài đặt

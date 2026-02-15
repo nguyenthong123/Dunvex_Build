@@ -115,9 +115,9 @@ const ProductList = () => {
 		return unsubscribe;
 	}, [owner.loading, owner.ownerId]);
 
-	// Fetch Inventory Logs
+	// Fetch Inventory Logs (Always fetch to compute stats)
 	useEffect(() => {
-		if (owner.loading || !owner.ownerId || activeTab !== 'logs') return;
+		if (owner.loading || !owner.ownerId) return;
 
 		const q = query(
 			collection(db, 'inventory_logs'),
@@ -219,6 +219,21 @@ const ProductList = () => {
 		}
 	};
 
+	// Helper to compute stats from logs
+	const getProductInventoryStats = (productId: string) => {
+		const logs = inventoryLogs.filter(l => l.productId === productId || l.targetProductId === productId);
+
+		const totalImport = logs
+			.filter(l => l.type === 'init' || (l.type === 'audit' && l.diffType === 'increase') || (l.type === 'transfer' && l.targetProductId === productId))
+			.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+
+		const totalExport = logs
+			.filter(l => l.type === 'out' || (l.type === 'audit' && l.diffType === 'decrease') || (l.type === 'transfer' && l.productId === productId))
+			.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+
+		return { import: totalImport, export: totalExport };
+	};
+
 	const handleAddProduct = async (e: React.FormEvent) => {
 		e.preventDefault();
 		try {
@@ -286,21 +301,46 @@ const ProductList = () => {
 		e.preventDefault();
 		if (!selectedProduct) return;
 		try {
-			await updateDoc(doc(db, 'products', selectedProduct.id), {
+			const batch = writeBatch(db);
+			const prodRef = doc(db, 'products', selectedProduct.id);
+
+			const oldStock = Number(selectedProduct.stock) || 0;
+			const newStock = Number(formData.stock) || 0;
+			const stockDiff = newStock - oldStock;
+
+			batch.update(prodRef, {
 				...formData,
 				updatedAt: serverTimestamp(),
 				updatedBy: auth.currentUser?.uid
 			});
 
-			// Log Update Product
-			await addDoc(collection(db, 'audit_logs'), {
+			if (stockDiff !== 0) {
+				const logRef = doc(collection(db, 'inventory_logs'));
+				batch.set(logRef, {
+					productId: selectedProduct.id,
+					type: 'audit',
+					diffType: stockDiff > 0 ? 'increase' : 'decrease',
+					productName: formData.name,
+					qty: Math.abs(stockDiff),
+					note: `Chỉnh sửa thủ công: ${oldStock} -> ${newStock}`,
+					ownerId: owner.ownerId,
+					user: auth.currentUser?.displayName || auth.currentUser?.email,
+					createdAt: serverTimestamp()
+				});
+			}
+
+			// Log Audit Trail
+			const auditTrailRef = doc(collection(db, 'audit_logs'));
+			batch.set(auditTrailRef, {
 				action: 'Cập nhật sản phẩm',
 				user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
 				userId: auth.currentUser?.uid,
 				ownerId: owner.ownerId,
-				details: `Đã cập nhật sản phẩm: ${formData.name}`,
+				details: `Đã cập nhật sản phẩm: ${formData.name}${stockDiff !== 0 ? ` (Điều chỉnh kho: ${stockDiff})` : ''}`,
 				createdAt: serverTimestamp()
 			});
+
+			await batch.commit();
 			setShowEditForm(false);
 			resetForm();
 		} catch (error) {
@@ -550,7 +590,7 @@ const ProductList = () => {
 						<span className="material-symbols-outlined text-xl group-hover:rotate-[-45deg] transition-transform">home</span>
 					</button>
 					<div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
-					<h2 className="text-lg md:text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight">Kho Hàng</h2>
+					<h2 className="text-lg md:text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight">Sản Phẩm & Tồn Kho</h2>
 				</div>
 
 				<div className="flex items-center gap-4">
@@ -559,7 +599,7 @@ const ProductList = () => {
 							onClick={() => setActiveTab('products')}
 							className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all ${activeTab === 'products' ? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm' : 'text-slate-400'}`}
 						>
-							DANH SÁCH
+							TỒN KHO CHI TIẾT
 						</button>
 						<button
 							onClick={() => setActiveTab('logs')}
@@ -632,11 +672,10 @@ const ProductList = () => {
 			{/* CONTENT */}
 			<div className="flex-1 p-4 md:p-8 overflow-y-auto custom-scrollbar">
 				{/* Stats */}
-				<div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+				<div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
 					<ProdStatCard icon="inventory_2" label="Tổng sản phẩm" value={products.length.toString()} color="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400" />
 					<ProdStatCard icon="production_quantity_limits" label="Sắp hết hàng" value={products.filter(p => p.stock <= 5).length.toString()} color="bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400" />
 					<ProdStatCard icon="history" label="Giao dịch kho" value={inventoryLogs.length.toString()} color="bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400" />
-					<ProdStatCard icon="link" label="SP liên kết" value={products.filter(p => p.linkedProductId).length.toString()} color="bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400" />
 				</div>
 
 				{/* Main Content Area */}
@@ -648,9 +687,10 @@ const ProductList = () => {
 								<thead>
 									<tr className="bg-slate-100/50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
 										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Sản phẩm</th>
-										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Giá bán</th>
-										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Tồn kho</th>
-										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Danh mục</th>
+										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Nhập kho</th>
+										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Xuất kho</th>
+										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Tồn cuối</th>
+										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Giá bán</th>
 										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-right">Hành động</th>
 									</tr>
 								</thead>
@@ -682,26 +722,31 @@ const ProductList = () => {
 														</div>
 													</div>
 												</td>
-												<td className="py-4 px-6 font-bold text-blue-600 dark:text-blue-400">{formatPrice(product.priceSell)}</td>
-												<td className="py-4 px-6">
-													<div className="flex items-center gap-2">
-														<span className={`font-black ${product.stock <= 5 ? 'text-red-500 dark:text-red-400' : 'text-[#1A237E] dark:text-indigo-400'}`}>
-															{product.linkedProductId ?
-																(products.find(p => p.id === product.linkedProductId)?.stock || 0) :
-																product.stock
-															}
+												<td className="py-4 px-6 text-center">
+													<div className="flex flex-col items-center">
+														<span className="text-sm font-bold text-slate-700 dark:text-slate-300">
+															{getProductInventoryStats(product.id).import}
 														</span>
-														<span className="text-[10px] text-gray-400 dark:text-slate-500 font-bold uppercase">{product.unit}</span>
-														{product.linkedProductId && (
-															<span className="material-symbols-outlined text-xs text-blue-400" title="Đang liên kết với mã kho gốc">link</span>
-														)}
+														<span className="text-[9px] text-slate-400 uppercase font-black tracking-widest">Tổng nhập</span>
 													</div>
 												</td>
-												<td className="py-4 px-6">
-													<span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 uppercase">
-														{product.category}
-													</span>
+												<td className="py-4 px-6 text-center">
+													<div className="flex flex-col items-center">
+														<span className="text-sm font-bold text-rose-500 dark:text-rose-400">
+															{getProductInventoryStats(product.id).export}
+														</span>
+														<span className="text-[9px] text-slate-400 uppercase font-black tracking-widest">Tổng xuất</span>
+													</div>
 												</td>
+												<td className="py-4 px-6 text-center">
+													<div className="flex flex-col items-center">
+														<span className={`text-base font-black ${product.stock <= 5 ? 'text-orange-500' : 'text-[#1A237E] dark:text-indigo-400'}`}>
+															{product.stock}
+														</span>
+														<span className="text-[9px] text-slate-400 uppercase font-black tracking-widest">{product.unit}</span>
+													</div>
+												</td>
+												<td className="py-4 px-6 text-center font-bold text-blue-600 dark:text-blue-400">{formatPrice(product.priceSell)}</td>
 												<td className="py-4 px-6 text-right">
 													{hasManagePermission && (
 														<div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
@@ -1001,25 +1046,6 @@ const ProductList = () => {
 										</div>
 									</div>
 									<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-										<div className="md:col-span-2 p-4 bg-blue-50/50 dark:bg-blue-900/10 rounded-2xl border border-blue-100 dark:border-blue-900/20">
-											<label className="block text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase mb-2 tracking-widest">Liên kết nguồn Kho (Inventory Link)</label>
-											<select
-												className="w-full bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 rounded-xl py-3 px-4 text-slate-900 dark:text-white font-bold outline-none focus:ring-2 focus:ring-blue-500/20"
-												value={formData.linkedProductId}
-												onChange={(e) => setFormData({ ...formData, linkedProductId: e.target.value })}
-											>
-												<option value="">-- Tự quản lý tồn kho (Sản phẩm gốc) --</option>
-												{products
-													.filter(p => p.id !== selectedProduct?.id && !p.linkedProductId)
-													.map(p => (
-														<option key={p.id} value={p.id}>Dùng chung kho với: {p.name} (Tồn: {p.stock} {p.unit})</option>
-													))
-												}
-											</select>
-											<p className="text-[10px] text-blue-500 dark:text-blue-400 mt-2 font-medium italic">
-												* Nếu chọn liên kết, sản phẩm này sẽ sử dụng số lượng tồn kho của "Sản phẩm gốc". Phù hợp cho việc tạo nhiều mã giá khác nhau.
-											</p>
-										</div>
 
 										<div>
 											<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Quy cách</label>

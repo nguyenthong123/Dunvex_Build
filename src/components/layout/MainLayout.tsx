@@ -26,7 +26,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 			<main className="flex-1 flex flex-col h-full overflow-hidden bg-white dark:bg-slate-900 relative transition-colors duration-300">
 				{/* MOBILE TOP BAR - Intelligent hiding */}
 				<header
-					className={`md:hidden flex items-center justify-between px-6 py-4 border-b border-slate-50 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md fixed top-0 left-0 right-0 z-[50] transition-transform duration-500 ${isNavVisible ? 'translate-y-0' : '-translate-y-full'}`}
+					className="md:hidden flex items-center justify-between px-6 py-4 border-b border-slate-50 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md fixed top-0 left-0 right-0 z-[50]"
 					style={{ WebkitBackdropFilter: 'blur(12px)' }}
 				>
 					<div className="flex items-center gap-2">

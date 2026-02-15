@@ -530,8 +530,8 @@ const Debts: React.FC = () => {
 			{/* Content Area */}
 			<div className="flex-1 p-4 md:p-8">
 				<div className="max-w-7xl mx-auto flex flex-col gap-6 md:gap-8">
-					{/* KPI Cards Section - Intelligent hiding on mobile */}
-					<div className={`grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 transition-all duration-500 origin-top overflow-hidden ${!isNavVisible ? 'max-h-0 opacity-0 mb-0 scale-y-90 pointer-events-none' : 'max-h-[500px] opacity-100 mb-0'}`}>
+					{/* KPI Cards Section */}
+					<div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 mb-0 transition-colors duration-300">
 						{/* KPI Card 1 */}
 						<div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border-l-[6px] border-[#10b981] relative overflow-hidden group transition-colors duration-300">
 							<div className="absolute right-0 top-1/2 -translate-y-1/2 p-4 opacity-10 group-hover:scale-110 transition-transform">

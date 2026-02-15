@@ -270,14 +270,14 @@ const PriceList = () => {
 					>
 						<ArrowLeft size={20} />
 					</button>
-					<h2 className="text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight">
+					<h2 className="text-sm md:text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tighter flex-1 truncate">
 						{viewMode === 'list' ? 'Lịch sử báo giá' : 'Chi tiết báo giá'}
 					</h2>
 				</div>
 
-				<div className="flex items-center gap-3">
+				<div className="flex items-center gap-2">
 					{viewMode === 'detail' && (
-						<div className="hidden md:relative md:block">
+						<div className="hidden lg:relative lg:block">
 							<Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
 							<input
 								type="text"
@@ -291,17 +291,19 @@ const PriceList = () => {
 
 					<button
 						onClick={() => setShowImportModal(true)}
-						className="flex items-center gap-2 bg-[#FF6D00] text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-orange-500/20 hover:bg-orange-600 transition-all"
+						className="size-10 md:w-auto bg-[#FF6D00] text-white md:px-4 md:py-2.5 rounded-xl font-bold md:text-sm shadow-lg shadow-orange-500/20 hover:bg-orange-600 transition-all flex items-center justify-center gap-2"
+						title="Cập nhật Data"
 					>
 						<Upload size={18} />
-						<span className="hidden sm:inline">Cập nhật Data</span>
+						<span className="hidden md:inline">Cập nhật Data</span>
 					</button>
 
 					{viewMode === 'detail' && (
 						<button
 							onClick={handlePrint}
 							disabled={priceData.length === 0}
-							className="size-10 md:w-32 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 md:rounded-xl rounded-full flex items-center justify-center gap-2 font-bold text-sm hover:bg-slate-200 transition-all disabled:opacity-50"
+							className="size-10 md:w-32 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl flex items-center justify-center gap-2 font-bold text-sm hover:bg-slate-200 transition-all disabled:opacity-50"
+							title="In Báo Giá"
 						>
 							<Printer size={18} />
 							<span className="hidden md:inline">In Báo Giá</span>
@@ -396,7 +398,7 @@ const PriceList = () => {
 								<button
 									key={scale}
 									onClick={() => setZoomScale(scale)}
-									className={`px-5 py-2.5 rounded-full font-black text-xs transition-all ${zoomScale === scale ? 'bg-white text-slate-900' : 'text-white/60 hover:text-white transition-colors'}`}
+									className={`px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-widest transition-all ${zoomScale === scale ? 'bg-white text-slate-900' : 'text-white/40 hover:text-white'}`}
 								>
 									{Math.round(scale * 100)}%
 								</button>
@@ -423,24 +425,24 @@ const PriceList = () => {
 							<div className="bg-white dark:bg-slate-900 shadow-2xl rounded-[3rem] overflow-hidden border border-slate-200 dark:border-slate-800 print:shadow-none print:rounded-none print:border-none">
 
 								{/* Báo giá Header */}
-								<div className="p-12 bg-white border-b border-slate-100 relative">
-									<div className="flex flex-col md:flex-row justify-between items-start gap-8">
-										<div className="space-y-6">
-											<div className="flex items-center gap-4">
-												<div className="size-16 bg-[#5C5CFF] rounded-2xl flex items-center justify-center text-white shadow-xl shadow-blue-500/20">
-													<Building2 size={36} />
+								<div className="p-6 md:p-12 bg-white border-b border-slate-100 relative">
+									<div className="flex flex-col md:flex-row justify-between items-start gap-6 md:gap-8">
+										<div className="space-y-4 md:space-y-6">
+											<div className="flex items-center gap-3 md:gap-4">
+												<div className="size-12 md:size-16 bg-[#5C5CFF] rounded-xl md:rounded-2xl flex items-center justify-center text-white shadow-xl shadow-blue-500/20">
+													<Building2 size={24} className="md:w-9 md:h-9" />
 												</div>
-												<h1 className="text-4xl font-black text-[#1A237E] uppercase tracking-tighter">
+												<h1 className="text-2xl md:text-4xl font-black text-[#1A237E] uppercase tracking-tighter">
 													{companyInfo?.name || 'DUNVEX'}
 												</h1>
 											</div>
 
-											<div className="space-y-2.5 pl-1">
-												<div className="flex items-center gap-3 text-slate-500">
-													<div className="size-5 rounded-full bg-indigo-50 flex items-center justify-center">
-														<MapPin size={12} className="text-indigo-600" />
+											<div className="space-y-1.5 md:space-y-2.5 pl-1">
+												<div className="flex items-start gap-3 text-slate-500">
+													<div className="size-5 rounded-full bg-indigo-50 flex items-center justify-center shrink-0 mt-0.5">
+														<MapPin size={10} className="text-indigo-600" />
 													</div>
-													<span className="text-xs font-bold uppercase tracking-wide">{companyInfo?.address || 'XÃ KIẾN ĐỨC , LÂM ĐỒNG'}</span>
+													<span className="text-[10px] md:text-xs font-bold uppercase tracking-wide leading-tight">{companyInfo?.address || 'XÃ KIẾN ĐỨC , LÂM ĐỒNG'}</span>
 												</div>
 												<div className="flex flex-wrap items-center gap-6">
 													<div className="flex items-center gap-3 text-slate-500">
@@ -465,12 +467,12 @@ const PriceList = () => {
 											</div>
 										</div>
 
-										<div className="text-right">
-											<h2 className="text-6xl font-normal text-[#1A237E] uppercase tracking-[0.2em] mb-1">Báo Giá</h2>
-											<p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.4em] mb-8 pr-1">Niêm Yết Hệ Thống</p>
+										<div className="text-left md:text-right">
+											<h2 className="text-4xl md:text-6xl font-normal text-[#1A237E] uppercase tracking-[0.2em] mb-1">Báo Giá</h2>
+											<p className="text-[9px] md:text-[10px] font-black text-slate-300 uppercase tracking-[0.4em] mb-4 md:mb-8 pr-1">Niêm Yết Hệ Thống</p>
 
-											<div className="w-32 h-px bg-slate-100 ml-auto mb-4"></div>
-											<p className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-1">
+											<div className="hidden md:block w-32 h-px bg-slate-100 ml-auto mb-4"></div>
+											<p className="text-[8px] md:text-[9px] font-black text-slate-400 uppercase tracking-widest pl-1">
 												Ngày cập nhật: {selectedList?.updatedAt?.seconds ? new Date(selectedList.updatedAt.seconds * 1000).toLocaleDateString('vi-VN') : new Date().toLocaleDateString('vi-VN')}
 											</p>
 										</div>
@@ -483,7 +485,7 @@ const PriceList = () => {
 										<table className="w-full text-left border-collapse">
 											<thead>
 												<tr>
-													<th className="py-6 px-4 text-[10px] font-black text-indigo-800 uppercase tracking-[0.2em] border-b border-slate-100 text-center w-16 whitespace-nowrap">STT</th>
+													<th className="py-4 md:py-6 px-2 md:px-4 text-[9px] md:text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] border-b border-slate-100 text-center w-10 whitespace-nowrap">STT</th>
 													{headers.map((header, idx) => (
 														<th key={idx} className="py-6 px-4 text-[11px] font-black text-slate-950 uppercase tracking-[0.2em] border-b border-slate-100 whitespace-nowrap">
 															{header}
@@ -494,9 +496,9 @@ const PriceList = () => {
 											<tbody className="divide-y divide-slate-50">
 												{filteredData.map((row, rowIdx) => (
 													<tr key={rowIdx} className="hover:bg-slate-50/50 transition-colors">
-														<td className="py-6 px-4 text-[10px] font-black text-slate-200 text-center whitespace-nowrap">{rowIdx + 1}</td>
+														<td className="py-4 md:py-6 px-2 md:px-4 text-[9px] md:text-[10px] font-black text-slate-200 text-center whitespace-nowrap">{rowIdx + 1}</td>
 														{headers.map((header, colIdx) => (
-															<td key={colIdx} className={`py-6 px-4 text-xs font-bold whitespace-nowrap ${colIdx === 0 ? 'text-[#1A237E] text-[13px] leading-relaxed' : 'text-slate-500'}`}>
+															<td key={colIdx} className={`py-4 md:py-6 px-4 text-xs font-bold ${colIdx === 0 ? 'text-[#1A237E] text-[13px] leading-relaxed min-w-[200px] whitespace-normal' : 'text-slate-500 whitespace-nowrap'}`}>
 																{row[header]?.toLocaleString() || '---'}
 															</td>
 														))}

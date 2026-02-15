@@ -14,13 +14,17 @@ export const ScrollProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
 	const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
 		const currentScrollY = e.currentTarget.scrollTop;
+		const scrollDelta = currentScrollY - lastScrollY.current;
 
-		if (Math.abs(currentScrollY - lastScrollY.current) < 10) return;
+		// Increased threshold to 20px for stability
+		if (Math.abs(scrollDelta) < 20) return;
 
-		if (currentScrollY > lastScrollY.current && currentScrollY > 70) {
-			setIsNavVisible(false);
-		} else {
-			setIsNavVisible(true);
+		// Only hide if scrolling down significantly and past top area
+		if (scrollDelta > 0 && currentScrollY > 100) {
+			if (isNavVisible) setIsNavVisible(false);
+		} else if (scrollDelta < -15) {
+			// Show immediately if scrolling up a bit
+			if (!isNavVisible) setIsNavVisible(true);
 		}
 
 		lastScrollY.current = currentScrollY;

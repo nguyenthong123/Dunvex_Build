@@ -9,7 +9,7 @@ const MobileNav = () => {
 	const { isNavVisible } = useScroll();
 
 	return (
-		<div className={`md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 px-4 py-2 flex justify-between items-center z-[100] pb-6 h-24 transition-all duration-500 transform ${isNavVisible ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'}`}>
+		<div className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 px-4 py-2 flex justify-between items-center z-[100] pb-6 h-24">
 			{navItems.map((item) => {
 				const isActive = currentPath === item.path;
 

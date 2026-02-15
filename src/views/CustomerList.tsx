@@ -376,8 +376,8 @@ const CustomerList = () => {
 
 			{/* CONTENT */}
 			<div className="flex-1 p-4 md:p-8">
-				{/* Stats Cards - Intelligent hiding on mobile */}
-				<div className={`grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8 transition-all duration-500 origin-top overflow-hidden ${!isNavVisible ? 'max-h-0 mb-0 opacity-0 pointer-events-none scale-y-90' : 'max-h-96 opacity-100'}`}>
+				{/* Stats Cards */}
+				<div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
 					<StatCard icon="group" label="Tổng khách" value={customers.length.toString()} color="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400" />
 					<StatCard icon="person_add" label="Khách mới" value="12" color="bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400" />
 					<StatCard icon="verified" label="VIP" value="5" color="bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400" />

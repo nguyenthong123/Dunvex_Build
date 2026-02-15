@@ -99,20 +99,13 @@ const PriceList = () => {
 		setHeaders(list.headers || []);
 		setViewMode('detail');
 
-		const isMobile = window.innerWidth < 768;
-
-		if (isMobile) {
-			setIsDesktopLayout(false);
-			setZoomScale(1);
-		} else {
-			setIsDesktopLayout(true);
-			// Auto calculate zoom to fit screen width for desktop view
-			const screenWidth = window.innerWidth;
-			const targetWidth = 1000;
-			const padding = 64;
-			const fitScale = (screenWidth - padding) / targetWidth;
-			setZoomScale(Math.min(1, Math.max(0.6, fitScale)));
-		}
+		setIsDesktopLayout(true);
+		// Auto calculate zoom to fit screen width
+		const screenWidth = window.innerWidth;
+		const targetWidth = 1000;
+		const padding = 32;
+		const fitScale = (screenWidth - padding) / targetWidth;
+		setZoomScale(Math.min(1, Math.max(0.3, fitScale)));
 	};
 
 	const processRawData = (jsonData: any[][]) => {
@@ -134,18 +127,12 @@ const PriceList = () => {
 		setSelectedList({ items: mappedData, headers: rawHeaders, isUnsaved: true });
 		setViewMode('detail');
 
-		const isMobile = window.innerWidth < 768;
-		if (isMobile) {
-			setIsDesktopLayout(false);
-			setZoomScale(1);
-		} else {
-			setIsDesktopLayout(true);
-			const screenWidth = window.innerWidth;
-			const targetWidth = 1000;
-			const padding = 64;
-			const fitScale = (screenWidth - padding) / targetWidth;
-			setZoomScale(Math.min(1, Math.max(0.6, fitScale)));
-		}
+		setIsDesktopLayout(true);
+		const screenWidth = window.innerWidth;
+		const targetWidth = 1000;
+		const padding = 32;
+		const fitScale = (screenWidth - padding) / targetWidth;
+		setZoomScale(Math.min(1, Math.max(0.3, fitScale)));
 
 		setShowImportModal(false);
 	};
@@ -353,7 +340,7 @@ const PriceList = () => {
 			</header>
 
 			{/* PAGE CONTENT */}
-			<main className={`flex-1 ${viewMode === 'detail' ? 'p-0 md:p-8' : 'p-4 md:p-12'} print:p-0 overflow-x-hidden transition-all duration-300`}>
+			<main className={`flex-1 ${viewMode === 'detail' ? 'p-4 md:p-8' : 'p-4 md:p-12'} print:p-0 overflow-x-hidden transition-all duration-300`}>
 				{viewMode === 'list' ? (
 					<div className="max-w-4xl mx-auto space-y-6">
 						<div className="flex flex-col md:flex-row md:items-center justify-between gap-3 px-1">
@@ -444,52 +431,52 @@ const PriceList = () => {
 						</div>
 
 						<div
-							className="origin-top transition-all duration-500 ease-out pb-40 md:pb-20 w-full flex justify-center"
+							className="origin-top transition-all duration-500 ease-out pb-40 md:pb-20 flex justify-center"
 							style={{
 								transform: `scale(${zoomScale})`,
-								width: isDesktopLayout ? '1000px' : '100%',
-								minWidth: isDesktopLayout ? '1000px' : '0px'
+								width: '1000px',
+								minWidth: '1000px'
 							}}
 						>
-							<div className="bg-white dark:bg-slate-900 shadow-2xl rounded-none md:rounded-[3rem] overflow-hidden border-x-0 md:border border-slate-200 dark:border-slate-800 print:shadow-none print:rounded-none print:border-none w-full">
+							<div className="bg-white dark:bg-slate-900 shadow-2xl rounded-[3rem] overflow-hidden border border-slate-200 dark:border-slate-800 print:shadow-none print:rounded-none print:border-none w-full">
 
 								{/* Báo giá Header */}
-								<div className="p-5 md:p-12 bg-white border-b border-slate-50 relative">
-									<div className="flex flex-col md:flex-row justify-between items-start gap-5 md:gap-8">
-										<div className="space-y-4 md:space-y-6 w-full md:w-auto">
-											<div className="flex items-center gap-3 md:gap-4">
-												<div className="size-11 md:size-16 bg-[#5C5CFF] rounded-xl md:rounded-2xl flex items-center justify-center text-white shadow-xl shadow-blue-500/20 shrink-0">
-													<Building2 size={24} className="md:w-9 md:h-9" />
+								<div className="p-12 bg-white border-b border-slate-50 relative">
+									<div className="flex justify-between items-start gap-8">
+										<div className="space-y-6">
+											<div className="flex items-center gap-4">
+												<div className="size-16 bg-[#5C5CFF] rounded-2xl flex items-center justify-center text-white shadow-xl shadow-blue-500/20 shrink-0">
+													<Building2 size={36} />
 												</div>
-												<h1 className="text-xl md:text-4xl font-black text-[#1A237E] uppercase tracking-tighter leading-tight">
+												<h1 className="text-4xl font-black text-[#1A237E] uppercase tracking-tighter leading-tight">
 													{companyInfo?.name || 'DUNVEX'}
 												</h1>
 											</div>
 
-											<div className="space-y-2 md:space-y-2.5 pl-1">
+											<div className="space-y-2.5 pl-1">
 												<div className="flex items-start gap-3 text-slate-500">
-													<MapPin size={12} className="text-indigo-600 shrink-0 mt-0.5" />
-													<span className="text-[10px] md:text-xs font-bold uppercase tracking-wide leading-tight">{companyInfo?.address || 'XÃ KIẾN ĐỨC , LÂM ĐỒNG'}</span>
+													<MapPin size={14} className="text-indigo-600 shrink-0 mt-0.5" />
+													<span className="text-xs font-bold uppercase tracking-wide leading-tight">{companyInfo?.address || 'XÃ KIẾN ĐỨC , LÂM ĐỒNG'}</span>
 												</div>
-												<div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+												<div className="flex items-center gap-6">
 													<div className="flex items-center gap-2 text-slate-500">
-														<Phone size={12} className="text-indigo-600" />
-														<span className="text-[11px] md:text-xs font-bold">{companyInfo?.phone || '0988765444'}</span>
+														<Phone size={14} className="text-indigo-600" />
+														<span className="text-sm font-bold">{companyInfo?.phone || '0988765444'}</span>
 													</div>
 													<div className="flex items-center gap-2 text-slate-500">
-														<Mail size={12} className="text-indigo-600" />
-														<span className="text-[11px] md:text-xs font-bold">{companyInfo?.email || 'dunvex.green@gmail.com'}</span>
+														<Mail size={14} className="text-indigo-600" />
+														<span className="text-sm font-bold">{companyInfo?.email || 'dunvex.green@gmail.com'}</span>
 													</div>
 												</div>
 											</div>
 										</div>
 
-										<div className="text-left md:text-right w-full md:w-auto pt-4 md:pt-0 border-t md:border-t-0 border-slate-100">
-											<h2 className="text-3xl md:text-6xl font-normal text-[#1A237E] uppercase tracking-[0.2em] mb-1">Báo Giá</h2>
-											<p className="text-[9px] md:text-[10px] font-black text-slate-300 uppercase tracking-[0.4em] mb-3 md:mb-8">Niêm Yết Hệ Thống</p>
+										<div className="text-right">
+											<h2 className="text-6xl font-normal text-[#1A237E] uppercase tracking-[0.2em] mb-1">Báo Giá</h2>
+											<p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.4em] mb-8">Niêm Yết Hệ Thống</p>
 
-											<div className="hidden md:block w-32 h-px bg-slate-100 ml-auto mb-4"></div>
-											<p className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest">
+											<div className="w-32 h-px bg-slate-100 ml-auto mb-4"></div>
+											<p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
 												Ngày cập nhật: {selectedList?.updatedAt?.seconds ? new Date(selectedList.updatedAt.seconds * 1000).toLocaleDateString('vi-VN') : new Date().toLocaleDateString('vi-VN')}
 											</p>
 										</div>
@@ -502,11 +489,11 @@ const PriceList = () => {
 										<table className="w-full text-left border-collapse min-w-[700px] md:min-w-full">
 											<thead>
 												<tr>
-													<th className="py-4 md:py-6 px-2 md:px-4 text-[10px] md:text-[11px] font-black text-indigo-100 uppercase tracking-[0.2em] border-b border-white/10 text-center w-10 whitespace-nowrap sticky left-0 z-20 bg-[#1A237E]">STT</th>
+													<th className="py-6 px-4 text-[11px] font-black text-indigo-400 uppercase tracking-[0.2em] border-b border-slate-100 text-center w-10">STT</th>
 													{headers.map((header, idx) => (
 														<th
 															key={idx}
-															className={`py-6 px-4 text-[11px] md:text-[12px] font-black uppercase tracking-[0.2em] border-b border-slate-100 whitespace-nowrap ${idx === 0 ? 'sticky left-10 z-20 bg-white text-indigo-600 sticky-shadow min-w-[200px] md:min-w-[300px]' : 'text-slate-950 bg-white'}`}
+															className="py-6 px-4 text-[12px] font-black text-slate-950 uppercase tracking-[0.2em] border-b border-slate-100 whitespace-nowrap"
 														>
 															{header}
 														</th>
@@ -516,11 +503,11 @@ const PriceList = () => {
 											<tbody className="divide-y divide-slate-50">
 												{filteredData.map((row, rowIdx) => (
 													<tr key={rowIdx} className="hover:bg-slate-50/50 transition-colors">
-														<td className="py-4 md:py-6 px-2 md:px-4 text-[10px] md:text-[11px] font-black text-white/40 text-center whitespace-nowrap sticky left-0 z-10 bg-[#1A237E]">{rowIdx + 1}</td>
+														<td className="py-6 px-4 text-[11px] font-black text-slate-200 text-center">{rowIdx + 1}</td>
 														{headers.map((header, colIdx) => (
 															<td
 																key={colIdx}
-																className={`py-4 md:py-6 px-4 text-[12px] md:text-[13px] font-bold ${colIdx === 0 ? 'text-[#1A237E] leading-relaxed sticky left-10 z-10 bg-white sticky-shadow whitespace-normal min-w-[200px] md:min-w-[300px]' : 'text-slate-500 whitespace-nowrap bg-transparent'}`}
+																className={`py-6 px-4 text-[13px] font-bold ${colIdx === 0 ? 'text-[#1A237E] leading-relaxed w-[350px]' : 'text-slate-500 whitespace-nowrap'}`}
 															>
 																{row[header]?.toLocaleString() || '---'}
 															</td>

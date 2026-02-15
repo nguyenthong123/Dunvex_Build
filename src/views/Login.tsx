@@ -105,18 +105,22 @@ const Login = () => {
 			setIsLoggingIn(true);
 			setLoginStatus('Đang kết nối với Google...');
 
-			// Detect if mobile (especially in-app browsers)
+			// Detect environment
+			const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 			const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 			const isInAppBrowser = /FBAN|FBAV|Instagram|Zalo|Line/i.test(navigator.userAgent);
 
-			if (isMobile || isInAppBrowser) {
-				setLoginStatus('Vui lòng đợi chuyển hướng...');
-				await signInWithRedirect(auth, googleProvider);
-			} else {
+			// Localhost/Desktop should always use Popup for stability
+			if (isLocalhost || (!isMobile && !isInAppBrowser)) {
+				setLoginStatus('Đang mở cửa sổ đăng nhập...');
 				const result = await signInWithPopup(auth, googleProvider);
 				if (result.user) {
 					await processUserLogin(result.user);
 				}
+			} else {
+				// Use Redirect for mobile devices/in-app browsers
+				setLoginStatus('Đang chuyển hướng đến Google...');
+				await signInWithRedirect(auth, googleProvider);
 			}
 		} catch (error: any) {
 			console.error("Login trigger error:", error);
@@ -126,7 +130,9 @@ const Login = () => {
 			const errorMsg = error.message || "Lỗi không xác định";
 			const errorCode = error.code || "no-code";
 
-			if (error.code !== 'auth/popup-closed-by-user' && error.code !== 'auth/cancelled-popup-request') {
+			if (errorCode === 'auth/invalid-action-code' || errorMsg.includes('invalid action')) {
+				alert(`Lỗi cấu hình: ${errorMsg}\n\nCách sửa: Bạn hãy vào Google Cloud Console, chọn API Key và gỡ bỏ tất cả "API restrictions" (chọn None) để thử lại nhé.`);
+			} else if (error.code !== 'auth/popup-closed-by-user' && error.code !== 'auth/cancelled-popup-request') {
 				alert(`Đăng nhập thất bại.\nMã lỗi: ${errorCode}\nChi tiết: ${errorMsg}`);
 			}
 		}

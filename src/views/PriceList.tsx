@@ -61,7 +61,7 @@ const PriceList = () => {
 				const legacyRef = doc(db, 'price_lists', owner.ownerId);
 				const legacySnap = await getDoc(legacyRef);
 
-				let combined = [...collectionLists];
+				let combined: any[] = [...collectionLists];
 
 				if (legacySnap.exists()) {
 					const legacyData = legacySnap.data();

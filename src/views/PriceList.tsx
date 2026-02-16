@@ -30,7 +30,8 @@ const PriceList = () => {
 	const [viewMode, setViewMode] = useState<'list' | 'detail'>('list');
 	const [priceLists, setPriceLists] = useState<any[]>([]);
 	const [selectedList, setSelectedList] = useState<any>(null);
-	const [zoomScale, setZoomScale] = useState(1); // 0.6, 0.85, 1.0
+	const [zoomScale, setZoomScale] = useState(1);
+	const [autoScale, setAutoScale] = useState(1);
 	const [isDesktopLayout, setIsDesktopLayout] = useState(true);
 
 	useEffect(() => {
@@ -103,9 +104,11 @@ const PriceList = () => {
 		// Auto calculate zoom to fit screen width
 		const screenWidth = window.innerWidth;
 		const targetWidth = 1000;
-		const padding = 32;
+		const padding = 24;
 		const fitScale = (screenWidth - padding) / targetWidth;
-		setZoomScale(Math.min(1, Math.max(0.3, fitScale)));
+		const finalScale = Math.min(1, Math.max(0.2, fitScale));
+		setZoomScale(finalScale);
+		setAutoScale(finalScale);
 	};
 
 	const processRawData = (jsonData: any[][]) => {
@@ -130,9 +133,11 @@ const PriceList = () => {
 		setIsDesktopLayout(true);
 		const screenWidth = window.innerWidth;
 		const targetWidth = 1000;
-		const padding = 32;
+		const padding = 24;
 		const fitScale = (screenWidth - padding) / targetWidth;
-		setZoomScale(Math.min(1, Math.max(0.3, fitScale)));
+		const finalScale = Math.min(1, Math.max(0.2, fitScale));
+		setZoomScale(finalScale);
+		setAutoScale(finalScale);
 
 		setShowImportModal(false);
 	};
@@ -269,7 +274,7 @@ const PriceList = () => {
 					>
 						<ArrowLeft size={18} />
 					</button>
-					<h2 className="text-xs md:text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tighter truncate">
+					<h2 className="text-sm md:text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tighter truncate max-w-[150px] md:max-w-none">
 						{viewMode === 'list' ? 'Lịch sử báo giá' : (selectedList?.title || 'Chi tiết báo giá')}
 					</h2>
 				</div>
@@ -410,12 +415,18 @@ const PriceList = () => {
 				) : (
 					<div className="relative min-h-[800px] flex justify-center">
 						{/* ZOOM CONTROLS - Floating Pill (Moved higher on mobile) */}
-						<div className="fixed bottom-28 md:bottom-8 left-1/2 -translate-x-1/2 z-[60] bg-slate-900/80 backdrop-blur-xl border border-white/10 rounded-full p-1.5 flex items-center gap-1 shadow-[0_20px_50px_rgba(0,0,0,0.5)] print:hidden scale-90 sm:scale-100 transition-all duration-500">
-							{[0.6, 0.85, 1.0].map((scale) => (
+						<div className="fixed bottom-28 md:bottom-8 left-1/2 -translate-x-1/2 z-[60] bg-slate-900/90 backdrop-blur-xl border border-white/10 rounded-full p-1.5 flex items-center gap-1 shadow-[0_20px_50px_rgba(0,0,0,0.5)] print:hidden scale-90 sm:scale-100 transition-all duration-500 overflow-hidden">
+							<button
+								onClick={() => setZoomScale(autoScale)}
+								className={`px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-widest transition-all ${Math.abs(zoomScale - autoScale) < 0.01 ? 'bg-white text-slate-900' : 'text-white/40 hover:text-white'}`}
+							>
+								Vừa
+							</button>
+							{[0.5, 0.75, 1.0].map((scale) => (
 								<button
 									key={scale}
 									onClick={() => setZoomScale(scale)}
-									className={`px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-widest transition-all ${zoomScale === scale ? 'bg-white text-slate-900' : 'text-white/40 hover:text-white'}`}
+									className={`px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-widest transition-all ${Math.abs(zoomScale - scale) < 0.01 && Math.abs(zoomScale - autoScale) > 0.01 ? 'bg-white text-slate-900' : 'text-white/40 hover:text-white'}`}
 								>
 									{Math.round(scale * 100)}%
 								</button>

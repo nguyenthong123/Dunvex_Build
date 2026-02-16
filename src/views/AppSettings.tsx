@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { auth } from '../services/firebase';
 import { signOut } from 'firebase/auth';
 import { useTheme } from '../context/ThemeContext';
@@ -7,9 +7,35 @@ import { Moon, Sun, Globe, Bell, LogOut, User, ShieldCheck, Key, HelpCircle, Che
 
 const AppSettings = () => {
 	const navigate = useNavigate();
+	const location = useLocation();
 	const { theme, toggleTheme } = useTheme();
 	const [showConfirmLogout, setShowConfirmLogout] = React.useState(false);
 	const [activeGuide, setActiveGuide] = React.useState<string | null>(null);
+
+	const pricingRef = React.useRef<HTMLDivElement>(null);
+	const guideRef = React.useRef<HTMLDivElement>(null);
+
+	React.useEffect(() => {
+		const params = new URLSearchParams(location.search);
+		const action = params.get('action');
+		const section = params.get('section');
+
+		if (action === 'toggleTheme') {
+			toggleTheme();
+			navigate('/settings', { replace: true });
+		} else if (action === 'logout') {
+			setShowConfirmLogout(true);
+			navigate('/settings', { replace: true });
+		}
+
+		if (section === 'pricing') {
+			pricingRef.current?.scrollIntoView({ behavior: 'smooth' });
+			navigate('/settings', { replace: true });
+		} else if (section === 'guide') {
+			guideRef.current?.scrollIntoView({ behavior: 'smooth' });
+			navigate('/settings', { replace: true });
+		}
+	}, [location, toggleTheme, navigate]);
 
 	const handleLogout = async () => {
 		try {
@@ -109,7 +135,7 @@ const AppSettings = () => {
 					</div>
 
 					{/* Pricing & Subscription Section */}
-					<div className="bg-[#1A237E] dark:bg-indigo-950 p-6 rounded-[2rem] shadow-xl border border-indigo-400/20 text-white relative overflow-hidden">
+					<div ref={pricingRef} className="bg-[#1A237E] dark:bg-indigo-950 p-6 rounded-[2rem] shadow-xl border border-indigo-400/20 text-white relative overflow-hidden">
 						<div className="absolute top-0 right-0 p-8 opacity-10 rotate-12">
 							<ShieldCheck size={120} />
 						</div>
@@ -187,7 +213,7 @@ const AppSettings = () => {
 					</div>
 
 					{/* Comprehensive User Guide Section */}
-					<div className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800">
+					<div ref={guideRef} className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800">
 						<div className="flex items-center gap-3 mb-6">
 							<div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-xl">
 								<BookOpen size={24} />

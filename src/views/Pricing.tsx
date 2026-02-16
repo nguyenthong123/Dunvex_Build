@@ -25,7 +25,7 @@ const Pricing = () => {
 		{
 			id: 'premium_monthly',
 			name: 'Gói Tháng',
-			price: 299000,
+			price: 199000,
 			period: 'tháng',
 			description: 'Dành cho shop lẻ muốn trải nghiệm dịch vụ.',
 			features: [
@@ -39,9 +39,9 @@ const Pricing = () => {
 		{
 			id: 'premium_yearly',
 			name: 'Gói Năm',
-			price: 2490000,
+			price: 1500000,
 			period: 'năm',
-			description: 'Tiết kiệm 30% - Giải pháp ổn định lâu dài.',
+			description: 'Tiết kiệm hơn 35% - Giải pháp kinh doanh bền vững.',
 			features: [
 				'Toàn bộ tính năng Gói Tháng',
 				'Quản lý nhân sự & Phân quyền',
@@ -227,12 +227,18 @@ const Pricing = () => {
 							</div>
 
 							{/* QR Image with Transfer Code */}
-							<div className="bg-white p-4 rounded-3xl shadow-inner border border-slate-100 dark:border-slate-800 mx-auto w-fit mb-8">
+							<div className="bg-white p-4 rounded-3xl shadow-inner border border-slate-100 dark:border-slate-800 mx-auto w-fit mb-4">
 								<img
-									src={`https://img.vietqr.io/image/MB-0348784878-compact2.png?amount=${selectedPlan.price}&addInfo=${encodeURIComponent(transferCode)}`}
+									src={`https://img.vietqr.io/image/ICB-107882271865-compact2.png?amount=${selectedPlan.price}&addInfo=${encodeURIComponent(transferCode)}`}
 									alt="Payment QR"
 									className="size-64 object-contain rounded-2xl"
 								/>
+							</div>
+
+							<div className="text-center mb-8 space-y-1">
+								<p className="text-sm font-black text-slate-800 dark:text-white uppercase">VietinBank</p>
+								<p className="text-xs font-bold text-slate-500">107882271865</p>
+								<p className="text-[10px] font-black text-indigo-500 uppercase">NGUYEN BA THONG</p>
 							</div>
 
 							<div className="space-y-4">

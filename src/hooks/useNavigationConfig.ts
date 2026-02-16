@@ -92,6 +92,14 @@ export const useNavigationConfig = () => {
 			};
 		}
 
+		if (path === '/settings') {
+			return {
+				icon: 'contrast',
+				label: 'Chế độ tối',
+				path: '/settings?action=toggleTheme',
+			};
+		}
+
 		// Mặc định cho các trang khác (checkin...)
 		return {
 			icon: 'add',
@@ -183,6 +191,14 @@ export const useNavigationConfig = () => {
 				allItems[2], // Center (Chấm công vào)
 				{ icon: 'coffee', label: 'Đăng ký nghỉ/muộn', path: '/attendance?action=request' },
 				allItems[4], // Hoạt động
+			];
+		} else if (path === '/settings') {
+			items = [
+				allItems[0], // Trang chủ
+				{ icon: 'payments', label: 'Gói & Chi phí', path: '/settings?section=pricing' },
+				allItems[2], // Center (Chế độ tối)
+				{ icon: 'menu_book', label: 'Cẩm nang', path: '/settings?section=guide' },
+				{ icon: 'logout', label: 'Đăng xuất', path: '/settings?action=logout' },
 			];
 		} else if (path === '/customers') {
 			items = [

@@ -16,20 +16,25 @@ const NotificationBell = ({ placement = 'down', align = 'right' }: { placement?:
 			where('userId', '==', auth.currentUser.uid)
 		);
 
-		const unsubscribe = onSnapshot(q, (snap) => {
-			const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+		const unsubscribe = onSnapshot(q,
+			(snap) => {
+				const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-			// Client-side sort and limit
-			const sorted = data.sort((a: any, b: any) => {
-				const timeA = a.createdAt?.seconds || 0;
-				const timeB = b.createdAt?.seconds || 0;
-				return timeB - timeA;
-			});
+				// Client-side sort and limit
+				const sorted = data.sort((a: any, b: any) => {
+					const timeA = a.createdAt?.seconds || 0;
+					const timeB = b.createdAt?.seconds || 0;
+					return timeB - timeA;
+				});
 
-			const recent = sorted.slice(0, 10);
-			setNotifications(recent);
-			setUnreadCount(data.filter((n: any) => !n.read).length);
-		});
+				const recent = sorted.slice(0, 10);
+				setNotifications(recent);
+				setUnreadCount(data.filter((n: any) => !n.read).length);
+			},
+			(error) => {
+				console.error("NotificationBell Firestore Error:", error);
+			}
+		);
 
 		return () => unsubscribe();
 	}, [auth.currentUser]);

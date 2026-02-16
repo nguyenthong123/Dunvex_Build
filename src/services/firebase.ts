@@ -16,7 +16,13 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 setPersistence(auth, browserLocalPersistence);
 export const googleProvider = new GoogleAuthProvider();
-export const db = getFirestore(app);
+
+// Optimize Firestore connection to avoid ERR_QUIC_PROTOCOL_ERROR
+import { initializeFirestore } from "firebase/firestore";
+export const db = initializeFirestore(app, {
+	experimentalForceLongPolling: true,
+});
+
 export const storage = getStorage(app);
 
 export default app;

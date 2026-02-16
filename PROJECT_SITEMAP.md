@@ -124,6 +124,10 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Tối ưu Mobile Admin**: Giao diện Tab trượt ngang, các bảng điều khiển và bộ lọc được thiết kế lại dạng cột/stack cho điện thoại. Thanh điều hướng (Bottom Nav) thay đổi linh hoạt các nút tắt (Thêm NV, Chấm công, Nhân sự, Phân quyền) khi Admin truy cập trang quản trị.
 - [x] **UI/UX Refinement (Sidebar & Notifications)**: Khắc phục lỗi hiển thị thông báo bị che khuất trên PC bằng cơ chế mở ngược lên (Placement Up) và căn lề thông minh (Align Left).
 - [x] **Hệ thống Tài liệu & Hướng dẫn (User Education)**: Xây dựng bộ "Cẩm nang vận hành chi tiết" 6 bước (Khách hàng, Sản phẩm, Đơn hàng, Công nợ, Báo giá, Checkin) tích hợp ngay trong Cài đặt. Bổ sung chính sách Bảo mật, Quyền GPS và thông tin minh bạch về gói dịch vụ (Premium vs Free).
+- [x] **Cấu trúc Giá & Thanh toán (Billing & QR)**: Cập nhật phí thuê bao Premium mới (199k/tháng & 1.5tr/năm). Tích hợp hệ thống thanh toán qua VietinBank với QR Code tự động điền số tiền và nội dung định danh.
+- [x] **Điều hướng Thông minh theo Ngữ cảnh (Smart Navigation)**:
+    - **Trung tâm Đào tạo**: Tùy biến nút chính thành "Kết thúc Lab" và các mục menu thành Tồn kho chuyên sâu, Vận hành, Tài chính.
+    - **Trang Cài đặt**: Tích hợp phím tắt nhanh trên Bottom Nav bao gồm: Bật/tắt Chế độ tối (FAB chính), nhảy nhanh đến Gói dịch vụ, Cẩm nang vận hành và nút Đăng xuất trực tiếp.
 
 ### 📝 Cần làm tiếp (To-do)
 - [ ] **Báo cáo & Phân tích thông minh (Dashboard Pro)**: Cảnh báo hàng sắp hết kho dựa trên tốc độ bán hàng và dự báo doanh số.

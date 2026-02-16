@@ -99,7 +99,14 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 - [x] **Đối soát & Kiểm kho Định kỳ**: Hệ thống kiểm kê thực tế, tự động tính chênh lệch và cập nhật số dư kho với lý do điều chỉnh cụ thể.
 - [x] **Nâng cấp Bảo mật (Security Pro)**: Tối ưu hóa CSP, chặn Clickjacking và XSS theo tiêu chuẩn Mozilla HTTP Observatory thông qua `vercel.json`.
 - [x] **Ổn định hóa Nhập liệu & Kết nối**: Khắc phục lỗi "Failed to fetch" khi nhập liệu từ Google Sheets và tối ưu hóa kết nối Real-time cho Firebase bằng cách tinh chỉnh chính sách CSP.
-- [x] **Nexus Control & Feature Locking**: Nâng cấp giao diện Nexus Control đáp ứng mọi màn hình. Triển khai cơ chế khóa tính năng Google Sheets Sync linh hoạt (toàn hệ thống cho user Free hoặc thủ công cho từng doanh nghiệp).
+- [x] **Nexus Control & Smart Billing**: 
+    - Nâng cấp giao diện Nexus Control đáp ứng mọi màn hình (Responsive).
+    - Triển khai cột **"Ngày vào trang"** (Joined Date) thay cho Ngày hết hạn, tự động reset mốc khi cập nhật gói (Mail xác nhận).
+    - Cột **Gói đăng ký chuyên sâu**: Tích hợp menu xổ xuống (FREE, 1 THÁNG, 1 NĂM).
+    - Hệ thống **Auto-Lock (Tự động khóa)**: Tự động khóa các tính năng Đơn hàng, Công nợ, Đồng bộ Sheets dựa theo thời gian sử dụng (FREE: 60 ngày, 1 THÁNG: 30 ngày, 1 NĂM: 365 ngày).
+- [x] **Cấu hình Bảo mật chuN A+ (Security Refinement)**: 
+    - Tinh chỉnh chính sách CSP để hỗ trợ hiển thị hình ảnh từ DiceBear SVG API cho Trung tâm đào tạo.
+    - Cho phép kết nối và nạp script Google Analytics / Tag Manager theo tiêu chuẩn bảo mật cao nhất qua `vercel.json`.
 - [x] **Báo Giá Niêm Yết chuyên nghiệp (Inventory Pro)**: Tích hợp cơ chế nhập dữ liệu từ Excel/Google Sheets, quản lý lịch sử đa bản giá trên Firestore. Hỗ trợ thu phóng thông minh (60%-85%-100%) và ép khung Desktop trên Mobile giúp chụp ảnh màn hình tờ báo giá trọn vẹn, không bị nhảy dòng. Tinh chỉnh giao diện cao cấp với tiêu đề cột siêu tương phản (Slate-950).
 - [x] **Xác thực & Bảo mật Đăng nhập (Auth & Security)**: Khắc phục triệt để lỗi "missing initial state" và "invalid action" trên mọi thiết bị. Tối ưu hóa CSP & COOP headers cho Firebase Auth. Tích hợp thanh trạng thái đăng nhập chi tiết và cơ chế tự động chuyển đổi giữa Popup/Redirect thông minh giúp người dùng luôn vào được hệ thống dù là trên trình duyệt Zalo, Safari hay Chrome.
 - [x] **Tối ưu Báo Giá Di động (Price List Mobile Optimization)**: Tinh chỉnh giao diện Chi tiết báo giá siêu gọn nhẹ và chuyên nghiệp trên điện thoại. Tối ưu hóa kích thước bảng giá, hỗ trợ xuống dòng thông minh và hệ thống Zoom Pill cao cấp giúp chụp ảnh màn hình báo giá trọn vẹn.

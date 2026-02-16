@@ -90,6 +90,7 @@ const NexusControl = () => {
 					return {
 						...u,
 						isPro: s.isPro ?? u.isPro ?? false,
+						planId: s.planId || (s.isPro ? 'premium_monthly' : 'free'),
 						subscriptionStatus: s.subscriptionStatus || (u.isPro ? 'active' : 'trial'),
 						subscriptionExpiresAt: s.subscriptionExpiresAt || null,
 						paymentConfirmedAt: s.paymentConfirmedAt || u.createdAt || null,
@@ -126,6 +127,49 @@ const NexusControl = () => {
 			unsubUsers();
 		};
 	}, [navigate]);
+
+	const handleUpdatePlan = async (ownerId: string, newPlan: string) => {
+		if (!window.confirm(`Xác nhận đổi gói sang ${newPlan === 'free' ? 'FREE' : newPlan === 'premium_monthly' ? '1 tháng' : '1 năm'}? Ngày hiệu lực sẽ được đặt về hôm nay.`)) return;
+		try {
+			const isPro = newPlan !== 'free';
+			await updateDoc(doc(db, 'settings', ownerId), {
+				planId: newPlan,
+				isPro: isPro,
+				paymentConfirmedAt: serverTimestamp()
+			});
+		} catch (error) {
+			alert("Lỗi khi cập nhật gói");
+		}
+	};
+
+	const getEffectiveStatus = (c: any) => {
+		const joinedAt = c.paymentConfirmedAt?.toDate ? c.paymentConfirmedAt.toDate() : (c.paymentConfirmedAt?.seconds ? new Date(c.paymentConfirmedAt.seconds * 1000) : null);
+		if (!joinedAt) return { isExpired: false, daysUsed: 0, locks: { orders: c.manualLockOrders, debts: c.manualLockDebts, sheets: c.manualLockSheets } };
+
+		const now = new Date();
+		const diffDays = Math.floor((now.getTime() - joinedAt.getTime()) / (1000 * 60 * 60 * 24));
+
+		let isExpired = false;
+		const plan = c.planId || (c.isPro ? 'premium_monthly' : 'free');
+
+		if (plan === 'free') {
+			if (diffDays > 60) isExpired = true;
+		} else if (plan === 'premium_monthly') {
+			if (diffDays > 30) isExpired = true;
+		} else if (plan === 'premium_yearly') {
+			if (diffDays > 365) isExpired = true;
+		}
+
+		return {
+			isExpired,
+			daysUsed: diffDays,
+			locks: {
+				orders: isExpired || c.manualLockOrders,
+				debts: isExpired || c.manualLockDebts,
+				sheets: isExpired || c.manualLockSheets
+			}
+		};
+	};
 
 	const handleApprovePayment = async (request: any) => {
 		if (!window.confirm(`Xác nhận thanh toán ${request.amount.toLocaleString()}đ cho ${request.userEmail}?`)) return;
@@ -405,7 +449,7 @@ const NexusControl = () => {
 										<th className="px-6 py-5">Doanh nghiệp</th>
 										<th className="px-6 py-5">Email Owner</th>
 										<th className="px-6 py-5">Gói</th>
-										<th className="px-6 py-5">Hết hạn</th>
+										<th className="px-6 py-5">Ngày vào trang</th>
 										<th className="px-3 py-5 text-center">Đơn</th>
 										<th className="px-3 py-5 text-center">Nợ</th>
 										<th className="px-3 py-5 text-center">Sheet</th>
@@ -413,49 +457,67 @@ const NexusControl = () => {
 									</tr>
 								</thead>
 								<tbody className="divide-y divide-slate-800">
-									{customers.map((c) => (
-										<tr key={c.id} className="hover:bg-slate-800/30 transition-colors text-xs">
-											<td className="px-6 py-6 font-bold text-white uppercase truncate max-w-[150px]">
-												{c.displayName || 'No Name'}
-											</td>
-											<td className="px-6 py-6 text-slate-400">{c.email}</td>
-											<td className="px-6 py-6">
-												<span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${c.isPro ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
-													{c.isPro ? 'PRO' : 'FREE'}
-												</span>
-											</td>
-											<td className="px-6 py-6 text-slate-500">
-												{c.subscriptionExpiresAt?.toDate ? c.subscriptionExpiresAt.toDate().toLocaleDateString('vi-VN') : 'Hết hạn'}
-											</td>
-											<td className="px-3 py-6 text-center">
-												<button
-													onClick={() => toggleUserLock(c.uid, 'manualLockOrders', c.manualLockOrders)}
-													className={`size-8 rounded-lg flex items-center justify-center mx-auto transition-all ${c.manualLockOrders ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'bg-slate-800 text-slate-500 hover:text-white'}`}
-												>
-													{c.manualLockOrders ? <Lock size={12} /> : <Unlock size={12} />}
-												</button>
-											</td>
-											<td className="px-3 py-6 text-center">
-												<button
-													onClick={() => toggleUserLock(c.uid, 'manualLockDebts', c.manualLockDebts)}
-													className={`size-8 rounded-lg flex items-center justify-center mx-auto transition-all ${c.manualLockDebts ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'bg-slate-800 text-slate-500 hover:text-white'}`}
-												>
-													{c.manualLockDebts ? <Lock size={12} /> : <Unlock size={12} />}
-												</button>
-											</td>
-											<td className="px-3 py-6 text-center">
-												<button
-													onClick={() => toggleUserLock(c.uid, 'manualLockSheets', c.manualLockSheets)}
-													className={`size-8 rounded-lg flex items-center justify-center mx-auto transition-all ${c.manualLockSheets ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'bg-slate-800 text-slate-500 hover:text-white'}`}
-												>
-													{c.manualLockSheets ? <Lock size={12} /> : <Unlock size={12} />}
-												</button>
-											</td>
-											<td className="px-6 py-6 text-right">
-												<ExternalLink size={16} className="text-slate-600 cursor-not-allowed mx-auto" />
-											</td>
-										</tr>
-									))}
+									{customers.map((c) => {
+										const eff = getEffectiveStatus(c);
+										return (
+											<tr key={c.id} className="hover:bg-slate-800/30 transition-colors text-xs">
+												<td className="px-6 py-6 font-bold text-white uppercase truncate max-w-[150px]">
+													{c.displayName || 'No Name'}
+												</td>
+												<td className="px-6 py-6 text-slate-400">{c.email}</td>
+												<td className="px-6 py-6">
+													<select
+														className="bg-slate-800 text-white text-[10px] font-black rounded-lg px-2 py-1 outline-none border border-slate-700 hover:border-indigo-500 transition-colors cursor-pointer"
+														value={c.planId || (c.isPro ? 'premium_monthly' : 'free')}
+														onChange={(e) => handleUpdatePlan(c.uid, e.target.value)}
+													>
+														<option value="free">FREE (60d)</option>
+														<option value="premium_monthly">1 THÁNG (30d)</option>
+														<option value="premium_yearly">1 NĂM (365d)</option>
+													</select>
+												</td>
+												<td className="px-6 py-6 text-slate-500 whitespace-nowrap">
+													<div className={`font-bold text-[10px] ${eff.isExpired ? 'text-rose-500' : 'text-slate-300'}`}>
+														{eff.isExpired ? 'ĐÃ HẾT HẠN' : 'ĐANG HIỆU LỰC'}
+													</div>
+													<div className="text-[10px] uppercase font-black tracking-tighter">
+														{c.paymentConfirmedAt?.toDate ? c.paymentConfirmedAt.toDate().toLocaleDateString('vi-VN') : '---'}
+														<span className="ml-1 opacity-50">({eff.daysUsed}d)</span>
+													</div>
+												</td>
+												<td className="px-3 py-6 text-center">
+													<button
+														onClick={() => !eff.isExpired && toggleUserLock(c.uid, 'manualLockOrders', c.manualLockOrders)}
+														className={`size-8 rounded-lg flex items-center justify-center mx-auto transition-all ${eff.locks.orders ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'bg-slate-800 text-slate-500 hover:text-white'} ${eff.isExpired ? 'cursor-not-allowed opacity-80' : ''}`}
+														title={eff.isExpired ? "Tự động khóa do hết hạn" : "Khóa thủ công"}
+													>
+														{eff.locks.orders ? <Lock size={12} /> : <Unlock size={12} />}
+													</button>
+												</td>
+												<td className="px-3 py-6 text-center">
+													<button
+														onClick={() => !eff.isExpired && toggleUserLock(c.uid, 'manualLockDebts', c.manualLockDebts)}
+														className={`size-8 rounded-lg flex items-center justify-center mx-auto transition-all ${eff.locks.debts ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'bg-slate-800 text-slate-500 hover:text-white'} ${eff.isExpired ? 'cursor-not-allowed opacity-80' : ''}`}
+														title={eff.isExpired ? "Tự động khóa do hết hạn" : "Khóa thủ công"}
+													>
+														{eff.locks.debts ? <Lock size={12} /> : <Unlock size={12} />}
+													</button>
+												</td>
+												<td className="px-3 py-6 text-center">
+													<button
+														onClick={() => !eff.isExpired && toggleUserLock(c.uid, 'manualLockSheets', c.manualLockSheets)}
+														className={`size-8 rounded-lg flex items-center justify-center mx-auto transition-all ${eff.locks.sheets ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'bg-slate-800 text-slate-500 hover:text-white'} ${eff.isExpired ? 'cursor-not-allowed opacity-80' : ''}`}
+														title={eff.isExpired ? "Tự động khóa do hết hạn" : "Khóa thủ công"}
+													>
+														{eff.locks.sheets ? <Lock size={12} /> : <Unlock size={12} />}
+													</button>
+												</td>
+												<td className="px-6 py-6 text-right">
+													<ExternalLink size={16} className="text-slate-600 cursor-not-allowed mx-auto" />
+												</td>
+											</tr>
+										);
+									})}
 								</tbody>
 							</table>
 						</div>

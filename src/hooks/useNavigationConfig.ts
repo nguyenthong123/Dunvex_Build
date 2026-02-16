@@ -75,6 +75,23 @@ export const useNavigationConfig = () => {
 			};
 		}
 
+		if (path.startsWith('/khoa-dao-tao')) {
+			return {
+				icon: 'stop_circle',
+				label: 'Kết thúc Lab',
+				path: '/khoa-dao-tao',
+			};
+		}
+
+		if (path === '/attendance') {
+			return {
+				icon: 'task_alt',
+				label: 'Chấm công vào',
+				path: '/attendance?action=checkin',
+				permissionKey: 'checkin_create'
+			};
+		}
+
 		// Mặc định cho các trang khác (checkin...)
 		return {
 			icon: 'add',
@@ -150,6 +167,22 @@ export const useNavigationConfig = () => {
 				allItems[2], // Center (Thêm NV)
 				{ icon: 'people', label: 'Nhân sự', path: '/admin?tab=users' },
 				{ icon: 'shield', label: 'Phân quyền', path: '/admin?tab=permissions' },
+			];
+		} else if (path.startsWith('/khoa-dao-tao')) {
+			items = [
+				allItems[0], // Trang chủ
+				{ icon: 'inventory_2', label: 'Tồn kho chuyên sâu', path: '/khoa-dao-tao?tab=inventory' },
+				allItems[2], // Center (Kết thúc Lab)
+				{ icon: 'sync', label: 'Vận hành & đồng bộ', path: '/khoa-dao-tao?tab=operations' },
+				{ icon: 'account_balance', label: 'Đối soát & tài chính', path: '/khoa-dao-tao?tab=finance' },
+			];
+		} else if (path === '/attendance') {
+			items = [
+				allItems[0], // Trang chủ
+				allItems[1], // Đơn hàng
+				allItems[2], // Center (Chấm công vào)
+				{ icon: 'coffee', label: 'Đăng ký nghỉ/muộn', path: '/attendance?action=request' },
+				allItems[4], // Hoạt động
 			];
 		} else if (path === '/customers') {
 			items = [

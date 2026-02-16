@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 import {
 	collection, query, where, onSnapshot, doc, getDoc,
@@ -13,7 +13,9 @@ import {
 
 const Attendance = () => {
 	const navigate = useNavigate();
+	const { search } = useLocation();
 	const owner = useOwner();
+
 	const [companySettings, setCompanySettings] = useState<any>(null);
 	const [todayLog, setTodayLog] = useState<any>(null);
 	const [loading, setLoading] = useState(true);
@@ -186,6 +188,19 @@ const Attendance = () => {
 			setChecking(false);
 		}
 	};
+
+	// Handle URL Actions
+	useEffect(() => {
+		const params = new URLSearchParams(search);
+		const action = params.get('action');
+		if (action === 'checkin' && !loading && !checking && !todayLog) {
+			handleCheckIn();
+			navigate('/attendance', { replace: true });
+		} else if (action === 'request' && !loading) {
+			setShowRequestModal(true);
+			navigate('/attendance', { replace: true });
+		}
+	}, [search, loading, todayLog, checking]);
 
 	if (loading) return <div className="p-10 text-center font-bold">ĐANG TẢI...</div>;
 

@@ -16,6 +16,8 @@ const OrderList = () => {
 	const [showDetail, setShowDetail] = useState(false);
 	const [selectedOrder, setSelectedOrder] = useState<any>(null);
 	const [showMobileSearch, setShowMobileSearch] = useState(false);
+	const [currentPage, setCurrentPage] = useState(1);
+	const itemsPerPage = 10;
 	const searchRef = useRef<HTMLInputElement>(null);
 	const { search } = useLocation();
 
@@ -52,6 +54,16 @@ const OrderList = () => {
 		(String(order.customerName || '').toLowerCase().includes(searchTerm.toLowerCase())) ||
 		(String(order.id || '').toLowerCase().includes(searchTerm.toLowerCase())) ||
 		(String(order.customerPhone || '').includes(searchTerm))
+	);
+
+	useEffect(() => {
+		setCurrentPage(1);
+	}, [searchTerm]);
+
+	const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
+	const paginatedOrders = filteredOrders.slice(
+		(currentPage - 1) * itemsPerPage,
+		currentPage * itemsPerPage
 	);
 
 	const getStatusColor = (status: string) => {
@@ -208,14 +220,14 @@ const OrderList = () => {
 						<tbody className="divide-y divide-gray-100 dark:divide-slate-800">
 							{loading ? (
 								<tr><td colSpan={5} className="py-8 text-center text-slate-400 dark:text-slate-500">Đang tải dữ liệu...</td></tr>
-							) : filteredOrders.length === 0 ? (
+							) : paginatedOrders.length === 0 ? (
 								<tr><td colSpan={5} className="py-12 text-center">
 									<div className="flex flex-col items-center gap-2">
 										<span className="material-symbols-outlined text-4xl text-slate-200 dark:text-slate-700">inventory_2</span>
 										<p className="text-slate-400 dark:text-slate-500 font-medium">Không tìm thấy đơn hàng nào</p>
 									</div>
 								</td></tr>
-							) : filteredOrders.map((order) => (
+							) : paginatedOrders.map((order) => (
 								<tr key={order.id} className="hover:bg-slate-100/50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer" onClick={() => { setSelectedOrder(order); setShowDetail(true); }}>
 									<td className="py-4 px-6">
 										<div className="font-black text-slate-900 dark:text-indigo-400">#{order.id.slice(0, 8).toUpperCase()}</div>
@@ -257,8 +269,8 @@ const OrderList = () => {
 				</div>
 
 				{/* Mobile List */}
-				<div className="md:hidden space-y-4 pb-24">
-					{filteredOrders.map((order) => (
+				<div className="md:hidden space-y-4 pb-12">
+					{paginatedOrders.map((order) => (
 						<div key={order.id} className="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-800 active:scale-[0.98] transition-all" onClick={() => { setSelectedOrder(order); setShowDetail(true); }}>
 							<div className="flex justify-between items-start mb-3">
 								<div className="flex items-center gap-3">
@@ -267,20 +279,20 @@ const OrderList = () => {
 									</div>
 									<div>
 										<div className="flex items-center gap-2">
-											<button
-												onClick={(e) => { e.stopPropagation(); navigate(`/quick-order/${order.id}`); }}
-												className="p-2 text-slate-300 dark:text-slate-600 active:text-orange-500 dark:active:text-orange-400 transition-colors"
-											>
-												<span className="material-symbols-outlined text-[20px]">edit</span>
-											</button>
 											<div className="font-bold text-[#1A237E] dark:text-indigo-400">#{order.id.slice(0, 8).toUpperCase()}</div>
 										</div>
 										<div className="text-xs text-slate-500 dark:text-slate-400 font-medium">{order.customerName || 'Khách vãng lai'}</div>
 									</div>
 								</div>
-								<span className={`px-2 py-1 rounded-lg text-[9px] font-bold uppercase ${getStatusColor(order.status)}`}>
-									{order.status}
-								</span>
+								<div className="flex flex-col items-end gap-2">
+									<span className={`px-2 py-1 rounded-lg text-[9px] font-bold uppercase ${getStatusColor(order.status)}`}>
+										{order.status}
+									</span>
+									<div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+										<button onClick={() => navigate(`/quick-order/${order.id}`)} className="p-1 text-orange-500"><span className="material-symbols-outlined text-sm">edit</span></button>
+										<button onClick={() => deleteOrder(order.id)} className="p-1 text-red-500"><span className="material-symbols-outlined text-sm">delete</span></button>
+									</div>
+								</div>
 							</div>
 							<div className="flex justify-between items-baseline pt-2 border-t border-gray-50 dark:border-slate-800">
 								<span className="text-[10px] text-gray-400 dark:text-slate-500 font-medium">{new Date(order.createdAt?.seconds * 1000).toLocaleDateString('vi-VN')}</span>
@@ -289,6 +301,50 @@ const OrderList = () => {
 						</div>
 					))}
 				</div>
+
+				{/* Pagination Controls */}
+				{totalPages > 1 && (
+					<div className="mt-8 mb-24 flex flex-col md:flex-row items-center justify-between gap-4">
+						<p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+							Hiển thị {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredOrders.length)} trên {filteredOrders.length} đơn
+						</p>
+						<div className="flex items-center gap-1">
+							<button
+								onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+								disabled={currentPage === 1}
+								className="size-10 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:border-[#FF6D00] transition-all"
+							>
+								<span className="material-symbols-outlined">chevron_left</span>
+							</button>
+							<div className="flex items-center gap-1 mx-2">
+								{[...Array(totalPages)].map((_, i) => {
+									const pageNum = i + 1;
+									if (pageNum === 1 || pageNum === totalPages || (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)) {
+										return (
+											<button
+												key={pageNum}
+												onClick={() => setCurrentPage(pageNum)}
+												className={`size-10 rounded-xl font-bold text-xs transition-all border ${currentPage === pageNum ? 'bg-[#FF6D00] text-white border-[#FF6D00]' : 'bg-white dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-slate-800'}`}
+											>
+												{pageNum}
+											</button>
+										);
+									} else if (pageNum === currentPage - 2 || pageNum === currentPage + 2) {
+										return <span key={pageNum} className="text-slate-300">...</span>;
+									}
+									return null;
+								})}
+							</div>
+							<button
+								onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+								disabled={currentPage === totalPages}
+								className="size-10 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:border-[#FF6D00] transition-all"
+							>
+								<span className="material-symbols-outlined">chevron_right</span>
+							</button>
+						</div>
+					</div>
+				)}
 			</div>
 
 			{/* DETAIL MODAL (Ticket View) */}

@@ -66,6 +66,15 @@ export const useNavigationConfig = () => {
 			};
 		}
 
+		if (path === '/admin') {
+			return {
+				icon: 'person_add',
+				label: 'Thêm NV',
+				path: '/admin?tab=users&action=add',
+				permissionKey: 'users_manage'
+			};
+		}
+
 		// Mặc định cho các trang khác (checkin...)
 		return {
 			icon: 'add',
@@ -86,6 +95,7 @@ export const useNavigationConfig = () => {
 		{ icon: 'group', label: 'Khách hàng', path: '/customers', desktopOnly: true, permissionKey: 'customers_manage' },
 		{ icon: 'inventory_2', label: 'Sản phẩm', path: '/inventory', desktopOnly: true, permissionKey: 'inventory_view' },
 		{ icon: 'request_quote', label: 'Báo giá', path: '/price-list' },
+		{ icon: 'timer', label: 'Chấm công', path: '/attendance' },
 		{ icon: 'school', label: 'Đào tạo', path: '/khoa-dao-tao' },
 		{ icon: 'settings', label: 'Cài đặt', path: '/settings' },
 	];
@@ -132,6 +142,14 @@ export const useNavigationConfig = () => {
 				allItems[2], // Center (Thu nợ)
 				allItems[4], // Hoạt động/Checkin (Thay cho Công nợ)
 				getSlot5(),  // Cài đặt
+			];
+		} else if (path === '/admin') {
+			items = [
+				allItems[0], // Trang chủ
+				{ icon: 'timer', label: 'Chấm công', path: '/admin?tab=attendance' },
+				allItems[2], // Center (Thêm NV)
+				{ icon: 'people', label: 'Nhân sự', path: '/admin?tab=users' },
+				{ icon: 'shield', label: 'Phân quyền', path: '/admin?tab=permissions' },
 			];
 		} else if (path === '/customers') {
 			items = [

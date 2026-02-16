@@ -11,9 +11,16 @@ Dưới đây là sơ đồ tóm tắt các trang và luồng dữ liệu chính
     - Phím tắt nhanh đến các module.
 - **Trang Quản Trị Doanh Nghiệp (`/admin`)** 🆕:
     - **Thông tin doanh nghiệp**: Cấu hình tên, logo, VAT, địa chỉ.
+    - **Vị trí & Giờ làm**: Cấu hình tọa độ GPS, bán kính chấm công (Geofencing) và giờ làm việc chính thức.
     - **Quản lý Nhân sự**: Mời nhân viên qua email, quản lý vai trò (Sale, Kho, Kế toán).
+    - **Bảng công Tổng hợp** 🆕: Theo dõi giờ vào/ra văn phòng, giờ check-in đầu/cuối của nhân viên thị trường và quản lý yêu cầu Nghỉ/Đi muộn.
+    - **Chia sẻ bảng công**: Cho phép chia sẻ quyền xem dữ liệu chấm công cho Kế toán qua email.
     - **Phân quyền Truy cập (RBAC)**: Bật/tắt chức năng cụ thể cho từng nhân viên.
     - **Nhật ký Hoạt động**: Theo dõi lịch sử thao tác hệ thống.
+- **Trang Chấm công Di động (`/attendance`)** 🆕:
+    - Chấm công vào/ra dựa trên định vị GPS (Geofencing).
+    - Khóa chấm công theo thiết bị (Fingerprint ID) để chống gian lận.
+    - **Đăng ký Nghỉ/Đi muộn**: Gửi yêu cầu kèm lý do trực tiếp từ ứng dụng.
 - **Trang Cài Đặt Ứng Dụng (`/settings`)** 🆕:
     - Cấu hình giao diện (Sáng/Tối).
     - Các tùy chọn cá nhân hóa khác.
@@ -74,7 +81,7 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 - [x] **Sửa lỗi Firestore Index**: Loại bỏ hoàn toàn lỗi "failed-precondition" bằng cách chuyển sang lọc và sắp xếp dữ liệu phía Client cho các module: Thông báo, Nhật ký hoạt động, Đơn hàng, Công nợ.
 - [x] **Tích hợp Mã Chuyển Khoản**: Tự động tạo và hiển thị mã chuyển khoản (DVX...) trong QR thanh toán và quản lý yêu cầu nạp tiền (Nexus Control).
 - [x] **Thực thi phân quyền toàn diện**: Đã áp dụng cho Dashboard, Đơn hàng, Kho hàng, Khách hàng, Công nợ và Check-in.
-- [x] **Quản lý Gói dịch vụ (Subscription)**: Tích hợp hệ thống kiểm soát dùng thử (Trial) và khóa tính năng cao cấp (Pro).
+- [x] **Quản lý Gói dịch vụ (Subscription)**: Tích hợp hệ thống kiểm soát dùng thử (Trial) và khóa tính năng cao cấp (Pro). Hiển thị chi tiết tên gói (Tháng/Năm) và **số ngày còn lại** đồng bộ từ Nexus Control.
 - [x] **Ổn định hóa Giao diện Điều hướng (Bottom Nav & Top Bar)**: Khắc phục triệt để hiện tượng nháy (flickering) và tự động ẩn khi cuộn. Chuyển sang cơ chế hiển thị cố định (Pinned) giúp người dùng truy cập menu nhanh chóng và mượt mà hơn trên mọi thiết bị di động.
 - [x] **Tối ưu Chi tiết Khách hàng**: Chuyển đổi sang dạng Bottom Sheet mượt mà trên di động, hỗ trợ gọi điện trực tiếp từ ứng dụng.
 - [x] **Bảo mật chuẩn A+**: Triển khai toàn diện CSP, XFO, HSTS, Referrer-Policy thông qua `vercel.json`.
@@ -109,6 +116,13 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Hệ thống Chứng chỉ (Badges System)**: Kích hoạt hệ thống huy chương (Nhập môn -> Bậc thầy) tự động mở khóa dựa trên tổng điểm kỹ năng thực tế tích lũy từ các bài Lab.
     - **Real-time Scoring**: Tích hợp cơ chế chấm điểm và tự động lưu (Auto-save) tiến độ vào Firestore, đồng bộ hiển thị điểm số và huy chương ngay tại trang danh mục đào tạo.
     - **Tối ưu Mobile (Responsive Training)**: Khắc phục triệt để lỗi tràn dòng cho các mã ID dài, tối ưu sidebar hướng dẫn dạng stack linh hoạt cho điện thoại, đảm bảo trải nghiệm đào tạo mượt mà trên mọi thiết bị.
+- [x] **Hệ thống Chấm công & Quản lý Nhân sự (Attendance & HR)**:
+    - **Mobile Check-in**: Chấm công thời gian thực dựa trên Geofencing (GPS) và nhận diện thiết bị duy nhất (Device Fingerprint) để chống chấm công hộ.
+    - **Đăng ký Nghỉ/Đi muộn**: Hệ thống gửi yêu cầu kèm lý do trực tiếp từ ứng dụng dành cho nhân viên.
+    - **Bảng công Tổng hợp**: Tự động tổng hợp giờ làm văn phòng và lịch sử viếng thăm khách hàng (Thị trường) vào một bảng duy nhất cho Admin. Hỗ trợ **phân trang (10 dòng/trang)** và **bộ lọc ngày** thông minh.
+    - **Phân quyền Chia sẻ**: Cho phép cấp quyền xem bảng công cho Kế toán/Quản lý một cách bảo mật.
+    - **Tối ưu Mobile Admin**: Giao diện Tab trượt ngang, các bảng điều khiển và bộ lọc được thiết kế lại dạng cột/stack cho điện thoại. Thanh điều hướng (Bottom Nav) thay đổi linh hoạt các nút tắt (Thêm NV, Chấm công, Nhân sự, Phân quyền) khi Admin truy cập trang quản trị.
+- [x] **UI/UX Refinement (Sidebar & Notifications)**: Khắc phục lỗi hiển thị thông báo bị che khuất trên PC bằng cơ chế mở ngược lên (Placement Up) và căn lề thông minh (Align Left).
 
 ### 📝 Cần làm tiếp (To-do)
 - [ ] **Báo cáo & Phân tích thông minh (Dashboard Pro)**: Cảnh báo hàng sắp hết kho dựa trên tốc độ bán hàng và dự báo doanh số.

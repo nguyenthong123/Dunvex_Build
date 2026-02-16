@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
 	Settings, User, Bell, Shield, Database, Globe, Moon, Sun, Users, Activity,
 	FileText, Save, Plus, Trash2, Edit2, CheckCircle, XCircle, Crown, Clock,
-	Rocket, Lock, RefreshCcw, ExternalLink
+	Rocket, Lock, RefreshCcw, ExternalLink, MapPin, Calendar, X,
+	ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { auth, db } from '../services/firebase';
@@ -13,6 +14,16 @@ import {
 } from 'firebase/firestore';
 
 import { useOwner } from '../hooks/useOwner';
+
+const scrollbarHideStyle = `
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+`;
 
 const AdminSettings = () => {
 	const { theme, toggleTheme } = useTheme();
@@ -34,7 +45,13 @@ const AdminSettings = () => {
 		spreadsheetId: '',
 		spreadsheetUrl: '',
 		manualLockSheets: false,
-		lastSyncAt: null as any
+		lastSyncAt: null as any,
+		lat: 0,
+		lng: 0,
+		workStart: '08:00',
+		workEnd: '17:30',
+		geofenceRadius: 100,
+		attendanceViewers: [] as string[]
 	});
 	const [syncing, setSyncing] = useState(false);
 	const [syncRange, setSyncRange] = useState({
@@ -55,8 +72,13 @@ const AdminSettings = () => {
 		...pendingInvites.filter(p => !activeEmployees.some(u => u.email === p.email))
 	];
 
-	// Audit Logs State
+	// User Points for context (if needed)
+	const [userPoints, setUserPoints] = useState(0);
+
+	// Audit Logs & Attendance Logs & Field Checkins
 	const [logs, setLogs] = useState<any[]>([]);
+	const [attendanceLogs, setAttendanceLogs] = useState<any[]>([]);
+	const [fieldCheckins, setFieldCheckins] = useState<any[]>([]);
 
 	useEffect(() => {
 		if (owner.loading || !owner.ownerId) return;
@@ -91,11 +113,9 @@ const AdminSettings = () => {
 		});
 
 		// Listen to Logs
-		const qLogs = query(collection(db, 'audit_logs'), where('ownerId', '==', owner.ownerId));
+		const qLogs = query(collection(db, 'audit_logs'), where('ownerId', '==', owner.ownerId), orderBy('createdAt', 'desc'), limit(50));
 		const unsubLogs = onSnapshot(qLogs, (snap) => {
-			const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-			const sorted = data.sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-			setLogs(sorted.slice(0, 50));
+			setLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
 		});
 
 		// 3. Listen to System Config
@@ -105,19 +125,37 @@ const AdminSettings = () => {
 			}
 		});
 
+		// Listen to Attendance Logs
+		const qAtt = query(collection(db, 'attendance_logs'), where('ownerId', '==', owner.ownerId), orderBy('createdAt', 'desc'), limit(500));
+		const unsubAtt = onSnapshot(qAtt, (snap) => {
+			setAttendanceLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+		});
+
+		// Listen to Field Checkins for Market Staff tracking
+		const qField = query(collection(db, 'checkins'), where('ownerId', '==', owner.ownerId), orderBy('createdAt', 'desc'), limit(500));
+		const unsubField = onSnapshot(qField, (snap) => {
+			setFieldCheckins(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+		});
+
 		return () => {
 			unsubUsers();
 			unsubPerms();
 			unsubLogs();
 			unsubConfig();
+			unsubAtt();
+			unsubField();
 		};
 	}, [owner.loading, owner.ownerId]);
 
 	useEffect(() => {
 		const params = new URLSearchParams(search);
 		const tab = params.get('tab');
-		if (tab) {
-			setActiveTab(tab);
+		if (tab) setActiveTab(tab);
+
+		const action = params.get('action');
+		if (action === 'add') {
+			setActiveTab('users');
+			setShowAddUser(true);
 		}
 	}, [search]);
 
@@ -301,22 +339,40 @@ const AdminSettings = () => {
 		} catch (error) { }
 	};
 
+	const isAttendanceViewer = companyInfo.attendanceViewers?.includes(auth.currentUser?.email || '');
+
+	useEffect(() => {
+		if (isAttendanceViewer && !owner.role && activeTab !== 'attendance') {
+			setActiveTab('attendance');
+		}
+	}, [isAttendanceViewer, activeTab]);
+
 	if (owner.loading) return null;
-	if (owner.role !== 'admin') return <div className="p-10 text-center uppercase font-black">Truy cập bị từ chối</div>;
+	if (owner.role !== 'admin' && !isAttendanceViewer) return <div className="p-10 text-center uppercase font-black">Truy cập bị từ chối</div>;
 
 	const isSyncLocked = (systemConfig.lock_free_sheets && !owner.isPro) || companyInfo.manualLockSheets;
 
 	return (
 		<div className="flex flex-col h-full bg-[#f8f9fb] dark:bg-slate-950 transition-colors duration-300">
-			<header className="h-16 md:h-20 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row items-center justify-between px-4 md:px-8 shrink-0">
-				<div className="flex items-center gap-4 py-2 md:py-0">
+			<style>{scrollbarHideStyle}</style>
+			<header className="min-h-[4rem] md:h-20 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row items-center justify-between px-4 md:px-8 shrink-0 py-2 md:py-0">
+				<div className="flex items-center gap-4 py-1 md:py-0">
 					<h2 className="text-[#1A237E] dark:text-indigo-400 text-lg md:text-2xl font-black uppercase tracking-tight">Quản Trị Hệ Thống</h2>
 				</div>
-				<nav className="flex items-center gap-1 md:gap-2 overflow-x-auto no-scrollbar py-2">
-					<TabItem active={activeTab === 'general'} onClick={() => setActiveTab('general')} icon={<Settings size={18} />} label="Cấu hình" />
-					<TabItem active={activeTab === 'users'} onClick={() => setActiveTab('users')} icon={<Users size={18} />} label="Nhân sự" />
-					<TabItem active={activeTab === 'permissions'} onClick={() => setActiveTab('permissions')} icon={<Shield size={18} />} label="Phân quyền" />
-					<TabItem active={activeTab === 'audit'} onClick={() => setActiveTab('audit')} icon={<Activity size={18} />} label="Nhật ký" />
+				<nav className="flex items-center gap-1 md:gap-2 overflow-x-auto no-scrollbar py-2 w-full md:w-auto">
+					{owner.role === 'admin' && (
+						<>
+							<TabItem active={activeTab === 'general'} onClick={() => setActiveTab('general')} icon={<Settings size={18} />} label="Cấu hình" />
+							<TabItem active={activeTab === 'users'} onClick={() => setActiveTab('users')} icon={<Users size={18} />} label="Nhân sự" />
+						</>
+					)}
+					<TabItem active={activeTab === 'attendance'} onClick={() => setActiveTab('attendance')} icon={<Calendar size={18} />} label="Chấm công" />
+					{owner.role === 'admin' && (
+						<>
+							<TabItem active={activeTab === 'permissions'} onClick={() => setActiveTab('permissions')} icon={<Shield size={18} />} label="Phân quyền" />
+							<TabItem active={activeTab === 'audit'} onClick={() => setActiveTab('audit')} icon={<Activity size={18} />} label="Nhật ký" />
+						</>
+					)}
 				</nav>
 			</header>
 
@@ -340,6 +396,38 @@ const AdminSettings = () => {
 									<InputSection label="Địa chỉ" value={companyInfo.address} onChange={(v: string) => setCompanyInfo({ ...companyInfo, address: v })} fullWidth />
 									<InputSection label="Hotline" value={companyInfo.phone} onChange={(v: string) => setCompanyInfo({ ...companyInfo, phone: v })} />
 									<InputSection label="Email" value={companyInfo.email} onChange={(v: string) => setCompanyInfo({ ...companyInfo, email: v })} />
+
+									<div className="md:col-span-2 border-t border-slate-100 dark:border-slate-800 pt-6">
+										<h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Cấu hình Chấm công văn phòng</h4>
+										<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+											<div className="space-y-2">
+												<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Vị trí Văn phòng (Lat, Lng)</label>
+												<div className="flex gap-2">
+													<input
+														readOnly
+														className="flex-1 bg-slate-100 dark:bg-slate-800/50 border-none rounded-xl px-4 py-3 text-xs font-bold dark:text-white"
+														value={`${companyInfo.lat || 0}, ${companyInfo.lng || 0}`}
+													/>
+													<button
+														onClick={() => {
+															navigator.geolocation.getCurrentPosition(
+																(pos) => setCompanyInfo({ ...companyInfo, lat: pos.coords.latitude, lng: pos.coords.longitude }),
+																(err) => alert("Không thể lấy vị trí: " + err.message)
+															);
+														}}
+														className="bg-blue-600 text-white p-3 rounded-xl hover:bg-blue-700 transition-all shrink-0"
+													>
+														<MapPin size={20} />
+													</button>
+												</div>
+											</div>
+											<div className="grid grid-cols-3 gap-4">
+												<InputSection label="Giờ bắt đầu" type="time" value={companyInfo.workStart} onChange={(v: string) => setCompanyInfo({ ...companyInfo, workStart: v })} />
+												<InputSection label="Giờ kết thúc" type="time" value={companyInfo.workEnd} onChange={(v: string) => setCompanyInfo({ ...companyInfo, workEnd: v })} />
+												<InputSection label="Bán kính (m)" type="number" value={companyInfo.geofenceRadius} onChange={(v: string) => setCompanyInfo({ ...companyInfo, geofenceRadius: Number(v) })} />
+											</div>
+										</div>
+									</div>
 								</div>
 								<div className="mt-8 flex justify-end">
 									<button onClick={handleSaveSettings} disabled={loading} className="flex items-center gap-2 bg-[#1A237E] dark:bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:opacity-90 transition-all disabled:opacity-50">
@@ -432,15 +520,26 @@ const AdminSettings = () => {
 									<div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl flex items-center gap-4">
 										<div className={`p-3 rounded-xl ${owner.isPro ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>{owner.isPro ? <CheckCircle /> : <XCircle />}</div>
 										<div>
-											<p className="text-xs font-black text-slate-400 uppercase tracking-widest">Loại tài khoản</p>
-											<p className="text-lg font-black text-slate-800 dark:text-white uppercase">{owner.isPro ? 'Premium Pro' : 'Free Trial'}</p>
+											<p className="text-xs font-black text-slate-400 uppercase tracking-widest">Gói đăng ký</p>
+											<p className="text-lg font-black text-slate-800 dark:text-white uppercase">
+												{owner.planId === 'premium_yearly' ? 'Premium (1 Năm)' : owner.planId === 'premium_monthly' ? 'Premium (1 Tháng)' : owner.isPro ? 'Premium Pro' : 'Dùng thử'}
+											</p>
 										</div>
 									</div>
 									<div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl flex items-center gap-4">
 										<div className="p-3 rounded-xl bg-blue-50 text-blue-600"><Clock /></div>
 										<div>
 											<p className="text-xs font-black text-slate-400 uppercase tracking-widest">Thời gian còn lại</p>
-											<p className="text-lg font-black text-slate-800 dark:text-white">{owner.subscriptionStatus === 'active' ? 'Vô thời hạn' : 'Dùng thử'}</p>
+											<p className="text-lg font-black text-slate-800 dark:text-white">
+												{(() => {
+													const expireAt = owner.subscriptionExpiresAt || owner.trialEndsAt;
+													if (expireAt) {
+														const days = Math.ceil((expireAt.toDate().getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+														return days > 0 ? `${days} ngày` : 'Đã hết hạn';
+													}
+													return owner.subscriptionStatus === 'active' ? 'Vô thời hạn' : 'Hết hạn';
+												})()}
+											</p>
 										</div>
 									</div>
 								</div>
@@ -449,6 +548,8 @@ const AdminSettings = () => {
 					)}
 
 					{activeTab === 'users' && <UserManagement userList={userList} onAdd={() => setShowAddUser(true)} onUpdateRole={updateUserRole} onDelete={deleteUser} showAdd={showAddUser} onShowAdd={setShowAddUser} newUser={newUser} setNewUser={setNewUser} handleAddUser={handleAddUser} />}
+
+					{activeTab === 'attendance' && <AttendanceAdmin logs={attendanceLogs} fieldLogs={fieldCheckins} companyInfo={companyInfo} setCompanyInfo={setCompanyInfo} onSave={handleSaveSettings} />}
 
 					{activeTab === 'permissions' && (
 						<div className="space-y-6">
@@ -485,7 +586,7 @@ const AdminSettings = () => {
 								<h3 className="font-bold dark:text-white">Nhật ký hoạt động hệ thống</h3>
 							</div>
 							<div className="divide-y divide-slate-50 dark:divide-slate-800 overflow-y-auto max-h-[600px]">
-								{logs.map(log => (
+								{logs.map((log: any) => (
 									<div key={log.id} className="p-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
 										<div className="flex justify-between items-start mb-1">
 											<span className="text-xs font-black text-indigo-600 uppercase tracking-widest">{log.action}</span>
@@ -505,8 +606,15 @@ const AdminSettings = () => {
 };
 
 const TabItem = ({ active, onClick, icon, label }: any) => (
-	<button onClick={onClick} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${active ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
-		{icon} <span>{label}</span>
+	<button
+		onClick={onClick}
+		className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 whitespace-nowrap min-w-fit ${active
+			? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-none translate-y-[-1px]'
+			: 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+			}`}
+	>
+		{icon}
+		<span className="text-[10px] md:text-xs font-bold uppercase tracking-widest">{label}</span>
 	</button>
 );
 
@@ -573,5 +681,260 @@ const UserManagement = ({ userList, showAdd, onShowAdd, newUser, setNewUser, han
 		</div>
 	</div>
 );
+
+const AttendanceAdmin = ({ logs, fieldLogs, companyInfo, setCompanyInfo, onSave }: { logs: any[], fieldLogs: any[], companyInfo: any, setCompanyInfo: any, onSave: any }) => {
+	const [viewerEmail, setViewerEmail] = useState('');
+	const [startDate, setStartDate] = useState('');
+	const [endDate, setEndDate] = useState('');
+	const [currentPage, setCurrentPage] = useState(1);
+	const rowsPerPage = 10;
+
+	// Aggregate data by User and Date
+	const aggregatedData = useMemo(() => {
+		const data: any = {};
+
+		// 1. Process Office Logs & Requests
+		logs.forEach(log => {
+			const key = `${log.userEmail}_${log.date}`;
+			if (!data[key]) data[key] = {
+				userName: log.userName,
+				userEmail: log.userEmail,
+				date: log.date,
+				officeIn: null,
+				officeOut: null,
+				fieldFirst: null,
+				fieldLast: null,
+				requests: [],
+				status: 'on-time'
+			};
+
+			if (log.type === 'request') {
+				data[key].requests.push(log);
+			} else {
+				if (log.checkInAt) data[key].officeIn = log.checkInAt;
+				if (log.checkOutAt) data[key].officeOut = log.checkOutAt;
+				if (log.status === 'late') data[key].status = 'late';
+			}
+		});
+
+		// 2. Process Field Checkins
+		fieldLogs.forEach(f => {
+			const date = f.createdAt?.seconds ? new Date(f.createdAt.seconds * 1000).toISOString().split('T')[0] : '';
+			if (!date) return;
+			const key = `${f.userEmail}_${date}`;
+
+			if (!data[key]) data[key] = {
+				userName: f.userName || f.userEmail,
+				userEmail: f.userEmail,
+				date: date,
+				officeIn: null,
+				officeOut: null,
+				fieldFirst: f.createdAt,
+				fieldLast: f.createdAt,
+				requests: [],
+				status: 'field-trip'
+			}; else {
+				if (!data[key].fieldFirst || f.createdAt.seconds < data[key].fieldFirst.seconds) data[key].fieldFirst = f.createdAt;
+				if (!data[key].fieldLast || f.createdAt.seconds > data[key].fieldLast.seconds) data[key].fieldLast = f.createdAt;
+			}
+		});
+
+		const result = Object.values(data).sort((a: any, b: any) => b.date.localeCompare(a.date));
+
+		// 3. Filter by Date Range
+		return result.filter((item: any) => {
+			if (startDate && item.date < startDate) return false;
+			if (endDate && item.date > endDate) return false;
+			return true;
+		});
+	}, [logs, fieldLogs, startDate, endDate]);
+
+	const totalPages = Math.ceil(aggregatedData.length / rowsPerPage);
+	const paginatedData = aggregatedData.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
+
+	useEffect(() => {
+		setCurrentPage(1);
+	}, [startDate, endDate]);
+
+	const addViewer = () => {
+		if (!viewerEmail || !viewerEmail.includes('@')) return;
+		const newList = [...(companyInfo.attendanceViewers || []), viewerEmail];
+		setCompanyInfo({ ...companyInfo, attendanceViewers: newList });
+		setViewerEmail('');
+	};
+
+	const removeViewer = (email: string) => {
+		const newList = companyInfo.attendanceViewers.filter((e: string) => e !== email);
+		setCompanyInfo({ ...companyInfo, attendanceViewers: newList });
+	};
+
+	return (
+		<div className="space-y-6">
+			{/* Sharing Header */}
+			<div className="bg-white dark:bg-slate-900 rounded-[2rem] p-4 md:p-6 shadow-sm border border-slate-100 dark:border-slate-800">
+				<div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+					<div>
+						<h3 className="font-bold dark:text-white uppercase text-[10px] md:text-sm tracking-widest flex items-center gap-2">
+							<ExternalLink size={18} className="text-indigo-600" /> Chia sẻ bảng công
+						</h3>
+						<p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1">Cho phép Kế toán/Quản lý truy cập</p>
+					</div>
+					<div className="flex flex-col sm:flex-row gap-2">
+						<input
+							type="email"
+							placeholder="Email người xem..."
+							className="bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-xs font-bold outline-none ring-2 ring-transparent focus:ring-indigo-500/20 flex-1 md:w-64"
+							value={viewerEmail}
+							onChange={(e) => setViewerEmail(e.target.value)}
+						/>
+						<div className="flex gap-2">
+							<button onClick={addViewer} className="flex-1 sm:flex-none bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all">Thêm</button>
+							<button onClick={onSave} className="flex-1 sm:flex-none bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-emerald-700 transition-all">Lưu</button>
+						</div>
+					</div>
+				</div>
+				{companyInfo.attendanceViewers?.length > 0 && (
+					<div className="mt-4 flex flex-wrap gap-2">
+						{companyInfo.attendanceViewers.map((email: string) => (
+							<span key={email} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-lg text-[10px] font-bold text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+								{email}
+								<button onClick={() => removeViewer(email)} className="text-red-500 hover:scale-110 transition-transform"><X size={14} /></button>
+							</span>
+						))}
+					</div>
+				)}
+			</div>
+
+			<div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+				<div className="p-4 md:p-6 border-b border-slate-50 dark:border-slate-800 flex flex-col lg:flex-row justify-between lg:items-center gap-4">
+					<div>
+						<h3 className="font-bold dark:text-white uppercase text-[10px] md:text-sm tracking-widest font-['Manrope']">Nhật ký Tổng hợp (Văn phòng & Thị trường)</h3>
+						<p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">
+							Hiển thị {paginatedData.length}/{aggregatedData.length} bản ghi
+						</p>
+					</div>
+
+					<div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+						<div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-xl border border-slate-100 dark:border-slate-700 flex-1">
+							<span className="text-[9px] font-black text-slate-400 uppercase min-w-[30px]">Từ</span>
+							<input
+								type="date"
+								className="bg-transparent border-none text-xs font-bold outline-none dark:text-white dark:color-scheme-dark flex-1"
+								value={startDate}
+								onChange={(e) => setStartDate(e.target.value)}
+							/>
+						</div>
+						<div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-xl border border-slate-100 dark:border-slate-700 flex-1">
+							<span className="text-[9px] font-black text-slate-400 uppercase min-w-[30px]">Đến</span>
+							<input
+								type="date"
+								className="bg-transparent border-none text-xs font-bold outline-none dark:text-white dark:color-scheme-dark flex-1"
+								value={endDate}
+								onChange={(e) => setEndDate(e.target.value)}
+							/>
+						</div>
+					</div>
+				</div>
+				<div className="overflow-x-auto">
+					<table className="w-full text-left min-w-[1000px]">
+						<thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-400">
+							<tr>
+								<th className="px-6 py-4">Nhân viên</th>
+								<th className="px-6 py-4">Ngày</th>
+								<th className="px-6 py-4 text-center">Văn phòng (Vào/Ra)</th>
+								<th className="px-6 py-4 text-center">Thị trường (Đầu/Cuối)</th>
+								<th className="px-6 py-4">Đăng ký / Lý do</th>
+								<th className="px-6 py-4">Trạng thái</th>
+							</tr>
+						</thead>
+						<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+							{paginatedData.length === 0 ? (
+								<tr><td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-bold uppercase text-xs">Chưa có nhật ký hoạt động</td></tr>
+							) : paginatedData.map((row: any) => (
+								<tr key={`${row.userEmail}_${row.date}`} className="text-sm hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors">
+									<td className="px-6 py-4">
+										<div className="font-bold dark:text-white">{row.userName}</div>
+										<div className="text-[10px] text-slate-400">{row.userEmail}</div>
+									</td>
+									<td className="px-6 py-4 font-black text-slate-600 dark:text-slate-400">{row.date}</td>
+									<td className="px-6 py-4">
+										<div className="flex items-center justify-center gap-2">
+											<span className={`px-2 py-1 rounded-lg text-[10px] font-bold ${row.officeIn ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-300'}`}>
+												In: {row.officeIn ? new Date(row.officeIn.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+											</span>
+											<span className={`px-2 py-1 rounded-lg text-[10px] font-bold ${row.officeOut ? 'bg-orange-50 text-orange-600' : 'bg-slate-50 text-slate-300'}`}>
+												Out: {row.officeOut ? new Date(row.officeOut.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+											</span>
+										</div>
+									</td>
+									<td className="px-6 py-4">
+										<div className="flex items-center justify-center gap-2">
+											<span className={`px-2 py-1 rounded-lg text-[10px] font-bold ${row.fieldFirst ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-50 text-slate-300'}`}>
+												{row.fieldFirst ? new Date(row.fieldFirst.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+											</span>
+											<span className="text-slate-200">→</span>
+											<span className={`px-2 py-1 rounded-lg text-[10px] font-bold ${row.fieldLast ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-50 text-slate-300'}`}>
+												{row.fieldLast ? new Date(row.fieldLast.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+											</span>
+										</div>
+									</td>
+									<td className="px-6 py-4 max-w-[200px]">
+										{row.requests.length > 0 ? (
+											<div className="space-y-1">
+												{row.requests.map((req: any, i: number) => (
+													<div key={i} className="flex flex-col">
+														<span className={`text-[9px] font-black uppercase ${req.requestType === 'leave' ? 'text-red-500' : 'text-amber-500'}`}>
+															{req.requestType === 'leave' ? 'Nghỉ phép' : 'Đi muộn'}
+														</span>
+														<p className="text-[10px] italic text-slate-500 line-clamp-1" title={req.note}>{req.note}</p>
+													</div>
+												))}
+											</div>
+										) : <span className="text-slate-300">---</span>}
+									</td>
+									<td className="px-6 py-4">
+										<span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase 
+											${row.status === 'on-time' ? 'bg-emerald-100 text-emerald-600' :
+												row.status === 'late' ? 'bg-rose-100 text-rose-600' :
+													row.status === 'field-trip' ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-500'}`}>
+											{row.status === 'on-time' ? 'Đúng giờ' :
+												row.status === 'late' ? 'Đi trễ' :
+													row.status === 'field-trip' ? 'Thị trường' : 'N/A'}
+										</span>
+									</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+
+				{/* Pagination Footer */}
+				{totalPages > 1 && (
+					<div className="px-6 py-4 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+						<p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+							Trang {currentPage} / {totalPages}
+						</p>
+						<div className="flex items-center gap-2">
+							<button
+								onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+								disabled={currentPage === 1}
+								className="p-2 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-lg text-slate-500 disabled:opacity-50 hover:bg-slate-50 transition-all shadow-sm"
+							>
+								<ChevronLeft size={16} />
+							</button>
+							<button
+								onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+								disabled={currentPage === totalPages}
+								className="p-2 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-lg text-slate-500 disabled:opacity-50 hover:bg-slate-50 transition-all shadow-sm"
+							>
+								<ChevronRight size={16} />
+							</button>
+						</div>
+					</div>
+				)}
+			</div>
+		</div>
+	);
+};
 
 export default AdminSettings;

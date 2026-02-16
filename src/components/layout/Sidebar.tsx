@@ -81,7 +81,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onToggle }) => {
 			<div className="p-4 border-t border-white/10 space-y-2">
 				{/* Notifications & Theme */}
 				<div className="flex items-center gap-2">
-					<NotificationBell />
+					<NotificationBell placement="up" align="left" />
 					<button
 						onClick={toggleTheme}
 						className="flex-1 flex items-center gap-3 px-3 py-3 rounded-xl text-white/70 hover:bg-white/10 hover:text-white transition-all group overflow-hidden"

@@ -178,13 +178,17 @@ const TrainingCatalog = () => {
 								</div>
 
 								<div className="flex items-center justify-between">
-									<div className="flex -space-x-2">
+									<div className="flex -space-x-3">
 										{[1, 2, 3].map(i => (
-											<div key={i} className="size-8 rounded-full border-2 border-white dark:border-slate-900 bg-slate-200 dark:bg-slate-800 overflow-hidden">
-												<img src={`https://i.pravatar.cc/150?u=${lab.id}${i}`} alt="user" className="size-full object-cover" />
+											<div key={i} className="size-8 rounded-full border-2 border-white dark:border-slate-900 bg-indigo-50 dark:bg-slate-800 overflow-hidden shadow-sm">
+												<img
+													src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${lab.id}${i}&backgroundColor=b6e3f4,c0aede,d1d4f9`}
+													alt="user"
+													className="size-full object-cover"
+												/>
 											</div>
 										))}
-										<div className="size-8 rounded-full border-2 border-white dark:border-slate-900 bg-indigo-600 text-[10px] font-black text-white flex items-center justify-center">+12</div>
+										<div className="size-8 rounded-full border-2 border-white dark:border-slate-900 bg-indigo-600 text-[9px] font-black text-white flex items-center justify-center shadow-sm z-10">+12</div>
 									</div>
 									<div className="flex items-center gap-2 text-indigo-600 font-black text-xs uppercase tracking-widest group-hover:translate-x-2 transition-transform">
 										Bắt đầu Lab <Play size={14} fill="currentColor" />

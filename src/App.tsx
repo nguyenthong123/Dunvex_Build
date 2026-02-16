@@ -13,6 +13,7 @@ import CustomerList from './views/CustomerList';
 import ProductList from './views/ProductList';
 import OrderList from './views/OrderList';
 import Checkin from './views/Checkin';
+import Attendance from './views/Attendance';
 import MainLayout from './components/layout/MainLayout';
 import Pricing from './views/Pricing';
 import NexusControl from './views/NexusControl';
@@ -78,6 +79,10 @@ function App() {
 				<Route
 					path="/checkin"
 					element={currentUser ? <MainLayout><Checkin /></MainLayout> : <Navigate to="/login" />}
+				/>
+				<Route
+					path="/attendance"
+					element={currentUser ? <MainLayout><Attendance /></MainLayout> : <Navigate to="/login" />}
 				/>
 				<Route
 					path="/quick-order"

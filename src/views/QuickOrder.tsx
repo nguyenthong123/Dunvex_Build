@@ -119,6 +119,21 @@ const QuickOrder = () => {
 		}
 	};
 
+	const getEffectiveStock = (prod: any) => {
+		if (!prod) return 0;
+		// 1. Prioritize explicit manual link
+		if (prod.linkedProductId) {
+			const linked = products.find(p => p.id === prod.linkedProductId);
+			if (linked) return linked.stock || 0;
+		}
+		// 2. Fallback to SKU-based link (Find the first product with same SKU that has no linkedProductId)
+		if (prod.sku) {
+			const master = products.find(p => p.sku === prod.sku && !p.linkedProductId);
+			if (master) return master.stock || 0;
+		}
+		return prod.stock || 0;
+	};
+
 	const updateLineItem = (index: number, field: string, value: any) => {
 		const newItems = [...lineItems];
 		newItems[index][field] = value;
@@ -133,7 +148,7 @@ const QuickOrder = () => {
 				newItems[index].category = prod.category;
 				newItems[index].packaging = prod.packaging;
 				newItems[index].density = prod.density;
-				newItems[index].maxStock = prod.stock || 0;
+				newItems[index].maxStock = getEffectiveStock(prod);
 			}
 		}
 		setLineItems(newItems);
@@ -160,7 +175,7 @@ const QuickOrder = () => {
 						unit: product.unit,
 						packaging: product.packaging,
 						density: product.density,
-						maxStock: product.stock || 0
+						maxStock: getEffectiveStock(product)
 					}
 				]);
 			}
@@ -263,7 +278,15 @@ const QuickOrder = () => {
 					if (item.productId) {
 						// Check if this product is linked to another for inventory
 						const sourceProduct = products.find(p => p.id === item.productId);
-						const stockProductId = sourceProduct?.linkedProductId || item.productId;
+						let stockProductId = item.productId;
+
+						// Determine stock source: manual link > SKU master > self
+						if (sourceProduct?.linkedProductId) {
+							stockProductId = sourceProduct.linkedProductId;
+						} else if (sourceProduct?.sku) {
+							const master = products.find(p => p.sku === sourceProduct.sku && !p.linkedProductId);
+							if (master) stockProductId = master.id;
+						}
 
 						const prodRef = doc(db, 'products', stockProductId);
 						batch.update(prodRef, {
@@ -441,6 +464,17 @@ const QuickOrder = () => {
 							</div>
 						</div>
 
+						{/* ORDER DATE */}
+						<div>
+							<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 ml-1">NGÀY LÊN ĐƠN</label>
+							<input
+								type="date"
+								className="w-full px-5 h-14 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#f27121]/10 appearance-none transition-all"
+								value={orderDate}
+								onChange={(e) => setOrderDate(e.target.value)}
+							/>
+						</div>
+
 						{/* NOTE */}
 						<div className="md:col-span-2">
 							<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 ml-1">GHI CHÚ ĐƠN HÀNG</label>
@@ -500,11 +534,14 @@ const QuickOrder = () => {
 													<option value="">Tìm SP...</option>
 													{products
 														.filter(p => !item.category || p.category === item.category)
-														.map(p => (
-															<option key={p.id} value={p.id} disabled={p.stock <= 0}>
-																{p.name} {p.stock !== undefined ? `(Tồn: ${p.stock})` : ''}
-															</option>
-														))
+														.map(p => {
+															const effStock = getEffectiveStock(p);
+															return (
+																<option key={p.id} value={p.id} disabled={effStock <= 0}>
+																	{p.name} {effStock !== undefined ? `(Tồn: ${effStock})` : ''}
+																</option>
+															);
+														})
 													}
 												</select>
 												<ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />

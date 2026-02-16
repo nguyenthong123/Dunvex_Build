@@ -12,6 +12,7 @@ export interface OwnerState {
 	// Subscription fields
 	isPro: boolean;
 	subscriptionStatus: 'trial' | 'active' | 'expired';
+	planId?: string;
 	trialEndsAt?: any;
 	subscriptionExpiresAt?: any;
 	manualLockOrders?: boolean;
@@ -19,6 +20,7 @@ export interface OwnerState {
 	systemConfig: {
 		lock_free_orders: boolean;
 		lock_free_debts: boolean;
+		lock_free_sheets: boolean;
 		maintenance_mode: boolean;
 	};
 }
@@ -35,6 +37,7 @@ export const useOwner = () => {
 		systemConfig: {
 			lock_free_orders: false,
 			lock_free_debts: false,
+			lock_free_sheets: false,
 			maintenance_mode: false
 		}
 	});
@@ -68,6 +71,7 @@ export const useOwner = () => {
 			let subscriptionStatus: 'trial' | 'active' | 'expired' = 'active';
 			let trialEndsAt = null;
 			let subscriptionExpiresAt = null;
+			let planId = userData.planId || null;
 			let manualLockOrders = userData.manualLockOrders || false;
 			let manualLockDebts = userData.manualLockDebts || false;
 
@@ -75,6 +79,7 @@ export const useOwner = () => {
 				subscriptionStatus = settingsData.subscriptionStatus || 'trial';
 				trialEndsAt = settingsData.trialEndsAt;
 				subscriptionExpiresAt = settingsData.subscriptionExpiresAt;
+				planId = settingsData.planId || planId;
 
 				if (subscriptionStatus === 'active') isPro = true;
 				else if (subscriptionStatus === 'trial') {
@@ -106,6 +111,7 @@ export const useOwner = () => {
 				loading: false,
 				isPro,
 				subscriptionStatus,
+				planId,
 				trialEndsAt,
 				subscriptionExpiresAt,
 				manualLockOrders,

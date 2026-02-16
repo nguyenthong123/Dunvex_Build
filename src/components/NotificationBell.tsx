@@ -3,7 +3,7 @@ import { Bell, CheckCircle2, XCircle, Clock, X } from 'lucide-react';
 import { db, auth } from '../services/firebase';
 import { collection, query, where, orderBy, onSnapshot, updateDoc, doc, limit, serverTimestamp, setDoc } from 'firebase/firestore';
 
-const NotificationBell = () => {
+const NotificationBell = ({ placement = 'down', align = 'right' }: { placement?: 'up' | 'down', align?: 'left' | 'right' }) => {
 	const [notifications, setNotifications] = useState<any[]>([]);
 	const [showList, setShowList] = useState(false);
 	const [unreadCount, setUnreadCount] = useState(0);
@@ -73,7 +73,7 @@ const NotificationBell = () => {
 						className="fixed inset-0 z-[100]"
 						onClick={() => setShowList(false)}
 					/>
-					<div className="absolute top-12 right-0 w-80 bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden z-[101] animate-in slide-in-from-top-2 duration-200">
+					<div className={`absolute ${placement === 'up' ? 'bottom-full mb-3' : 'top-12'} ${align === 'left' ? 'left-0' : 'right-0'} w-80 bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden z-[101] animate-in ${placement === 'up' ? 'slide-in-from-bottom-2' : 'slide-in-from-top-2'} duration-200`}>
 						<div className="p-5 border-b border-slate-50 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/30">
 							<h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">Thông báo</h3>
 							<button onClick={() => setShowList(false)} className="text-slate-400 hover:text-slate-600 outline-none">

@@ -100,6 +100,14 @@ export const useNavigationConfig = () => {
 			};
 		}
 
+		if (path === '/price-list') {
+			return {
+				icon: 'cloud_upload',
+				label: 'Cập nhật Data',
+				path: '/price-list?import=true',
+			};
+		}
+
 		// Mặc định cho các trang khác (checkin...)
 		return {
 			icon: 'add',
@@ -207,6 +215,14 @@ export const useNavigationConfig = () => {
 				allItems[2], // Center (Thêm Khách)
 				{ icon: 'search', label: 'Tìm kiếm', path: '/customers?search=true' }, // Giữ Tìm kiếm
 				{ icon: 'upload_file', label: 'Nhập Excel', path: '/customers?import=true' }, // Thay Hoạt động bằng Nhập Excel
+			];
+		} else if (path === '/price-list') {
+			items = [
+				allItems[0], // Trang chủ
+				allItems[5], // Khách hàng
+				allItems[2], // Center (Cập nhật Data)
+				allItems[6], // Sản phẩm
+				allItems[1], // Đơn hàng
 			];
 		} else {
 			items = [

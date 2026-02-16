@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
@@ -14,6 +14,7 @@ import { useOwner } from '../hooks/useOwner';
 
 const PriceList = () => {
 	const navigate = useNavigate();
+	const location = useLocation();
 	const owner = useOwner();
 	const [loading, setLoading] = useState(true);
 	const [importing, setImporting] = useState(false);
@@ -33,6 +34,14 @@ const PriceList = () => {
 	const [zoomScale, setZoomScale] = useState(1);
 	const [autoScale, setAutoScale] = useState(1);
 	const [isDesktopLayout, setIsDesktopLayout] = useState(true);
+
+	useEffect(() => {
+		const params = new URLSearchParams(location.search);
+		if (params.get('import') === 'true') {
+			setShowImportModal(true);
+			navigate('/price-list', { replace: true });
+		}
+	}, [location, navigate]);
 
 	useEffect(() => {
 		if (owner.loading || !owner.ownerId) return;

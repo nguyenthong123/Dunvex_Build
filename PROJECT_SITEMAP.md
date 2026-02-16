@@ -72,7 +72,7 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 ## 4. Các mục đã hoàn thành & Cần làm (To-do)
 
 ### ✅ Đã hoàn thành (Done)
-- [x] **Nhập liệu hàng loạt (Bulk Import) + Google Sheets**: Hỗ trợ nhập danh sách Khách hàng/Sản phẩm từ Excel và trực tiếp từ link Google Sheets. Tự động xử lý tọa độ vị trí từ một cột duy nhất (Lat, Lng).
+- [x] **Nhập liệu hàng loạt (Bulk Import) + Google Sheets**: Hỗ trợ nhập danh sách Khách hàng/Sản phẩm từ Excel và trực tiếp từ link Google Sheets. Tự động xử lý tọa độ vị trí từ một cột duy nhất (Lat, Lng). **Cải tiến**: Chuyển đổi cơ chế lấy dữ liệu sang XLSX để tránh lỗi định dạng CSV, tích hợp bộ lọc số thông minh hỗ trợ dấu phẩy thập phân kiểu Việt Nam (VD: 0,3).
 - [x] **Sao lưu Google Sheets Tự động (Sync to Sheets)**: Cho phép Admin tự động khởi tạo file Google Sheets riêng và đẩy toàn bộ dữ liệu (Khách hàng, Sản phẩm, Đơn hàng) từ Firestore về để lưu trữ dự phòng hoặc xử lý báo cáo nâng cao.
 - [x] **Ổn định hóa Bản đồ & Định vị**: Khắc phục triệt để lỗi trắng bản đồ trên PC, tối ưu hóa nút "Vị trí hiện tại" với cơ chế Timeout và thông báo lỗi chi tiết. Tương thích hoàn toàn React-Leaflet v5.
 - [x] **Cải thiện UI/UX & Độ tin cậy**: Thay thế hộp thoại xóa mặc định bằng xác nhận in-line cao cấp. Bảo vệ ứng dụng khỏi các lỗi crash do dữ liệu không đúng định dạng (tên khách hàng là số) tại các view Công nợ và Đơn hàng.

@@ -103,9 +103,24 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 				if (colIndex !== -1) {
 					let val = row[colIndex];
 					if (field.type === 'number') {
-						val = Number(val) || field.default || 0;
+						if (typeof val === 'string') {
+							// Handle Vietnamese locale: replace comma with dot, and remove thousands separators (dots) if comma is present
+							let cleaned = val.trim();
+							if (cleaned.includes(',') && cleaned.includes('.')) {
+								cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+							} else if (cleaned.includes(',')) {
+								cleaned = cleaned.replace(',', '.');
+							}
+							val = Number(cleaned);
+						}
+						val = (val !== undefined && val !== null && !isNaN(Number(val))) ? Number(val) : (field.default || 0);
 					} else {
-						val = val !== undefined && val !== null ? String(val).trim() : (field.default || '');
+						if (typeof val === 'number') {
+							// Convert number to locale string to preserve decimal commas in UI
+							val = val.toLocaleString('vi-VN');
+						} else {
+							val = val !== undefined && val !== null ? String(val).trim() : (field.default || '');
+						}
 					}
 					obj[field.key] = val;
 				} else {
@@ -169,15 +184,15 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 			const ssId = ssMatch[1];
 			const gid = gidMatch ? gidMatch[1] : '0';
 
-			const exportUrl = `https://docs.google.com/spreadsheets/d/${ssId}/export?format=csv&gid=${gid}`;
+			const exportUrl = `https://docs.google.com/spreadsheets/d/${ssId}/export?format=xlsx&gid=${gid}`;
 
 			const response = await fetch(exportUrl);
 			if (!response.ok) {
 				throw new Error("Không thể truy cập trang tính. Hãy chắc chắn bạn đã bật quyền 'Bất kỳ ai có liên kết đều có thể xem'.");
 			}
 
-			const csvText = await response.text();
-			const wb = XLSX.read(csvText, { type: 'string' });
+			const arrayBuffer = await response.arrayBuffer();
+			const wb = XLSX.read(arrayBuffer, { type: 'array' });
 			const wsname = wb.SheetNames[0];
 			const ws = wb.Sheets[wsname];
 			const jsonData = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];

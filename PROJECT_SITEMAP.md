@@ -99,6 +99,7 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 - [x] **Đối soát & Kiểm kho Định kỳ**: Hệ thống kiểm kê thực tế, tự động tính chênh lệch và cập nhật số dư kho với lý do điều chỉnh cụ thể.
 - [x] **Nâng cấp Bảo mật (Security Pro)**: Tối ưu hóa CSP, chặn Clickjacking và XSS theo tiêu chuẩn Mozilla HTTP Observatory thông qua `vercel.json`.
 - [x] **Ổn định hóa Nhập liệu & Kết nối**: Khắc phục lỗi "Failed to fetch" khi nhập liệu từ Google Sheets và tối ưu hóa kết nối Real-time cho Firebase bằng cách tinh chỉnh chính sách CSP.
+- [x] **Tối ưu UX Lên đơn trên Di động**: Hiển thị mặc định nút xóa sản phẩm và tăng kích thước vùng nhấp trên thiết bị cảm ứng để thao tác nhanh và chính xác hơn.
 - [x] **Nexus Control & Smart Billing**: 
     - Nâng cấp giao diện Nexus Control đáp ứng mọi màn hình (Responsive).
     - Triển khai cột **"Ngày vào trang"** (Joined Date) thay cho Ngày hết hạn, tự động reset mốc khi cập nhật gói (Mail xác nhận).

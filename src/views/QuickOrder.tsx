@@ -578,9 +578,9 @@ const QuickOrder = () => {
 										<td className="py-6 text-right pl-4">
 											<button
 												onClick={() => removeLineItem(index)}
-												className="size-8 rounded-lg flex items-center justify-center text-rose-200 hover:bg-rose-50 hover:text-rose-500 transition-all opacity-0 group-hover:opacity-100"
+												className="size-10 rounded-xl flex items-center justify-center text-rose-500 bg-rose-50 dark:bg-rose-900/20 md:bg-transparent md:text-rose-200 md:hover:bg-rose-50 md:hover:text-rose-500 transition-all md:opacity-0 md:group-hover:opacity-100"
 											>
-												<X size={16} />
+												<X size={18} />
 											</button>
 										</td>
 									</tr>

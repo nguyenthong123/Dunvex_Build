@@ -30,6 +30,7 @@ const ProductList = () => {
 	const [showScanner, setShowScanner] = useState(false);
 	const itemsPerPage = 10;
 	const searchRef = useRef<HTMLInputElement>(null);
+	const qrRef = useRef<HTMLCanvasElement>(null);
 
 	const [formData, setFormData] = useState({
 		name: '',
@@ -448,14 +449,8 @@ const ProductList = () => {
 			return;
 		}
 
-		// Use a temporary canvas to get a high-res QR for printing
-		const canvas = document.createElement('canvas');
-		const size = 300;
-		// We'll use the qrUrl as a fallback or just use the same logic in the print window
-		// Actually, simpler to just use api.qrserver for the print window as it's separate, 
-		// but since we want local, we can inject a script to the print window or just pass a dataURL.
-
-		const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${product.id}`;
+		// Use the canvas from the modal to get the data URL
+		const qrDataURL = qrRef.current?.toDataURL('image/png') || '';
 
 		printWindow.document.write(`
 			<html>
@@ -519,7 +514,7 @@ const ProductList = () => {
 				<body>
 					<div class="label-container">
 						<div class="brand">DUNVEX BUILD</div>
-						<img src="${qrUrl}" class="qr-img" />
+						<img src="${qrDataURL}" class="qr-img" />
 						<div class="product-name">${product.name}</div>
 						<div class="sku-details">ID: ${product.id}</div>
 						<div class="sku-details">SKU: ${product.sku || '---'}</div>
@@ -1247,11 +1242,13 @@ const ProductList = () => {
 									</div>
 									<div className="flex flex-col items-center p-4 bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-700 shrink-0">
 										<QRCodeCanvas
+											ref={qrRef}
 											value={selectedProduct.id}
-											size={120}
+											size={300}
 											level="H"
 											includeMargin={false}
 											className="rounded-lg"
+											style={{ width: 120, height: 120 }}
 										/>
 										<p className="text-[9px] font-black text-slate-400 uppercase mt-3 tracking-widest">QR ID Sản phẩm</p>
 										<button

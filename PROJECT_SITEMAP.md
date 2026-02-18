@@ -135,6 +135,12 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 - [x] **Điều hướng Thông minh theo Ngữ cảnh (Smart Navigation)**:
     - **Trung tâm Đào tạo**: Tùy biến nút chính thành "Kết thúc Lab" và các mục menu thành Tồn kho chuyên sâu, Vận hành, Tài chính.
     - **Trang Cài đặt**: Tích hợp phím tắt nhanh trên Bottom Nav bao gồm: Bật/tắt Chế độ tối (FAB chính), nhảy nhanh đến Gói dịch vụ, Cẩm nang vận hành và nút Đăng xuất trực tiếp.
+- [x] **Hệ thống Định danh & Quét mã QR (QR System Pro)**:
+    - **Định danh duy nhất**: Mỗi sản phẩm được gắn một mã QR duy nhất dựa trên **Firestore ID**, loại bỏ hoàn toàn việc trùng lặp khi nhiều sản phẩm dùng chung mã SKU.
+    - **In Tem QR**: Tích hợp chức năng in tem sản phẩm chuyên nghiệp ngay từ trình xem chi tiết, hỗ trợ dán nhãn vật lý trong kho.
+    - **Quét mã Tra cứu Nhanh**: Tích hợp nút quét mã QR toàn cục tại Trang chủ và trang Sản phẩm, cho phép nhảy thẳng đến chi tiết sản phẩm chỉ với 1 lần quét.
+    - **Lên đơn bằng QR**: Tối ưu hóa trình quét tại trang Lên đơn hàng, hỗ trợ nhận diện ID sản phẩm tức thì để tự động điền thông tin và quản lý tồn kho chính xác.
+    - **Công nghệ Local QR**: Sử dụng thư viện `qrcode.react` để tạo mã QR trực tiếp tại phía Client, đảm bảo tốc độ tải tức thì, bảo mật dữ liệu và không phụ thuộc vào Internet hay dịch vụ bên ngoài.
 
 ### 📝 Cần làm tiếp (To-do)
 - [ ] **Báo cáo & Phân tích thông minh (Dashboard Pro)**: Cảnh báo hàng sắp hết kho dựa trên tốc độ bán hàng và dự báo doanh số.

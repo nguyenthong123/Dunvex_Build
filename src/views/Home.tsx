@@ -7,6 +7,8 @@ import { useNavigationConfig } from '../hooks/useNavigationConfig';
 import { Eye, EyeOff, TrendingUp, TrendingDown, AlertTriangle, Wallet } from 'lucide-react';
 
 import { useOwner } from '../hooks/useOwner';
+import QRScanner from '../components/shared/QRScanner';
+import { QrCode } from 'lucide-react';
 
 const Home = () => {
 	const navigate = useNavigate();
@@ -24,6 +26,7 @@ const Home = () => {
 	const [auditLogs, setAuditLogs] = useState<any[]>([]);
 	const [showProfit, setShowProfit] = useState(false);
 	const [chartFilter, setChartFilter] = useState('7days');
+	const [showScanner, setShowScanner] = useState(false);
 
 	useEffect(() => {
 		if (!auth.currentUser || owner.loading || !owner.ownerId) return;
@@ -133,6 +136,11 @@ const Home = () => {
 
 	const formatPrice = (price: number) => {
 		return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
+	};
+
+	const handleQRScan = (productId: string) => {
+		// Just navigate to inventory with ID param, ProductList will handle opening detail
+		navigate(`/inventory?id=${productId}`);
 	};
 
 	// --- CALCULATIONS ---
@@ -262,6 +270,15 @@ const Home = () => {
 			<header className="h-16 md:h-20 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between px-4 md:px-8 shrink-0 relative z-20 transition-colors duration-300">
 				<h2 className="text-lg md:text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight">Tổng Quan Hệ Thống</h2>
 				<div className="flex items-center gap-4">
+					{/* Global Scanner Button */}
+					<button
+						onClick={() => setShowScanner(true)}
+						className="p-2 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors group flex items-center gap-2"
+						title="Quét mã tra cứu"
+					>
+						<QrCode size={24} className="group-hover:scale-110 transition-transform" />
+						<span className="hidden md:inline text-xs font-bold uppercase tracking-widest">Quét Mã</span>
+					</button>
 
 					{/* Notification Bell */}
 					<div className="relative">
@@ -571,6 +588,14 @@ const Home = () => {
 					</div>
 				</div>
 			</main>
+
+			{showScanner && (
+				<QRScanner
+					onScan={handleQRScan}
+					onClose={() => setShowScanner(false)}
+					title="Tra cứu sản phẩm"
+				/>
+			)}
 		</div>
 	);
 };

@@ -3,12 +3,14 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, where, writeBatch, increment } from 'firebase/firestore';
 import BulkImport from '../components/shared/BulkImport';
-
+import QRScanner from '../components/shared/QRScanner';
+import { QRCodeCanvas } from 'qrcode.react';
 import { useOwner } from '../hooks/useOwner';
 
 
 const ProductList = () => {
 	const navigate = useNavigate();
+	const location = useLocation();
 	const owner = useOwner();
 
 	const [products, setProducts] = useState<any[]>([]);
@@ -25,6 +27,7 @@ const ProductList = () => {
 	const [inventoryLogs, setInventoryLogs] = useState<any[]>([]);
 	const [currentPage, setCurrentPage] = useState(1);
 	const [showMobileSearch, setShowMobileSearch] = useState(false);
+	const [showScanner, setShowScanner] = useState(false);
 	const itemsPerPage = 10;
 	const searchRef = useRef<HTMLInputElement>(null);
 
@@ -95,6 +98,23 @@ const ProductList = () => {
 		});
 		return unsubscribe;
 	}, [owner.loading, owner.ownerId]);
+
+	useEffect(() => {
+		if (products.length > 0) {
+			const params = new URLSearchParams(location.search);
+			const productId = params.get('id');
+			if (productId) {
+				const product = products.find(p => p.id === productId);
+				if (product) {
+					setSelectedProduct(product);
+					setShowDetail(true);
+					// Clear the param after opening
+					navigate('/inventory', { replace: true });
+				}
+			}
+		}
+	}, [location.search, products]);
+
 
 	// Fetch Inventory Logs (Always fetch to compute stats)
 	useEffect(() => {
@@ -421,6 +441,108 @@ const ProductList = () => {
 		return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
 	};
 
+	const printQRLabel = (product: any) => {
+		const printWindow = window.open('', '_blank');
+		if (!printWindow) {
+			alert("Vui lòng cho phép mở popup để in tem.");
+			return;
+		}
+
+		// Use a temporary canvas to get a high-res QR for printing
+		const canvas = document.createElement('canvas');
+		const size = 300;
+		// We'll use the qrUrl as a fallback or just use the same logic in the print window
+		// Actually, simpler to just use api.qrserver for the print window as it's separate, 
+		// but since we want local, we can inject a script to the print window or just pass a dataURL.
+
+		const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${product.id}`;
+
+		printWindow.document.write(`
+			<html>
+				<head>
+					<title>In Tem QR - ${product.name}</title>
+					<style>
+						@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+						body { 
+							margin: 0; 
+							display: flex; 
+							flex-direction: column; 
+							align-items: center; 
+							justify-content: center;
+							font-family: 'Inter', sans-serif;
+							text-align: center;
+							min-height: 100vh;
+							background: #f5f5f5;
+						}
+						.label-container {
+							border: 2px solid #000;
+							padding: 30px;
+							width: 350px;
+							background: white;
+							box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+							border-radius: 20px;
+						}
+						.qr-img {
+							width: 280px;
+							height: 280px;
+						}
+						.product-name {
+							font-weight: 900;
+							font-size: 20px;
+							margin-top: 20px;
+							text-transform: uppercase;
+							color: #000;
+							line-height: 1.2;
+						}
+						.sku-details {
+							font-size: 14px;
+							font-weight: 700;
+							color: #444;
+							margin-top: 10px;
+							letter-spacing: 0.5px;
+						}
+						.brand {
+							font-size: 12px;
+							font-weight: 900;
+							color: #1A237E;
+							margin-bottom: 15px;
+							letter-spacing: 4px;
+							text-transform: uppercase;
+						}
+						@media print {
+							.no-print { display: none !important; }
+							body { min-height: auto; background: white; }
+							.label-container { border: none; box-shadow: none; width: 100%; padding: 0; }
+						}
+					</style>
+				</head>
+				<body>
+					<div class="label-container">
+						<div class="brand">DUNVEX BUILD</div>
+						<img src="${qrUrl}" class="qr-img" />
+						<div class="product-name">${product.name}</div>
+						<div class="sku-details">ID: ${product.id}</div>
+						<div class="sku-details">SKU: ${product.sku || '---'}</div>
+					</div>
+					<div class="no-print" style="margin-top: 40px; display: flex; gap: 15px;">
+						<button onclick="window.print()" style="padding: 15px 35px; background: #1A237E; color: white; border: none; border-radius: 12px; font-weight: 900; cursor: pointer; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 10px 20px rgba(26,35,126,0.2);">IN TEM NGAY</button>
+						<button onclick="window.close()" style="padding: 15px 35px; background: #eeeeee; color: #666; border: none; border-radius: 12px; font-weight: 900; cursor: pointer; text-transform: uppercase; letter-spacing: 1px;">ĐÓNG</button>
+					</div>
+				</body>
+			</html>
+		`);
+		printWindow.document.close();
+	};
+
+	const handleQRScan = (productId: string) => {
+		const product = products.find(p => p.id === productId);
+		if (product) {
+			openDetail(product);
+		} else {
+			alert(`Không tìm thấy sản phẩm với mã ID: ${productId}`);
+		}
+	};
+
 	// Helper to handle Google Drive image URLs more reliably
 	const getImageUrl = (url: string) => {
 		if (!url) return '';
@@ -498,6 +620,13 @@ const ProductList = () => {
 
 					{hasManagePermission && (
 						<div className="flex items-center gap-2">
+							<button
+								onClick={() => setShowScanner(true)}
+								className="md:flex bg-[#1A237E] text-white px-4 py-2.5 rounded-xl font-bold border border-[#1A237E] active:scale-95 transition-all items-center gap-2 hover:bg-indigo-700"
+							>
+								<span className="material-symbols-outlined">qr_code_scanner</span>
+								<span className="hidden md:inline">Quét Mã QR</span>
+							</button>
 							<button
 								onClick={() => setShowImport(true)}
 								className="hidden md:flex bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-4 py-2.5 rounded-xl font-bold border border-slate-200 dark:border-slate-800 active:scale-95 transition-all items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-700"
@@ -1107,14 +1236,31 @@ const ProductList = () => {
 									</div>
 								</div>
 
-								<div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl flex justify-between items-center">
-									<div>
+								<div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-6">
+									<div className="flex-1">
 										<p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase mb-1">Mô tả / Ghi chú</p>
 										<p className="text-slate-600 dark:text-slate-300 italic whitespace-pre-wrap">{selectedProduct.note || 'Không có ghi chú'}</p>
+										<div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+											<p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase mb-1">Người tạo</p>
+											<p className="text-[10px] text-blue-500 font-bold truncate max-w-[200px]">{selectedProduct.createdByEmail || 'N/A'}</p>
+										</div>
 									</div>
-									<div className="text-right border-l pl-4 border-slate-200 dark:border-slate-700">
-										<p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase mb-1">Người tạo</p>
-										<p className="text-[10px] text-blue-500 font-bold truncate max-w-[100px]">{selectedProduct.createdByEmail || 'N/A'}</p>
+									<div className="flex flex-col items-center p-4 bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-700 shrink-0">
+										<QRCodeCanvas
+											value={selectedProduct.id}
+											size={120}
+											level="H"
+											includeMargin={false}
+											className="rounded-lg"
+										/>
+										<p className="text-[9px] font-black text-slate-400 uppercase mt-3 tracking-widest">QR ID Sản phẩm</p>
+										<button
+											onClick={() => printQRLabel(selectedProduct)}
+											className="mt-3 flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 rounded-lg text-[10px] font-black uppercase hover:bg-orange-100 transition-all border border-orange-100 dark:border-orange-800"
+										>
+											<span className="material-symbols-outlined text-sm">print</span>
+											In Tem QR
+										</button>
 									</div>
 								</div>
 
@@ -1137,7 +1283,13 @@ const ProductList = () => {
 					</div>
 				)}
 
-				{/* LOGS MODALS REMOVED */}
+				{showScanner && (
+					<QRScanner
+						onScan={handleQRScan}
+						onClose={() => setShowScanner(false)}
+						title="Tìm nhanh sản phẩm"
+					/>
+				)}
 			</div>
 		</div>
 	);

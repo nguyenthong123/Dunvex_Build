@@ -63,7 +63,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScan, onClose, title = "Quét m
 						</div>
 						<div>
 							<h3 className="text-xl font-black uppercase tracking-tight">{title}</h3>
-							<p className="text-[10px] font-bold opacity-60 uppercase tracking-widest">Quét mã SKU để chọn nhanh</p>
+							<p className="text-[10px] font-bold opacity-60 uppercase tracking-widest">Quét mã QR sản phẩm để chọn nhanh</p>
 						</div>
 					</div>
 					<button
@@ -88,7 +88,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScan, onClose, title = "Quét m
 							Di chuyển camera đến vùng chứa mã QR của sản phẩm
 						</p>
 						<p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mt-2 px-4 py-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-full inline-block">
-							Hệ thống sẽ tự nhận diện theo SKU
+							Hệ thống sẽ tự nhận diện theo mã gốc (ID)
 						</p>
 					</div>
 				</div>

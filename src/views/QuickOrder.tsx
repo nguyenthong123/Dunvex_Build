@@ -154,8 +154,8 @@ const QuickOrder = () => {
 		setLineItems(newItems);
 	};
 
-	const handleQRScan = (sku: string) => {
-		const product = products.find(p => p.sku === sku);
+	const handleQRScan = (productId: string) => {
+		const product = products.find(p => p.id === productId);
 		if (product) {
 			// Find first empty item or add new one
 			const emptyIdx = lineItems.findIndex(item => !item.productId);
@@ -180,7 +180,7 @@ const QuickOrder = () => {
 				]);
 			}
 		} else {
-			alert(`Không tìm thấy sản phẩm với mã SKU: ${sku}`);
+			alert(`Không tìm thấy sản phẩm với mã ID: ${productId}`);
 		}
 	};
 
@@ -601,7 +601,7 @@ const QuickOrder = () => {
 							className="w-full py-4 mt-3 border-2 border-dashed border-blue-100 dark:border-blue-900/30 rounded-2xl text-blue-600 font-black text-xs uppercase tracking-[2px] flex items-center justify-center gap-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all active:scale-[0.99]"
 						>
 							<QrCode size={16} strokeWidth={3} />
-							+ QUÉT MÃ QR (SKU)
+							+ QUÉT MÃ QR SẢN PHẨM
 						</button>
 					</div>
 				</div>

@@ -667,7 +667,7 @@ const QuickOrder = () => {
 								</div>
 								<button
 									onClick={handleConfirmOrder}
-									className="w-full md:w-[350px] ml-auto h-16 bg-[#ffcc00] text-slate-900 rounded-2xl font-black text-sm uppercase tracking-[2px] shadow-xl shadow-yellow-500/10 hover:bg-[#fbc02d] transition-all active:scale-[0.98]"
+									className="hidden md:flex items-center justify-center w-[350px] ml-auto h-16 bg-[#ffcc00] text-slate-900 rounded-2xl font-black text-sm uppercase tracking-[2px] shadow-xl shadow-yellow-500/10 hover:bg-[#fbc02d] transition-all active:scale-[0.98]"
 								>
 									XÁC NHẬN LÊN ĐƠN
 								</button>

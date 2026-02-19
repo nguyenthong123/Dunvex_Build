@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db } from '../services/firebase';
-import { collection, query, where, onSnapshot, addDoc, serverTimestamp, orderBy, limit } from 'firebase/firestore';
-import { Wallet, TrendingUp, TrendingDown, Receipt, Clock, BarChart3, Plus, ArrowUpRight, ArrowDownLeft, Filter, Search, Calendar, ChevronRight } from 'lucide-react';
+import { collection, query, where, onSnapshot, addDoc, serverTimestamp, Timestamp, doc, writeBatch, limit, orderBy, deleteDoc } from 'firebase/firestore';
+import { Wallet, TrendingUp, TrendingDown, Receipt, Clock, BarChart3, Plus, ArrowUpRight, ArrowDownLeft, Filter, Search, Calendar, ChevronRight, Trash2 } from 'lucide-react';
 import { useOwner } from '../hooks/useOwner';
 
 import { useSearchParams } from 'react-router-dom';
@@ -148,6 +148,26 @@ const Finance = () => {
 
 	// --- CALCULATIONS ---
 
+	const handleDeleteLog = async (id: string, log: any) => {
+		if (!window.confirm(`Bạn có chắc muốn xóa ghi chép: "${log.note}" ? `)) return;
+
+		try {
+			await deleteDoc(doc(db, 'cash_book', id));
+			// Log action
+			await addDoc(collection(db, 'audit_logs'), {
+				action: 'Xóa ghi chép thu chi',
+				user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
+				userId: auth.currentUser?.uid,
+				ownerId: owner.ownerId,
+				details: `Đã xóa: ${log.type === 'thu' ? '+' : '-'}${formatPrice(log.amount)} - Nội dung: ${log.note} `,
+				createdAt: serverTimestamp()
+			});
+		} catch (error) {
+			console.error("Finance: Delete Log Error:", error);
+			alert("Lỗi khi xóa ghi chép");
+		}
+	};
+
 	const filterByDate = (date: any) => {
 		if (!date) return false;
 		const d = date.seconds ? new Date(date.seconds * 1000).toISOString().split('T')[0] : date;
@@ -238,19 +258,19 @@ const Finance = () => {
 					<div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
 						<button
 							onClick={() => setActiveTab('cashbook')}
-							className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'cashbook' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+							className={`px - 4 py - 2 rounded - lg text - xs font - bold transition - all ${activeTab === 'cashbook' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700'} `}
 						>
 							Sổ Quỹ
 						</button>
 						<button
 							onClick={() => setActiveTab('aging')}
-							className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'aging' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+							className={`px - 4 py - 2 rounded - lg text - xs font - bold transition - all ${activeTab === 'aging' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700'} `}
 						>
 							Tuổi Nợ
 						</button>
 						<button
 							onClick={() => setActiveTab('profit')}
-							className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'profit' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+							className={`px - 4 py - 2 rounded - lg text - xs font - bold transition - all ${activeTab === 'profit' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700'} `}
 						>
 							Lợi Nhuận
 						</button>
@@ -330,12 +350,13 @@ const Finance = () => {
 											<th className="px-6 py-4">Phân loại</th>
 											<th className="px-6 py-4">Nội dung</th>
 											<th className="px-6 py-4 text-right">Số tiền</th>
+											<th className="px-6 py-4 text-right">Hành động</th>
 										</tr>
 									</thead>
 									<tbody className="divide-y divide-slate-50 dark:divide-slate-800">
 										{cashLogs.length === 0 ? (
 											<tr>
-												<td colSpan={4} className="px-6 py-10 text-center text-slate-400 italic">
+												<td colSpan={5} className="px-6 py-10 text-center text-slate-400 italic">
 													Chưa có ghi chép thu chi nào cho kỳ này.
 												</td>
 											</tr>
@@ -351,6 +372,15 @@ const Finance = () => {
 													<td className="px-6 py-4 font-medium text-slate-700 dark:text-slate-300">{log.note}</td>
 													<td className={`px-6 py-4 text-right font-black ${log.type === 'thu' ? 'text-emerald-600' : 'text-rose-600'}`}>
 														{log.type === 'thu' ? '+' : '-'}{formatPrice(log.amount)}
+													</td>
+													<td className="px-6 py-4 text-right">
+														<button
+															onClick={() => handleDeleteLog(log.id, log)}
+															className="p-2 text-slate-300 hover:text-rose-500 transition-colors"
+															title="Xóa"
+														>
+															<Trash2 size={16} />
+														</button>
 													</td>
 												</tr>
 											))

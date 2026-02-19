@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, CheckCircle2, XCircle, Clock, X, AlertTriangle, Coins } from 'lucide-react';
+import { Bell, CheckCircle2, XCircle, Clock, X, AlertTriangle, Coins, Database } from 'lucide-react';
 import { db, auth } from '../services/firebase';
 import { collection, query, where, orderBy, onSnapshot, updateDoc, doc, limit, serverTimestamp, setDoc } from 'firebase/firestore';
 
@@ -94,15 +94,17 @@ const NotificationBell = ({ placement = 'down', align = 'right' }: { placement?:
 										className={`p-4 border-b border-slate-50 dark:border-slate-800/50 flex gap-3 transition-colors ${!n.read ? 'bg-indigo-50/30 dark:bg-indigo-500/5' : 'hover:bg-slate-50 dark:hover:bg-slate-800/20'}`}
 									>
 										<div className={`mt-0.5 size-8 rounded-lg flex items-center justify-center shrink-0 ${n.type === 'lock' ? 'bg-rose-500/10 text-rose-500' :
-												n.type === 'unlock' ? 'bg-emerald-500/10 text-emerald-500' :
-													n.type === 'low_stock' ? 'bg-orange-500/10 text-orange-500' :
-														n.type === 'debt_warning' ? 'bg-amber-500/10 text-amber-500' :
+											n.type === 'unlock' ? 'bg-emerald-500/10 text-emerald-500' :
+												n.type === 'low_stock' ? 'bg-orange-500/10 text-orange-500' :
+													n.type === 'debt_warning' ? 'bg-amber-500/10 text-amber-500' :
+														n.type === 'auto_sync' ? 'bg-emerald-500/10 text-emerald-500' :
 															'bg-indigo-500/10 text-indigo-500'
 											}`}>
 											{n.type === 'lock' && <XCircle size={16} />}
 											{n.type === 'unlock' && <CheckCircle2 size={16} />}
 											{n.type === 'low_stock' && <AlertTriangle size={16} />}
 											{n.type === 'debt_warning' && <Coins size={16} />}
+											{n.type === 'auto_sync' && <Database size={16} />}
 											{n.type === 'payment' && <Bell size={16} />}
 											{(n.type === 'order' || !n.type) && <Bell size={16} />}
 										</div>

@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { db, auth } from '../services/firebase';
-import { collection, query, where, getDocs, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, serverTimestamp, Timestamp, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { useOwner } from '../hooks/useOwner';
 
 /**
@@ -8,6 +8,7 @@ import { useOwner } from '../hooks/useOwner';
  * Background component that monitors Business Intelligence:
  * 1. Inventory Sales Velocity -> Low Stock warnings.
  * 2. Debt Aging -> Collection reminders (6-day threshold).
+ * 3. Auto-sync to Google Sheets (Weekly, Monthly, Quarterly).
  */
 const SystemAlertManager: React.FC = () => {
 	const owner = useOwner();
@@ -18,6 +19,7 @@ const SystemAlertManager: React.FC = () => {
 		const runSystemChecks = async () => {
 			await checkInventory();
 			await checkDebts();
+			await checkAutoSync();
 		};
 
 		const checkInventory = async () => {
@@ -76,7 +78,6 @@ const SystemAlertManager: React.FC = () => {
 			if (lastChecked && now - parseInt(lastChecked) < 12 * 60 * 60 * 1000) return;
 
 			try {
-				// Fetch confirmed orders (Đơn chốt)
 				const orderSnap = await getDocs(query(
 					collection(db, 'orders'),
 					where('ownerId', '==', owner.ownerId),
@@ -84,14 +85,12 @@ const SystemAlertManager: React.FC = () => {
 				));
 				const orders = orderSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-				// Fetch all payments
 				const paymentSnap = await getDocs(query(
 					collection(db, 'payments'),
 					where('ownerId', '==', owner.ownerId)
 				));
 				const payments = paymentSnap.docs.map(d => d.data());
 
-				// Calculate balances per customer
 				const balances = new Map<string, number>();
 				orders.forEach((o: any) => {
 					if (o.customerId) {
@@ -104,7 +103,6 @@ const SystemAlertManager: React.FC = () => {
 					}
 				});
 
-				// Check for orders reaching the 6-day threshold
 				const sixDaysAgo = new Date();
 				sixDaysAgo.setDate(sixDaysAgo.getDate() - 6);
 				const compareDateStr = sixDaysAgo.toISOString().split('T')[0];
@@ -113,7 +111,7 @@ const SystemAlertManager: React.FC = () => {
 					if (!order.customerId) continue;
 					const customerDebt = balances.get(order.customerId) || 0;
 
-					if (customerDebt > 10000) { // Only alert if debt > 10k VND
+					if (customerDebt > 10000) {
 						const dateString = order.createdAt?.toDate ?
 							order.createdAt.toDate().toISOString().split('T')[0] :
 							(order.orderDate || '');
@@ -126,6 +124,125 @@ const SystemAlertManager: React.FC = () => {
 				localStorage.setItem(`lastDebtCheck_${owner.ownerId}`, now.toString());
 			} catch (error) {
 				console.error("SystemAlertManager (Debt) Error:", error);
+			}
+		};
+
+		const checkAutoSync = async () => {
+			try {
+				const settingsRef = doc(db, 'settings', owner.ownerId);
+				const settingsSnap = await getDoc(settingsRef);
+				if (!settingsSnap.exists()) return;
+
+				const settings = settingsSnap.data();
+				const schedule = settings.autoSyncSchedule || 'none';
+				if (schedule === 'none') return;
+
+				const lastSyncAt = settings.lastSyncAt?.toDate?.() || (settings.lastSyncAt ? new Date(settings.lastSyncAt.seconds * 1000) : null);
+				const now = new Date();
+
+				let shouldSync = false;
+				let rangeStart = new Date();
+				let rangeEnd = new Date();
+
+				if (schedule === 'weekly') {
+					if (!lastSyncAt || (now.getTime() - lastSyncAt.getTime() > 7 * 24 * 60 * 60 * 1000)) {
+						shouldSync = true;
+						rangeStart.setDate(rangeStart.getDate() - 7);
+					}
+				} else if (schedule === 'monthly') {
+					if (!lastSyncAt || now.getMonth() !== lastSyncAt.getMonth()) {
+						if (now.getDate() >= 1) {
+							shouldSync = true;
+							rangeStart.setMonth(rangeStart.getMonth() - 1);
+							rangeStart.setDate(1);
+							rangeStart.setHours(0, 0, 0, 0);
+							rangeEnd.setDate(0);
+							rangeEnd.setHours(23, 59, 59, 999);
+						}
+					}
+				} else if (schedule === 'quarterly') {
+					const currentMonth = now.getMonth();
+					const currentQuarter = Math.floor(currentMonth / 3);
+					const lastSyncMonth = lastSyncAt ? lastSyncAt.getMonth() : -1;
+					const lastSyncQuarter = lastSyncAt ? Math.floor(lastSyncMonth / 3) : -1;
+
+					if (currentQuarter !== lastSyncQuarter) {
+						shouldSync = true;
+						const prevQuarter = (currentQuarter - 1 + 4) % 4;
+						const year = currentQuarter === 0 ? now.getFullYear() - 1 : now.getFullYear();
+						rangeStart = new Date(year, prevQuarter * 3, 1, 0, 0, 0, 0);
+						rangeEnd = new Date(year, (prevQuarter + 1) * 3, 0, 23, 59, 59, 999);
+					}
+				}
+
+				if (shouldSync && settings.spreadsheetId) {
+					const [prodSnap, custSnap, orderSnap] = await Promise.all([
+						getDocs(query(collection(db, 'products'), where('ownerId', '==', owner.ownerId))),
+						getDocs(query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId))),
+						getDocs(query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId)))
+					]);
+
+					const syncOrders = orderSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter((o: any) => {
+						if (!o.createdAt) return false;
+						const createdDate = o.createdAt.toDate ? o.createdAt.toDate() : new Date(o.createdAt);
+						return createdDate >= rangeStart && createdDate <= rangeEnd;
+					});
+
+					const orderDetails: any[] = [];
+					syncOrders.forEach((order: any) => {
+						if (Array.isArray(order.items)) {
+							order.items.forEach((item: any) => {
+								orderDetails.push({
+									orderId: order.id,
+									orderDate: order.orderDate,
+									customerName: order.customerName,
+									productName: item.name,
+									qty: item.qty,
+									price: item.price,
+									unit: item.unit,
+									total: (item.qty || 0) * (item.price || 0),
+									category: item.category,
+									packaging: item.packaging
+								});
+							});
+						}
+					});
+
+					const dataToSync = {
+						products: prodSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+						customers: custSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+						orders: syncOrders,
+						orderDetails: orderDetails
+					};
+
+					const response = await fetch('https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec', {
+						method: 'POST',
+						body: JSON.stringify({
+							action: 'sync_to_sheets',
+							ownerEmail: owner.ownerEmail,
+							spreadsheetId: settings.spreadsheetId,
+							data: dataToSync
+						})
+					});
+
+					if (response.ok) {
+						await updateDoc(settingsRef, {
+							lastSyncAt: serverTimestamp()
+						});
+
+						await addDoc(collection(db, 'notifications'), {
+							userId: auth.currentUser?.uid,
+							title: '📊 Tự động đồng bộ',
+							message: `Dữ liệu đã được tự động đồng bộ vào Google Sheets theo lịch (${schedule}).`,
+							body: `Dữ liệu đã được tự động đồng bộ vào Google Sheets theo lịch (${schedule}).`,
+							type: 'auto_sync',
+							read: false,
+							createdAt: serverTimestamp()
+						});
+					}
+				}
+			} catch (error) {
+				console.error("SystemAlertManager (AutoSync) Error:", error);
 			}
 		};
 

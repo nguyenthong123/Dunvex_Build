@@ -51,7 +51,8 @@ const AdminSettings = () => {
 		workStart: '08:00',
 		workEnd: '17:30',
 		geofenceRadius: 100,
-		attendanceViewers: [] as string[]
+		attendanceViewers: [] as string[],
+		autoSyncSchedule: 'none'
 	});
 	const [syncing, setSyncing] = useState(false);
 	const [syncRange, setSyncRange] = useState({
@@ -491,6 +492,25 @@ const AdminSettings = () => {
 														onChange={(e) => setSyncRange({ ...syncRange, end: e.target.value })}
 													/>
 												</div>
+											</div>
+
+											<div className="space-y-1">
+												<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Lịch đồng bộ tự động</label>
+												<select
+													className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-xs font-bold dark:text-white outline-none focus:ring-2 focus:ring-green-500/20"
+													value={companyInfo.autoSyncSchedule}
+													onChange={(e) => setCompanyInfo({ ...companyInfo, autoSyncSchedule: e.target.value })}
+												>
+													<option value="none">Tắt tự động</option>
+													<option value="weekly">Hàng tuần</option>
+													<option value="monthly">Hàng tháng</option>
+													<option value="quarterly">Cuối mỗi quý</option>
+												</select>
+												<p className="text-[9px] text-slate-400 font-medium px-1 mt-1">
+													{companyInfo.autoSyncSchedule === 'weekly' && "Hệ thống sẽ tự động đồng bộ mỗi 7 ngày."}
+													{companyInfo.autoSyncSchedule === 'monthly' && "Hệ thống sẽ đồng bộ vào ngày đầu tiên mỗi tháng."}
+													{companyInfo.autoSyncSchedule === 'quarterly' && "Hệ thống sẽ đồng bộ khi kết thúc mỗi quý (31/3, 30/6, 30/9, 31/12)."}
+												</p>
 											</div>
 											<button onClick={handleSheetSync} disabled={syncing || isSyncLocked} className="w-full bg-[#1A237E] dark:bg-indigo-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 enabled:hover:bg-blue-800 transition-all disabled:opacity-50">
 												{syncing ? <><RefreshCcw size={18} className="animate-spin" /> Đang đồng bộ...</> : isSyncLocked ? <><Lock size={18} /> TÍNH NĂNG ĐÃ BỊ KHÓA</> : <><Rocket size={18} /> CẬP NHẬT DỮ LIỆU NGAY</>}

@@ -28,6 +28,7 @@ const ProductList = () => {
 	const [currentPage, setCurrentPage] = useState(1);
 	const [showMobileSearch, setShowMobileSearch] = useState(false);
 	const [showScanner, setShowScanner] = useState(false);
+	const [selectedIds, setSelectedIds] = useState<string[]>([]);
 	const itemsPerPage = 10;
 	const searchRef = useRef<HTMLInputElement>(null);
 	const qrRef = useRef<HTMLCanvasElement>(null);
@@ -90,6 +91,13 @@ const ProductList = () => {
 		const unsubscribe = onSnapshot(q, (snapshot: any) => {
 			const docs = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
 			const sortedDocs = [...docs].sort((a, b) => {
+				const stockA = Number(a.stock) || 0;
+				const stockB = Number(b.stock) || 0;
+
+				// Prioritize products with stock > 0
+				if (stockA > 0 && stockB === 0) return -1;
+				if (stockA === 0 && stockB > 0) return 1;
+
 				const dateA = a.createdAt?.seconds || 0;
 				const dateB = b.createdAt?.seconds || 0;
 				return dateB - dateA;
@@ -368,10 +376,55 @@ const ProductList = () => {
 		if (bypassConfirm || window.confirm("Bạn có chắc chắn muốn xóa sản phẩm này không?")) {
 			try {
 				await deleteDoc(doc(db, 'products', id));
+				setSelectedIds(prev => prev.filter(item => item !== id));
 			} catch (error) {
 				alert("Lỗi khi xóa sản phẩm");
 			}
 		}
+	};
+
+	const handleBulkDelete = async () => {
+		if (!window.confirm(`Bạn có chắc chắn muốn xóa ${selectedIds.length} sản phẩm đã chọn không?`)) return;
+
+		try {
+			const batch = writeBatch(db);
+			selectedIds.forEach(id => {
+				batch.delete(doc(db, 'products', id));
+			});
+
+			// Log Bulk Delete
+			await addDoc(collection(db, 'audit_logs'), {
+				action: 'Xóa hàng loạt sản phẩm',
+				user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
+				userId: auth.currentUser?.uid,
+				ownerId: owner.ownerId,
+				details: `Đã xóa ${selectedIds.length} sản phẩm`,
+				createdAt: serverTimestamp()
+			});
+
+			await batch.commit();
+			setSelectedIds([]);
+			alert(`Đã xóa ${selectedIds.length} sản phẩm thành công`);
+		} catch (error) {
+			alert("Lỗi khi xóa hàng loạt sản phẩm");
+		}
+	};
+
+	const toggleSelectAll = () => {
+		const allOnPageIds = paginatedProducts.map(p => p.id);
+		const areAllSelected = allOnPageIds.length > 0 && allOnPageIds.every(id => selectedIds.includes(id));
+
+		if (areAllSelected) {
+			setSelectedIds(prev => prev.filter(id => !allOnPageIds.includes(id)));
+		} else {
+			setSelectedIds(prev => Array.from(new Set([...prev, ...allOnPageIds])));
+		}
+	};
+
+	const toggleSelect = (id: string) => {
+		setSelectedIds(prev =>
+			prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+		);
 	};
 
 	const generateSKU = () => {
@@ -615,6 +668,15 @@ const ProductList = () => {
 
 					{hasManagePermission && (
 						<div className="flex items-center gap-2">
+							{selectedIds.length > 0 && (
+								<button
+									onClick={handleBulkDelete}
+									className="flex bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 px-4 py-2.5 rounded-xl font-bold border border-rose-100 dark:border-rose-900/50 active:scale-95 transition-all items-center gap-2 hover:bg-rose-100"
+								>
+									<span className="material-symbols-outlined">delete_sweep</span>
+									<span>Xóa ({selectedIds.length})</span>
+								</button>
+							)}
 							<button
 								onClick={() => setShowScanner(true)}
 								className="md:flex bg-[#1A237E] text-white px-4 py-2.5 rounded-xl font-bold border border-[#1A237E] active:scale-95 transition-all items-center gap-2 hover:bg-indigo-700"
@@ -692,7 +754,15 @@ const ProductList = () => {
 							<table className="w-full text-left">
 								<thead>
 									<tr className="bg-slate-100/50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
-										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Mã SKU / Code</th>
+										<th className="py-4 px-6 w-10">
+											<input
+												type="checkbox"
+												className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+												checked={paginatedProducts.length > 0 && paginatedProducts.every(p => selectedIds.includes(p.id))}
+												onChange={toggleSelectAll}
+											/>
+										</th>
+										<th className="py-4 px-2 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Mã SKU / Code</th>
 										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Tên sản phẩm</th>
 										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Nhập kho</th>
 										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Xuất kho</th>
@@ -702,13 +772,21 @@ const ProductList = () => {
 								</thead>
 								<tbody className="divide-y divide-gray-100 dark:divide-slate-800">
 									{loading ? (
-										<tr><td colSpan={6} className="py-8 text-center text-slate-400 dark:text-slate-500">Đang tải dữ liệu...</td></tr>
+										<tr><td colSpan={7} className="py-8 text-center text-slate-400 dark:text-slate-500">Đang tải dữ liệu...</td></tr>
 									) : paginatedProducts.length === 0 ? (
-										<tr><td colSpan={6} className="py-8 text-center text-slate-400 dark:text-slate-500">Không tìm thấy sản phẩm nào</td></tr>
+										<tr><td colSpan={7} className="py-8 text-center text-slate-400 dark:text-slate-500">Không tìm thấy sản phẩm nào</td></tr>
 									) : (
 										paginatedProducts.map((product) => (
-											<tr key={product.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer" onClick={() => openDetail(product)}>
-												<td className="py-4 px-6">
+											<tr key={product.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer ${selectedIds.includes(product.id) ? 'bg-indigo-50/30' : ''}`} onClick={() => openDetail(product)}>
+												<td className="py-4 px-6" onClick={(e) => e.stopPropagation()}>
+													<input
+														type="checkbox"
+														className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+														checked={selectedIds.includes(product.id)}
+														onChange={() => toggleSelect(product.id)}
+													/>
+												</td>
+												<td className="py-4 px-2">
 													<span className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
 														{product.sku || '#' + product.id.slice(-6).toUpperCase()}
 													</span>

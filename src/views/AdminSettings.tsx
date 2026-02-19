@@ -318,6 +318,16 @@ const AdminSettings = () => {
 					lastSyncAt: { seconds: Math.floor(Date.now() / 1000) }
 				}));
 
+				await addDoc(collection(db, 'notifications'), {
+					userId: auth.currentUser?.uid,
+					title: '📊 Đồng bộ thành công',
+					message: `Toàn bộ dữ liệu từ ${syncRange.start} đến ${syncRange.end} đã được đẩy lên Google Sheets.`,
+					body: `Toàn bộ dữ liệu từ ${syncRange.start} đến ${syncRange.end} đã được đẩy lên Google Sheets.`,
+					type: 'auto_sync',
+					read: false,
+					createdAt: serverTimestamp()
+				});
+
 				alert("Đồng bộ dữ liệu thành công!");
 			} else {
 				throw new Error(result.message);

@@ -255,22 +255,22 @@ const Finance = () => {
 						<h2 className="text-lg md:text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight">Quản Lý Tài Chính</h2>
 					</div>
 
-					<div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+					<div className="flex bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl">
 						<button
 							onClick={() => setActiveTab('cashbook')}
-							className={`px - 4 py - 2 rounded - lg text - xs font - bold transition - all ${activeTab === 'cashbook' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700'} `}
+							className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition-all ${activeTab === 'cashbook' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
 						>
 							Sổ Quỹ
 						</button>
 						<button
 							onClick={() => setActiveTab('aging')}
-							className={`px - 4 py - 2 rounded - lg text - xs font - bold transition - all ${activeTab === 'aging' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700'} `}
+							className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition-all ${activeTab === 'aging' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
 						>
 							Tuổi Nợ
 						</button>
 						<button
 							onClick={() => setActiveTab('profit')}
-							className={`px - 4 py - 2 rounded - lg text - xs font - bold transition - all ${activeTab === 'profit' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700'} `}
+							className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition-all ${activeTab === 'profit' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
 						>
 							Lợi Nhuận
 						</button>
@@ -278,24 +278,26 @@ const Finance = () => {
 				</div>
 
 				{/* Filter Bar */}
-				<div className="px-4 md:px-8 py-3 bg-white/50 dark:bg-slate-900/50 backdrop-blur-md flex flex-wrap items-center gap-3">
-					<div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-100 dark:border-slate-800">
-						<Calendar size={14} className="text-slate-400" />
-						<input
-							type="date"
-							className="bg-transparent border-none p-0 text-[10px] font-black uppercase text-indigo-600 focus:ring-0"
-							value={fromDate}
-							onChange={(e) => setFromDate(e.target.value)}
-						/>
-						<span className="text-slate-300 text-xs">→</span>
-						<input
-							type="date"
-							className="bg-transparent border-none p-0 text-[10px] font-black uppercase text-indigo-600 focus:ring-0"
-							value={toDate}
-							onChange={(e) => setToDate(e.target.value)}
-						/>
+				<div className="px-4 md:px-8 py-3 bg-slate-50/50 dark:bg-slate-900/50 backdrop-blur-md flex flex-wrap items-center gap-4">
+					<div className="flex items-center gap-3 bg-white dark:bg-slate-800 px-4 py-2 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+						<Calendar size={16} className="text-indigo-500" />
+						<div className="flex items-center gap-2">
+							<input
+								type="date"
+								className="bg-transparent border-none p-0 text-xs font-black uppercase text-slate-700 dark:text-slate-200 focus:ring-0"
+								value={fromDate}
+								onChange={(e) => setFromDate(e.target.value)}
+							/>
+							<span className="text-slate-300 font-bold">→</span>
+							<input
+								type="date"
+								className="bg-transparent border-none p-0 text-xs font-black uppercase text-slate-700 dark:text-slate-200 focus:ring-0"
+								value={toDate}
+								onChange={(e) => setToDate(e.target.value)}
+							/>
+						</div>
 					</div>
-					<div className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden md:block">
+					<div className="text-[10px] font-black text-slate-400 uppercase tracking-[2px] hidden lg:block opacity-60">
 						Lọc dữ liệu theo thời gian
 					</div>
 				</div>

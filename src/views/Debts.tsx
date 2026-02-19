@@ -290,7 +290,9 @@ const Debts: React.FC = () => {
 			initials: String(customer.name || '').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || 'KH'
 		};
 	}).filter((item: any) => {
-		const matchesName = !searchTerm || String(item.name || '').toLowerCase().includes(searchTerm.toLowerCase());
+		const matchesName = !searchTerm ||
+			String(item.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+			String(item.businessName || '').toLowerCase().includes(searchTerm.toLowerCase());
 		const matchesStatus = item.hasStatusOrders;
 
 		if (!matchesStatus) return false;

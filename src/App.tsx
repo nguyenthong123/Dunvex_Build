@@ -20,6 +20,7 @@ import NexusControl from './views/NexusControl';
 import PriceList from './views/PriceList';
 import TrainingCatalog from './views/TrainingCatalog';
 import TrainingLab from './views/TrainingLab';
+import ReloadPrompt from './components/ReloadPrompt';
 
 function App() {
 	const [currentUser, setCurrentUser] = useState<any>(null);
@@ -129,6 +130,7 @@ function App() {
 				{/* Catch all */}
 				<Route path="*" element={<Navigate to="/" />} />
 			</Routes>
+			<ReloadPrompt />
 		</div>
 	);
 }

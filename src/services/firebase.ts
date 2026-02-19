@@ -18,9 +18,18 @@ setPersistence(auth, browserLocalPersistence);
 export const googleProvider = new GoogleAuthProvider();
 
 // Optimize Firestore connection to avoid ERR_QUIC_PROTOCOL_ERROR
-import { initializeFirestore } from "firebase/firestore";
+import { initializeFirestore, enableIndexedDbPersistence } from "firebase/firestore";
 export const db = initializeFirestore(app, {
 	experimentalForceLongPolling: true,
+});
+
+// Enable Offline Persistence
+enableIndexedDbPersistence(db).catch((err) => {
+	if (err.code === 'failed-precondition') {
+		console.warn('Persistence failed: Multiple tabs open');
+	} else if (err.code === 'unimplemented') {
+		console.warn('Persistence is not available in this browser');
+	}
 });
 
 export const storage = getStorage(app);

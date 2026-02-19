@@ -207,6 +207,7 @@ const QuickOrder = () => {
 				customerName: selectedCustomer?.name || searchCustomerQuery || 'Khách vãng lai',
 				customerId: selectedCustomer?.id || null,
 				customerPhone: selectedCustomer?.phone || '',
+				customerBusinessName: selectedCustomer?.businessName || '',
 				orderDate: orderDate,
 				items: validItems.map(item => ({
 					id: item.productId,
@@ -331,6 +332,7 @@ const QuickOrder = () => {
 
 	const filteredCustomers = customers.filter(c =>
 		String(c.name || '').toLowerCase().includes(searchCustomerQuery.toLowerCase()) ||
+		String(c.businessName || '').toLowerCase().includes(searchCustomerQuery.toLowerCase()) ||
 		String(c.phone || '').includes(searchCustomerQuery)
 	);
 
@@ -431,7 +433,15 @@ const QuickOrder = () => {
 											}}
 										>
 											<div>
-												<p className="font-black text-sm uppercase text-slate-800 dark:text-slate-200 group-hover:text-[#f27121]">{c.name}</p>
+												<p className="font-black text-sm uppercase text-slate-800 dark:text-slate-200 group-hover:text-[#f27121]">
+													{c.name}
+												</p>
+												{c.businessName && (
+													<p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1 uppercase">
+														<span className="material-symbols-outlined text-[12px]">domain</span>
+														{c.businessName}
+													</p>
+												)}
 												<p className="text-xs text-slate-400 dark:text-slate-500 font-medium">{c.phone}</p>
 											</div>
 											<CheckCircle size={18} className="text-slate-100 dark:text-slate-700 group-hover:text-[#f27121]" />

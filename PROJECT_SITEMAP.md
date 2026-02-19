@@ -142,11 +142,21 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Quét mã Tra cứu Nhanh**: Tích hợp nút quét mã QR toàn cục tại Trang chủ và trang Sản phẩm, cho phép nhảy thẳng đến chi tiết sản phẩm chỉ với 1 lần quét.
     - **Lên đơn bằng QR**: Tối ưu hóa trình quét tại trang Lên đơn hàng, hỗ trợ nhận diện ID sản phẩm tức thì để tự động điền thông tin và quản lý tồn kho chính xác.
     - **Công nghệ Local QR**: Sử dụng thư viện `qrcode.react` để tạo mã QR trực tiếp tại phía Client, đảm bảo tốc độ tải tức thì, bảo mật dữ liệu và không phụ thuộc vào Internet hay dịch vụ bên ngoài.
+- [x] **Tìm kiếm & Trải nghiệm Lên đơn (Search & UX)**:
+    - **Tìm kiếm Đa năng**: Hỗ trợ tìm kiếm khách hàng theo **Tên doanh nghiệp (Business Name)**, tên cá nhân và số điện thoại đồng nhất tại các module Lên đơn, Công nợ và Danh sách đơn hàng.
+    - **Lưu trữ Thông tin**: Tự động lưu và hiển thị tên doanh nghiệp trong chi tiết đơn hàng giúp kế toán đối soát chính xác.
+- [x] **Cảnh báo & Phân tích thông minh (System Alerts)**:
+    - **Dự báo Hết kho (Low Stock Velocity)**: Tự động phân tích tốc độ bán hàng trong 30 ngày để cảnh báo các sản phẩm sắp hết kho trong vòng 7 ngày tới.
+    - **Nhắc nợ Tự động (Debt Aging)**: Hệ thống tự động quét và gửi thông báo nhắc thu hồi công nợ cho các đơn hàng đã chốt quá 6 ngày mà vẫn chưa thanh toán đủ.
+    - **Trung tâm Thông báo**: Tích hợp biểu tượng trực quan (⚠️, 💰) vào nút chuông thông báo giúp Admin nắm bắt tình hình kinh doanh tức thì.
+- [x] **PWA & Offline Support**:
+    - **Cài đặt như Mobile App**: Hỗ trợ cài đặt vào màn hình chính (Add to Home Screen) trên cả iOS và Android với giao diện standalone chuyên nghiệp.
+    - **Hoạt động Offline**: Kích hoạt bộ nhớ đệm Firestore Persistence cho phép xem dữ liệu khách hàng, sản phẩm và công nợ ngay cả khi không có mạng. Tự động đồng bộ dữ liệu khi kết nối lại.
+    - **Cập nhật Thông minh**: Hệ thống Reload Prompt thông báo ngay khi có bản cập nhật mới hoặc khi ứng dụng đã sẵn sàng chạy Offline.
 
 ### 📝 Cần làm tiếp (To-do)
-- [ ] **Báo cáo & Phân tích thông minh (Dashboard Pro)**: Cảnh báo hàng sắp hết kho dựa trên tốc độ bán hàng và dự báo doanh số.
+- [ ] **Báo cáo & Phân tích thông minh (Dashboard Pro)**: Phân tích sâu xu hướng lợi nhuận và dự báo dòng tiền theo quý.
 - [ ] **Tự động hóa quy trình (Automation)**: Gửi thông báo nhắc nợ qua Zalo/SMS API và tích hợp nút chia sẻ hóa đơn nhanh cho khách hàng.
-- [ ] **PWA & Offline Support**: Cài đặt ứng dụng vào màn hình chính và hỗ trợ xem dữ liệu cơ bản khi mất kết nối mạng.
 - [ ] **Quản lý Tài chính nâng cao**: Thêm sổ quỹ nội bộ quản lý chi phí vận hành và báo cáo phân loại tuổi nợ (30-60-90 ngày).
 - [ ] **Hệ thống KPI & Phân vùng**: Thống kê doanh số theo nhân viên để tính hoa hồng và phân chia khách hàng theo tuyến bán hàng.
 - [ ] **Smart Search**: Tìm kiếm nhanh bằng giọng nói hoặc gợi ý thông minh dựa trên hành vi người dùng.

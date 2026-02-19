@@ -52,6 +52,7 @@ const OrderList = () => {
 
 	const filteredOrders = orders.filter(order =>
 		(String(order.customerName || '').toLowerCase().includes(searchTerm.toLowerCase())) ||
+		(String(order.customerBusinessName || '').toLowerCase().includes(searchTerm.toLowerCase())) ||
 		(String(order.id || '').toLowerCase().includes(searchTerm.toLowerCase())) ||
 		(String(order.customerPhone || '').includes(searchTerm))
 	);

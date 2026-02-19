@@ -37,6 +37,10 @@ Dưới đây là sơ đồ tóm tắt các trang và luồng dữ liệu chính
     - Quản lý lịch sử nhiều bản báo giá (Firestore), hỗ trợ Lưu/Xóa linh hoạt.
     - Chế độ "Desktop trên Mobile" & Thu phóng (60%-100%) để chụp ảnh toàn bộ bảng giá.
     - Giao diện in ấn Premium, tự động khớp thông tin doanh nghiệp.
+- **Quản lý Tài chính (`/finance`)** 🆕:
+    - **Sổ quỹ nội bộ**: Theo dõi thu chi vận hành, lương, nhập hàng và số dư thực tế.
+    - **Báo cáo Tuổi nợ (Debt Aging)**: Phân loại nợ quá hạn theo các mốc 30-60-90 ngày để đánh giá rủi ro tài chính.
+    - **Lợi nhuận chi tiết**: Thống kê doanh thu, giá vốn và lợi nhuận gộp trên từng đơn hàng đã chốt.
 - **Hệ thống Đào tạo (`/khoa-dao-tao`)** 🎓:
     - **Hands-on Practice**: Thực hành trực tiếp trên dữ liệu thật của chính người dùng.
     - **Môi trường Interactive Lab**: Chia đôi màn hình, hướng dẫn chi tiết từng bước.
@@ -153,12 +157,15 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Cài đặt như Mobile App**: Hỗ trợ cài đặt vào màn hình chính (Add to Home Screen) trên cả iOS và Android với giao diện standalone chuyên nghiệp.
     - **Hoạt động Offline**: Kích hoạt bộ nhớ đệm Firestore Persistence cho phép xem dữ liệu khách hàng, sản phẩm và công nợ ngay cả khi không có mạng. Tự động đồng bộ dữ liệu khi kết nối lại.
     - **Cập nhật Thông minh**: Hệ thống Reload Prompt thông báo ngay khi có bản cập nhật mới hoặc khi ứng dụng đã sẵn sàng chạy Offline.
+- [x] **Quản lý Tài chính nâng cao (Advanced Finance)**: Tích hợp Sổ quỹ, Báo cáo Tuổi nợ, Lợi nhuận chi tiết và **Bộ lọc thời gian (Từ ngày - Đến ngày)** đồng bộ trên toàn bộ module.
 
 ### 📝 Cần làm tiếp (To-do)
-- [ ] **Báo cáo & Phân tích thông minh (Dashboard Pro)**: Phân tích sâu xu hướng lợi nhuận và dự báo dòng tiền theo quý.
-- [ ] **Tự động hóa quy trình (Automation)**: Gửi thông báo nhắc nợ qua Zalo/SMS API và tích hợp nút chia sẻ hóa đơn nhanh cho khách hàng.
-- [ ] **Quản lý Tài chính nâng cao**: Thêm sổ quỹ nội bộ quản lý chi phí vận hành và báo cáo phân loại tuổi nợ (30-60-90 ngày).
+- [ ] **Báo cáo & Xuất dữ liệu (Finance Pro)**: Tích hợp nút xuất báo cáo Sổ quỹ và Lợi nhuận ra file Excel/PDF theo khoảng thời gian tùy chọn.
+- [ ] **Ký nhận điện tử (E-Signature)**: Cho phép khách hàng ký nhận trực tiếp trên màn hình di động khi giao hàng; tích hợp chữ ký vào Phiếu giao hàng.
+- [ ] **Tự động hóa quy trình (Automation)**: Gửi thông báo nhắc nợ hoặc ảnh hóa đơn qua Zalo/Messenger nhanh chỉ với 1 lần nhấp.
+- [ ] **Dòng thời gian khách hàng (CRM Pro)**: Hiển thị toàn bộ lịch sử Giao dịch - Thanh toán - Checkin của từng khách hàng trên 1 trục thời gian (Timeline).
+- [ ] **Dự báo dòng tiền (AI Forecast)**: Phân tích lịch sử thu chi để dự báo số dư khả dụng trong 30 ngày tiếp theo.
 - [ ] **Hệ thống KPI & Phân vùng**: Thống kê doanh số theo nhân viên để tính hoa hồng và phân chia khách hàng theo tuyến bán hàng.
-- [ ] **Smart Search**: Tìm kiếm nhanh bằng giọng nói hoặc gợi ý thông minh dựa trên hành vi người dùng.
+- [ ] **Smart Search**: Tìm kiếm nhanh bằng gợi ý thông minh dựa trên hành vi người dùng.
 
 *Ghi chú: File `upload_script.gs` đã được cập nhật logic gửi email.*

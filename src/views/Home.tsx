@@ -54,34 +54,44 @@ const Home = () => {
 
 		// 3. Fetch Data for Dashboard Calculations (Owner specific)
 		const qOrders = query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId));
-		const unsubOrders = onSnapshot(qOrders, (snap) => {
-			setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-		});
-
-		const qCust = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
-		const unsubCust = onSnapshot(qCust, (snap) => {
-			setCustomers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-		});
-
-		const qPay = query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId));
-		const unsubPay = onSnapshot(qPay, (snap) => {
-			setPayments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-		});
-
-		const qProd = query(collection(db, 'products'), where('ownerId', '==', owner.ownerId));
-		const unsubProd = onSnapshot(qProd, (snap) => {
-			setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-		});
-
 		const qAudit = query(
 			collection(db, 'audit_logs'),
 			where('ownerId', '==', owner.ownerId),
-			orderBy('createdAt', 'desc'),
-			limit(10)
+			limit(50)
 		);
 		const unsubAudit = onSnapshot(qAudit, (snap) => {
-			setAuditLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+			const logs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+			// Sắp xếp client-side để tránh lỗi Firestore Index
+			const sorted = logs.sort((a: any, b: any) => {
+				const timeA = a.createdAt?.seconds || 0;
+				const timeB = b.createdAt?.seconds || 0;
+				return timeB - timeA;
+			});
+			setAuditLogs(sorted.slice(0, 10));
+		}, (err) => {
+			console.error("Home: Audit Logs Error:", err);
 		});
+
+		const qCust = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
+		const qPay = query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId));
+		const qProd = query(collection(db, 'products'), where('ownerId', '==', owner.ownerId));
+
+		// Add error handlers to other snapshots for better debugging
+		const unsubOrders = onSnapshot(qOrders, (snap) => {
+			setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+		}, (err: any) => console.error("Home: Orders Error:", err));
+
+		const unsubCust = onSnapshot(qCust, (snap) => {
+			setCustomers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+		}, (err: any) => console.error("Home: Customers Error:", err));
+
+		const unsubPay = onSnapshot(qPay, (snap) => {
+			setPayments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+		}, (err: any) => console.error("Home: Payments Error:", err));
+
+		const unsubProd = onSnapshot(qProd, (snap) => {
+			setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+		}, (err: any) => console.error("Home: Products Error:", err));
 
 		return () => {
 			unsubscribeNotif();
@@ -480,12 +490,12 @@ const Home = () => {
 										<button
 											key={item.path}
 											onClick={() => navigate(item.path)}
-											className="aspect-square bg-slate-50 hover:bg-[#1A237E] hover:text-white transition-all rounded-3xl flex flex-col items-center justify-center gap-2 group p-2"
+											className="aspect-square bg-slate-50 dark:bg-slate-800/50 hover:bg-[#1A237E] dark:hover:bg-indigo-600 hover:text-white transition-all rounded-3xl flex flex-col items-center justify-center gap-2 group p-2 border border-slate-100 dark:border-slate-800"
 										>
-											<div className="p-3 bg-white rounded-full text-[#1A237E] group-hover:bg-[#FF6D00] group-hover:text-white shadow-sm transition-colors">
+											<div className="p-3 bg-white dark:bg-slate-900 rounded-full text-[#1A237E] dark:text-indigo-400 group-hover:bg-[#FF6D00] group-hover:text-white shadow-sm transition-colors">
 												<span className="material-symbols-outlined">{item.icon}</span>
 											</div>
-											<span className="text-[11px] font-bold text-center leading-tight">{item.label}</span>
+											<span className="text-[11px] font-bold text-center leading-tight dark:text-slate-300 group-hover:text-white">{item.label}</span>
 										</button>
 									))}
 							</div>

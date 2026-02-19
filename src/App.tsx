@@ -20,6 +20,7 @@ import NexusControl from './views/NexusControl';
 import PriceList from './views/PriceList';
 import TrainingCatalog from './views/TrainingCatalog';
 import TrainingLab from './views/TrainingLab';
+import Finance from './views/Finance';
 import ReloadPrompt from './components/ReloadPrompt';
 
 function App() {
@@ -117,6 +118,10 @@ function App() {
 				<Route
 					path="/price-list"
 					element={currentUser ? <MainLayout><PriceList /></MainLayout> : <Navigate to="/login" />}
+				/>
+				<Route
+					path="/finance"
+					element={currentUser ? <MainLayout><Finance /></MainLayout> : <Navigate to="/login" />}
 				/>
 				<Route
 					path="/khoa-dao-tao"

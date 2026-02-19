@@ -121,11 +121,11 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 							<div className="space-y-4">
 								<div className="flex flex-col">
 									<span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Khách hàng</span>
-									<span className="font-black text-gray-900 text-xl uppercase leading-tight tracking-tight">{order.customerName || 'Khách vãng lai'}</span>
+									<span className="font-black text-gray-900 text-xl uppercase leading-tight tracking-tight">{order.customerBusinessName || order.customerName || 'Khách vãng lai'}</span>
 								</div>
 								<div className="flex flex-col">
-									<span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Địa chỉ giao hàng</span>
-									<span className="text-gray-600 font-bold italic leading-relaxed">{order.deliveryAddress || '---'}</span>
+									<span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Số điện thoại người nhận</span>
+									<span className="text-gray-600 font-bold italic leading-relaxed">{order.customerPhone || '---'}</span>
 								</div>
 							</div>
 							<div className="space-y-4 text-right">

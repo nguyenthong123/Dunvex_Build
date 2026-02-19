@@ -108,10 +108,19 @@ export const useNavigationConfig = () => {
 			};
 		}
 
+		if (path === '/finance') {
+			return {
+				icon: 'add_card',
+				label: 'Thu/Chi',
+				path: '/finance?new=true',
+				permissionKey: 'finance_view'
+			};
+		}
+
 		// Mặc định cho các trang khác (checkin...)
 		return {
 			icon: 'add',
-			label: 'Checkin ngay',
+			label: 'Checkin',
 			path: '/checkin?new=true',
 			permissionKey: 'checkin_create'
 		};
@@ -124,21 +133,22 @@ export const useNavigationConfig = () => {
 		{ icon: 'receipt_long', label: 'Đơn hàng', path: '/orders', permissionKey: 'orders_view' },
 		{ ...getCenterItem(), isCenter: true },
 		{ icon: 'account_balance_wallet', label: 'Công nợ', path: '/debts', permissionKey: 'debts_manage' },
-		{ icon: 'history', label: 'Hoạt động', path: '/checkin?action=history', permissionKey: 'checkin_create' },
+		{ icon: 'account_balance', label: 'Tài chính', path: '/finance', permissionKey: 'finance_view' },
 		{ icon: 'group', label: 'Khách hàng', path: '/customers', desktopOnly: true, permissionKey: 'customers_manage' },
 		{ icon: 'inventory_2', label: 'Sản phẩm', path: '/inventory', desktopOnly: true, permissionKey: 'inventory_view' },
 		{ icon: 'request_quote', label: 'Báo giá', path: '/price-list' },
+		{ icon: 'history', label: 'Hoạt động', path: '/checkin?action=history', permissionKey: 'checkin_create' },
 		{ icon: 'timer', label: 'Chấm công', path: '/attendance' },
 		{ icon: 'school', label: 'Đào tạo', path: '/khoa-dao-tao' },
 		{ icon: 'settings', label: 'Cài đặt', path: '/settings' },
 	];
 
-	// Logic xử lý slot 5: "Hoạt động" hay "Cài đặt"
+	// Logic xử lý slot 5: "Báo giá" hay "Hoạt động"
 	const getSlot5 = () => {
 		if (path === '/debts' || path === '/orders' || path === '/inventory' || path === '/') {
-			return allItems[7]; // Cài đặt
+			return allItems[7]; // Báo giá (index 7 sau khi dời Hoạt động xuống)
 		}
-		return allItems[4]; // Hoạt động
+		return allItems[8]; // Hoạt động (index 8)
 	};
 
 	// Xử lý Dynamic Menu cho Mobile
@@ -147,9 +157,9 @@ export const useNavigationConfig = () => {
 		if (path === '/orders') {
 			items = [
 				allItems[0], // Trang chủ
-				allItems[5], // Khách hàng (Thay cho Đơn hàng)
+				allItems[6], // Khách hàng (Thay cho Đơn hàng)
 				allItems[2], // Center (Lên đơn)
-				allItems[6], // Sản phẩm (Thay cho Công nợ)
+				allItems[7], // Sản phẩm (Thay cho Công nợ)
 				{ icon: 'search', label: 'Tìm đơn', path: '/orders?search=focus' }, // Thay Báo giá bằng Tìm đơn hàng
 			];
 		} else if (path === '/inventory') {
@@ -165,7 +175,7 @@ export const useNavigationConfig = () => {
 				allItems[0], // Trang chủ
 				allItems[1], // Đơn hàng
 				allItems[2], // Center (Thu nợ)
-				allItems[5], // Khách hàng (Thay cho Công nợ)
+				allItems[6], // Khách hàng (Thay cho Công nợ)
 				getSlot5(),  // Cài đặt
 			];
 		} else if (path === '/') {
@@ -173,8 +183,8 @@ export const useNavigationConfig = () => {
 				allItems[0], // Trang chủ
 				allItems[1], // Đơn hàng
 				allItems[2], // Center (Thu nợ)
-				allItems[4], // Hoạt động/Checkin (Thay cho Công nợ)
-				getSlot5(),  // Cài đặt
+				allItems[4], // Tài chính (Thay cho Hoạt động)
+				allItems[7], // Báo giá
 			];
 		} else if (path === '/admin') {
 			items = [
@@ -198,7 +208,7 @@ export const useNavigationConfig = () => {
 				allItems[1], // Đơn hàng
 				allItems[2], // Center (Chấm công vào)
 				{ icon: 'coffee', label: 'Đăng ký nghỉ/muộn', path: '/attendance?action=request' },
-				allItems[4], // Hoạt động
+				allItems[5], // Hoạt động
 			];
 		} else if (path === '/settings') {
 			items = [
@@ -219,10 +229,18 @@ export const useNavigationConfig = () => {
 		} else if (path === '/price-list') {
 			items = [
 				allItems[0], // Trang chủ
-				allItems[5], // Khách hàng
+				allItems[6], // Khách hàng
 				allItems[2], // Center (Cập nhật Data)
-				allItems[6], // Sản phẩm
+				allItems[7], // Sản phẩm
 				allItems[1], // Đơn hàng
+			];
+		} else if (path === '/finance') {
+			items = [
+				allItems[0], // Trang chủ
+				{ icon: 'history_toggle_off', label: 'Tuổi nợ', path: '/finance?tab=aging' },
+				allItems[2], // Center (Thu/Chi)
+				{ icon: 'query_stats', label: 'Lợi nhuận', path: '/finance?tab=profit' },
+				allItems[6], // Khách hàng
 			];
 		} else {
 			items = [

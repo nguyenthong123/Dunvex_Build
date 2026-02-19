@@ -30,21 +30,23 @@ const SystemAlertManager: React.FC = () => {
 			try {
 				const productSnap = await getDocs(query(
 					collection(db, 'products'),
-					where('ownerId', '==', owner.ownerId),
-					where('status', '==', 'Kinh doanh')
+					where('ownerId', '==', owner.ownerId)
 				));
-				const products = productSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+				// Filter status client-side to avoid complex index requirements
+				const products = productSnap.docs.map(d => ({ id: d.id, ...d.data() as any })).filter(p => p.status === 'Kinh doanh');
 
 				const thirtyDaysAgo = new Date();
 				thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
 				const logSnap = await getDocs(query(
 					collection(db, 'inventory_logs'),
-					where('ownerId', '==', owner.ownerId),
-					where('type', '==', 'out'),
-					where('createdAt', '>=', Timestamp.fromDate(thirtyDaysAgo))
+					where('ownerId', '==', owner.ownerId)
 				));
-				const logs = logSnap.docs.map(d => d.data());
+				// Filter by type and date client-side
+				const logs = logSnap.docs.map(d => d.data() as any).filter(log => {
+					const createdDate = log.createdAt?.toDate ? log.createdAt.toDate() : new Date(log.createdAt);
+					return log.type === 'out' && createdDate >= thirtyDaysAgo;
+				});
 
 				const salesMap = new Map<string, number>();
 				logs.forEach((log: any) => {
@@ -253,12 +255,17 @@ const SystemAlertManager: React.FC = () => {
 			const existingSnap = await getDocs(query(
 				collection(db, 'notifications'),
 				where('userId', '==', auth.currentUser?.uid),
-				where('type', '==', type),
-				where(type === 'low_stock' ? 'productId' : 'orderId', '==', refId),
-				where('createdAt', '>=', Timestamp.fromDate(today))
+				where('type', '==', type)
 			));
 
-			if (existingSnap.empty) {
+			const isAlreadyAlertedToday = existingSnap.docs.some(d => {
+				const data = d.data();
+				if ((type === 'low_stock' ? data.productId : data.orderId) !== refId) return false;
+				const created = data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
+				return created >= today;
+			});
+
+			if (!isAlreadyAlertedToday) {
 				let title = "";
 				let body = "";
 

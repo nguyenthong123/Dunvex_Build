@@ -336,7 +336,10 @@ const QuickOrder = () => {
 		String(c.phone || '').includes(searchCustomerQuery)
 	);
 
-	const categories = Array.from(new Set(products.map(p => p.category).filter(Boolean)));
+	const categories = Array.from(new Set([
+		'Tôn lợp', 'Xà gồ', 'Sắt hộp', 'Phụ kiện', 'Inox',
+		...products.map(p => p.category)
+	])).filter(Boolean).sort((a: any, b: any) => String(a).localeCompare(String(b)));
 
 	const hasOrderPermission = owner.role === 'admin' || (owner.accessRights?.orders_create ?? true);
 
@@ -509,7 +512,7 @@ const QuickOrder = () => {
 						<table className="w-full min-w-[1000px]">
 							<thead>
 								<tr className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px] border-b border-slate-50 dark:border-slate-800">
-									<th className="pb-4 text-left font-black w-[200px]">NGÀNH HÀNG</th>
+									<th className="pb-4 text-left font-black w-[200px]">DANH MỤC</th>
 									<th className="pb-4 text-left font-black w-[350px]">SẢN PHẨM</th>
 									<th className="pb-4 text-center font-black w-24">SỐ LƯỢNG</th>
 									<th className="pb-4 text-center font-black w-32">ĐƠN GIÁ</th>
@@ -528,7 +531,7 @@ const QuickOrder = () => {
 													value={item.category}
 													onChange={(e) => updateLineItem(index, 'category', e.target.value)}
 												>
-													<option value="">Tìm ngành...</option>
+													<option value="">Tìm danh mục...</option>
 													{categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
 												</select>
 												<ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />

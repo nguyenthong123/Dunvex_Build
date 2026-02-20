@@ -77,11 +77,15 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 
 ### ✅ Đã hoàn thành (Done)
 - [x] **Nhập liệu hàng loạt (Bulk Import) Thông minh**: 
-    - **Smart Update**: Tự động nhận diện và cập nhật (Update) sản phẩm/khách hàng đã có sẵn dựa trên SKU, Tên hoặc Số điện thoại thay vì tạo trùng lặp.
-    - **Giải mã Tiêu đề linh hoạt**: Tự động nhận diện các tiêu đề cột không đồng nhất từ các phần mềm khác (VD: "họ và tên" = "Tên khách hàng", "SĐT" = "Số điện thoại").
-    - **Xử lý Số liệu chuyên sâu**: Bộ lọc thông minh tự động loại bỏ ký tự tiền tệ (đ, VND), xử lý chính xác dấu chấm hàng nghìn và dấu phẩy thập phân kiểu Việt Nam.
-    - **Tọa độ & Vị trí**: Tự động tách vĩ độ/kinh độ từ chuỗi tọa độ kết hợp và dọn dẹp ký tự lạ (BOM) trong dữ liệu Google Sheets.
-    - **Google Sheets Pro**: Chuyển đổi sang cơ chế xuất XLSX giúp giữ nguyên định dạng dữ liệu và hỗ trợ lấy chính xác từng trang tính (GID) từ link.
+    *   **Smart Update & Anti-Overwrite**: Tự động nhận diện sản phẩm dựa trên bộ đôi **[Mã SKU/Tên + Danh mục]**. Cơ chế này cho phép nhập nhiều bảng giá (Niêm yết, Chủ nhà, Thợ...) cho cùng một loại sản phẩm mà không bị ghi đè dữ liệu cũ.
+    *   **Bảo toàn dữ liệu (Partial Update)**: Hệ thống chỉ cập nhật những cột có trong file Excel, giữ nguyên các thông tin cũ (như số lượng tồn kho) nếu cột đó bị thiếu trong lần nhập sau.
+    *   **Giải mã Tiêu đề linh hoạt**: Tự động nhận diện các tiêu đề cột như "Ngành hàng", "Danh mục", "Nhóm", "SĐT", "Điện thoại"... giúp người dùng không cần chỉnh sửa file Excel trước khi tải lên.
+    *   **Xử lý Số liệu chuyên sâu**: Bộ lọc thông minh tự động loại bỏ ký tự tiền tệ (đ, VND), xử lý chính xác dấu chấm hàng nghìn và dấu phẩy thập phân kiểu Việt Nam.
+    *   **Google Sheets Pro**: Chuyển đổi sang cơ chế xuất XLSX giúp giữ nguyên định dạng dữ liệu và hỗ trợ lấy chính xác từng trang tính (GID) từ link.
+- [x] **Tối ưu Lên đơn & Danh mục (Quick Order UX)**:
+    *   **Đổi tên Ngành hàng -> Danh mục**: Thống nhất thuật ngữ "Danh mục" trên toàn bộ ứng dụng để dễ hiểu hơn.
+    *   **Cơ chế Lọc tinh gọn**: Loại bỏ việc trộn lẫn tiêu đề Báo giá vào danh sách chọn sản phẩm. Giờ đây, danh mục và sản phẩm chỉ được lấy 100% từ dữ liệu thực tế trong Kho hàng, đảm bảo sự sạch sẽ và chính xác về giá/tồn kho.
+    *   **Sắp xếp Alphabet**: Tự động sắp xếp danh sách danh mục theo thứ tự A-Z giúp tìm kiếm nhanh chóng.
 - [x] **Sao lưu Google Sheets Tự động (Sync to Sheets)**: Cho phép Admin tự động khởi tạo file Google Sheets riêng và đẩy toàn bộ dữ liệu (Khách hàng, Sản phẩm, Đơn hàng) từ Firestore về để lưu trữ dự phòng hoặc xử lý báo cáo nâng cao.
 - [x] **Ổn định hóa Bản đồ & Định vị**: Khắc phục triệt để lỗi trắng bản đồ trên PC, tối ưu hóa nút "Vị trí hiện tại" với cơ chế Timeout và thông báo lỗi chi tiết. Tương thích hoàn toàn React-Leaflet v5.
 - [x] **Cải thiện UI/UX & Độ tin cậy**: Thay thế hộp thoại xóa mặc định bằng xác nhận in-line cao cấp. Bảo vệ ứng dụng khỏi các lỗi crash do dữ liệu không đúng định dạng (tên khách hàng là số) tại các view Công nợ và Đơn hàng.

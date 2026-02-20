@@ -143,6 +143,12 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 						if (bizSynonyms.some(s => cleanH.includes(s) || s.includes(cleanH))) return true;
 					}
 
+					// Synonyms for 'category'
+					if (field.key === 'category') {
+						const catSynonyms = ['danhmục', 'ngànhhàng', 'loại', 'phânloại', 'nhóm', 'group', 'category'];
+						if (catSynonyms.some(s => cleanH.includes(s) || s.includes(cleanH))) return true;
+					}
+
 					return false;
 				});
 
@@ -185,8 +191,10 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 					}
 					obj[field.key] = val;
 				} else {
+					// Mark as missing so we don't overwrite during update
+					obj[`_${field.key}_isMissing`] = true;
 					if (obj[field.key] === undefined) {
-						obj[field.key] = field.default || '';
+						obj[field.key] = field.default || (field.type === 'number' ? 0 : '');
 					}
 				}
 			});
@@ -297,14 +305,22 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 					let existingItem: any = null;
 
 					if (type === 'products') {
-						// Priority 1: Match by SKU if provided in spreadsheet
+						// Priority 1: Match by SKU AND Category if provided in spreadsheet
 						if (item.sku) {
-							existingItem = existingItems.find((e: any) => e.sku === item.sku);
+							const cleanCat = normalize(item.category);
+							existingItem = existingItems.find((e: any) =>
+								String(e.sku) === String(item.sku) &&
+								normalize(e.category) === cleanCat
+							);
 						}
-						// Priority 2: Match by Name (Normalized) if SKU didn't match or wasn't provided
+						// Priority 2: Match by Name AND Category if SKU didn't match or wasn't provided
 						if (!existingItem && item.name) {
 							const cleanName = normalize(item.name);
-							existingItem = existingItems.find((e: any) => normalize(e.name) === cleanName);
+							const cleanCat = normalize(item.category);
+							existingItem = existingItems.find((e: any) =>
+								normalize(e.name) === cleanName &&
+								normalize(e.category) === cleanCat
+							);
 						}
 
 						if (existingItem) existingDocId = existingItem.id;
@@ -322,8 +338,7 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 						finalItem.sku = existingItem.sku;
 					}
 
-					const dataToSet = {
-						...finalItem,
+					const dataToSet: any = {
 						ownerId,
 						ownerEmail,
 						[existingDocId ? 'updatedAt' : 'createdAt']: serverTimestamp(),
@@ -331,6 +346,18 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 						[existingDocId ? 'updatedByEmail' : 'createdByEmail']: auth.currentUser?.email,
 						status: item.status || (type === 'customers' ? 'Hoạt động' : 'Kinh doanh')
 					};
+
+					// Only include fields that were actually in the spreadsheet if updating
+					config.fields.forEach(f => {
+						if (!existingDocId || !item[`_${f.key}_isMissing`]) {
+							dataToSet[f.key] = item[f.key];
+						}
+					});
+
+					// Remove internal tracking keys before saving
+					Object.keys(dataToSet).forEach(k => {
+						if (k.startsWith('_') && k.endsWith('_isMissing')) delete dataToSet[k];
+					});
 
 					if (existingDocId) {
 						batch.update(docRef, dataToSet);

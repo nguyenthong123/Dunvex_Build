@@ -58,7 +58,7 @@ const ProductList = () => {
 			// @ts-ignore
 			return p.category;
 		}).filter(Boolean)
-	]));
+	])).sort((a: any, b: any) => String(a).localeCompare(String(b)));
 
 	// Get unique units for suggestions
 	const units = Array.from(new Set([

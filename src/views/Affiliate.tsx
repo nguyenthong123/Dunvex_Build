@@ -566,13 +566,13 @@ const Affiliate = () => {
 							<div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl border border-slate-200 dark:border-slate-700">
 								<button
 									onClick={() => setAdminTab('active')}
-									className={`px - 6 py - 2 rounded - xl text - [10px] font - black uppercase tracking - widest transition - all ${adminTab === 'active' ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'} `}
+									className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${adminTab === 'active' ? 'bg-[#FF6D00] text-white shadow-lg' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
 								>
 									Mạng lưới ({(affiliates.filter(a => a.status === 'active').length)})
 								</button>
 								<button
 									onClick={() => setAdminTab('pending')}
-									className={`px - 6 py - 2 rounded - xl text - [10px] font - black uppercase tracking - widest transition - all ${adminTab === 'pending' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'} `}
+									className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${adminTab === 'pending' ? 'bg-[#1A237E] text-white shadow-lg' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
 								>
 									Phê duyệt ({(affiliates.filter(a => a.status === 'pending').length)})
 								</button>
@@ -596,7 +596,94 @@ const Affiliate = () => {
 							</div>
 						</div>
 					</div>
-					<div className="overflow-x-auto">
+
+					{/* Mobile Card Layout (visible only on mobile) */}
+					<div className="flex flex-col gap-4 p-4 md:hidden">
+						{affiliates.filter(a => a.status === adminTab).length === 0 ? (
+							<div className="py-20 text-center text-slate-300 font-black uppercase tracking-[4px] text-xs">Không có dữ liệu</div>
+						) : (
+							affiliates.filter(a => a.status === adminTab).map((aff) => (
+								<div key={aff.id} className="bg-white dark:bg-slate-900 rounded-[2rem] p-6 border border-slate-100 dark:border-slate-800 shadow-lg space-y-4">
+									<div className="flex items-center gap-4">
+										<div className="size-12 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 rounded-2xl flex items-center justify-center font-black shadow-sm">
+											{aff.name[0].toUpperCase()}
+										</div>
+										<div className="flex-1 min-w-0">
+											<p className="text-[11px] font-black text-slate-900 dark:text-white uppercase truncate">{aff.name}</p>
+											<p className="text-[9px] font-bold text-slate-400 uppercase truncate">{aff.email}</p>
+										</div>
+										<span className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-[1px] ${aff.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+											{aff.status === 'active' ? 'Active' : 'Pending'}
+										</span>
+									</div>
+
+									<div className="grid grid-cols-2 gap-4 py-4 border-y border-slate-50 dark:border-slate-800/50">
+										<div>
+											<p className="text-[8px] font-black text-slate-400 uppercase mb-1">Mã ưu đãi</p>
+											<p className="text-xs font-black text-indigo-600 tracking-wider bg-indigo-50 dark:bg-indigo-900/30 px-2 py-1 rounded-lg inline-block">{aff.referralCode}</p>
+										</div>
+										<div className="text-right">
+											<p className="text-[8px] font-black text-slate-400 uppercase mb-1">Giới thiệu</p>
+											<p className="text-xs font-bold text-slate-600 dark:text-slate-300">{aff.referrerCode || 'Trực tiếp'}</p>
+										</div>
+										<div>
+											<p className="text-[8px] font-black text-rose-400 uppercase mb-1">Giảm (KH)</p>
+											<p className="text-xs font-black text-rose-500 tabular-nums">{(affiliateStats[aff.id]?.discount || 0).toLocaleString()} ₫</p>
+										</div>
+										<div className="text-right">
+											<p className="text-[8px] font-black text-amber-400 uppercase mb-1">Hoa hồng (∑)</p>
+											<p className="text-xs font-black text-amber-600 tabular-nums">{(affiliateStats[aff.id]?.commission || 0).toLocaleString()} ₫</p>
+										</div>
+									</div>
+
+									<div className="flex items-center justify-between gap-4">
+										<div className="flex gap-2">
+											<div className="bg-slate-50 dark:bg-slate-800 px-2 py-1.5 rounded-xl border border-slate-100 dark:border-slate-700 text-[9px] font-black flex items-center gap-1">
+												<span className="text-rose-500">{aff.discountRate}%</span>
+												<span className="text-slate-300">DISC</span>
+											</div>
+											<div className="bg-slate-50 dark:bg-slate-800 px-2 py-1.5 rounded-xl border border-slate-100 dark:border-slate-700 text-[9px] font-black flex items-center gap-1">
+												<span className="text-amber-600">{aff.commissionRate}%</span>
+												<span className="text-slate-300">COMM</span>
+											</div>
+										</div>
+										<div className="flex gap-2">
+											{aff.status === 'active' && (
+												<button
+													onClick={() => {
+														setSelectedAffForPay(aff);
+														setPayAmountInput((affiliateStats[aff.id]?.commission || 0).toString());
+														setShowPayModal(true);
+													}}
+													className="size-11 bg-emerald-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/20 active:scale-90 transition-transform"
+												>
+													<DollarSign size={20} />
+												</button>
+											)}
+											<button
+												onClick={() => {
+													setEditingAffiliate(aff);
+													setEditForm({ ...aff });
+												}}
+												className="size-11 bg-indigo-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/20 active:scale-90 transition-transform"
+											>
+												<Edit2 size={18} />
+											</button>
+											<button
+												onClick={() => handleDeleteAffiliate(aff.id, aff.name)}
+												className="size-11 bg-rose-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-rose-500/20 active:scale-90 transition-transform"
+											>
+												<Trash2 size={18} />
+											</button>
+										</div>
+									</div>
+								</div>
+							))
+						)}
+					</div>
+
+					{/* Desktop Table (hidden on mobile) */}
+					<div className="hidden md:block overflow-x-auto border-t border-slate-50 dark:border-slate-800">
 						<table className="w-full text-left text-sm">
 							<thead className="bg-[#fcfdff] dark:bg-slate-800/80 text-[10px] font-black text-indigo-500 uppercase tracking-[3px] text-center border-b border-slate-50 dark:border-slate-800">
 								<tr>
@@ -625,7 +712,6 @@ const Affiliate = () => {
 													<div>
 														<p className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight leading-none mb-1">{aff.name}</p>
 														<p className="text-[9px] font-bold text-slate-400 opacity-60 uppercase mb-2">{aff.email}</p>
-														{/* Bank Details in Mini-tag */}
 														<div className="flex flex-wrap gap-1">
 															<span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-[8px] font-black text-slate-500 rounded-md uppercase border border-slate-200 dark:border-slate-700">{aff.bankName}</span>
 															<span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-[8px] font-black text-indigo-500 rounded-md uppercase border border-slate-200 dark:border-slate-700">{aff.bankNumber}</span>
@@ -661,10 +747,10 @@ const Affiliate = () => {
 												)}
 											</td>
 											<td className="px-4 py-6 text-center">
-												<span className={`px - 4 py - 1.5 rounded - full text - [9px] font - black uppercase tracking - [2px] border ${aff.status === 'active' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-														aff.status === 'pending' ? 'bg-amber-50 text-amber-600 border-amber-100' :
-															'bg-rose-50 text-rose-600 border-rose-100'
-													} `}>
+												<span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-[2px] border ${aff.status === 'active' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+													aff.status === 'pending' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+														'bg-rose-50 text-rose-600 border-rose-100'
+													}`}>
 													{aff.status === 'active' ? 'Hoạt động' : aff.status === 'pending' ? 'Chờ duyệt' : 'Từ chối'}
 												</span>
 											</td>
@@ -711,7 +797,7 @@ const Affiliate = () => {
 												{(affiliateStats[aff.id]?.commission || 0).toLocaleString()} ₫
 											</td>
 											<td className="px-6 py-6 text-right">
-												<div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+												<div className="flex items-center justify-end gap-2 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
 													{aff.status === 'active' && (
 														<button
 															onClick={() => {
@@ -890,24 +976,55 @@ const Affiliate = () => {
 					</button>
 
 					{showHistory && (
-						<div className="overflow-x-auto border-t border-slate-50 dark:border-slate-800 animate-in slide-in-from-top-4 duration-500">
-							<table className="w-full text-left text-sm">
-								<thead className="bg-[#fcfdff] dark:bg-slate-800/80 text-[10px] font-black text-slate-400 uppercase tracking-[3px] text-center border-b border-slate-50 dark:border-slate-800">
-									<tr>
-										<th className="px-10 py-6 text-left">Ngày chi</th>
-										<th className="px-6 py-6">Đối tác</th>
-										<th className="px-6 py-6">Số tiền</th>
-										<th className="px-6 py-6">Minh chứng</th>
-										<th className="px-10 py-6 text-right">Người chi</th>
-									</tr>
-								</thead>
-								<tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-									{payouts.length === 0 ? (
-										<tr><td colSpan={5} className="px-10 py-16 text-center text-slate-300 font-black uppercase text-[10px] tracking-[4px]">Chưa có lịch sử giao dịch</td></tr>
-									) : (
-										payouts.map((p) => (
+						<div className="border-t border-slate-50 dark:border-slate-800 animate-in slide-in-from-top-4 duration-500">
+							{/* Mobile History View */}
+							<div className="md:hidden divide-y divide-slate-50 dark:divide-slate-800">
+								{payouts.length === 0 ? (
+									<div className="px-10 py-16 text-center text-slate-300 font-black uppercase text-[10px] tracking-[4px]">Chưa có lịch sử</div>
+								) : (
+									payouts.map((p) => (
+										<div key={p.id} className="p-6 space-y-3">
+											<div className="flex justify-between items-start">
+												<div>
+													<p className="text-[11px] font-black text-slate-900 dark:text-white uppercase">{p.affiliateName}</p>
+													<p className="text-[9px] font-bold text-slate-400">{new Date(p.date).toLocaleDateString('vi-VN')}</p>
+												</div>
+												<p className="text-sm font-black text-emerald-600">{Number(p.amount).toLocaleString()} ₫</p>
+											</div>
+											<div className="flex justify-between items-center">
+												<p className="text-[8px] font-bold text-slate-400 uppercase">Người chi: {p.paidBy?.split('@')[0]}</p>
+												{p.proofUrl && (
+													<a
+														href={p.proofUrl}
+														target="_blank"
+														rel="noreferrer"
+														className="px-3 py-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg text-[9px] font-black uppercase"
+													>
+														Xem ảnh
+													</a>
+												)}
+											</div>
+										</div>
+									))
+								)}
+							</div>
+
+							{/* Desktop History View */}
+							<div className="hidden md:block overflow-x-auto">
+								<table className="w-full text-left text-sm">
+									<thead className="bg-[#fcfdff] dark:bg-slate-800/80 text-[10px] font-black text-slate-400 uppercase tracking-[3px] text-center border-b border-slate-50 dark:border-slate-800">
+										<tr>
+											<th className="px-10 py-6 text-left">Ngày chi</th>
+											<th className="px-6 py-6">Đối tác</th>
+											<th className="px-6 py-6">Số tiền</th>
+											<th className="px-6 py-6">Minh chứng</th>
+											<th className="px-10 py-6 text-right">Người chi</th>
+										</tr>
+									</thead>
+									<tbody className="divide-y divide-slate-50 dark:divide-slate-800">
+										{payouts.map((p) => (
 											<tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors group">
-												<td className="px-10 py-6 font-bold text-slate-500 text-xs">
+												<td className="px-10 py-6 font-bold text-slate-500 text-xs text-left">
 													{new Date(p.date).toLocaleDateString('vi-VN')}
 												</td>
 												<td className="px-6 py-6 text-center">
@@ -935,10 +1052,10 @@ const Affiliate = () => {
 													{p.paidBy?.split('@')[0]}
 												</td>
 											</tr>
-										))
-									)}
-								</tbody>
-							</table>
+										))}
+									</tbody>
+								</table>
+							</div>
 						</div>
 					)}
 				</div>

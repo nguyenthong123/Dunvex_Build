@@ -293,13 +293,39 @@ const AdminSettings = () => {
 				orderDetails: orderDetails
 			};
 
+			// Calculate stats for email notification
+			const stats = syncOrders.reduce((acc: any, order: any) => {
+				const email = order.createdByEmail || 'N/A';
+				const name = order.createdByEmail?.split('@')[0] || 'Nhân viên';
+				if (!acc[email]) acc[email] = { name, email, newCust: 0, orders: 0, revenue: 0 };
+				acc[email].orders += 1;
+				acc[email].revenue += (order.finalTotal || 0);
+				return acc;
+			}, {});
+
+			// Count new customers in range
+			custSnap.docs.forEach(d => {
+				const c = d.data();
+				if (!c.createdAt) return;
+				const createdDate = c.createdAt.toDate ? c.createdAt.toDate() : new Date(c.createdAt);
+				if (createdDate >= startTimestamp && createdDate <= endTimestamp) {
+					const email = c.createdByEmail || 'N/A';
+					if (stats[email]) stats[email].newCust += 1;
+				}
+			});
+
 			const response = await fetch('https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec', {
 				method: 'POST',
 				body: JSON.stringify({
 					action: 'sync_to_sheets',
 					ownerEmail: owner.ownerEmail,
 					spreadsheetId: companyInfo.spreadsheetId || '',
-					data: dataToSync
+					data: dataToSync,
+					syncRange: {
+						start: syncRange.start,
+						end: syncRange.end
+					},
+					stats: Object.values(stats)
 				})
 			});
 

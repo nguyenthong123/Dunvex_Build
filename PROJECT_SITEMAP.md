@@ -41,11 +41,18 @@ Dưới đây là sơ đồ tóm tắt các trang và luồng dữ liệu chính
     - **Sổ quỹ nội bộ**: Theo dõi thu chi vận hành, lương, nhập hàng và số dư thực tế.
     - **Báo cáo Tuổi nợ (Debt Aging)**: Phân loại nợ quá hạn theo các mốc 30-60-90 ngày để đánh giá rủi ro tài chính.
     - **Lợi nhuận chi tiết**: Thống kê doanh thu, giá vốn và lợi nhuận gộp trên từng đơn hàng đã chốt.
+    - **Lập kế hoạch & Đánh giá KPI** 🆕: Hệ thống thiết lập chỉ tiêu tháng (lương cứng, số lượt check-in, chỉ tiêu sản phẩm SKU) và tự động tính toán hiệu suất, thưởng/phạt lương thực tế cho nhân viên.
 - **Hệ thống Đào tạo (`/khoa-dao-tao`)** 🎓:
     - **Hands-on Practice**: Thực hành trực tiếp trên dữ liệu thật của chính người dùng.
     - **Môi trường Interactive Lab**: Chia đôi màn hình, hướng dẫn chi tiết từng bước.
     - **Real-time Scoring**: Tự động chấm điểm bằng cách truy vấn dữ liệu thực tế gắn với `ownerId`.
     - **Chứng chỉ Digital**: Cấp chứng chỉ ngay sau khi hoàn thành các nhiệm vụ trong bài Lab.
+- **Mạng lưới Affiliate (`/affiliate`)** 🤝 🆕:
+    - **Quản lý CTV**: Đăng ký đối tác kèm thông tin ngân hàng và người giới thiệu (Referrer).
+    - **Chính sách Linh hoạt**: Nexus Admin cấu hình % chiết khấu khách và % hoa hồng CTV riêng biệt cho từng đối tác.
+    - **Lệnh chi Hoa hồng**: Hệ thống ghi nhận thanh toán, tải ảnh minh chứng (bill) lên Google Drive và gửi email thông báo tự động cho CTV.
+    - **Tra soát Lịch sử**: Lưu trữ 50 giao dịch gần nhất kèm bằng chứng chuyển khoản.
+    - **Phê duyệt phân cấp**: Tách biệt luồng Đăng ký chờ duyệt và Mạng lưới đang hoạt động.
 ---
 
 ## 2. Hệ thống Giao diện & Điều hướng (Nâng cấp 🚀)
@@ -171,6 +178,12 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Hoạt động Offline**: Kích hoạt bộ nhớ đệm Firestore Persistence cho phép xem dữ liệu khách hàng, sản phẩm và công nợ ngay cả khi không có mạng. Tự động đồng bộ dữ liệu khi kết nối lại.
     - **Cập nhật Thông minh**: Hệ thống Reload Prompt thông báo ngay khi có bản cập nhật mới hoặc khi ứng dụng đã sẵn sàng chạy Offline.
 - [x] **Quản lý Tài chính nâng cao (Advanced Finance)**: Tích hợp Sổ quỹ, Báo cáo Tuổi nợ, Lợi nhuận chi tiết và **Bộ lọc thời gian (Từ ngày - Đến ngày)** đồng bộ trên toàn bộ module.
+- [x] **Mạng lưới Đối tác Affiliate (Growth Pro)**: 
+    - **Chính sách "New Signup Only"**: Thực thi nghiêm ngặt việc mã giảm giá chỉ áp dụng 1 lần duy nhất cho khách hàng mới. Hệ thống tự động chặn giảm giá đối với các shop gia hạn/đăng ký lại.
+    - **Bảo mật & Chống trục lợi**: Ngăn chặn tuyệt đối việc tự dùng mã của chính mình hoặc nhân viên cùng shop lấy mã của nhau để hưởng hoa hồng.
+    - **Quản lý Payout chuyên nghiệp**: Hệ thống chi trả hoa hồng tích hợp upload minh chứng lên Google Drive và lưu lịch sử giao dịch rõ ràng.
+    - **Phân quyền Nexus**: Chỉ duy nhất tài khoản điều hành (`dunvex.green@gmail.com`) có quyền thiết lập tỷ lệ hoa hồng, đảm bảo an toàn tài chính cho hệ thống.
+    - **Quản lý CTV đa tầng**: Tích hợp người giới thiệu (Referrer) để mở rộng mạng lưới đối tác nhanh chóng.
 
 ### 📝 Cần làm tiếp (To-do)
 - [ ] **Báo cáo & Xuất dữ liệu (Finance Pro)**: Tích hợp nút xuất báo cáo Sổ quỹ và Lợi nhuận ra file Excel/PDF theo khoảng thời gian tùy chọn.
@@ -178,7 +191,7 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 - [ ] **Tự động hóa quy trình (Automation)**: Gửi thông báo nhắc nợ hoặc ảnh hóa đơn qua Zalo/Messenger nhanh chỉ với 1 lần nhấp.
 - [ ] **Dòng thời gian khách hàng (CRM Pro)**: Hiển thị toàn bộ lịch sử Giao dịch - Thanh toán - Checkin của từng khách hàng trên 1 trục thời gian (Timeline).
 - [ ] **Dự báo dòng tiền (AI Forecast)**: Phân tích lịch sử thu chi để dự báo số dư khả dụng trong 30 ngày tiếp theo.
-- [ ] **Hệ thống KPI & Phân vùng**: Thống kê doanh số theo nhân viên để tính hoa hồng và phân chia khách hàng theo tuyến bán hàng.
+- [x] **Hệ thống KPI & Phân vùng**: Thống kê doanh số theo nhân viên để tính hoa hồng và phân chia khách hàng theo tuyến bán hàng.
 - [ ] **Smart Search**: Tìm kiếm nhanh bằng gợi ý thông minh dựa trên hành vi người dùng.
 
 *Ghi chú: File `upload_script.gs` đã được cập nhật logic gửi email.*

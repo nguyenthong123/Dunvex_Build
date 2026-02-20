@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Search, Plus, Minus, Trash2, ShoppingCart, User, Package, MapPin, Truck, FileText, ChevronDown, X, Layers, CheckCircle, Mail, RotateCcw, QrCode } from 'lucide-react';
+import { ArrowLeft, Search, Plus, Minus, Trash2, ShoppingCart, User, Package, MapPin, Truck, FileText, ChevronDown, X, Layers, CheckCircle, Mail, RotateCcw, QrCode, Ticket, Tag } from 'lucide-react';
 import QRScanner from '../components/shared/QRScanner';
 import { useNavigate, useParams } from 'react-router-dom';
 import { db, auth } from '../services/firebase';
-import { collection, query, onSnapshot, addDoc, updateDoc, doc, getDoc, serverTimestamp, where, increment, writeBatch } from 'firebase/firestore';
+import { collection, query, onSnapshot, addDoc, updateDoc, doc, getDoc, serverTimestamp, where, increment, writeBatch, getDocs, limit } from 'firebase/firestore';
 import { useOwner } from '../hooks/useOwner';
 
 const QuickOrder = () => {
@@ -34,6 +34,8 @@ const QuickOrder = () => {
 	// Adjustments
 	const [shippingFee, setShippingFee] = useState(0);
 	const [discountAmt, setDiscountAmt] = useState(0);
+	const [couponCode, setCouponCode] = useState('');
+	const [appliedAffiliate, setAppliedAffiliate] = useState<any>(null);
 
 	const customerSearchRef = useRef<HTMLDivElement>(null);
 
@@ -110,7 +112,7 @@ const QuickOrder = () => {
 	}, [id, owner.ownerId, customers.length]);
 
 	const addLineItem = () => {
-		setLineItems([...lineItems, { id: Date.now(), category: '', productId: '', name: '', qty: 1, price: 0, buyPrice: 0, unit: '', packaging: '', density: '', maxStock: 0 }]);
+		setLineItems([...lineItems, { id: Date.now(), category: '', productId: '', sku: '', name: '', qty: 1, price: 0, buyPrice: 0, unit: '', packaging: '', density: '', maxStock: 0 }]);
 	};
 
 	const removeLineItem = (index: number) => {
@@ -142,6 +144,7 @@ const QuickOrder = () => {
 			const prod = products.find(p => p.id === value);
 			if (prod) {
 				newItems[index].name = prod.name;
+				newItems[index].sku = prod.sku || '';
 				newItems[index].price = prod.priceSell;
 				newItems[index].buyPrice = prod.priceBuy || 0; // Capture current buy price
 				newItems[index].unit = prod.unit;
@@ -151,7 +154,31 @@ const QuickOrder = () => {
 				newItems[index].maxStock = getEffectiveStock(prod);
 			}
 		}
-		setLineItems(newItems);
+	};
+
+	const handleApplyCoupon = async () => {
+		if (!couponCode) return;
+		try {
+			const q = query(collection(db, 'affiliates'), where('referralCode', '==', couponCode.toUpperCase()), where('status', '==', 'active'), limit(1));
+			const snapshot = await getDocs(q);
+			if (snapshot.empty) {
+				alert("Mã giảm giá không hợp lệ hoặc đã hết hạn.");
+				return;
+			}
+			const affData = snapshot.docs[0].data();
+			setAppliedAffiliate({ id: snapshot.docs[0].id, ...affData });
+
+			// Calculate discount if it's a percentage
+			const discountRate = affData.discountRate || 0;
+			if (discountRate > 0) {
+				const calculatedDiscount = Math.round((subTotal * discountRate) / 100);
+				setDiscountAmt(calculatedDiscount);
+				alert(`Đã áp dụng mã giảm giá: Giảm ${discountRate}% (${calculatedDiscount.toLocaleString('vi-VN')}đ)`);
+			}
+		} catch (error) {
+			console.error("Error applying coupon:", error);
+			alert("Có lỗi xảy ra khi áp dụng mã.");
+		}
 	};
 
 	const handleQRScan = (productId: string) => {
@@ -168,6 +195,7 @@ const QuickOrder = () => {
 						id: Date.now(),
 						category: product.category || '',
 						productId: product.id,
+						sku: product.sku || '',
 						name: product.name,
 						qty: 1,
 						price: product.priceSell,
@@ -211,6 +239,7 @@ const QuickOrder = () => {
 				orderDate: orderDate,
 				items: validItems.map(item => ({
 					id: item.productId,
+					sku: item.sku || '',
 					name: item.name,
 					price: Number(item.price) || 0,
 					buyPrice: Number(item.buyPrice) || 0,
@@ -231,7 +260,11 @@ const QuickOrder = () => {
 				ownerId: owner.ownerId,
 				ownerEmail: owner.ownerEmail,
 				createdBy: auth.currentUser?.uid || '',
-				createdByEmail: auth.currentUser?.email || ''
+				createdByEmail: auth.currentUser?.email || '',
+				// AFFILIATE TRACKING
+				referralCode: appliedAffiliate?.referralCode || localStorage.getItem('dunvex_referral') || null,
+				affiliateId: appliedAffiliate?.id || null,
+				affiliateCommissionRate: appliedAffiliate?.commissionRate || 0
 			};
 
 			if (id) {
@@ -627,6 +660,27 @@ const QuickOrder = () => {
 							<h4 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-1">ĐIỀU CHỈNH ĐƠN HÀNG</h4>
 							<div className="space-y-4">
 								<div>
+									<label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Mã giảm giá / Voucher</label>
+									<div className="flex gap-2">
+										<div className="relative flex-1">
+											<Ticket size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
+											<input
+												type="text"
+												placeholder="Nhập mã..."
+												className="w-full h-14 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl pl-12 pr-4 text-sm font-black text-indigo-600 uppercase focus:ring-indigo-500 transition-all"
+												value={couponCode}
+												onChange={(e) => setCouponCode(e.target.value)}
+											/>
+										</div>
+										<button
+											onClick={handleApplyCoupon}
+											className="px-6 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase shadow-lg shadow-indigo-200 dark:shadow-none hover:bg-slate-900 transition-all active:scale-95"
+										>
+											ÁP DỤNG
+										</button>
+									</div>
+								</div>
+								<div>
 									<label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Phí vận chuyển (+)</label>
 									<input
 										type="number"
@@ -637,7 +691,7 @@ const QuickOrder = () => {
 									/>
 								</div>
 								<div>
-									<label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Chiết khấu (-)</label>
+									<label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Số tiền Chiết khấu (-)</label>
 									<input
 										type="number"
 										placeholder="0"
@@ -645,6 +699,9 @@ const QuickOrder = () => {
 										value={discountAmt === 0 ? '' : discountAmt}
 										onChange={(e) => setDiscountAmt(e.target.value === '' ? 0 : Number(e.target.value))}
 									/>
+									{appliedAffiliate && (
+										<p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mt-2 ml-1">✓ Đang dùng mã {appliedAffiliate.referralCode} (Giảm {appliedAffiliate.discountRate}%)</p>
+									)}
 								</div>
 							</div>
 						</div>

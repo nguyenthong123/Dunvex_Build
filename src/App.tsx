@@ -21,6 +21,7 @@ import PriceList from './views/PriceList';
 import TrainingCatalog from './views/TrainingCatalog';
 import TrainingLab from './views/TrainingLab';
 import Finance from './views/Finance';
+import Affiliate from './views/Affiliate';
 import ReloadPrompt from './components/ReloadPrompt';
 
 function App() {
@@ -122,6 +123,10 @@ function App() {
 				<Route
 					path="/finance"
 					element={currentUser ? <MainLayout><Finance /></MainLayout> : <Navigate to="/login" />}
+				/>
+				<Route
+					path="/affiliate"
+					element={currentUser ? <MainLayout><Affiliate /></MainLayout> : <Navigate to="/login" />}
 				/>
 				<Route
 					path="/khoa-dao-tao"

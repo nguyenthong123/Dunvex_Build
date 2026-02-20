@@ -22,6 +22,7 @@ const CustomerList = () => {
 	const [showMap, setShowMap] = useState(false);
 	const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
 	const [searchTerm, setSearchTerm] = useState('');
+	const [selectedRoute, setSelectedRoute] = useState('All');
 	const [showMobileSearch, setShowMobileSearch] = useState(false);
 	const searchInputRef = React.useRef<HTMLInputElement>(null);
 	const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -36,6 +37,7 @@ const CustomerList = () => {
 		address: '',
 		note: '',
 		status: 'Hoạt động',
+		route: '', // New Field: Sales Route
 		lat: null as number | null,
 		lng: null as number | null
 	});
@@ -57,6 +59,11 @@ const CustomerList = () => {
 		: [];
 
 	const customerTypes = [...baseTypes, ...dynamicTypes];
+
+	// Extract unique sales routes
+	const salesRoutes = Array.isArray(customers)
+		? Array.from(new Set(customers.map(c => c.route).filter(Boolean)))
+		: [];
 
 	const handleGetLocation = () => {
 		setGettingLocation(true);
@@ -229,6 +236,7 @@ const CustomerList = () => {
 			address: '',
 			note: '',
 			status: 'Hoạt động',
+			route: '',
 			lat: null,
 			lng: null
 		});
@@ -245,6 +253,7 @@ const CustomerList = () => {
 			address: customer.address || '',
 			note: customer.note || '',
 			status: customer.status || 'Hoạt động',
+			route: customer.route || '',
 			lat: customer.lat || null,
 			lng: customer.lng || null
 		});
@@ -256,12 +265,17 @@ const CustomerList = () => {
 		setShowDetail(true);
 	};
 
-	const filteredCustomers = customers.filter(c =>
-		String(c.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-		String(c.businessName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-		String(c.phone || '').includes(searchTerm) ||
-		String(c.email || '').toLowerCase().includes(searchTerm.toLowerCase())
-	);
+	const filteredCustomers = customers.filter(c => {
+		const matchesSearch = String(c.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+			String(c.businessName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+			String(c.phone || '').includes(searchTerm) ||
+			String(c.route || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+			String(c.email || '').toLowerCase().includes(searchTerm.toLowerCase());
+
+		const matchesRoute = selectedRoute === 'All' || c.route === selectedRoute;
+
+		return matchesSearch && matchesRoute;
+	});
 
 	const hasManagePermission = owner.role === 'admin' || (owner.accessRights?.customers_manage ?? true);
 
@@ -299,16 +313,30 @@ const CustomerList = () => {
 							<h2 className="text-lg md:text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight">Khách Hàng</h2>
 						</div>
 						<div className="flex items-center gap-2 md:gap-4">
-							{/* Search on Desktop */}
-							<div className="hidden md:relative md:block">
-								<span className="material-symbols-outlined absolute left-3 top-2.5 text-gray-400 dark:text-gray-500">search</span>
-								<input
-									type="text"
-									placeholder="Tìm khách hàng..."
-									className="pl-10 pr-4 py-2.5 bg-gray-100 dark:bg-slate-800 border-none rounded-xl text-sm focus:ring-2 focus:ring-[#FF6D00]/30 w-64 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-									value={searchTerm}
-									onChange={(e) => setSearchTerm(e.target.value)}
-								/>
+							{/* Route & Search on Desktop */}
+							<div className="hidden md:flex items-center gap-2">
+								<div className="relative">
+									<select
+										className="pl-4 pr-10 py-2.5 bg-indigo-50 dark:bg-slate-800 border-none rounded-xl text-xs font-black uppercase text-indigo-600 dark:text-indigo-400 focus:ring-2 focus:ring-indigo-500/30 appearance-none transition-all cursor-pointer"
+										value={selectedRoute}
+										onChange={(e) => setSelectedRoute(e.target.value)}
+									>
+										<option value="All">Tốt cả Tuyến</option>
+										{salesRoutes.map(r => <option key={r} value={r}>{r}</option>)}
+									</select>
+									<span className="material-symbols-outlined absolute right-3 top-2 text-indigo-300 pointer-events-none text-lg">expand_more</span>
+								</div>
+
+								<div className="relative">
+									<span className="material-symbols-outlined absolute left-3 top-2.5 text-gray-400 dark:text-gray-500">search</span>
+									<input
+										type="text"
+										placeholder="Tìm khách hàng..."
+										className="pl-10 pr-4 py-2.5 bg-gray-100 dark:bg-slate-800 border-none rounded-xl text-sm focus:ring-2 focus:ring-[#FF6D00]/30 w-64 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+										value={searchTerm}
+										onChange={(e) => setSearchTerm(e.target.value)}
+									/>
+								</div>
 							</div>
 
 							{/* Search Trigger for Mobile */}
@@ -402,6 +430,7 @@ const CustomerList = () => {
 								<th className="py-4 px-6 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest">Khách hàng</th>
 								<th className="py-4 px-6 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest">Liên hệ</th>
 								<th className="py-4 px-6 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest">Phân loại</th>
+								<th className="py-4 px-6 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest text-center">Tuyến</th>
 								<th className="py-4 px-6 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest text-center">Trạng thái</th>
 								<th className="py-4 px-6 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest text-right">Hành động</th>
 							</tr>
@@ -429,6 +458,15 @@ const CustomerList = () => {
 										<span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-orange-50 dark:bg-orange-900/20 text-[#FF6D00] dark:text-orange-400 uppercase tracking-wider">
 											{customer.type}
 										</span>
+									</td>
+									<td className="py-4 px-6 text-center">
+										{customer.route ? (
+											<span className="px-2 py-0.5 text-[9px] font-black bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg uppercase border border-indigo-100 dark:border-indigo-800">
+												{customer.route}
+											</span>
+										) : (
+											<span className="text-[9px] font-bold text-slate-300 dark:text-slate-700 italic">--</span>
+										)}
 									</td>
 									<td className="py-4 px-6 text-center">
 										<span className="px-2 py-0.5 text-[10px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded uppercase">
@@ -488,6 +526,9 @@ const CustomerList = () => {
 									</div>
 								</div>
 								<span className="px-2 py-1 rounded-lg text-[9px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 uppercase">
+									{customer.route || 'Mặc định'}
+								</span>
+								<span className="px-2 py-1 rounded-lg text-[9px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 uppercase ml-2">
 									{customer.status}
 								</span>
 							</div>
@@ -557,6 +598,16 @@ const CustomerList = () => {
 											{customerTypes.map(t => <option key={t} value={t} />)}
 										</datalist>
 									</div>
+								</div>
+								<div>
+									<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Tuyến bán hàng (Zoning)</label>
+									<input
+										type="text"
+										className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
+										placeholder="VD: Tuyến Thứ 2, Khu vực A..."
+										value={formData.route}
+										onChange={(e) => setFormData({ ...formData, route: e.target.value })}
+									/>
 								</div>
 								<div>
 									<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Địa chỉ</label>
@@ -633,8 +684,15 @@ const CustomerList = () => {
 								)}
 							</div>
 
-							<div className="px-4 py-1.5 bg-orange-50 dark:bg-orange-900/20 text-[#FF6D00] dark:text-orange-400 text-[10px] font-black rounded-full uppercase tracking-widest mb-8 relative z-10 shadow-sm border border-orange-100 dark:border-orange-500/20">
-								{selectedCustomer.type}
+							<div className="w-full grid grid-cols-2 gap-3 sm:gap-4 mb-3 text-center">
+								<div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-3xl border border-slate-100 dark:border-slate-800 flex flex-col items-center shadow-sm">
+									<p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest">Tuyến bán hàng</p>
+									<p className="font-black text-indigo-600 dark:text-indigo-400 text-sm italic">{selectedCustomer.route || 'Chưa phân tuyến'}</p>
+								</div>
+								<div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-3xl border border-slate-100 dark:border-slate-800 flex flex-col items-center shadow-sm">
+									<p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest">Loại khách</p>
+									<p className="font-black text-[#FF6D00] dark:text-orange-400 text-sm">{selectedCustomer.type}</p>
+								</div>
 							</div>
 
 							<div className="w-full grid grid-cols-2 gap-3 sm:gap-4 mb-6 text-center">

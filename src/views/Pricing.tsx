@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, Zap, Crown, Rocket, ShieldCheck, ArrowLeft, CreditCard, QrCode } from 'lucide-react';
 import { auth, db } from '../services/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, limit, getDocs } from 'firebase/firestore';
 import { useOwner } from '../hooks/useOwner';
 
 import NotificationBell from '../components/NotificationBell';
@@ -14,6 +14,9 @@ const Pricing = () => {
 	const [step, setStep] = useState(1); // 1: Pricing, 2: Checkout
 	const [loading, setLoading] = useState(false);
 	const [transferCode, setTransferCode] = useState('');
+	const [promoCode, setPromoCode] = useState('');
+	const [appliedAffiliate, setAppliedAffiliate] = useState<any>(null);
+	const [discountAmt, setDiscountAmt] = useState(0);
 
 	const generateTransferCode = (email: string) => {
 		const prefix = email.split('@')[0].toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
@@ -61,6 +64,66 @@ const Pricing = () => {
 		setStep(2);
 	};
 
+	const handleApplyPromo = async () => {
+		if (!promoCode) return;
+		try {
+			// POLICY: Check if user has applied a coupon before OR has a premium subscription history
+			// We check payment_requests OR if the shop already has a planId record
+			const prevReqsQ = query(collection(db, 'payment_requests'), where('ownerId', '==', owner.ownerId), limit(1));
+			const prevReqs = await getDocs(prevReqsQ);
+
+			const isOldUser = !prevReqs.empty || owner.planId;
+
+			if (isOldUser) {
+				alert("CHÍNH SÁCH: Hệ thống nhận diện bạn là tài khoản cũ đang thực hiện Gia hạn/Đăng ký lại. Theo quy định, mã giảm giá chỉ áp dụng DUY NHẤT cho lần đầu tiên đăng ký hệ thống. Việc nhập mã CTV khác cũng sẽ không được áp dụng giảm giá, tuy nhiên hoa hồng vẫn sẽ được tính cho CTV đó để ghi nhận công hỗ trợ.");
+			}
+
+			const q = query(collection(db, 'affiliates'), where('referralCode', '==', promoCode.toUpperCase()), where('status', '==', 'active'), limit(1));
+			const ship = await getDocs(q);
+			if (ship.empty) {
+				alert("Mã giảm giá không hợp lệ hoặc đã hết hạn.");
+				return;
+			}
+
+			const affData = ship.docs[0].data();
+
+			// POLICY: No self-referral
+			if (auth.currentUser?.uid === ship.docs[0].id) {
+				alert("CHÍNH SÁCH: Bạn không thể sử dụng mã ưu đãi của chính mình để nhận chiết khấu/hoa hồng.");
+				return;
+			}
+
+			// POLICY: No internal referrals within the same shop/organization
+			if (owner.ownerId === affData.ownerId && affData.ownerId !== 'GLOBAL') {
+				alert("CHÍNH SÁCH: Mã ưu đãi không áp dụng giữa các thành viên trong cùng một hệ thống quản lý để tránh trục lợi.");
+				return;
+			}
+
+			// POLICY: Only Admin (Shop Owner) can apply promo for payment
+			if (owner.role !== 'admin') {
+				alert("CHÍNH SÁCH: Chỉ tài khoản Quản trị viên (Chủ shop) mới được phép áp dụng mã ưu đãi khi đăng ký gói.");
+				return;
+			}
+
+			setAppliedAffiliate({ id: ship.docs[0].id, ...affData });
+
+			// Only calculate discount if totally new user
+			if (!isOldUser) {
+				const rate = affData.discountRate || 0;
+				if (rate > 0) {
+					const calculated = Math.round((selectedPlan.price * rate) / 100);
+					setDiscountAmt(calculated);
+					alert(`Đã áp dụng mã: Giảm ${rate}% (${calculated.toLocaleString('vi-VN')}đ)`);
+				}
+			} else {
+				setDiscountAmt(0);
+				alert(`Đối tác hỗ trợ: ${affData.name}. (Lưu ý: Không áp dụng giảm giá trực tiếp cho tài khoản gia hạn theo chính sách)`);
+			}
+		} catch (error) {
+			console.error("Error applying promo:", error);
+		}
+	};
+
 	const handlePaid = async () => {
 		if (!auth.currentUser) return;
 		setLoading(true);
@@ -72,9 +135,14 @@ const Pricing = () => {
 				ownerEmail: owner.ownerEmail,
 				planId: selectedPlan.id,
 				planName: selectedPlan.name,
-				amount: selectedPlan.price,
+				amount: selectedPlan.price - discountAmt,
+				originalAmount: selectedPlan.price,
 				transferCode: transferCode,
 				status: 'pending',
+				// Affiliate Tracking
+				appliedPromoCode: appliedAffiliate?.referralCode || null,
+				affiliateId: appliedAffiliate?.id || null,
+				affiliateCommissionRate: appliedAffiliate?.commissionRate || 0,
 				createdAt: serverTimestamp()
 			});
 
@@ -209,10 +277,41 @@ const Pricing = () => {
 								</div>
 								<div className="flex justify-between items-center mb-4">
 									<span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cần thanh toán:</span>
-									<span className="text-xl font-black text-slate-800 dark:text-white tracking-tighter">
-										{new Intl.NumberFormat('vi-VN').format(selectedPlan.price)} đ
-									</span>
+									<div className="text-right">
+										{discountAmt > 0 && (
+											<span className="block text-[10px] font-black text-slate-400 line-through">
+												{new Intl.NumberFormat('vi-VN').format(selectedPlan.price)} đ
+											</span>
+										)}
+										<span className="text-xl font-black text-slate-800 dark:text-white tracking-tighter">
+											{new Intl.NumberFormat('vi-VN').format(selectedPlan.price - discountAmt)} đ
+										</span>
+									</div>
 								</div>
+
+								{/* Coupon Code Section */}
+								<div className="pt-4 mb-4 border-t border-slate-200 dark:border-slate-700">
+									<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Mã giảm giá (Coupon)</label>
+									<div className="flex gap-2">
+										<input
+											type="text"
+											placeholder="NHẬP MÃ..."
+											className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-xs font-black text-indigo-600 uppercase focus:ring-2 focus:ring-indigo-500/20"
+											value={promoCode}
+											onChange={(e) => setPromoCode(e.target.value)}
+										/>
+										<button
+											onClick={handleApplyPromo}
+											className="px-4 bg-slate-900 dark:bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase"
+										>
+											ÁP DỤNG
+										</button>
+									</div>
+									{appliedAffiliate && (
+										<p className="text-[9px] font-bold text-emerald-500 mt-2 uppercase">✓ Đã áp dụng mã {appliedAffiliate.referralCode} (Giảm {appliedAffiliate.discountRate}%)</p>
+									)}
+								</div>
+
 								<div className="pt-4 mt-4 border-t border-slate-200 dark:border-slate-700">
 									<span className="block text-[10px] font-black text-indigo-500 uppercase tracking-[2px] mb-2 text-center">Nội dung chuyển khoản:</span>
 									<div className="bg-white dark:bg-slate-900 border-2 border-dashed border-indigo-200 dark:border-indigo-900 rounded-2xl p-4 text-center">
@@ -220,7 +319,7 @@ const Pricing = () => {
 											{transferCode}
 										</span>
 									</div>
-									<p className="text-[9px] text-center text-slate-400 font-bold mt-2 uppercase italic italic">
+									<p className="text-[9px] text-center text-slate-400 font-bold mt-2 uppercase italic">
 										* Vui lòng nhập đúng nội dung để được kích hoạt tự động
 									</p>
 								</div>
@@ -229,7 +328,7 @@ const Pricing = () => {
 							{/* QR Image with Transfer Code */}
 							<div className="bg-white p-4 rounded-3xl shadow-inner border border-slate-100 dark:border-slate-800 mx-auto w-fit mb-4">
 								<img
-									src={`https://img.vietqr.io/image/ICB-107882271865-compact2.png?amount=${selectedPlan.price}&addInfo=${encodeURIComponent(transferCode)}`}
+									src={`https://img.vietqr.io/image/ICB-107882271865-compact2.png?amount=${selectedPlan.price - discountAmt}&addInfo=${encodeURIComponent(transferCode)}`}
 									alt="Payment QR"
 									className="size-64 object-contain rounded-2xl"
 								/>

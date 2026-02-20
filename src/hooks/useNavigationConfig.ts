@@ -140,6 +140,7 @@ export const useNavigationConfig = () => {
 		{ icon: 'history', label: 'Hoạt động', path: '/checkin?action=history', permissionKey: 'checkin_create' },
 		{ icon: 'timer', label: 'Chấm công', path: '/attendance' },
 		{ icon: 'school', label: 'Đào tạo', path: '/khoa-dao-tao' },
+		{ icon: 'handshake', label: 'Affiliate', path: '/affiliate' },
 		{ icon: 'settings', label: 'Cài đặt', path: '/settings' },
 	];
 

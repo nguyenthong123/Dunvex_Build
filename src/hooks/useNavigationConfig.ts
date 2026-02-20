@@ -117,6 +117,14 @@ export const useNavigationConfig = () => {
 			};
 		}
 
+		if (path === '/affiliate') {
+			return {
+				icon: 'groups',
+				label: 'Mạng lưới',
+				path: '/affiliate?view=network',
+			};
+		}
+
 		// Mặc định cho các trang khác (checkin...)
 		return {
 			icon: 'add',
@@ -234,6 +242,14 @@ export const useNavigationConfig = () => {
 				allItems[2], // Center (Cập nhật Data)
 				allItems[7], // Sản phẩm
 				allItems[1], // Đơn hàng
+			];
+		} else if (path === '/affiliate') {
+			items = [
+				allItems[0], // Trang chủ
+				allItems[1], // Đơn hàng
+				allItems[2], // Center (Mạng lưới)
+				allItems[3], // Công nợ
+				allItems[8], // Hoạt động
 			];
 		} else if (path === '/finance') {
 			items = [

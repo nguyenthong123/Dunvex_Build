@@ -18,9 +18,14 @@ const MobileNav = () => {
 						<div key={item.path} className="relative -top-5 flex flex-col items-center">
 							<button
 								onClick={() => navigate(item.path)}
-								className="w-12 h-12 bg-[#FF6D00] text-white rounded-full shadow-lg flex items-center justify-center scale-110 border-4 border-white dark:border-slate-900 active:scale-95 transition-transform"
+								className={`h-12 bg-[#FF6D00] text-white rounded-full shadow-lg flex items-center justify-center border-4 border-white dark:border-slate-900 active:scale-95 transition-all
+									${item.label && item.label.length > 3 ? 'px-6 w-auto min-w-[3rem]' : 'w-12'}
+								`}
 							>
-								<span className="material-symbols-outlined text-2xl font-bold">{item.icon}</span>
+								<span className="material-symbols-outlined text-xl md:text-2xl font-bold">{item.icon}</span>
+								{item.label && item.label.length > 3 && (
+									<span className="ml-2 text-[10px] font-black uppercase whitespace-nowrap">{item.label}</span>
+								)}
 							</button>
 						</div>
 					);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { auth, db } from '../services/firebase';
 import { collection, query, where, onSnapshot, serverTimestamp, doc, updateDoc, limit, setDoc, getDocs, addDoc, deleteDoc } from 'firebase/firestore';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -10,6 +10,11 @@ const Affiliate = () => {
 	const isNexusAdmin = auth.currentUser?.email === 'dunvex.green@gmail.com';
 	const isAdmin = owner.role === 'admin' || isNexusAdmin;
 	const currentUserId = auth.currentUser?.uid;
+
+	// Refs & Navigation
+	const networkRef = useRef<HTMLDivElement>(null);
+	const location = useLocation();
+	const navigate = useNavigate();
 
 	// States
 	const [affiliates, setAffiliates] = useState<any[]>([]);
@@ -53,7 +58,7 @@ const Affiliate = () => {
 
 		setRegStatus('submitting');
 		try {
-			const referralCode = `DVX${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+			const referralCode = `DVX${Math.random().toString(36).substring(2, 7).toUpperCase()} `;
 
 			// Resolve referrer if code provided
 			let referrerData = null;
@@ -151,6 +156,13 @@ const Affiliate = () => {
 		fetchStats();
 	}, [isAdmin, startDate, endDate, affiliates.length]);
 
+	useEffect(() => {
+		const params = new URLSearchParams(location.search);
+		if (params.get('view') === 'network' && networkRef.current) {
+			networkRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+		}
+	}, [location.search, loading]);
+
 	// Payout Handler
 	const handlePayout = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -211,7 +223,7 @@ const Affiliate = () => {
 						filename: `payout_${Date.now()}.png`,
 						mimeType: 'image/png',
 						base64Data: base64,
-						folderId: '1e_wK4mFQOgYeOBLpO6tfXyHLXnU0d8SU' // Specific folder requested
+						folderId: '1e_wK4mFQOgYeOBLpO6tfXyHLXnU0d8SU'
 					})
 				});
 				const data = await res.json();
@@ -272,9 +284,6 @@ const Affiliate = () => {
 	}, [owner.ownerId, isAdmin, isNexusAdmin, currentUserId]);
 
 	// Handle Deep Link Actions from Email
-	const location = useLocation();
-	const navigate = useNavigate();
-
 	useEffect(() => {
 		const searchParams = new URLSearchParams(location.search);
 		const action = searchParams.get('action');
@@ -501,22 +510,22 @@ const Affiliate = () => {
 	// DASHBOARD VIEW
 	return (
 		<div className="p-4 md:p-12 space-y-10 animate-in fade-in duration-700">
-			<header className="flex flex-col md:flex-row md:items-end justify-between gap-8">
-				<div className="space-y-2">
-					<div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-full text-[10px] font-black uppercase tracking-[2px]">
+			<header className="flex flex-col md:flex-row md:items-end justify-between gap-6 md:gap-8">
+				<div className="space-y-1 md:space-y-2">
+					<div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-[2px]">
 						<Award size={12} /> Partner Program
 					</div>
-					<h2 className="text-4xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Affiliate Hub</h2>
-					<p className="text-xs font-bold text-slate-400 uppercase tracking-[3px]">Hệ thống quản lý đối tác & mã ưu đãi</p>
+					<h2 className="text-3xl md:text-4xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Affiliate Hub</h2>
+					<p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-[3px]">Hệ thống quản lý đối tác & mã ưu đãi</p>
 				</div>
 
 				{myAffiliateData && myAffiliateData.status === 'active' && (
-					<div className="bg-white dark:bg-slate-900 px-10 py-6 rounded-[2.5rem] shadow-xl border border-slate-100 dark:border-slate-800 flex items-center gap-10">
-						<div className="flex flex-col">
-							<span className="text-[10px] font-black text-slate-400 uppercase tracking-[3px] mb-2 px-1">Mã của bạn:</span>
-							<div className="flex items-center gap-4 bg-indigo-50 dark:bg-indigo-900/20 px-6 py-3 rounded-2xl border border-indigo-100 dark:border-indigo-900/50">
-								<Ticket size={24} className="text-indigo-600" />
-								<span className="text-2xl font-black text-indigo-600 tracking-[1px] select-all uppercase">{myAffiliateData.referralCode}</span>
+					<div className="bg-white dark:bg-slate-900 px-6 md:px-10 py-4 md:py-6 rounded-[2rem] md:rounded-[2.5rem] shadow-xl border border-slate-100 dark:border-slate-800 flex items-center gap-6 md:gap-10">
+						<div className="flex flex-col flex-1 md:flex-initial">
+							<span className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-[3px] mb-2 px-1">Mã của bạn:</span>
+							<div className="flex items-center gap-3 md:gap-4 bg-indigo-50 dark:bg-indigo-900/20 px-4 md:px-6 py-2.5 md:py-3 rounded-[1.5rem] border border-indigo-100 dark:border-indigo-900/50">
+								<Ticket size={20} className="text-indigo-600" />
+								<span className="text-xl md:text-2xl font-black text-indigo-600 tracking-[1px] select-all uppercase">{myAffiliateData.referralCode}</span>
 							</div>
 						</div>
 					</div>
@@ -524,46 +533,46 @@ const Affiliate = () => {
 			</header>
 
 			{/* Stats Grid */}
-			<div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-				<div className="bg-white dark:bg-slate-900 p-8 rounded-[3rem] border border-slate-100 dark:border-slate-800 shadow-xl relative overflow-hidden group">
-					<div className="absolute -right-6 -bottom-6 bg-indigo-50 dark:bg-indigo-900/20 size-32 rounded-full transition-transform duration-700 group-hover:scale-150 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/40"></div>
-					<Users size={24} className="text-indigo-600 mb-6 relative" />
-					<p className="text-[12px] font-black text-slate-400 uppercase tracking-[3px] mb-2 relative">Đối tác đồng hành</p>
-					<h3 className="text-4xl font-black text-indigo-600 relative tabular-nums">{affiliates.filter(a => a.status === 'active').length}</h3>
+			<div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-8">
+				<div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] border border-slate-100 dark:border-slate-800 shadow-xl relative overflow-hidden group">
+					<div className="absolute -right-6 -bottom-6 bg-indigo-50 dark:bg-indigo-900/20 size-24 md:size-32 rounded-full transition-transform duration-700 group-hover:scale-150 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/40"></div>
+					<Users size={20} className="text-indigo-600 mb-4 md:mb-6 relative" />
+					<p className="text-[10px] md:text-[12px] font-black text-slate-400 uppercase tracking-[3px] mb-1 md:mb-2 relative">Đối tác đồng hành</p>
+					<h3 className="text-2xl md:text-4xl font-black text-indigo-600 relative tabular-nums">{affiliates.filter(a => a.status === 'active').length}</h3>
 				</div>
-				<div className="bg-white dark:bg-slate-900 p-8 rounded-[3rem] border border-slate-100 dark:border-slate-800 shadow-xl relative overflow-hidden group">
-					<div className="absolute -right-6 -bottom-6 bg-emerald-50 dark:bg-emerald-900/20 size-32 rounded-full transition-transform duration-700 group-hover:scale-150 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/40"></div>
-					<Target size={24} className="text-emerald-500 mb-6 relative" />
-					<p className="text-[12px] font-black text-slate-400 uppercase tracking-[3px] mb-2 relative">Lượt chốt đơn qua mã</p>
-					<h3 className="text-4xl font-black text-emerald-500 relative tabular-nums">0</h3>
+				<div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] border border-slate-100 dark:border-slate-800 shadow-xl relative overflow-hidden group">
+					<div className="absolute -right-6 -bottom-6 bg-emerald-50 dark:bg-emerald-900/20 size-24 md:size-32 rounded-full transition-transform duration-700 group-hover:scale-150 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/40"></div>
+					<Target size={20} className="text-emerald-500 mb-4 md:mb-6 relative" />
+					<p className="text-[10px] md:text-[12px] font-black text-slate-400 uppercase tracking-[3px] mb-1 md:mb-2 relative">Lượt chốt đơn qua mã</p>
+					<h3 className="text-2xl md:text-4xl font-black text-emerald-500 relative tabular-nums">0</h3>
 				</div>
-				<div className="bg-white dark:bg-slate-900 p-8 rounded-[3rem] border border-slate-100 dark:border-slate-800 shadow-xl relative overflow-hidden group">
-					<div className="absolute -right-6 -bottom-6 bg-amber-50 dark:bg-amber-900/20 size-32 rounded-full transition-transform duration-700 group-hover:scale-150 group-hover:bg-amber-100 dark:group-hover:bg-amber-900/40"></div>
-					<DollarSign size={24} className="text-amber-500 mb-6 relative" />
-					<p className="text-[12px] font-black text-slate-400 uppercase tracking-[3px] mb-2 relative">Hoa hồng tích lũy</p>
-					<h3 className="text-4xl font-black text-amber-500 relative tabular-nums">0 ₫</h3>
+				<div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] border border-slate-100 dark:border-slate-800 shadow-xl relative overflow-hidden group">
+					<div className="absolute -right-6 -bottom-6 bg-amber-50 dark:bg-amber-900/20 size-24 md:size-32 rounded-full transition-transform duration-700 group-hover:scale-150 group-hover:bg-amber-100 dark:group-hover:bg-amber-900/40"></div>
+					<DollarSign size={20} className="text-amber-500 mb-4 md:mb-6 relative" />
+					<p className="text-[10px] md:text-[12px] font-black text-slate-400 uppercase tracking-[3px] mb-1 md:mb-2 relative">Hoa hồng tích lũy</p>
+					<h3 className="text-2xl md:text-4xl font-black text-amber-500 relative tabular-nums">0 ₫</h3>
 				</div>
 			</div>
 
 			{/* Admin Interface */}
 			{isAdmin && (
-				<div className="bg-white dark:bg-slate-900 rounded-[3.5rem] border border-slate-100 dark:border-slate-800 shadow-2xl overflow-hidden mt-10">
-					<div className="p-10 border-b border-slate-50 dark:border-slate-800 flex justify-between items-center bg-slate-50/30 backdrop-blur-sm">
+				<div ref={networkRef} className="bg-white dark:bg-slate-900 rounded-[2.5rem] md:rounded-[3.5rem] border border-slate-100 dark:border-slate-800 shadow-2xl overflow-hidden mt-10">
+					<div className="p-6 md:p-10 border-b border-slate-50 dark:border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-slate-50/30 backdrop-blur-sm">
 						<div>
-							<h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Thiết lập & Quản lý mạng lưới</h3>
+							<h3 className="text-base md:text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Thiết lập & Quản lý mạng lưới</h3>
 							<p className="text-[10px] text-slate-400 font-black mt-1 uppercase tracking-[3px] opacity-70">* Quản lý mã ưu đãi toàn hệ thống</p>
 						</div>
-						<div className="flex items-center gap-6">
+						<div className="flex flex-col md:flex-row items-stretch md:items-center gap-4 md:gap-6 w-full md:w-auto">
 							<div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl border border-slate-200 dark:border-slate-700">
 								<button
 									onClick={() => setAdminTab('active')}
-									className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${adminTab === 'active' ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+									className={`px - 6 py - 2 rounded - xl text - [10px] font - black uppercase tracking - widest transition - all ${adminTab === 'active' ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'} `}
 								>
 									Mạng lưới ({(affiliates.filter(a => a.status === 'active').length)})
 								</button>
 								<button
 									onClick={() => setAdminTab('pending')}
-									className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${adminTab === 'pending' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+									className={`px - 6 py - 2 rounded - xl text - [10px] font - black uppercase tracking - widest transition - all ${adminTab === 'pending' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'} `}
 								>
 									Phê duyệt ({(affiliates.filter(a => a.status === 'pending').length)})
 								</button>
@@ -652,10 +661,10 @@ const Affiliate = () => {
 												)}
 											</td>
 											<td className="px-4 py-6 text-center">
-												<span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-[2px] border ${aff.status === 'active' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-													aff.status === 'pending' ? 'bg-amber-50 text-amber-600 border-amber-100' :
-														'bg-rose-50 text-rose-600 border-rose-100'
-													}`}>
+												<span className={`px - 4 py - 1.5 rounded - full text - [9px] font - black uppercase tracking - [2px] border ${aff.status === 'active' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+														aff.status === 'pending' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+															'bg-rose-50 text-rose-600 border-rose-100'
+													} `}>
 													{aff.status === 'active' ? 'Hoạt động' : aff.status === 'pending' ? 'Chờ duyệt' : 'Từ chối'}
 												</span>
 											</td>

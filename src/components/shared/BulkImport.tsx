@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { db, auth } from '../../services/firebase';
-import { collection, writeBatch, doc, serverTimestamp, addDoc } from 'firebase/firestore';
+import { collection, writeBatch, doc, serverTimestamp, addDoc, getDocs, query, where } from 'firebase/firestore';
 import { X, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Download, Link as LinkIcon, Globe } from 'lucide-react';
 
 interface BulkImportProps {
@@ -66,12 +66,36 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 	const config = fieldConfig[type];
 
 	const processRawData = (jsonData: any[][]) => {
-		if (jsonData.length < 2) {
-			throw new Error("Dữ liệu không hợp lệ hoặc thiếu tiêu đề.");
+		if (jsonData.length < 1) {
+			throw new Error("Dữ liệu không hợp lệ hoặc trang tính trống.");
 		}
 
-		const headers = (jsonData[0] as any[]).map(h => String(h || '').trim().toLowerCase());
-		const rows = jsonData.slice(1) as any[][];
+		// Dynamically find the header row (first row with a "name" or equivalent column)
+		let headerRowIndex = -1;
+		const nameLabels = ['tên', 'name', 'sản phẩm', 'khách hàng'];
+
+		for (let i = 0; i < Math.min(jsonData.length, 10); i++) {
+			const row = jsonData[i];
+			if (!row) continue;
+			const hasNameColumn = row.some(cell => {
+				const val = String(cell || '').toLowerCase().trim();
+				return nameLabels.some(label => val.includes(label));
+			});
+			if (hasNameColumn) {
+				headerRowIndex = i;
+				break;
+			}
+		}
+
+		if (headerRowIndex === -1) {
+			headerRowIndex = 0; // Fallback to first row
+		}
+
+		const headers = (jsonData[headerRowIndex] as any[]).map(h =>
+			String(h || '').replace(/[\uFEFF\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase()
+		);
+
+		const rows = jsonData.slice(headerRowIndex + 1) as any[][];
 
 		const mappedData = rows.map(row => {
 			const obj: any = {};
@@ -94,23 +118,60 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 				// Avoid overwriting lat/lng if already successfully parsed from combined column
 				if ((field.key === 'lat' || field.key === 'lng') && obj[field.key] !== undefined) return;
 
-				const colIndex = headers.findIndex(h =>
-					h === field.key.toLowerCase() ||
-					h === field.label.toLowerCase() ||
-					h.replace(/\s/g, '').includes(field.label.toLowerCase().replace(/\s/g, ''))
-				);
+				const colIndex = headers.findIndex(h => {
+					const cleanH = h.replace(/\s/g, '');
+					const cleanLabel = field.label.toLowerCase().replace(/\s/g, '');
+					const cleanKey = field.key.toLowerCase();
+
+					if (cleanH === cleanKey || cleanH === cleanLabel || cleanH.includes(cleanLabel) || cleanLabel.includes(cleanH)) return true;
+
+					// Common Synonyms for 'name'
+					if (field.key === 'name') {
+						const nameSynonyms = ['họvàtên', 'fullname', 'têncơsở', 'tênkháchhàng', 'kháchhàng'];
+						if (nameSynonyms.some(s => cleanH.includes(s) || s.includes(cleanH))) return true;
+					}
+
+					// Common Synonyms for 'phone'
+					if (field.key === 'phone') {
+						const phoneSynonyms = ['sđt', 'đt', 'điệnthoại', 'mobile', 'tel'];
+						if (phoneSynonyms.some(s => cleanH.includes(s) || s.includes(cleanH))) return true;
+					}
+
+					// Common Synonyms for 'businessName'
+					if (field.key === 'businessName') {
+						const bizSynonyms = ['têncơsở', 'côngty', 'đơnvị', 'têncửahàng'];
+						if (bizSynonyms.some(s => cleanH.includes(s) || s.includes(cleanH))) return true;
+					}
+
+					return false;
+				});
 
 				if (colIndex !== -1) {
 					let val = row[colIndex];
 					if (field.type === 'number') {
 						if (typeof val === 'string') {
-							// Handle Vietnamese locale: replace comma with dot, and remove thousands separators (dots) if comma is present
-							let cleaned = val.trim();
+							// Remove currency units (đ, VND), and other non-numeric chars except separators
+							let cleaned = val.replace(/[^0-9,.-]/g, '').trim();
+
+							// Handle Vietnamese locale: 
+							// 1. If it has BOTH comma and dot (1.234.567,89) -> Remove dots, use comma as dot
 							if (cleaned.includes(',') && cleaned.includes('.')) {
 								cleaned = cleaned.replace(/\./g, '').replace(',', '.');
-							} else if (cleaned.includes(',')) {
+							}
+							// 2. If it has ONLY comma (1234,56) -> use comma as dot
+							else if (cleaned.includes(',')) {
 								cleaned = cleaned.replace(',', '.');
 							}
+							// 3. If it has ONLY dot (133.215) -> In VN, this is usually thousands
+							// We can identify this if the dot is followed by 3 digits at the end
+							else if (cleaned.includes('.') && /^\d+\.\d{3}$/.test(cleaned)) {
+								cleaned = cleaned.replace(/\./g, '');
+							}
+							// If it looks like 123.456 (dot as thousands separator in VN) 
+							// and it's for price fields, we might need caution.
+							// But standard Number("123.456") treats dot as decimal.
+							// For prices in VN, usually it's integer.
+
 							val = Number(cleaned);
 						}
 						val = (val !== undefined && val !== null && !isNaN(Number(val))) ? Number(val) : (field.default || 0);
@@ -130,7 +191,7 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 				}
 			});
 			return obj;
-		}).filter(row => row.name);
+		}).filter(row => row.name && String(row.name).length > 2);
 
 		setColumns(config.fields.map(f => f.label));
 		setData(mappedData);
@@ -184,6 +245,7 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 			const ssId = ssMatch[1];
 			const gid = gidMatch ? gidMatch[1] : '0';
 
+			// Try XLSX format first which is better for data types, but include GID
 			const exportUrl = `https://docs.google.com/spreadsheets/d/${ssId}/export?format=xlsx&gid=${gid}`;
 
 			const response = await fetch(exportUrl);
@@ -193,6 +255,9 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 
 			const arrayBuffer = await response.arrayBuffer();
 			const wb = XLSX.read(arrayBuffer, { type: 'array' });
+
+			// Select the sheet. Google normally returns the correct sheet even in XLSX if gid is provided,
+			// but we fallback to Sheet 0 if it's the whole book.
 			const wsname = wb.SheetNames[0];
 			const ws = wb.Sheets[wsname];
 			const jsonData = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
@@ -210,24 +275,70 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 		setImporting(true);
 
 		try {
+			// 1. Fetch existing items to check for duplicates
+			const q = query(collection(db, type), where('ownerId', '==', ownerId));
+			const snapshot = await getDocs(q);
+			const existingItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
 			const batchSize = 500;
 			const totalBatches = Math.ceil(data.length / batchSize);
+			let totalUpdated = 0;
+			let totalCreated = 0;
+
+			const normalize = (s: string) => String(s || '').toLowerCase().replace(/[\s\u00A0]+/g, ' ').trim();
 
 			for (let i = 0; i < totalBatches; i++) {
 				const batch = writeBatch(db);
 				const currentChunk = data.slice(i * batchSize, (i + 1) * batchSize);
 
 				currentChunk.forEach(item => {
-					const newDocRef = doc(collection(db, type));
-					batch.set(newDocRef, {
-						...item,
+					// Check if item already exists
+					let existingDocId = '';
+					let existingItem: any = null;
+
+					if (type === 'products') {
+						// Priority 1: Match by SKU if provided in spreadsheet
+						if (item.sku) {
+							existingItem = existingItems.find((e: any) => e.sku === item.sku);
+						}
+						// Priority 2: Match by Name (Normalized) if SKU didn't match or wasn't provided
+						if (!existingItem && item.name) {
+							const cleanName = normalize(item.name);
+							existingItem = existingItems.find((e: any) => normalize(e.name) === cleanName);
+						}
+
+						if (existingItem) existingDocId = existingItem.id;
+					} else if (type === 'customers' && item.phone) {
+						existingItem = existingItems.find((e: any) => e.phone === item.phone);
+						if (existingItem) existingDocId = existingItem.id;
+					}
+
+					const docRef = existingDocId ? doc(db, type, existingDocId) : doc(collection(db, type));
+
+					// Important: If updating and the new data has no SKU (e.g. column deleted), 
+					// preserve the OLD SKU instead of setting it to empty.
+					const finalItem = { ...item };
+					if (existingDocId && !item.sku && existingItem.sku) {
+						finalItem.sku = existingItem.sku;
+					}
+
+					const dataToSet = {
+						...finalItem,
 						ownerId,
 						ownerEmail,
-						createdAt: serverTimestamp(),
-						createdBy: auth.currentUser?.uid,
-						createdByEmail: auth.currentUser?.email,
-						status: type === 'customers' ? 'Hoạt động' : 'Kinh doanh'
-					});
+						[existingDocId ? 'updatedAt' : 'createdAt']: serverTimestamp(),
+						[existingDocId ? 'updatedBy' : 'createdBy']: auth.currentUser?.uid,
+						[existingDocId ? 'updatedByEmail' : 'createdByEmail']: auth.currentUser?.email,
+						status: item.status || (type === 'customers' ? 'Hoạt động' : 'Kinh doanh')
+					};
+
+					if (existingDocId) {
+						batch.update(docRef, dataToSet);
+						totalUpdated++;
+					} else {
+						batch.set(docRef, dataToSet);
+						totalCreated++;
+					}
 				});
 
 				await batch.commit();
@@ -238,13 +349,13 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 				user: auth.currentUser?.displayName || auth.currentUser?.email || 'Hệ thống',
 				userId: auth.currentUser?.uid,
 				ownerId,
-				details: `Đã nhập ${data.length} ${config.title} từ ${importMethod === 'file' ? 'Excel' : 'Google Sheets'}`,
+				details: `Đã xử lý ${data.length} ${config.title}: Cập nhật ${totalUpdated}, Thêm mới ${totalCreated}`,
 				createdAt: serverTimestamp()
 			});
 
 			onSuccess?.();
 			onClose();
-			alert(`Đã nhập thành công ${data.length} ${config.title}!`);
+			alert(`Thành công! Đã cập nhật ${totalUpdated} và thêm mới ${totalCreated} ${config.title}.`);
 		} catch (err: any) {
 			console.error("Import error:", err);
 			alert("Lỗi khi nhập dữ liệu: " + err.message);

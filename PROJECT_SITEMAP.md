@@ -76,7 +76,12 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 ## 4. Các mục đã hoàn thành & Cần làm (To-do)
 
 ### ✅ Đã hoàn thành (Done)
-- [x] **Nhập liệu hàng loạt (Bulk Import) + Google Sheets**: Hỗ trợ nhập danh sách Khách hàng/Sản phẩm từ Excel và trực tiếp từ link Google Sheets. Tự động xử lý tọa độ vị trí từ một cột duy nhất (Lat, Lng). **Cải tiến**: Chuyển đổi cơ chế lấy dữ liệu sang XLSX để tránh lỗi định dạng CSV, tích hợp bộ lọc số thông minh hỗ trợ dấu phẩy thập phân kiểu Việt Nam (VD: 0,3).
+- [x] **Nhập liệu hàng loạt (Bulk Import) Thông minh**: 
+    - **Smart Update**: Tự động nhận diện và cập nhật (Update) sản phẩm/khách hàng đã có sẵn dựa trên SKU, Tên hoặc Số điện thoại thay vì tạo trùng lặp.
+    - **Giải mã Tiêu đề linh hoạt**: Tự động nhận diện các tiêu đề cột không đồng nhất từ các phần mềm khác (VD: "họ và tên" = "Tên khách hàng", "SĐT" = "Số điện thoại").
+    - **Xử lý Số liệu chuyên sâu**: Bộ lọc thông minh tự động loại bỏ ký tự tiền tệ (đ, VND), xử lý chính xác dấu chấm hàng nghìn và dấu phẩy thập phân kiểu Việt Nam.
+    - **Tọa độ & Vị trí**: Tự động tách vĩ độ/kinh độ từ chuỗi tọa độ kết hợp và dọn dẹp ký tự lạ (BOM) trong dữ liệu Google Sheets.
+    - **Google Sheets Pro**: Chuyển đổi sang cơ chế xuất XLSX giúp giữ nguyên định dạng dữ liệu và hỗ trợ lấy chính xác từng trang tính (GID) từ link.
 - [x] **Sao lưu Google Sheets Tự động (Sync to Sheets)**: Cho phép Admin tự động khởi tạo file Google Sheets riêng và đẩy toàn bộ dữ liệu (Khách hàng, Sản phẩm, Đơn hàng) từ Firestore về để lưu trữ dự phòng hoặc xử lý báo cáo nâng cao.
 - [x] **Ổn định hóa Bản đồ & Định vị**: Khắc phục triệt để lỗi trắng bản đồ trên PC, tối ưu hóa nút "Vị trí hiện tại" với cơ chế Timeout và thông báo lỗi chi tiết. Tương thích hoàn toàn React-Leaflet v5.
 - [x] **Cải thiện UI/UX & Độ tin cậy**: Thay thế hộp thoại xóa mặc định bằng xác nhận in-line cao cấp. Bảo vệ ứng dụng khỏi các lỗi crash do dữ liệu không đúng định dạng (tên khách hàng là số) tại các view Công nợ và Đơn hàng.

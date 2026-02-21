@@ -3,7 +3,7 @@ import { Bell, CheckCircle2, XCircle, Clock, X, AlertTriangle, Coins, Database }
 import { db, auth } from '../services/firebase';
 import { collection, query, where, orderBy, onSnapshot, updateDoc, doc, limit, serverTimestamp, setDoc } from 'firebase/firestore';
 
-const NotificationBell = ({ placement = 'down', align = 'right' }: { placement?: 'up' | 'down', align?: 'left' | 'right' }) => {
+const NotificationBell = ({ placement = 'down', align = 'right', className = "" }: { placement?: 'up' | 'down', align?: 'left' | 'right', className?: string }) => {
 	const [notifications, setNotifications] = useState<any[]>([]);
 	const [showList, setShowList] = useState(false);
 	const [unreadCount, setUnreadCount] = useState(0);
@@ -61,12 +61,12 @@ const NotificationBell = ({ placement = 'down', align = 'right' }: { placement?:
 					setShowList(!showList);
 					if (!showList) markAllAsRead();
 				}}
-				className="relative p-2 rounded-xl bg-white/10 text-white hover:bg-white/20 transition-all group"
+				className={`relative p-2 rounded-xl transition-all group ${className || 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
 				title="Thông báo"
 			>
 				<Bell size={20} className={unreadCount > 0 ? "animate-wiggle" : ""} />
 				{unreadCount > 0 && (
-					<span className="absolute -top-1 -right-1 size-5 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-[#1A237E] shadow-lg animate-pulse">
+					<span className="absolute -top-1 -right-1 size-5 bg-[#FF6D00] text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900 shadow-lg animate-pulse">
 						{unreadCount}
 					</span>
 				)}

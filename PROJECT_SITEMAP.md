@@ -47,12 +47,6 @@ Dưới đây là sơ đồ tóm tắt các trang và luồng dữ liệu chính
     - **Môi trường Interactive Lab**: Chia đôi màn hình, hướng dẫn chi tiết từng bước.
     - **Real-time Scoring**: Tự động chấm điểm bằng cách truy vấn dữ liệu thực tế gắn với `ownerId`.
     - **Chứng chỉ Digital**: Cấp chứng chỉ ngay sau khi hoàn thành các nhiệm vụ trong bài Lab.
-- **Mạng lưới Affiliate (`/affiliate`)** 🤝 🆕:
-    - **Quản lý CTV**: Đăng ký đối tác kèm thông tin ngân hàng và người giới thiệu (Referrer).
-    - **Chính sách Linh hoạt**: Nexus Admin cấu hình % chiết khấu khách và % hoa hồng CTV riêng biệt cho từng đối tác.
-    - **Lệnh chi Hoa hồng**: Hệ thống ghi nhận thanh toán, tải ảnh minh chứng (bill) lên Google Drive và gửi email thông báo tự động cho CTV.
-    - **Tra soát Lịch sử**: Lưu trữ 50 giao dịch gần nhất kèm bằng chứng chuyển khoản.
-    - **Phê duyệt phân cấp**: Tách biệt luồng Đăng ký chờ duyệt và Mạng lưới đang hoạt động.
 ---
 
 ## 2. Hệ thống Giao diện & Điều hướng (Nâng cấp 🚀)
@@ -107,6 +101,9 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 - [x] **Thực thi phân quyền toàn diện**: Đã áp dụng cho Dashboard, Đơn hàng, Kho hàng, Khách hàng, Công nợ và Check-in.
 - [x] **Quản lý Gói dịch vụ (Subscription)**: Tích hợp hệ thống kiểm soát dùng thử (Trial) và khóa tính năng cao cấp (Pro). Hiển thị chi tiết tên gói (Tháng/Năm) và **số ngày còn lại** đồng bộ từ Nexus Control.
 - [x] **Ổn định hóa Giao diện Điều hướng (Bottom Nav & Top Bar)**: Khắc phục triệt để hiện tượng nháy (flickering) và tự động ẩn khi cuộn. Chuyển sang cơ chế hiển thị cố định (Pinned) giúp người dùng truy cập menu nhanh chóng và mượt mà hơn trên mọi thiết bị di động.
+- [x] **Redesign Mobile Header & Navigation (Feb 21)**: 
+    - **Header Premium**: Chuyển sang giao diện trắng (Glassmorphism), căn giữa logo DunvexBuild và tối ưu hóa hiển thị trên mọi nền tảng di động.
+    - **Bottom Nav 5-nút**: Tinh chỉnh hệ thống 5 nút điều động (Dynamic Items) với nút trung tâm nổi bật, hỗ trợ Label tiếng Việt viết hoa sang trọng và hiệu ứng active tinh tế.
 - [x] **Tối ưu Chi tiết Khách hàng**: Chuyển đổi sang dạng Bottom Sheet mượt mà trên di động, hỗ trợ gọi điện trực tiếp từ ứng dụng.
 - [x] **Bảo mật chuẩn A+**: Triển khai toàn diện CSP, XFO, HSTS, Referrer-Policy thông qua `vercel.json`.
 - [x] **Lọc theo ngày (Date Filtering)**: Đã hoàn thiện bộ lọc ngày thực tế cho danh sách công nợ và bảng kê chi tiết khách hàng.
@@ -178,12 +175,11 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Hoạt động Offline**: Kích hoạt bộ nhớ đệm Firestore Persistence cho phép xem dữ liệu khách hàng, sản phẩm và công nợ ngay cả khi không có mạng. Tự động đồng bộ dữ liệu khi kết nối lại.
     - **Cập nhật Thông minh**: Hệ thống Reload Prompt thông báo ngay khi có bản cập nhật mới hoặc khi ứng dụng đã sẵn sàng chạy Offline.
 - [x] **Quản lý Tài chính nâng cao (Advanced Finance)**: Tích hợp Sổ quỹ, Báo cáo Tuổi nợ, Lợi nhuận chi tiết và **Bộ lọc thời gian (Từ ngày - Đến ngày)** đồng bộ trên toàn bộ module.
-- [x] **Mạng lưới Đối tác Affiliate (Growth Pro)**: 
-    - **Chính sách "New Signup Only"**: Thực thi nghiêm ngặt việc mã giảm giá chỉ áp dụng 1 lần duy nhất cho khách hàng mới. Hệ thống tự động chặn giảm giá đối với các shop gia hạn/đăng ký lại.
-    - **Bảo mật & Chống trục lợi**: Ngăn chặn tuyệt đối việc tự dùng mã của chính mình hoặc nhân viên cùng shop lấy mã của nhau để hưởng hoa hồng.
-    - **Quản lý Payout chuyên nghiệp**: Hệ thống chi trả hoa hồng tích hợp upload minh chứng lên Google Drive và lưu lịch sử giao dịch rõ ràng.
-    - **Phân quyền Nexus**: Chỉ duy nhất tài khoản điều hành (`dunvex.green@gmail.com`) có quyền thiết lập tỷ lệ hoa hồng, đảm bảo an toàn tài chính cho hệ thống.
-    - **Quản lý CTV đa tầng**: Tích hợp người giới thiệu (Referrer) để mở rộng mạng lưới đối tác nhanh chóng.
+- [x] **Tối ưu Mobile UI & Điều hướng (Feb 21 Refinement)**:
+    - **Header & Nav Pro**: Nâng cấp Header Glassmorphism và Bottom Nav hỗ trợ Safe Area. Gỡ bỏ các wrapper dư thừa cho biểu tượng thông báo giúp giao diện thoáng hơn.
+    - **Nút Trung tâm tối giản (Dynamic FAB)**: Rút gọn nút Center thành dạng hình tròn (Icon-only) màu cam nổi bật. Tối ưu logic: Hiện **"Lên đơn"** tại Trang chủ để thao tác nhanh, hiện **"Thu nợ"** tại trang Công nợ.
+- [x] **Dọn dẹp & Tinh gọn Hệ thống**: Gỡ bỏ hoàn toàn tính năng Affiliate và hệ thống mã giảm giá (Coupon/Promo) trên toàn bộ ứng dụng (Pricing, Quick Order) để tối ưu hiệu suất.
+- [x] **PWA Reliability**: Cập nhật cơ chế precache HTML giúp sửa lỗi điều hướng khi sử dụng Service Worker.
 
 ### 📝 Cần làm tiếp (To-do)
 - [ ] **Báo cáo & Xuất dữ liệu (Finance Pro)**: Tích hợp nút xuất báo cáo Sổ quỹ và Lợi nhuận ra file Excel/PDF theo khoảng thời gian tùy chọn.

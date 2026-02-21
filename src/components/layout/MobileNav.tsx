@@ -9,23 +9,24 @@ const MobileNav = () => {
 	const { isNavVisible } = useScroll();
 
 	return (
-		<div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-100 dark:border-slate-800 px-4 py-2 flex justify-between items-center z-[100] pb-2 h-16 shadow-[0_-5px_20px_rgba(0,0,0,0.05)]">
+		<div
+			className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-t border-slate-100 dark:border-slate-800 px-4 flex justify-between items-center z-[100] h-20 shadow-[0_-8px_30px_rgba(0,0,0,0.08)]"
+			style={{
+				WebkitBackdropFilter: 'blur(20px)',
+				paddingBottom: 'env(safe-area-inset-bottom, 12px)'
+			}}
+		>
 			{navItems.map((item) => {
 				const isActive = currentPath === item.path;
 
 				if (item.isCenter) {
 					return (
-						<div key={item.path} className="relative -top-5 flex flex-col items-center">
+						<div key={item.path} className="relative -top-8 flex flex-col items-center">
 							<button
 								onClick={() => navigate(item.path)}
-								className={`h-12 bg-[#FF6D00] text-white rounded-full shadow-lg flex items-center justify-center border-4 border-white dark:border-slate-900 active:scale-95 transition-all
-									${item.label && item.label.length > 3 ? 'px-6 w-auto min-w-[3rem]' : 'w-12'}
-								`}
+								className="w-14 h-14 bg-[#FF6D00] text-white rounded-full shadow-[0_8px_25px_rgba(255,109,0,0.4)] flex items-center justify-center border-4 border-white dark:border-slate-900 active:scale-90 transition-all"
 							>
-								<span className="material-symbols-outlined text-xl md:text-2xl font-bold">{item.icon}</span>
-								{item.label && item.label.length > 3 && (
-									<span className="ml-2 text-[10px] font-black uppercase whitespace-nowrap">{item.label}</span>
-								)}
+								<span className="material-symbols-outlined text-2xl font-black">{item.icon}</span>
 							</button>
 						</div>
 					);

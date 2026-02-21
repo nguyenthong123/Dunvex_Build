@@ -277,7 +277,8 @@ const Home = () => {
 	return (
 		<div className="bg-[#f8f9fb] dark:bg-slate-950 transition-colors duration-300">
 			{/* HEADER */}
-			<header className="h-16 md:h-20 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between px-4 md:px-8 shrink-0 relative z-20 transition-colors duration-300">
+			{/* HEADER - Hidden on Mobile to use MainLayout Header */}
+			<header className="hidden md:flex h-16 md:h-20 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 items-center justify-between px-4 md:px-8 shrink-0 relative z-20 transition-colors duration-300">
 				<h2 className="text-lg md:text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight">Tổng Quan Hệ Thống</h2>
 				<div className="flex items-center gap-4">
 					{/* Global Scanner Button */}
@@ -383,46 +384,37 @@ const Home = () => {
 				</div>
 			</header>
 
-			<main className="p-4 md:p-8 max-w-[1600px] mx-auto">
+			<main className="p-4 md:p-8 max-w-[1600px] mx-auto pb-32">
+				{/* Mobile Only Title */}
+				<div className="md:hidden flex items-center justify-between mb-6">
+					<div>
+						<h2 className="text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tight">Tổng Quan</h2>
+						<p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Hệ thống DunvexBuild</p>
+					</div>
+					<div className="flex items-center gap-2">
+						<button
+							onClick={() => setShowScanner(true)}
+							className="size-11 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex items-center justify-center text-[#FF6D00] active:scale-90 transition-transform"
+						>
+							<QrCode size={22} />
+						</button>
+					</div>
+				</div>
+
 				{/* Alerts Section */}
-				<div className="mb-8 flex flex-col md:flex-row gap-4">
+				<div className="mb-6 flex flex-col md:flex-row gap-4">
 					{lowStockProducts.length > 0 && (
-						<div className="flex-1 bg-white dark:bg-slate-900 border-l-4 border-[#FF6D00] p-4 rounded-r-xl shadow-sm flex items-center justify-between animate-in slide-in-from-left-4 fade-in duration-500">
+						<div className="flex-1 bg-white dark:bg-slate-900 border-l-4 border-[#FF6D00] p-4 rounded-r-xl shadow-sm flex items-center justify-between">
 							<div className="flex items-center gap-3">
 								<div className="bg-orange-50 dark:bg-orange-900/20 p-2 rounded-lg text-[#FF6D00]">
 									<AlertTriangle size={24} />
 								</div>
 								<div>
-									<h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">Cảnh báo tồn kho</h4>
-									<p className="text-xs text-slate-600 dark:text-slate-400 font-bold">{lowStockProducts.length} sản phẩm dưới mức an toàn</p>
+									<h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">Tồn kho thấp</h4>
+									<p className="text-[11px] text-slate-500 font-bold">{lowStockProducts.length} mặt hàng</p>
 								</div>
 							</div>
-							<button onClick={() => navigate('/products')} className="text-xs font-bold text-[#FF6D00] px-3 py-1 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg">Kiểm tra</button>
-						</div>
-					)}
-
-					{highRiskDebts.length > 0 ? (
-						<div className="flex-1 bg-white dark:bg-slate-900 border-l-4 border-rose-600 p-4 rounded-r-xl shadow-sm flex items-center justify-between animate-in slide-in-from-right-4 fade-in duration-500">
-							<div className="flex items-center gap-3">
-								<div className="bg-rose-50 dark:bg-rose-900/20 p-2 rounded-lg text-rose-600">
-									<Wallet size={24} />
-								</div>
-								<div>
-									<h4 className="text-sm font-bold text-rose-700 dark:text-rose-400">Công nợ rủi ro cao</h4>
-									<p className="text-xs text-slate-500 dark:text-slate-400">{highRiskDebts.length} khách hàng nợ trên 50 triệu</p>
-								</div>
-							</div>
-							<button onClick={() => navigate('/debts')} className="text-xs font-bold text-rose-600 dark:text-rose-400 px-3 py-1 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg">Xem ngay</button>
-						</div>
-					) : (
-						<div className="hidden md:flex flex-1 bg-white dark:bg-slate-900 border-l-4 border-blue-600 p-4 rounded-r-xl shadow-sm items-center gap-3">
-							<div className="bg-blue-50 dark:bg-blue-900/20 p-2 rounded-lg text-blue-600 dark:text-blue-400">
-								<span className="material-symbols-outlined">verified</span>
-							</div>
-							<div>
-								<h4 className="text-sm font-bold dark:text-white">Tài chính ổn định</h4>
-								<p className="text-xs text-slate-500 dark:text-slate-400">Không có khoản nợ xấu nào cần lưu ý</p>
-							</div>
+							<button onClick={() => navigate('/products')} className="text-xs font-bold text-[#FF6D00] px-3 py-1 bg-orange-50 dark:bg-orange-900/20 rounded-lg">Xem</button>
 						</div>
 					)}
 				</div>
@@ -430,7 +422,7 @@ const Home = () => {
 				<div className="grid grid-cols-12 gap-6">
 					{/* Revenue and Profit Card */}
 					<div className="col-span-12 lg:col-span-4 flex flex-col gap-6">
-						<div className="bg-[#1A237E] text-white rounded-[2rem] p-8 shadow-2xl relative overflow-hidden group">
+						<div className="bg-[#1A237E] text-white rounded-[2rem] p-6 md:p-8 shadow-2xl relative overflow-hidden group">
 							<div className="absolute -right-8 -bottom-8 w-40 h-40 bg-white/10 rounded-full blur-3xl group-hover:bg-[#FF6D00]/20 transition-all duration-700"></div>
 
 							<div className="flex justify-between items-start mb-1">

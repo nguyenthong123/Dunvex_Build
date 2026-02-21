@@ -26,19 +26,22 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 			<SystemAlertManager />
 
 			<main className="flex-1 flex flex-col h-full overflow-hidden bg-white dark:bg-slate-900 relative transition-colors duration-300">
-				{/* MOBILE TOP BAR - Intelligent hiding */}
+				{/* MOBILE TOP BAR - Premium Glassmorphism */}
 				{!window.location.pathname.includes('/price-list') && (
 					<header
-						className="md:hidden flex items-center justify-between px-6 py-4 border-b border-slate-50 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md fixed top-0 left-0 right-0 z-[50]"
-						style={{ WebkitBackdropFilter: 'blur(12px)' }}
+						className="md:hidden flex items-center justify-between px-6 h-14 border-b border-slate-100 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl fixed top-0 left-0 right-0 z-[60] shadow-sm"
+						style={{ WebkitBackdropFilter: 'blur(20px)' }}
 					>
 						<div className="flex items-center gap-2">
-							<div className="size-8 bg-[#FF6D00] rounded-lg flex items-center justify-center shadow-lg">
+							<div className="size-8 bg-gradient-to-br from-[#FF6D00] to-[#FF9100] rounded-xl flex items-center justify-center shadow-md shadow-orange-500/20">
 								<span className="material-symbols-outlined text-white text-lg font-bold">architecture</span>
 							</div>
-							<h1 className="text-sm font-black uppercase tracking-tight">Dunvex<span className="text-[#FF6D00]">Build</span></h1>
+							<h1 className="text-[15px] font-black uppercase tracking-tight text-slate-800 dark:text-white">
+								Dunvex<span className="text-[#FF6D00]">Build</span>
+							</h1>
 						</div>
-						<div className="bg-[#1A237E] p-1 rounded-xl">
+
+						<div className="flex items-center">
 							<NotificationBell />
 						</div>
 					</header>
@@ -56,7 +59,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
 				<div
 					onScroll={handleScroll}
-					className={`flex-1 overflow-y-auto no-scrollbar md:pt-0 ${window.location.pathname.includes('/price-list') ? 'pt-0' : 'pt-16'}`}
+					className={`flex-1 overflow-y-auto no-scrollbar md:pt-0 ${window.location.pathname.includes('/price-list') ? 'pt-0' : 'pt-20'}`}
 				>
 					<div className="min-h-full">
 						{children}

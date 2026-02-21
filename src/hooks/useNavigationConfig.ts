@@ -30,7 +30,7 @@ export const useNavigationConfig = () => {
 	const getCenterItem = (): NavItem => {
 		const path = location.pathname;
 
-		if (path === '/orders') {
+		if (path === '/orders' || path === '/') {
 			return {
 				icon: 'add_shopping_cart',
 				label: 'Lên đơn',
@@ -57,7 +57,7 @@ export const useNavigationConfig = () => {
 			};
 		}
 
-		if (path === '/debts' || path === '/') {
+		if (path === '/debts') {
 			return {
 				icon: 'payments',
 				label: 'Thu nợ',
@@ -117,13 +117,6 @@ export const useNavigationConfig = () => {
 			};
 		}
 
-		if (path === '/affiliate') {
-			return {
-				icon: 'groups',
-				label: 'Mạng lưới',
-				path: '/affiliate?view=network',
-			};
-		}
 
 		// Mặc định cho các trang khác (checkin...)
 		return {
@@ -148,7 +141,6 @@ export const useNavigationConfig = () => {
 		{ icon: 'history', label: 'Hoạt động', path: '/checkin?action=history', permissionKey: 'checkin_create' },
 		{ icon: 'timer', label: 'Chấm công', path: '/attendance' },
 		{ icon: 'school', label: 'Đào tạo', path: '/khoa-dao-tao' },
-		{ icon: 'handshake', label: 'Affiliate', path: '/affiliate' },
 		{ icon: 'settings', label: 'Cài đặt', path: '/settings' },
 	];
 
@@ -242,14 +234,6 @@ export const useNavigationConfig = () => {
 				allItems[2], // Center (Cập nhật Data)
 				allItems[7], // Sản phẩm
 				allItems[1], // Đơn hàng
-			];
-		} else if (path === '/affiliate') {
-			items = [
-				allItems[0], // Trang chủ
-				allItems[1], // Đơn hàng
-				allItems[2], // Center (Mạng lưới)
-				allItems[3], // Công nợ
-				allItems[8], // Hoạt động
 			];
 		} else if (path === '/finance') {
 			items = [

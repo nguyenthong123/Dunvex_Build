@@ -103,7 +103,13 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 - [x] **Ổn định hóa Giao diện Điều hướng (Bottom Nav & Top Bar)**: Khắc phục triệt để hiện tượng nháy (flickering) và tự động ẩn khi cuộn. Chuyển sang cơ chế hiển thị cố định (Pinned) giúp người dùng truy cập menu nhanh chóng và mượt mà hơn trên mọi thiết bị di động.
 - [x] **Redesign Mobile Header & Navigation (Feb 21)**: 
     - **Header Premium**: Chuyển sang giao diện trắng (Glassmorphism), căn giữa logo DunvexBuild và tối ưu hóa hiển thị trên mọi nền tảng di động.
-    - **Bottom Nav 5-nút**: Tinh chỉnh hệ thống 5 nút điều động (Dynamic Items) với nút trung tâm nổi bật, hỗ trợ Label tiếng Việt viết hoa sang trọng và hiệu ứng active tinh tế.
+    - **Bottom Nav 5-nút**: Tinh chỉnh hệ thống 5 nút điều động (Dynamic Items) with nút trung tâm nổi bật, hỗ trợ Label tiếng Việt viết hoa sang trọng và hiệu ứng active tinh tế.
+- [x] **Hệ thống Mã Giảm Giá & Thanh toán (Feb 22 Updates)**:
+    *   **Bảo mật Mã giảm giá (Promo Security)**: Tích hợp cơ chế kiểm tra mã SKU theo định dạng chuẩn `XX-000` (VD: DV-476). Hệ thống truy vấn trực tiếp kho sản phẩm của tài khoản Admin `dunvex.green@gmail.com` để lấy giá trị chiết khấu.
+    *   **Quản lý lượt dùng (Stock-based Promo)**: Sử dụng trường "Tồn kho" của sản phẩm giảm giá để giới hạn số lần sử dụng. Hệ thống tự động trừ kho ngay khi người dùng hoàn tất yêu cầu thanh toán.
+    *   **Điều hướng thông minh**: Chỉ hiển thị phần nhập mã giảm giá cho **Gói Năm** để tối ưu hóa doanh thu và tăng giá trị đơn hàng trung bình.
+    *   **Khắc phục hiển thị QR (VietQR Fix)**: Cập nhật chính sách bảo mật CSP cho tên miền `vietqr.io`, đảm bảo hình ảnh QR thanh toán luôn hiển thị sắc nét trên mọi thiết bị.
+    *   **Ổn định hóa Thông báo Email**: Sửa lỗi logic gửi email về `dunvex.green@gmail.com` bằng cơ chế `no-cors`, đảm bảo yêu cầu kích hoạt dịch vụ của khách hàng luôn đến tay Admin tức thì.
 - [x] **Tối ưu Chi tiết Khách hàng**: Chuyển đổi sang dạng Bottom Sheet mượt mà trên di động, hỗ trợ gọi điện trực tiếp từ ứng dụng.
 - [x] **Bảo mật chuẩn A+**: Triển khai toàn diện CSP, XFO, HSTS, Referrer-Policy thông qua `vercel.json`.
 - [x] **Lọc theo ngày (Date Filtering)**: Đã hoàn thiện bộ lọc ngày thực tế cho danh sách công nợ và bảng kê chi tiết khách hàng.

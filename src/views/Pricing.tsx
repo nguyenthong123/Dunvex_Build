@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, Zap, Crown, Rocket, ShieldCheck, ArrowLeft, CreditCard, QrCode } from 'lucide-react';
 import { auth, db } from '../services/firebase';
-import { collection, addDoc, serverTimestamp, query, where, limit, getDocs } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, limit, getDocs, doc, updateDoc, increment } from 'firebase/firestore';
 import { useOwner } from '../hooks/useOwner';
 
 import NotificationBell from '../components/NotificationBell';
@@ -15,6 +15,11 @@ const Pricing = () => {
 	const [loading, setLoading] = useState(false);
 	const [transferCode, setTransferCode] = useState('');
 	const [discountAmt, setDiscountAmt] = useState(0);
+	const [promoCode, setPromoCode] = useState('');
+	const [isApplying, setIsApplying] = useState(false);
+	const [appliedCode, setAppliedCode] = useState('');
+	const [promoError, setPromoError] = useState('');
+	const [promoProdId, setPromoProdId] = useState('');
 
 	const generateTransferCode = (email: string) => {
 		const prefix = email.split('@')[0].toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
@@ -59,7 +64,70 @@ const Pricing = () => {
 		if (auth.currentUser?.email) {
 			setTransferCode(generateTransferCode(auth.currentUser.email));
 		}
+		setDiscountAmt(0);
+		setAppliedCode('');
+		setPromoCode('');
+		setPromoError('');
 		setStep(2);
+	};
+
+	const handleApplyPromo = async () => {
+		setIsApplying(true);
+		setPromoError('');
+		setDiscountAmt(0);
+		setAppliedCode('');
+		setPromoProdId('');
+
+		try {
+			const code = promoCode.trim();
+			if (!code) return;
+
+			// Kiểm tra định dạng: 2 chữ - 3 số (Ví dụ: DV-476)
+			const promoRegex = /^[A-Za-z]{2}-[0-9]{3}$/;
+			if (!promoRegex.test(code)) {
+				setPromoError('Mã giảm giá không đúng định dạng (VD: XX-000)');
+				return;
+			}
+
+			// Query products from master account dunvex.green@gmail.com
+			const q = query(
+				collection(db, 'products'),
+				where('ownerEmail', '==', 'dunvex.green@gmail.com'),
+				where('sku', '==', code),
+				limit(1)
+			);
+
+			const querySnapshot = await getDocs(q);
+
+			if (!querySnapshot.empty) {
+				const promoDoc = querySnapshot.docs[0];
+				const promoData = promoDoc.data();
+
+				// Kiểm tra tồn kho (số lần sử dụng còn lại)
+				if (Number(promoData.stock || 0) <= 0) {
+					setPromoError('Mã này đã hết lượt sử dụng');
+					return;
+				}
+
+				const discount = Number(promoData.priceSell) || 0;
+
+				if (discount > 0) {
+					const finalDiscount = Math.min(discount, selectedPlan.price);
+					setDiscountAmt(finalDiscount);
+					setAppliedCode(code);
+					setPromoProdId(promoDoc.id);
+				} else {
+					setPromoError('Mã này không có giá trị giảm giá');
+				}
+			} else {
+				setPromoError('Mã giảm giá không tồn tại');
+			}
+		} catch (error) {
+			console.error("Error applying promo:", error);
+			setPromoError('Không thể kiểm tra mã giảm giá lúc này');
+		} finally {
+			setIsApplying(false);
+		}
 	};
 
 
@@ -76,21 +144,39 @@ const Pricing = () => {
 				planName: selectedPlan.name,
 				amount: selectedPlan.price - discountAmt,
 				originalAmount: selectedPlan.price,
+				appliedCode: appliedCode,
 				transferCode: transferCode,
 				status: 'pending',
 				createdAt: serverTimestamp()
 			});
 
+			// Giảm số lượng mã (stock) sau khi dùng thành công
+			if (promoProdId) {
+				try {
+					const promoRef = doc(db, 'products', promoProdId);
+					await updateDoc(promoRef, {
+						stock: increment(-1)
+					});
+				} catch (err) {
+					console.error("Failed to decrement promo stock:", err);
+				}
+			}
+
 			// Trigger Email notification through GAS (existing endpoint but with payment_request action)
 			try {
 				await fetch('https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec', {
 					method: 'POST',
+					mode: 'no-cors', // Critical for GAS bypass CORS
+					headers: {
+						'Content-Type': 'text/plain;charset=utf-8',
+					},
 					body: JSON.stringify({
 						action: 'payment_request',
-						email: auth.currentUser.email,
-						ownerEmail: owner.ownerEmail,
+						email: auth.currentUser?.email || 'N/A',
+						ownerEmail: owner.ownerEmail || 'N/A',
+						systemAdminEmail: 'dunvex.green@gmail.com',
 						planName: selectedPlan.name,
-						amount: selectedPlan.price,
+						amount: selectedPlan.price - discountAmt,
 						transferCode: transferCode
 					})
 				});
@@ -224,7 +310,47 @@ const Pricing = () => {
 									</div>
 								</div>
 
-								{/* Promo Section Hidden */}
+								{/* Promo Section - Only for Yearly Plan */}
+								{selectedPlan.id === 'premium_yearly' && (
+									!appliedCode ? (
+										<div className="mt-4 mb-4">
+											<div className="flex gap-2">
+												<input
+													type="text"
+													value={promoCode}
+													onChange={(e) => setPromoCode(e.target.value)}
+													placeholder="Nhập mã giảm giá (nếu có)"
+													className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+												/>
+												<button
+													onClick={handleApplyPromo}
+													disabled={!promoCode || isApplying}
+													className="px-4 py-2 bg-slate-900 dark:bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 disabled:opacity-50 transition-all"
+												>
+													{isApplying ? '...' : 'Áp dụng'}
+												</button>
+											</div>
+											{promoError && (
+												<p className="text-[10px] text-red-500 font-bold mt-1 ml-1 animate-pulse">
+													{promoError}
+												</p>
+											)}
+										</div>
+									) : (
+										<div className="mt-4 mb-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50 rounded-2xl p-3 flex items-center justify-between">
+											<div>
+												<span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest block">Đã áp dụng mã:</span>
+												<span className="text-sm font-black text-emerald-700 dark:text-emerald-300 uppercase italic">{appliedCode}</span>
+											</div>
+											<button
+												onClick={() => { setAppliedCode(''); setDiscountAmt(0); setPromoCode(''); }}
+												className="text-[10px] font-black text-slate-400 hover:text-red-500 uppercase transition-colors"
+											>
+												Gỡ bỏ
+											</button>
+										</div>
+									)
+								)}
 
 								<div className="pt-4 mt-4 border-t border-slate-200 dark:border-slate-700">
 									<span className="block text-[10px] font-black text-indigo-500 uppercase tracking-[2px] mb-2 text-center">Nội dung chuyển khoản:</span>

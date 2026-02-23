@@ -194,6 +194,17 @@ const Debts: React.FC = () => {
 		return new Date(date).toLocaleDateString('vi-VN');
 	};
 
+	const getImageUrl = (url: string) => {
+		if (!url) return '';
+		if (url.includes('drive.google.com')) {
+			const match = url.match(/[-\w]{25,}/);
+			if (match) {
+				return `https://drive.google.com/thumbnail?id=${match[0]}&sz=w1000`;
+			}
+		}
+		return url;
+	};
+
 	// 1. Identify all unique customer entities (Registered + Guest)
 	const registeredMap = new Map();
 	customers.forEach(c => registeredMap.set(c.id, c));
@@ -336,55 +347,24 @@ const Debts: React.FC = () => {
 
 		setUploadingPaymentImage(true);
 		try {
-			let base64Data = "";
+			const formData = new FormData();
+			formData.append('file', file);
+			formData.append('upload_preset', 'dunvexbuil');
+			formData.append('folder', 'dunvex_payments');
 
-			// Safely read file using arrayBuffer (works on Safari)
-			if (file.arrayBuffer) {
-				const buffer = await file.arrayBuffer();
-				let binary = '';
-				const bytes = new Uint8Array(buffer);
-				const len = bytes.byteLength;
-				for (let i = 0; i < len; i++) {
-					binary += String.fromCharCode(bytes[i]);
+			const response = await fetch(
+				`https://api.cloudinary.com/v1_1/dtx0uvb4e/image/upload`,
+				{
+					method: 'POST',
+					body: formData,
 				}
-				base64Data = window.btoa(binary);
-			} else {
-				// Fallback (unlikely needed for modern browsers)
-				// @ts-ignore
-				const Reader = window.FileReader || FileReader;
-				if (Reader) {
-					const reader = new Reader();
-					base64Data = await new Promise((resolve, reject) => {
-						reader.onload = () => {
-							if (reader.result) resolve((reader.result as string).split(',')[1]);
-							else reject(new Error("Empty result"));
-						};
-						reader.onerror = reject;
-						reader.readAsDataURL(file);
-					});
-				} else {
-					throw new Error("Trình duyệt không hỗ trợ đọc file.");
-				}
-			}
-
-			const response = await fetch('https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec', {
-				method: 'POST',
-				redirect: 'follow',
-				headers: {
-					'Content-Type': 'text/plain;charset=utf-8',
-				},
-				body: JSON.stringify({
-					filename: `payment_${Date.now()}_${file.name}`,
-					mimeType: file.type,
-					base64Data: base64Data
-				})
-			});
+			);
 
 			const data = await response.json();
-			if (data.status === 'success') {
-				setPaymentData(prev => ({ ...prev, proofImage: data.fileUrl }));
+			if (data.secure_url) {
+				setPaymentData(prev => ({ ...prev, proofImage: data.secure_url }));
 			} else {
-				alert("Lỗi upload: " + (data.message || "Không xác định"));
+				alert("Lỗi upload Cloudinary: " + (data.error?.message || "Không xác định"));
 			}
 		} catch (error: any) {
 			alert(`Lỗi xử lý tệp: ${error.message}`);
@@ -805,7 +785,7 @@ const Debts: React.FC = () => {
 									/>
 									{paymentData.proofImage && (
 										<div className="size-20 bg-slate-100 dark:bg-slate-800 rounded-2xl overflow-hidden border-2 border-white dark:border-slate-700 shadow-lg shrink-0">
-											<img src={paymentData.proofImage.includes('drive.google.com') ? `https://drive.google.com/thumbnail?id=${paymentData.proofImage.split('id=')[1]}&sz=w200` : paymentData.proofImage} alt="Proof" className="w-full h-full object-cover" />
+											<img src={getImageUrl(paymentData.proofImage)} alt="Proof" className="w-full h-full object-cover" />
 										</div>
 									)}
 								</div>

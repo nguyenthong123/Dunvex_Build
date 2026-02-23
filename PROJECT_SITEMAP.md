@@ -66,7 +66,7 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 ## 3. Hệ thống & Bảo mật (System & Security)
 
 - **Cơ sở dữ liệu**: Firebase Firestore (Real-time).
-- **Lưu trữ ảnh**: Google Drive (Thumbnail sync).
+- **Lưu trữ ảnh**: Cloudinary (High performance, CDN optimized).
 - **Xác thực**: Firebase Auth.
 - **Phân quyền (RBAC)**: Thực thi nghiêm ngặt trên toàn bộ Router và Component.
 - **Bảo mật HTTP (Standard A+)**: Đã triển khai CSP, XFO, HSTS qua `vercel.json` để ngăn chặn XSS và Clickjacking.
@@ -138,10 +138,16 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 - [x] **Báo Giá Niêm Yết chuyên nghiệp (Inventory Pro)**: Tích hợp cơ chế nhập dữ liệu từ Excel/Google Sheets, quản lý lịch sử đa bản giá trên Firestore. Hỗ trợ thu phóng thông minh (60%-85%-100%) và ép khung Desktop trên Mobile giúp chụp ảnh màn hình tờ báo giá trọn vẹn, không bị nhảy dòng. Tinh chỉnh giao diện cao cấp với tiêu đề cột siêu tương phản (Slate-950).
 - [x] **Xác thực & Bảo mật Đăng nhập (Auth & Security)**: Khắc phục triệt để lỗi "missing initial state" và "invalid action" trên mọi thiết bị. Tối ưu hóa CSP & COOP headers cho Firebase Auth. Tích hợp thanh trạng thái đăng nhập chi tiết và cơ chế tự động chuyển đổi giữa Popup/Redirect thông minh giúp người dùng luôn vào được hệ thống dù là trên trình duyệt Zalo, Safari hay Chrome.
 - [x] **Tối ưu Báo Giá Di động (Price List Mobile Optimization)**: Tinh chỉnh giao diện Chi tiết báo giá siêu gọn nhẹ và chuyên nghiệp trên điện thoại. Tối ưu hóa kích thước bảng giá, hỗ trợ xuống dòng thông minh và hệ thống Zoom Pill cao cấp giúp chụp ảnh màn hình báo giá trọn vẹn.
-- [x] **Phân trang & Tìm kiếm Mobile thông minh (UX Refinement)**:
-    - **Phân trang (Pagination)**: Áp dụng cho danh sách Sản phẩm (10 mục/trang), giúp tăng tốc độ tải và giao diện gọn gàng. Tự động reset về trang 1 khi tìm kiếm.
-    - **Tìm kiếm Mobile 1-chạm**: Tích hợp nút tìm kiếm trực tiếp vào thanh điều hướng dưới cùng cho các trang Sản phẩm và Đơn hàng. Tự động focus và mở bàn phím ngay khi nhấn.
-    - **Điều hướng theo ngữ cảnh**: Tùy chỉnh menu di động linh hoạt: Trang Khách hàng có nút "Bản đồ", trang Kho có nút "Lịch sử kho", tất cả các module chính đều tích hợp sẵn nút "Nhập Excel" nhanh.
+- [x] **Tối ưu Lên đơn & Danh mục (Quick Order UX Refinement - Feb 23)**:
+    *   **Decimal Quantity**: Hỗ trợ nhập số lượng thập phân (ví dụ: 2.255) bằng `step="any"` và cơ chế xử lý chuỗi linh hoạt.
+    *   **Searchable Dropdowns**: Thay thế menu xổ xuống bằng bộ chọn Sản phẩm/Danh mục tích hợp tìm kiếm thông minh, hiển thị tồn kho trực tiếp.
+    *   **UX Cải tiến**: Tự động xóa nội dung khi nhập mới thay vì mặc định số 10.
+- [x] **Tích hợp Cloudinary (Image Storage Upgrade)**:
+    *   **Di cư Hệ thống**: Chuyển toàn bộ hạ tầng lưu trữ từ Google Drive sang Cloudinary để tối ưu tốc độ và độ tin cậy.
+    *   **Phân loại Thư mục**: Tự động tổ chức ảnh vào các thư mục `dunvex_products`, `dunvex_checkins`, và `dunvex_payments`.
+    *   **Tương thích ngược**: Cơ chế `getImageUrl` thông minh hỗ trợ hiển thị song song ảnh cũ (Drive) và ảnh mới (Cloudinary).
+- [x] **Phiếu Giao Hàng & Đóng gói**:
+    *   **Tính Kiện tự động**: Tự động tính toán tổng số Kiện dựa trên tỷ lệ đóng gói (`qty / packaging`) và hiển thị trên Phiếu giao hàng (Order Ticket).
 - [x] **Báo cáo & Phân tích thời gian thực (Dashboard Live)**: 
     - **Doanh thu & Lợi nhuận**: Tự động tính toán Doanh thu và Lợi nhuận gộp (giá bán - giá nhập) theo ngày và theo tháng từ dữ liệu thực tế của Firestore.
     - **Biểu đồ Tăng trưởng**: Chuyển đổi biểu đồ tĩnh sang biểu đồ động, hiển thị doanh thu 7 ngày gần nhất với cơ chế tự động cân bằng tỷ lệ (Auto-scale).

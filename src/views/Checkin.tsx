@@ -156,12 +156,13 @@ const Checkin = () => {
 
     const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
 
-    const formatDriveUrl = (url: string) => {
-
+    const getImageUrl = (url: string) => {
         if (!url) return '';
         if (url.includes('drive.google.com')) {
-            const fileId = url.split('id=')[1];
-            if (fileId) return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
+            const match = url.match(/[-\w]{25,}/);
+            if (match) {
+                return `https://drive.google.com/thumbnail?id=${match[0]}&sz=w1000`;
+            }
         }
         return url;
     };
@@ -226,55 +227,24 @@ const Checkin = () => {
 
         setUploading(true);
         try {
-            let base64Data = "";
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('upload_preset', 'dunvexbuil');
+            formData.append('folder', 'dunvex_checkins');
 
-            // Safely read file using arrayBuffer (works on Safari)
-            if (file.arrayBuffer) {
-                const buffer = await file.arrayBuffer();
-                let binary = '';
-                const bytes = new Uint8Array(buffer);
-                const len = bytes.byteLength;
-                for (let i = 0; i < len; i++) {
-                    binary += String.fromCharCode(bytes[i]);
+            const response = await fetch(
+                `https://api.cloudinary.com/v1_1/dtx0uvb4e/image/upload`,
+                {
+                    method: 'POST',
+                    body: formData,
                 }
-                base64Data = window.btoa(binary);
-            } else {
-                // Fallback (unlikely needed for modern browsers)
-                // @ts-ignore
-                const Reader = window.FileReader || FileReader;
-                if (Reader) {
-                    const reader = new Reader();
-                    base64Data = await new Promise((resolve, reject) => {
-                        reader.onload = () => {
-                            if (reader.result) resolve((reader.result as string).split(',')[1]);
-                            else reject(new Error("Empty result"));
-                        };
-                        reader.onerror = reject;
-                        reader.readAsDataURL(file);
-                    });
-                } else {
-                    throw new Error("Trình duyệt không hỗ trợ đọc file.");
-                }
-            }
-
-            const response = await fetch('https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec', {
-                method: 'POST',
-                redirect: 'follow',
-                headers: {
-                    'Content-Type': 'text/plain;charset=utf-8',
-                },
-                body: JSON.stringify({
-                    filename: `checkin_${Date.now()}_${file.name}`,
-                    mimeType: file.type,
-                    base64Data: base64Data
-                })
-            });
+            );
 
             const data = await response.json();
-            if (data.status === 'success') {
-                setFormData(prev => ({ ...prev, imageUrl: data.fileUrl }));
+            if (data.secure_url) {
+                setFormData(prev => ({ ...prev, imageUrl: data.secure_url }));
             } else {
-                alert("Lỗi upload: " + (data.message || "Không xác định"));
+                alert("Lỗi upload Cloudinary: " + (data.error?.message || "Không xác định"));
             }
         } catch (error: any) {
             alert(`Lỗi xử lý tệp: ${error.message}`);
@@ -485,7 +455,7 @@ const Checkin = () => {
                                             <p className="text-[9px] text-slate-500 mb-2">{checkin.purpose}</p>
                                             {checkin.imageUrl && (
                                                 <img
-                                                    src={formatDriveUrl(checkin.imageUrl)}
+                                                    src={getImageUrl(checkin.imageUrl)}
                                                     className="w-full h-20 object-cover rounded-lg mb-2 shadow-sm"
                                                     alt="Field"
                                                     referrerPolicy="no-referrer"
@@ -733,7 +703,7 @@ const Checkin = () => {
                                                 {checkin.imageUrl && (
                                                     <div className="mb-3 lg:mb-4 rounded-xl lg:rounded-2xl overflow-hidden border border-slate-100 dark:border-slate-700 aspect-video relative group/img shadow-sm">
                                                         <img
-                                                            src={formatDriveUrl(checkin.imageUrl)}
+                                                            src={getImageUrl(checkin.imageUrl)}
                                                             alt="Field"
                                                             className="size-full object-cover group-hover/img:scale-110 transition-transform duration-[1.5s]"
                                                             referrerPolicy="no-referrer"

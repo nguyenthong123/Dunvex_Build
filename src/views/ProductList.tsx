@@ -173,67 +173,27 @@ const ProductList = () => {
 		const file = e.target.files?.[0];
 		if (!file) return;
 
-		// Validation: check file size (max 5MB for GAS)
-		if (file.size > 5 * 1024 * 1024) {
-			alert("File quá lớn. Vui lòng chọn ảnh dưới 5MB.");
-			return;
-		}
-
 		setUploading(true);
 		try {
-			let base64Data = "";
+			const formData = new FormData();
+			formData.append('file', file);
+			formData.append('upload_preset', 'dunvexbuil');
+			formData.append('folder', 'dunvex_products');
 
-			// Method 1: Try using arrayBuffer (Modern & Safari safe)
-			// This bypasses FileReader completely
-			if (file.arrayBuffer) {
-				const buffer = await file.arrayBuffer();
-				let binary = '';
-				const bytes = new Uint8Array(buffer);
-				const len = bytes.byteLength;
-				for (let i = 0; i < len; i++) {
-					binary += String.fromCharCode(bytes[i]);
+			const response = await fetch(
+				`https://api.cloudinary.com/v1_1/dtx0uvb4e/image/upload`,
+				{
+					method: 'POST',
+					body: formData,
 				}
-				base64Data = window.btoa(binary);
-			}
-			// Method 2: Fallback to manual FileReader if absolutely necessary (but we know it's broken for you)
-			else {
-				// @ts-ignore
-				const Reader = window.FileReader || FileReader;
-				if (Reader) {
-					const reader = new Reader();
-					base64Data = await new Promise((resolve, reject) => {
-						reader.onload = () => {
-							if (reader.result) resolve((reader.result as string).split(',')[1]);
-							else reject(new Error("Empty result"));
-						};
-						reader.onerror = reject;
-						reader.readAsDataURL(file);
-					});
-				} else {
-					throw new Error("Trình duyệt không hỗ trợ đọc file.");
-				}
-			}
-
-			// Perform Upload
-			const response = await fetch('https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec', {
-				method: 'POST',
-				redirect: 'follow',
-				headers: {
-					'Content-Type': 'text/plain;charset=utf-8',
-				},
-				body: JSON.stringify({
-					filename: file.name,
-					mimeType: file.type,
-					base64Data: base64Data
-				})
-			});
+			);
 
 			const data = await response.json();
 
-			if (data.status === 'success') {
-				setFormData(prev => ({ ...prev, imageUrl: data.fileUrl }));
+			if (data.secure_url) {
+				setFormData(prev => ({ ...prev, imageUrl: data.secure_url }));
 			} else {
-				alert("Lỗi từ Drive: " + (data.message || "Không xác định"));
+				alert("Lỗi upload Cloudinary: " + (data.error?.message || "Không xác định"));
 			}
 
 		} catch (error: any) {
@@ -591,7 +551,7 @@ const ProductList = () => {
 		}
 	};
 
-	// Helper to handle Google Drive image URLs more reliably
+	// Helper to handle Cloudinary and legacy Drive image URLs
 	const getImageUrl = (url: string) => {
 		if (!url) return '';
 		if (url.includes('drive.google.com')) {

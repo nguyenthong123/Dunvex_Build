@@ -28,7 +28,7 @@ const QuickOrder = () => {
 
 	// Line items state
 	const [lineItems, setLineItems] = useState<any[]>([
-		{ id: Date.now(), category: '', productId: '', name: '', qty: 1, price: 0, buyPrice: 0, unit: '', packaging: '', density: '', maxStock: 0 }
+		{ id: Date.now(), category: '', productId: '', name: '', qty: '', price: 0, buyPrice: 0, unit: '', packaging: '', density: '', maxStock: 0 }
 	]);
 
 	// Adjustments
@@ -37,8 +37,24 @@ const QuickOrder = () => {
 	const [couponCode, setCouponCode] = useState('');
 
 	const customerSearchRef = useRef<HTMLDivElement>(null);
+	const dropdownRef = useRef<HTMLDivElement>(null);
 
+	// Custom Dropdown State
+	const [activeRow, setActiveRow] = useState<number | null>(null);
+	const [activeField, setActiveField] = useState<'category' | 'productId' | null>(null);
+	const [lineSearchQuery, setLineSearchQuery] = useState('');
 
+	// Handle outside click for custom dropdowns
+	useEffect(() => {
+		const handleClickOutside = (event: MouseEvent) => {
+			if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+				setActiveRow(null);
+				setActiveField(null);
+			}
+		};
+		document.addEventListener('mousedown', handleClickOutside);
+		return () => document.removeEventListener('mousedown', handleClickOutside);
+	}, []);
 	// Fetch Data (Products & Customers) based on Owner
 	useEffect(() => {
 		if (owner.loading || !owner.ownerId) return;
@@ -111,7 +127,7 @@ const QuickOrder = () => {
 	}, [id, owner.ownerId, customers.length]);
 
 	const addLineItem = () => {
-		setLineItems([...lineItems, { id: Date.now(), category: '', productId: '', sku: '', name: '', qty: 1, price: 0, buyPrice: 0, unit: '', packaging: '', density: '', maxStock: 0 }]);
+		setLineItems([...lineItems, { id: Date.now(), category: '', productId: '', sku: '', name: '', qty: '', price: 0, buyPrice: 0, unit: '', packaging: '', density: '', maxStock: 0 }]);
 	};
 
 	const removeLineItem = (index: number) => {
@@ -153,6 +169,7 @@ const QuickOrder = () => {
 				newItems[index].maxStock = getEffectiveStock(prod);
 			}
 		}
+		setLineItems(newItems);
 	};
 
 
@@ -529,49 +546,148 @@ const QuickOrder = () => {
 								{lineItems.map((item, index) => (
 									<tr key={index} className="group transition-colors">
 										<td className="py-6">
-											<div className="relative group/select">
-												<select
-													className="w-full h-12 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl px-4 text-xs font-bold text-slate-900 dark:text-white appearance-none hover:border-[#f27121] transition-colors"
-													value={item.category}
-													onChange={(e) => updateLineItem(index, 'category', e.target.value)}
+											<div className="relative" ref={activeRow === index && activeField === 'category' ? dropdownRef : null}>
+												<div
+													className="w-full h-12 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl px-4 flex items-center justify-between cursor-pointer hover:border-[#f27121] transition-colors"
+													onClick={() => {
+														setActiveRow(index);
+														setActiveField('category');
+														setLineSearchQuery('');
+													}}
 												>
-													<option value="">Tìm danh mục...</option>
-													{categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-												</select>
-												<ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
+													<span className={`text-xs font-bold ${item.category ? 'text-slate-900 dark:text-white' : 'text-slate-300 dark:text-slate-600'}`}>
+														{item.category || 'Tìm danh mục...'}
+													</span>
+													<ChevronDown size={14} className="text-slate-300" />
+												</div>
+
+												{activeRow === index && activeField === 'category' && (
+													<div className="absolute z-[100] top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl shadow-2xl overflow-hidden min-w-[250px]">
+														<div className="p-2 border-b border-slate-50 dark:border-slate-700">
+															<input
+																autoFocus
+																type="text"
+																placeholder="Gõ để tìm nhanh..."
+																className="w-full h-10 px-3 bg-slate-50 dark:bg-slate-900 border-none rounded-lg text-xs font-bold focus:ring-0"
+																value={lineSearchQuery}
+																onChange={(e) => setLineSearchQuery(e.target.value)}
+															/>
+														</div>
+														<div className="max-h-60 overflow-y-auto py-2">
+															<div
+																className="px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer text-xs font-bold text-slate-400"
+																onClick={() => {
+																	updateLineItem(index, 'category', '');
+																	setActiveRow(null);
+																	setActiveField(null);
+																}}
+															>
+																-- Tất cả danh mục --
+															</div>
+															{categories
+																.filter(cat => cat.toLowerCase().includes(lineSearchQuery.toLowerCase()))
+																.map(cat => (
+																	<div
+																		key={cat}
+																		className="px-4 py-3 hover:bg-[#f27121]/5 dark:hover:bg-[#f27121]/10 hover:text-[#f27121] cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between transition-colors"
+																		onClick={() => {
+																			updateLineItem(index, 'category', cat);
+																			setActiveRow(null);
+																			setActiveField(null);
+																		}}
+																	>
+																		{cat}
+																		{item.category === cat && <CheckCircle size={14} className="text-[#f27121]" />}
+																	</div>
+																))}
+														</div>
+													</div>
+												)}
 											</div>
 										</td>
 										<td className="py-6 pl-4">
-											<div className="relative">
-												<select
-													className="w-full h-12 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl px-4 text-xs font-bold text-slate-900 dark:text-white appearance-none hover:border-[#f27121] transition-colors"
-													value={item.productId}
-													onChange={(e) => updateLineItem(index, 'productId', e.target.value)}
+											<div className="relative" ref={activeRow === index && activeField === 'productId' ? dropdownRef : null}>
+												<div
+													className="w-full h-12 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl px-4 flex items-center justify-between cursor-pointer hover:border-[#f27121] transition-colors"
+													onClick={() => {
+														setActiveRow(index);
+														setActiveField('productId');
+														setLineSearchQuery('');
+													}}
 												>
-													<option value="">Tìm SP...</option>
-													{products
-														.filter(p => !item.category || p.category === item.category)
-														.map(p => {
-															const effStock = getEffectiveStock(p);
-															return (
-																<option key={p.id} value={p.id} disabled={effStock <= 0}>
-																	{p.name} {effStock !== undefined ? `(Tồn: ${effStock})` : ''}
-																</option>
-															);
-														})
-													}
-												</select>
-												<ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
+													<span className={`text-xs font-bold ${item.name ? 'text-slate-900 dark:text-white' : 'text-slate-300 dark:text-slate-600'} truncate mr-2`}>
+														{item.name || 'Tìm SP...'}
+													</span>
+													<ChevronDown size={14} className="text-slate-300 shrink-0" />
+												</div>
+
+												{activeRow === index && activeField === 'productId' && (
+													<div className="absolute z-[100] top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl shadow-2xl overflow-hidden min-w-[300px]">
+														<div className="p-2 border-b border-slate-50 dark:border-slate-700">
+															<input
+																autoFocus
+																type="text"
+																placeholder="Tìm theo tên hoặc SKU..."
+																className="w-full h-10 px-3 bg-slate-50 dark:bg-slate-900 border-none rounded-lg text-xs font-bold focus:ring-0"
+																value={lineSearchQuery}
+																onChange={(e) => setLineSearchQuery(e.target.value)}
+															/>
+														</div>
+														<div className="max-h-60 overflow-y-auto py-2">
+															{products
+																.filter(p => !item.category || p.category === item.category)
+																.filter(p =>
+																	p.name.toLowerCase().includes(lineSearchQuery.toLowerCase()) ||
+																	(p.sku && p.sku.toLowerCase().includes(lineSearchQuery.toLowerCase()))
+																)
+																.slice(0, 50) // Limit for performance
+																.map(p => {
+																	const effStock = getEffectiveStock(p);
+																	return (
+																		<div
+																			key={p.id}
+																			className={`px-4 py-3 hover:bg-[#f27121]/5 dark:hover:bg-[#f27121]/10 hover:text-[#f27121] cursor-pointer text-xs font-bold flex items-center justify-between border-b border-slate-50 dark:border-slate-700/50 last:border-none transition-colors ${effStock <= 0 ? 'opacity-50 grayscale' : ''}`}
+																			onClick={() => {
+																				if (effStock > 0) {
+																					updateLineItem(index, 'productId', p.id);
+																					setActiveRow(null);
+																					setActiveField(null);
+																				}
+																			}}
+																		>
+																			<div className="flex flex-col gap-0.5">
+																				<span>{p.name}</span>
+																				<span className="text-[9px] font-black text-slate-400">{p.sku || 'No SKU'} • {p.unit}</span>
+																			</div>
+																			<div className="text-right">
+																				<div className="text-[#f27121]">{p.priceSell.toLocaleString('vi-VN')} đ</div>
+																				<div className={`text-[9px] ${effStock > 0 ? 'text-green-500' : 'text-rose-500'}`}>
+																					Tồn: {effStock}
+																				</div>
+																			</div>
+																		</div>
+																	);
+																})
+															}
+															{products.filter(p => !item.category || p.category === item.category).filter(p => p.name.toLowerCase().includes(lineSearchQuery.toLowerCase()) || (p.sku && p.sku.toLowerCase().includes(lineSearchQuery.toLowerCase()))).length === 0 && (
+																<div className="px-4 py-8 text-center text-slate-400 text-xs font-medium">
+																	Không tìm thấy sản phẩm nào
+																</div>
+															)}
+														</div>
+													</div>
+												)}
 											</div>
 										</td>
 										<td className="py-6">
 											<div className="flex justify-center px-4">
 												<input
 													type="number"
-													className="w-16 h-12 text-center bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white focus:ring-[#f27121]"
-													value={item.qty === 0 ? '' : item.qty}
-													onChange={(e) => updateLineItem(index, 'qty', e.target.value === '' ? 0 : Number(e.target.value))}
-													placeholder="0"
+													step="any"
+													className="w-24 h-12 text-center bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white focus:ring-[#f27121]"
+													value={item.qty}
+													onChange={(e) => updateLineItem(index, 'qty', e.target.value)}
+													placeholder="0.00"
 												/>
 											</div>
 										</td>

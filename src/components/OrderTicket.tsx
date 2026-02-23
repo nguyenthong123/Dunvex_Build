@@ -108,7 +108,15 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 								</div>
 								<div className="flex items-center">
 									<span className="text-gray-400 mr-2 uppercase text-[10px] tracking-widest">Kiện:</span>
-									<span className="text-slate-900">{(order.totalItems || 0).toLocaleString('vi-VN', { maximumFractionDigits: 2 })}</span>
+									<span className="text-slate-900">
+										{(() => {
+											const totalPackages = order.items?.reduce((sum: number, item: any) => {
+												const packaging = parseFloat(item.packaging) || 1;
+												return sum + (Number(item.qty) / packaging);
+											}, 0) || 0;
+											return totalPackages.toLocaleString('vi-VN', { maximumFractionDigits: 2 });
+										})()}
+									</span>
 								</div>
 								<div className="flex items-center">
 									<span className="text-gray-400 mr-2 uppercase text-[10px] tracking-widest">TL tải:</span>

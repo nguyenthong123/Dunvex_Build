@@ -34,6 +34,8 @@ const PriceList = () => {
 	const [zoomScale, setZoomScale] = useState(1);
 	const [autoScale, setAutoScale] = useState(1);
 	const [isDesktopLayout, setIsDesktopLayout] = useState(true);
+	const [currentPage, setCurrentPage] = useState(1);
+	const ITEMS_PER_PAGE = 10;
 
 	useEffect(() => {
 		const params = new URLSearchParams(location.search);
@@ -102,6 +104,10 @@ const PriceList = () => {
 
 		return () => unsubscribe();
 	}, [owner.loading, owner.ownerId]);
+
+	useEffect(() => {
+		setCurrentPage(1);
+	}, [viewMode]);
 
 	const handleSelectList = (list: any) => {
 		setSelectedList(list);
@@ -263,6 +269,41 @@ const PriceList = () => {
 		)
 	);
 
+	// Pagination for Price Lists (List View)
+	const totalPages = Math.ceil(priceLists.length / ITEMS_PER_PAGE);
+	const paginatedPriceLists = priceLists.slice(
+		(currentPage - 1) * ITEMS_PER_PAGE,
+		currentPage * ITEMS_PER_PAGE
+	);
+
+	const getPageNumbers = () => {
+		const pages: (number | string)[] = [];
+		const radius = 1;
+
+		for (let i = 1; i <= totalPages; i++) {
+			if (
+				i === 1 ||
+				i === totalPages ||
+				(i >= currentPage - radius && i <= currentPage + radius) ||
+				i <= 3 ||
+				i >= totalPages - 2
+			) {
+				pages.push(i);
+			}
+		}
+
+		const uniquePages = [...new Set(pages)].sort((a, b) => (a as number) - (b as number));
+		const withEllipsis: (number | string)[] = [];
+
+		for (let i = 0; i < uniquePages.length; i++) {
+			if (i > 0 && (uniquePages[i] as number) - (uniquePages[i - 1] as number) > 1) {
+				withEllipsis.push('...');
+			}
+			withEllipsis.push(uniquePages[i]);
+		}
+		return withEllipsis;
+	};
+
 	if (loading) return (
 		<div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-950">
 			<div className="flex flex-col items-center gap-4">
@@ -380,7 +421,7 @@ const PriceList = () => {
 							</div>
 						) : (
 							<div className="grid gap-4">
-								{priceLists.map((list) => (
+								{paginatedPriceLists.map((list) => (
 									<div
 										key={list.id}
 										onClick={() => handleSelectList(list)}
@@ -418,6 +459,48 @@ const PriceList = () => {
 										</div>
 									</div>
 								))}
+							</div>
+						)}
+
+						{/* Pagination UI - Price Lists */}
+						{viewMode === 'list' && totalPages > 1 && (
+							<div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 transition-all mt-8">
+								<p className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">
+									Hiển thị {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, priceLists.length)} của {priceLists.length} báo giá
+								</p>
+								<div className="flex items-center gap-2">
+									<button
+										disabled={currentPage === 1}
+										onClick={() => { setCurrentPage(prev => prev - 1); window.scrollTo(0, 0); }}
+										className="size-10 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-500 disabled:opacity-30 transition-all hover:bg-slate-100 dark:hover:bg-slate-700"
+									>
+										<ChevronRight className="rotate-180" size={18} />
+									</button>
+									<div className="flex items-center gap-1">
+										{getPageNumbers().map((page, idx) => (
+											<button
+												key={idx}
+												onClick={() => typeof page === 'number' && setCurrentPage(page)}
+												disabled={page === '...'}
+												className={`size-10 rounded-xl font-black text-xs transition-all ${page === currentPage
+													? 'bg-[#1A237E] text-white shadow-lg shadow-blue-500/20'
+													: page === '...'
+														? 'text-slate-400 cursor-default'
+														: 'bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700'
+													}`}
+											>
+												{page}
+											</button>
+										))}
+									</div>
+									<button
+										disabled={currentPage === totalPages}
+										onClick={() => { setCurrentPage(prev => prev + 1); window.scrollTo(0, 0); }}
+										className="size-10 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-500 disabled:opacity-30 transition-all hover:bg-slate-100 dark:hover:bg-slate-700"
+									>
+										<ChevronRight size={18} />
+									</button>
+								</div>
 							</div>
 						)}
 					</div>

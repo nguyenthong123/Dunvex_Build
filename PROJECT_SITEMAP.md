@@ -146,6 +146,11 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     *   **Di cư Hệ thống**: Chuyển toàn bộ hạ tầng lưu trữ từ Google Drive sang Cloudinary để tối ưu tốc độ và độ tin cậy.
     *   **Phân loại Thư mục**: Tự động tổ chức ảnh vào các thư mục `dunvex_products`, `dunvex_checkins`, và `dunvex_payments`.
     *   **Tương thích ngược**: Cơ chế `getImageUrl` thông minh hỗ trợ hiển thị song song ảnh cũ (Drive) và ảnh mới (Cloudinary).
+- [x] **Quản lý Hồ sơ Khách hàng nâng cao (Customer CRM Pro)**:
+    *   **Email & Tài liệu**: Hỗ trợ lưu trữ Email khách hàng và gửi email trực tiếp từ ứng dụng.
+    *   **Giấy phép kinh doanh (GPKD) Đa tệp**: Tích hợp tải lên **nhiều tệp** (ảnh/PDF) giấy phép kinh doanh qua Cloudinary. Hỗ trợ hiển thị dạng lưới và danh sách chuyên nghiệp.
+    *   **Hình ảnh Công trình**: Cho phép lưu trữ không giới hạn bộ sưu tập hình ảnh thực tế tại công trình/cửa hàng của khách hàng.
+    *   **UX Cải tiến**: Form nhập liệu được tổ chức lại chuyên nghiệp, hỗ trợ xem chi tiết dạng Bottom Sheet trên di động với đầy đủ hình ảnh trực quan.
 - [x] **Phiếu Giao Hàng & Đóng gói**:
     *   **Tính Kiện tự động**: Tự động tính toán tổng số Kiện dựa trên tỷ lệ đóng gói (`qty / packaging`) và hiển thị trên Phiếu giao hàng (Order Ticket).
 - [x] **Báo cáo & Phân tích thời gian thực (Dashboard Live)**: 
@@ -192,6 +197,10 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Nút Trung tâm tối giản (Dynamic FAB)**: Rút gọn nút Center thành dạng hình tròn (Icon-only) màu cam nổi bật. Tối ưu logic: Hiện **"Lên đơn"** tại Trang chủ để thao tác nhanh, hiện **"Thu nợ"** tại trang Công nợ.
 - [x] **Dọn dẹp & Tinh gọn Hệ thống**: Gỡ bỏ hoàn toàn tính năng Affiliate và hệ thống mã giảm giá (Coupon/Promo) trên toàn bộ ứng dụng (Pricing, Quick Order) để tối ưu hiệu suất.
 - [x] **PWA Reliability**: Cập nhật cơ chế precache HTML giúp sửa lỗi điều hướng khi sử dụng Service Worker.
+- [x] **Hệ thống Phân trang Chuyên nghiệp (Refined Pagination - Feb 23)**:
+    *   **Đồng nhất hóa (Standardization)**: Áp dụng bộ điều khiển phân trang hiện đại (10 bản ghi/trang) trên toàn bộ hệ thống: **Khách hàng, Đơn hàng, Công nợ, Lịch sử báo giá, Sổ quỹ và Lợi nhuận**.
+    *   **Điều hướng thông minh**: Cơ chế hiển thị "3 trang đầu - 3 trang cuối" kèm dấu ba chấm (ellipsis) và nút mũi tên, tối ưu cho tập dữ liệu lớn.
+    *   **Trải nghiệm mượt mà**: Tự động quay về trang 1 khi lọc dữ liệu và tự động cuộn lên đầu trang khi chuyển trang.
 
 ### 📝 Cần làm tiếp (To-do)
 - [ ] **Báo cáo & Xuất dữ liệu (Finance Pro)**: Tích hợp nút xuất báo cáo Sổ quỹ và Lợi nhuận ra file Excel/PDF theo khoảng thời gian tùy chọn.

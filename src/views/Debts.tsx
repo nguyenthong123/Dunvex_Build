@@ -50,6 +50,8 @@ const Debts: React.FC = () => {
 	// Modals/Editing
 	const [showPaymentForm, setShowPaymentForm] = useState(false);
 	const [unreadCount, setUnreadCount] = useState(0);
+	const [currentPage, setCurrentPage] = useState(1);
+	const ITEMS_PER_PAGE = 10;
 
 
 	useEffect(() => {
@@ -64,6 +66,10 @@ const Debts: React.FC = () => {
 		});
 		return () => unsubscribe();
 	}, []);
+
+	useEffect(() => {
+		setCurrentPage(1);
+	}, [searchTerm, statusFilter, fromDate, toDate]);
 
 	const { search } = useLocation();
 	useEffect(() => {
@@ -334,6 +340,40 @@ const Debts: React.FC = () => {
 
 		return matchesName;
 	}).sort((a: any, b: any) => b.currentDebt - a.currentDebt);
+
+	const totalPages = Math.ceil(aggregatedData.length / ITEMS_PER_PAGE);
+	const paginatedData = aggregatedData.slice(
+		(currentPage - 1) * ITEMS_PER_PAGE,
+		currentPage * ITEMS_PER_PAGE
+	);
+
+	const getPageNumbers = () => {
+		const pages: (number | string)[] = [];
+		const radius = 1;
+
+		for (let i = 1; i <= totalPages; i++) {
+			if (
+				i === 1 ||
+				i === totalPages ||
+				(i >= currentPage - radius && i <= currentPage + radius) ||
+				i <= 3 ||
+				i >= totalPages - 2
+			) {
+				pages.push(i);
+			}
+		}
+
+		const uniquePages = [...new Set(pages)].sort((a, b) => (a as number) - (b as number));
+		const withEllipsis: (number | string)[] = [];
+
+		for (let i = 0; i < uniquePages.length; i++) {
+			if (i > 0 && (uniquePages[i] as number) - (uniquePages[i - 1] as number) > 1) {
+				withEllipsis.push('...');
+			}
+			withEllipsis.push(uniquePages[i]);
+		}
+		return withEllipsis;
+	};
 
 	// Totals for KPIs
 	const totalReceivable = aggregatedData.reduce((sum: any, item: any) => sum + (item.currentDebt > 0 ? item.currentDebt : 0), 0);
@@ -627,9 +667,9 @@ const Debts: React.FC = () => {
 								<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
 									{loading ? (
 										<tr><td colSpan={5} className="py-20 text-center text-slate-400 dark:text-slate-500 uppercase font-black text-xs tracking-[4px]">Đang tải dữ liệu...</td></tr>
-									) : aggregatedData.length === 0 ? (
+									) : paginatedData.length === 0 ? (
 										<tr><td colSpan={5} className="py-20 text-center text-slate-400 dark:text-slate-500 uppercase font-black text-xs tracking-[4px]">Không tìm thấy đối tác nào</td></tr>
-									) : aggregatedData.map((row) => (
+									) : paginatedData.map((row) => (
 										<tr key={row.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer" onClick={() => openStatement(row)}>
 											<td className="px-8 py-5">
 												<div className="flex items-center gap-4">
@@ -678,6 +718,48 @@ const Debts: React.FC = () => {
 							</table>
 						</div>
 					</div>
+
+					{/* Pagination Controls - Desktop & Mobile */}
+					{!loading && totalPages > 1 && (
+						<div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 transition-colors">
+							<p className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-2">
+								Hiển thị {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, aggregatedData.length)} của {aggregatedData.length} đối tác
+							</p>
+							<div className="flex items-center gap-2">
+								<button
+									onClick={() => { setCurrentPage(prev => Math.max(prev - 1, 1)); window.scrollTo(0, 0); }}
+									disabled={currentPage === 1}
+									className="size-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
+								>
+									<span className="material-symbols-outlined">chevron_left</span>
+								</button>
+								<div className="flex items-center gap-1">
+									{getPageNumbers().map((page, idx) => (
+										<button
+											key={idx}
+											onClick={() => typeof page === 'number' && setCurrentPage(page)}
+											disabled={page === '...'}
+											className={`size-10 rounded-xl font-black text-xs transition-all ${page === currentPage
+												? 'bg-[#1A237E] text-white shadow-lg shadow-blue-500/20'
+												: page === '...'
+													? 'text-slate-400 cursor-default'
+													: 'bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700'
+												}`}
+										>
+											{page}
+										</button>
+									))}
+								</div>
+								<button
+									onClick={() => { setCurrentPage(prev => Math.min(prev + 1, totalPages)); window.scrollTo(0, 0); }}
+									disabled={currentPage === totalPages}
+									className="size-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
+								>
+									<span className="material-symbols-outlined">chevron_right</span>
+								</button>
+							</div>
+						</div>
+					)}
 				</div>
 			</div>
 

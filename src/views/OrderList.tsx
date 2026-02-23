@@ -67,6 +67,34 @@ const OrderList = () => {
 		currentPage * itemsPerPage
 	);
 
+	const getPageNumbers = () => {
+		const pages: (number | string)[] = [];
+		const radius = 1;
+
+		for (let i = 1; i <= totalPages; i++) {
+			if (
+				i === 1 ||
+				i === totalPages ||
+				(i >= currentPage - radius && i <= currentPage + radius) ||
+				i <= 3 ||
+				i >= totalPages - 2
+			) {
+				pages.push(i);
+			}
+		}
+
+		const uniquePages = [...new Set(pages)].sort((a, b) => (a as number) - (b as number));
+		const withEllipsis: (number | string)[] = [];
+
+		for (let i = 0; i < uniquePages.length; i++) {
+			if (i > 0 && (uniquePages[i] as number) - (uniquePages[i - 1] as number) > 1) {
+				withEllipsis.push('...');
+			}
+			withEllipsis.push(uniquePages[i]);
+		}
+		return withEllipsis;
+	};
+
 	const getStatusColor = (status: string) => {
 		switch (status) {
 			case 'Mới': return 'bg-blue-50 text-blue-600';
@@ -305,41 +333,39 @@ const OrderList = () => {
 
 				{/* Pagination Controls */}
 				{totalPages > 1 && (
-					<div className="mt-8 mb-24 flex flex-col md:flex-row items-center justify-between gap-4">
-						<p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+					<div className="mt-8 mb-24 flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-gray-200 dark:border-slate-800">
+						<p className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-2">
 							Hiển thị {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredOrders.length)} trên {filteredOrders.length} đơn
 						</p>
-						<div className="flex items-center gap-1">
+						<div className="flex items-center gap-2">
 							<button
-								onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+								onClick={() => { setCurrentPage(prev => Math.max(prev - 1, 1)); window.scrollTo(0, 0); }}
 								disabled={currentPage === 1}
-								className="size-10 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:border-[#FF6D00] transition-all"
+								className="size-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
 							>
 								<span className="material-symbols-outlined">chevron_left</span>
 							</button>
-							<div className="flex items-center gap-1 mx-2">
-								{[...Array(totalPages)].map((_, i) => {
-									const pageNum = i + 1;
-									if (pageNum === 1 || pageNum === totalPages || (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)) {
-										return (
-											<button
-												key={pageNum}
-												onClick={() => setCurrentPage(pageNum)}
-												className={`size-10 rounded-xl font-bold text-xs transition-all border ${currentPage === pageNum ? 'bg-[#FF6D00] text-white border-[#FF6D00]' : 'bg-white dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-slate-800'}`}
-											>
-												{pageNum}
-											</button>
-										);
-									} else if (pageNum === currentPage - 2 || pageNum === currentPage + 2) {
-										return <span key={pageNum} className="text-slate-300">...</span>;
-									}
-									return null;
-								})}
+							<div className="flex items-center gap-1">
+								{getPageNumbers().map((page, idx) => (
+									<button
+										key={idx}
+										onClick={() => typeof page === 'number' && setCurrentPage(page)}
+										disabled={page === '...'}
+										className={`size-10 rounded-xl font-black text-xs transition-all ${page === currentPage
+											? 'bg-[#1A237E] text-white shadow-lg shadow-blue-500/20'
+											: page === '...'
+												? 'text-slate-400 cursor-default'
+												: 'bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700'
+											}`}
+									>
+										{page}
+									</button>
+								))}
 							</div>
 							<button
-								onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+								onClick={() => { setCurrentPage(prev => Math.min(prev + 1, totalPages)); window.scrollTo(0, 0); }}
 								disabled={currentPage === totalPages}
-								className="size-10 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:border-[#FF6D00] transition-all"
+								className="size-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
 							>
 								<span className="material-symbols-outlined">chevron_right</span>
 							</button>

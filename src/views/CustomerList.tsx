@@ -4,6 +4,7 @@ import { auth, db } from '../services/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, where } from 'firebase/firestore';
 import BulkImport from '../components/shared/BulkImport';
 import CustomerMap from '../components/CustomerMap';
+import { Camera, Plus, Trash, X, FileText, Image as ImageIcon, Mail } from 'lucide-react';
 
 import { useOwner } from '../hooks/useOwner';
 import { useScroll } from '../context/ScrollContext';
@@ -12,6 +13,17 @@ const CustomerList = () => {
 	const navigate = useNavigate();
 	const owner = useOwner();
 	const { isNavVisible } = useScroll();
+
+	const getImageUrl = (url: string) => {
+		if (!url) return '';
+		if (url.includes('drive.google.com')) {
+			const match = url.match(/[-\w]{25,}/);
+			if (match) {
+				return `https://drive.google.com/thumbnail?id=${match[0]}&sz=w1000`;
+			}
+		}
+		return url;
+	};
 
 	const [customers, setCustomers] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -26,6 +38,8 @@ const CustomerList = () => {
 	const [showMobileSearch, setShowMobileSearch] = useState(false);
 	const searchInputRef = React.useRef<HTMLInputElement>(null);
 	const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+	const [currentPage, setCurrentPage] = useState(1);
+	const ITEMS_PER_PAGE = 10;
 
 	// Form state
 	const [formData, setFormData] = useState({
@@ -37,10 +51,15 @@ const CustomerList = () => {
 		address: '',
 		note: '',
 		status: 'Hoạt động',
-		route: '', // New Field: Sales Route
+		route: '',
 		lat: null as number | null,
-		lng: null as number | null
+		lng: null as number | null,
+		licenseUrls: [] as string[],
+		additionalImages: [] as string[]
 	});
+
+	const [uploadingLicense, setUploadingLicense] = useState(false);
+	const [uploadingImages, setUploadingImages] = useState(false);
 
 	const [gettingLocation, setGettingLocation] = useState(false);
 
@@ -96,6 +115,63 @@ const CustomerList = () => {
 		});
 	};
 
+	const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'license' | 'additional') => {
+		const files = e.target.files;
+		if (!files || files.length === 0) return;
+
+		if (type === 'license') setUploadingLicense(true);
+		else setUploadingImages(true);
+
+		try {
+			const uploadPromises = Array.from(files).map(async (file) => {
+				const data = new FormData();
+				data.append('file', file);
+				data.append('upload_preset', 'dunvexbuil');
+				data.append('folder', 'dunvex_customers');
+
+				const response = await fetch(
+					`https://api.cloudinary.com/v1_1/dtx0uvb4e/image/upload`,
+					{ method: 'POST', body: data }
+				);
+				const result = await response.json();
+				return result.secure_url;
+			});
+
+			const urls = await Promise.all(uploadPromises);
+
+			if (type === 'license') {
+				setFormData(prev => ({
+					...prev,
+					licenseUrls: [...(prev.licenseUrls || []), ...urls]
+				}));
+			} else {
+				setFormData(prev => ({
+					...prev,
+					additionalImages: [...(prev.additionalImages || []), ...urls]
+				}));
+			}
+		} catch (error) {
+			alert("Lỗi upload Cloudinary");
+		} finally {
+			setUploadingLicense(false);
+			setUploadingImages(false);
+		}
+	};
+
+	const removeLicense = (index: number) => {
+		setFormData(prev => ({
+			...prev,
+			licenseUrls: prev.licenseUrls.filter((_, i) => i !== index)
+		}));
+	};
+
+	const removeImage = (index: number) => {
+		setFormData(prev => ({
+			...prev,
+			additionalImages: prev.additionalImages.filter((_, i) => i !== index)
+		}));
+	};
+
 	useEffect(() => {
 		if (owner.loading || !owner.ownerId) return;
 
@@ -142,6 +218,10 @@ const CustomerList = () => {
 			searchInputRef.current.focus();
 		}
 	}, [showMobileSearch]);
+
+	useEffect(() => {
+		setCurrentPage(1);
+	}, [searchTerm, selectedRoute]);
 
 	const handleAddCustomer = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -238,7 +318,9 @@ const CustomerList = () => {
 			status: 'Hoạt động',
 			route: '',
 			lat: null,
-			lng: null
+			lng: null,
+			licenseUrls: [],
+			additionalImages: []
 		});
 	};
 
@@ -255,7 +337,9 @@ const CustomerList = () => {
 			status: customer.status || 'Hoạt động',
 			route: customer.route || '',
 			lat: customer.lat || null,
-			lng: customer.lng || null
+			lng: customer.lng || null,
+			licenseUrls: customer.licenseUrls || (customer.licenseUrl ? [customer.licenseUrl] : []),
+			additionalImages: customer.additionalImages || []
 		});
 		setShowEditForm(true);
 	};
@@ -276,6 +360,40 @@ const CustomerList = () => {
 
 		return matchesSearch && matchesRoute;
 	});
+
+	const totalPages = Math.ceil(filteredCustomers.length / ITEMS_PER_PAGE);
+	const paginatedCustomers = filteredCustomers.slice(
+		(currentPage - 1) * ITEMS_PER_PAGE,
+		currentPage * ITEMS_PER_PAGE
+	);
+
+	const getPageNumbers = () => {
+		const pages: (number | string)[] = [];
+		const radius = 1;
+
+		for (let i = 1; i <= totalPages; i++) {
+			if (
+				i === 1 ||
+				i === totalPages ||
+				(i >= currentPage - radius && i <= currentPage + radius) ||
+				i <= 3 ||
+				i >= totalPages - 2
+			) {
+				pages.push(i);
+			}
+		}
+
+		const uniquePages = [...new Set(pages)].sort((a, b) => (a as number) - (b as number));
+		const withEllipsis: (number | string)[] = [];
+
+		for (let i = 0; i < uniquePages.length; i++) {
+			if (i > 0 && (uniquePages[i] as number) - (uniquePages[i - 1] as number) > 1) {
+				withEllipsis.push('...');
+			}
+			withEllipsis.push(uniquePages[i]);
+		}
+		return withEllipsis;
+	};
 
 	const hasManagePermission = owner.role === 'admin' || (owner.accessRights?.customers_manage ?? true);
 
@@ -438,9 +556,9 @@ const CustomerList = () => {
 						<tbody className="divide-y divide-gray-100 dark:divide-slate-800">
 							{loading ? (
 								<tr><td colSpan={5} className="py-8 text-center text-slate-400 dark:text-slate-500 font-medium">Đang tải dữ liệu...</td></tr>
-							) : filteredCustomers.length === 0 ? (
-								<tr><td colSpan={5} className="py-12 text-center text-slate-400 dark:text-slate-500 font-medium tracking-wide">Không tìm thấy khách hàng nào</td></tr>
-							) : filteredCustomers.map((customer) => (
+							) : paginatedCustomers.length === 0 ? (
+								<tr><td colSpan={6} className="py-12 text-center text-slate-400 dark:text-slate-500 font-medium tracking-wide">Không tìm thấy khách hàng nào</td></tr>
+							) : paginatedCustomers.map((customer) => (
 								<tr key={customer.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer" onClick={() => openDetail(customer)}>
 									<td className="py-4 px-6">
 										<div className="flex items-center gap-3">
@@ -511,9 +629,49 @@ const CustomerList = () => {
 					</table>
 				</div>
 
+				{/* Pagination UI - Desktop */}
+				{!loading && totalPages > 1 && (
+					<div className="hidden md:flex items-center justify-between mt-6 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-gray-200 dark:border-slate-800">
+						<div className="text-xs font-bold text-slate-500 p-2">
+							Hiển thị {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredCustomers.length)} của {filteredCustomers.length} khách hàng
+						</div>
+						<div className="flex gap-2">
+							<button
+								disabled={currentPage === 1}
+								onClick={() => setCurrentPage(prev => prev - 1)}
+								className="size-10 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-500 disabled:opacity-30 transition-all hover:bg-slate-100 dark:hover:bg-slate-700"
+							>
+								<span className="material-symbols-outlined">chevron_left</span>
+							</button>
+							{getPageNumbers().map((page, idx) => (
+								<button
+									key={idx}
+									onClick={() => typeof page === 'number' && setCurrentPage(page)}
+									disabled={page === '...'}
+									className={`size-10 rounded-xl font-black text-xs transition-all ${page === currentPage
+										? 'bg-[#1A237E] text-white shadow-lg shadow-blue-500/20'
+										: page === '...'
+											? 'text-slate-400 cursor-default'
+											: 'bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700'
+										}`}
+								>
+									{page}
+								</button>
+							))}
+							<button
+								disabled={currentPage === totalPages}
+								onClick={() => setCurrentPage(prev => prev + 1)}
+								className="size-10 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-500 disabled:opacity-30 transition-all hover:bg-slate-100 dark:hover:bg-slate-700"
+							>
+								<span className="material-symbols-outlined">chevron_right</span>
+							</button>
+						</div>
+					</div>
+				)}
+
 				{/* Mobile List */}
 				<div className="md:hidden space-y-4 pb-24">
-					{filteredCustomers.map((customer) => (
+					{paginatedCustomers.map((customer) => (
 						<div key={customer.id} className="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-800" onClick={() => openDetail(customer)}>
 							<div className="flex justify-between items-start mb-3">
 								<div className="flex items-center gap-3">
@@ -525,12 +683,14 @@ const CustomerList = () => {
 										<div className="text-xs text-slate-500 dark:text-slate-400 font-medium">{customer.phone}</div>
 									</div>
 								</div>
-								<span className="px-2 py-1 rounded-lg text-[9px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 uppercase">
-									{customer.route || 'Mặc định'}
-								</span>
-								<span className="px-2 py-1 rounded-lg text-[9px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 uppercase ml-2">
-									{customer.status}
-								</span>
+								<div className="flex flex-col items-end gap-1">
+									<span className="px-2 py-1 rounded-lg text-[9px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 uppercase">
+										{customer.route || 'Mặc định'}
+									</span>
+									<span className="px-2 py-1 rounded-lg text-[9px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 uppercase">
+										{customer.status}
+									</span>
+								</div>
 							</div>
 							<div className="flex justify-between items-center pt-2 border-t border-gray-50 dark:border-slate-800">
 								<span className="text-[10px] font-bold text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 px-2 py-0.5 rounded uppercase tracking-wider">{customer.type}</span>
@@ -538,6 +698,29 @@ const CustomerList = () => {
 							</div>
 						</div>
 					))}
+
+					{/* Pagination UI - Mobile */}
+					{!loading && totalPages > 1 && (
+						<div className="flex items-center justify-between bg-white dark:bg-slate-900 p-4 rounded-2xl border border-gray-200 dark:border-slate-800 mt-4">
+							<button
+								disabled={currentPage === 1}
+								onClick={() => { setCurrentPage(prev => prev - 1); window.scrollTo(0, 0); }}
+								className="size-12 flex items-center justify-center rounded-2xl bg-slate-50 dark:bg-slate-800 text-slate-500 disabled:opacity-30"
+							>
+								<span className="material-symbols-outlined">chevron_left</span>
+							</button>
+							<div className="text-sm font-black text-[#1A237E] dark:text-indigo-400">
+								Trang {currentPage} / {totalPages}
+							</div>
+							<button
+								disabled={currentPage === totalPages}
+								onClick={() => { setCurrentPage(prev => prev + 1); window.scrollTo(0, 0); }}
+								className="size-12 flex items-center justify-center rounded-2xl bg-slate-50 dark:bg-slate-800 text-slate-500 disabled:opacity-30"
+							>
+								<span className="material-symbols-outlined">chevron_right</span>
+							</button>
+						</div>
+					)}
 				</div>
 			</div>
 
@@ -575,7 +758,8 @@ const CustomerList = () => {
 										/>
 									</div>
 								</div>
-								<div className="grid grid-cols-2 gap-4">
+
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 									<div>
 										<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Số điện thoại *</label>
 										<input
@@ -585,6 +769,19 @@ const CustomerList = () => {
 											onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
 										/>
 									</div>
+									<div>
+										<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Email khách hàng</label>
+										<input
+											type="email"
+											className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
+											placeholder="VD: customer@example.com"
+											value={formData.email}
+											onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+										/>
+									</div>
+								</div>
+
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 									<div>
 										<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Phân loại</label>
 										<input
@@ -598,16 +795,95 @@ const CustomerList = () => {
 											{customerTypes.map(t => <option key={t} value={t} />)}
 										</datalist>
 									</div>
+									<div>
+										<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Tuyến bán hàng (Zoning)</label>
+										<input
+											type="text"
+											className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
+											placeholder="VD: Tuyến Thứ 2, Khu vực A..."
+											value={formData.route}
+											onChange={(e) => setFormData({ ...formData, route: e.target.value })}
+										/>
+									</div>
 								</div>
+
 								<div>
-									<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Tuyến bán hàng (Zoning)</label>
-									<input
-										type="text"
-										className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
-										placeholder="VD: Tuyến Thứ 2, Khu vực A..."
-										value={formData.route}
-										onChange={(e) => setFormData({ ...formData, route: e.target.value })}
-									/>
+									<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Giấy phép kinh doanh / GPKD</label>
+									<div className="space-y-3">
+										<button
+											type="button"
+											onClick={() => document.getElementById('license-upload')?.click()}
+											disabled={uploadingLicense}
+											className="w-full h-14 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 flex items-center justify-center gap-2 text-slate-400 hover:text-indigo-500 hover:border-indigo-500 transition-all"
+										>
+											{uploadingLicense ? (
+												<span className="animate-spin material-symbols-outlined">sync</span>
+											) : (
+												<>
+													<FileText size={18} />
+													<span className="text-[10px] font-black uppercase tracking-widest">Tải lên GPKD</span>
+												</>
+											)}
+										</button>
+										<input id="license-upload" type="file" className="hidden" multiple accept="image/*,application/pdf" onChange={(e) => handleImageUpload(e, 'license')} />
+
+										{formData.licenseUrls && formData.licenseUrls.length > 0 && (
+											<div className="grid grid-cols-4 gap-2">
+												{formData.licenseUrls.map((url, idx) => (
+													<div key={idx} className="aspect-square rounded-xl overflow-hidden border border-slate-100 dark:border-slate-800 relative group">
+														<img src={getImageUrl(url)} className="w-full h-full object-cover" alt={`License ${idx}`} />
+														<button
+															type="button"
+															onClick={() => removeLicense(idx)}
+															className="absolute top-1 right-1 size-6 bg-red-500 text-white rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+														>
+															<X size={12} />
+														</button>
+													</div>
+												))}
+											</div>
+										)}
+									</div>
+								</div>
+
+								{/* Additional Images Upload */}
+								<div>
+									<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Hình ảnh khác / Công trình</label>
+									<div className="space-y-3">
+										<button
+											type="button"
+											onClick={() => document.getElementById('images-upload')?.click()}
+											disabled={uploadingImages}
+											className="w-full h-14 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 flex items-center justify-center gap-2 text-slate-400 hover:text-orange-500 hover:border-orange-500 transition-all"
+										>
+											{uploadingImages ? (
+												<span className="animate-spin material-symbols-outlined">sync</span>
+											) : (
+												<>
+													<ImageIcon size={18} />
+													<span className="text-[10px] font-black uppercase tracking-widest">Thêm hình ảnh</span>
+												</>
+											)}
+										</button>
+										<input id="images-upload" type="file" className="hidden" multiple accept="image/*" onChange={(e) => handleImageUpload(e, 'additional')} />
+
+										{formData.additionalImages && formData.additionalImages.length > 0 && (
+											<div className="grid grid-cols-4 gap-2">
+												{formData.additionalImages.map((url, idx) => (
+													<div key={idx} className="aspect-square rounded-xl overflow-hidden border border-slate-100 dark:border-slate-800 relative group">
+														<img src={getImageUrl(url)} className="w-full h-full object-cover" alt={`Img ${idx}`} />
+														<button
+															type="button"
+															onClick={() => removeImage(idx)}
+															className="absolute top-1 right-1 size-6 bg-red-500 text-white rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+														>
+															<X size={12} />
+														</button>
+													</div>
+												))}
+											</div>
+										)}
+									</div>
 								</div>
 								<div>
 									<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Địa chỉ</label>
@@ -711,12 +987,63 @@ const CustomerList = () => {
 
 							<div className="w-full space-y-4 text-left">
 								<div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 relative group">
-									<p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest flex items-center gap-1.5">
-										<span className="material-symbols-outlined text-sm">location_on</span>
-										Địa chỉ công trình
-									</p>
-									<p className="text-sm font-bold text-slate-700 dark:text-white leading-relaxed">{selectedCustomer.address || 'Chưa cung cấp'}</p>
+									<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+										<div>
+											<p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest flex items-center gap-1.5">
+												<span className="material-symbols-outlined text-sm">location_on</span>
+												Địa chỉ công trình
+											</p>
+											<p className="text-sm font-bold text-slate-700 dark:text-white leading-relaxed">{selectedCustomer.address || 'Chưa cung cấp'}</p>
+										</div>
+										{selectedCustomer.email && (
+											<div>
+												<p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest flex items-center gap-1.5">
+													<span className="material-symbols-outlined text-sm">mail</span>
+													Email khách hàng
+												</p>
+												<p className="text-sm font-bold text-slate-700 dark:text-white leading-relaxed truncate">{selectedCustomer.email}</p>
+											</div>
+										)}
+									</div>
 								</div>
+
+								{/* GPKD Section */}
+								{(selectedCustomer.licenseUrls?.length > 0 || selectedCustomer.licenseUrl) && (
+									<div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-3xl border border-slate-100 dark:border-slate-800">
+										<p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-3 tracking-widest flex items-center gap-1.5">
+											<span className="material-symbols-outlined text-sm">description</span>
+											Giấy phép kinh doanh
+										</p>
+										<div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+											{[...(selectedCustomer.licenseUrls || []), selectedCustomer.licenseUrl].filter(Boolean).map((url: string, idx: number) => (
+												<div key={idx} className="aspect-square rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700">
+													<a href={url} target="_blank" rel="noopener noreferrer" className="block w-full h-full">
+														<img src={getImageUrl(url)} className="w-full h-full object-cover hover:scale-110 transition-transform duration-500" alt={`License ${idx}`} />
+													</a>
+												</div>
+											))}
+										</div>
+									</div>
+								)}
+
+								{/* Additional Images Section */}
+								{selectedCustomer.additionalImages && selectedCustomer.additionalImages.length > 0 && (
+									<div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-3xl border border-slate-100 dark:border-slate-800">
+										<p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-3 tracking-widest flex items-center gap-1.5">
+											<span className="material-symbols-outlined text-sm">gallery_thumbnail</span>
+											Hình ảnh công trình / Cửa hàng
+										</p>
+										<div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+											{selectedCustomer.additionalImages.map((url: string, idx: number) => (
+												<div key={idx} className="aspect-square rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700">
+													<a href={url} target="_blank" rel="noopener noreferrer" className="block w-full h-full">
+														<img src={getImageUrl(url)} className="w-full h-full object-cover hover:scale-110 transition-transform duration-500" alt={`Img ${idx}`} />
+													</a>
+												</div>
+											))}
+										</div>
+									</div>
+								)}
 
 								{selectedCustomer.note && (
 									<div className="bg-[#1A237E]/5 dark:bg-indigo-500/5 p-5 rounded-3xl border border-[#1A237E]/10 dark:border-indigo-500/20">
@@ -728,24 +1055,32 @@ const CustomerList = () => {
 									</div>
 								)}
 
-								<div className="flex flex-col sm:flex-row gap-3 pt-4 pb-2">
+								<div className="flex flex-wrap gap-3 pt-4 pb-2">
 									{selectedCustomer.lat && selectedCustomer.lng && (
 										<button
 											onClick={() => { setShowDetail(false); setShowMap(true); }}
-											className="flex-1 bg-green-500 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-green-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 h-14"
+											className="flex-1 min-w-[140px] bg-green-500 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-green-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 h-14"
 										>
 											<span className="material-symbols-outlined text-lg">map</span> Xem vị trí
 										</button>
 									)}
+									{selectedCustomer.email && (
+										<a
+											href={`mailto:${selectedCustomer.email}`}
+											className="flex-1 min-w-[140px] bg-indigo-50 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-indigo-500/5 active:scale-95 transition-all flex items-center justify-center gap-2 h-14 border border-indigo-100 dark:border-slate-700"
+										>
+											<Mail size={18} /> Gửi Email
+										</a>
+									)}
 									<button
 										onClick={() => { setShowDetail(false); openEdit(selectedCustomer); }}
-										className="flex-1 bg-[#1A237E] dark:bg-indigo-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 h-14"
+										className="flex-1 min-w-[140px] bg-[#1A237E] dark:bg-indigo-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 h-14"
 									>
 										<span className="material-symbols-outlined text-lg">edit_square</span> Sửa hồ sơ
 									</button>
 									<button
 										onClick={() => handleDeleteCustomer(selectedCustomer.id)}
-										className="flex-1 bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-900/30 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all active:scale-95 flex items-center justify-center gap-2 h-14"
+										className="flex-1 min-w-[140px] bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-900/30 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all active:scale-95 flex items-center justify-center gap-2 h-14"
 									>
 										<span className="material-symbols-outlined text-lg">delete</span> Xóa khách
 									</button>

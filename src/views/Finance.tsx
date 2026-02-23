@@ -25,6 +25,8 @@ const Finance = () => {
 	const [kpiPlans, setKpiPlans] = useState<any[]>([]);
 	const [commissionRate, setCommissionRate] = useState(5); // Default 5%
 	const [loading, setLoading] = useState(true);
+	const [currentPage, setCurrentPage] = useState(1);
+	const ITEMS_PER_PAGE = 10;
 
 	// KPI Plan Management
 	const [showPlanForm, setShowPlanForm] = useState(false);
@@ -76,6 +78,9 @@ const Finance = () => {
 			setShowLogForm(isNew);
 		}
 	}, [searchParams]);
+	useEffect(() => {
+		setCurrentPage(1);
+	}, [activeTab, fromDate, toDate]);
 
 	useEffect(() => {
 		if (owner.loading || !owner.ownerId) return;
@@ -191,6 +196,34 @@ const Finance = () => {
 		return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
 	};
 
+	const getPageNumbers = (totalPages: number) => {
+		const pages: (number | string)[] = [];
+		const radius = 1;
+
+		for (let i = 1; i <= totalPages; i++) {
+			if (
+				i === 1 ||
+				i === totalPages ||
+				(i >= currentPage - radius && i <= currentPage + radius) ||
+				i <= 3 ||
+				i >= totalPages - 2
+			) {
+				pages.push(i);
+			}
+		}
+
+		const uniquePages = [...new Set(pages)].sort((a, b) => (a as number) - (b as number));
+		const withEllipsis: (number | string)[] = [];
+
+		for (let i = 0; i < uniquePages.length; i++) {
+			if (i > 0 && (uniquePages[i] as number) - (uniquePages[i - 1] as number) > 1) {
+				withEllipsis.push('...');
+			}
+			withEllipsis.push(uniquePages[i]);
+		}
+		return withEllipsis;
+	};
+
 
 
 	const openKPIDialog = (staff: any) => {
@@ -272,6 +305,9 @@ const Finance = () => {
 	const filteredOrders = orders.filter(o => filterByDate(o.orderDate || o.createdAt));
 	const filteredPayments = payments.filter(p => filterByDate(p.date || p.createdAt));
 
+	const paginatedLogs = filteredLogs.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+	const totalLogsPages = Math.ceil(filteredLogs.length / ITEMS_PER_PAGE);
+
 	// 1. Funds calculation
 	const totalIncome = filteredLogs.filter(l => l.type === 'thu').reduce((sum, l) => sum + (l.amount || 0), 0) +
 		filteredPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
@@ -336,6 +372,9 @@ const Finance = () => {
 		const profit = revenue - cost - (o.discountValue || 0);
 		return { ...o, revenue, cost, profit };
 	}).sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
+
+	const paginatedProfits = orderProfits.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+	const totalProfitsPages = Math.ceil(orderProfits.length / ITEMS_PER_PAGE);
 
 	return (
 		<div className="min-h-screen bg-[#f8f9fb] dark:bg-slate-950 transition-colors duration-300">
@@ -456,14 +495,14 @@ const Finance = () => {
 										</tr>
 									</thead>
 									<tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-										{cashLogs.length === 0 ? (
+										{paginatedLogs.length === 0 ? (
 											<tr>
 												<td colSpan={5} className="px-6 py-10 text-center text-slate-400 italic">
 													Chưa có ghi chép thu chi nào cho kỳ này.
 												</td>
 											</tr>
 										) : (
-											cashLogs.map(log => (
+											paginatedLogs.map(log => (
 												<tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
 													<td className="px-6 py-4 font-bold text-slate-500">{log.date}</td>
 													<td className="px-6 py-4">
@@ -491,6 +530,48 @@ const Finance = () => {
 								</table>
 							</div>
 						</div>
+
+						{/* Pagination UI - Cash Logs */}
+						{totalLogsPages > 1 && (
+							<div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 transition-colors">
+								<p className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">
+									Hiển thị {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredLogs.length)} của {filteredLogs.length} ghi chép
+								</p>
+								<div className="flex items-center gap-2">
+									<button
+										disabled={currentPage === 1}
+										onClick={() => { setCurrentPage(prev => prev - 1); window.scrollTo(0, 0); }}
+										className="size-10 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-500 disabled:opacity-30 transition-all hover:bg-slate-100 dark:hover:bg-slate-700"
+									>
+										<ChevronRight className="rotate-180" size={18} />
+									</button>
+									<div className="flex items-center gap-1">
+										{getPageNumbers(totalLogsPages).map((page, idx) => (
+											<button
+												key={idx}
+												onClick={() => typeof page === 'number' && setCurrentPage(page)}
+												disabled={page === '...'}
+												className={`size-10 rounded-xl font-black text-xs transition-all ${page === currentPage
+													? 'bg-[#1A237E] text-white shadow-lg shadow-blue-500/20'
+													: page === '...'
+														? 'text-slate-400 cursor-default'
+														: 'bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700'
+													}`}
+											>
+												{page}
+											</button>
+										))}
+									</div>
+									<button
+										disabled={currentPage === totalLogsPages}
+										onClick={() => { setCurrentPage(prev => prev + 1); window.scrollTo(0, 0); }}
+										className="size-10 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-500 disabled:opacity-30 transition-all hover:bg-slate-100 dark:hover:bg-slate-700"
+									>
+										<ChevronRight size={18} />
+									</button>
+								</div>
+							</div>
+						)}
 					</div>
 				)}
 
@@ -586,7 +667,7 @@ const Finance = () => {
 										</tr>
 									</thead>
 									<tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-										{orderProfits.map((order, i) => (
+										{paginatedProfits.map((order, i) => (
 											<tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
 												<td className="px-6 py-4 font-black text-slate-900 dark:text-indigo-400">{order.invoiceId || order.id.slice(-6).toUpperCase()}</td>
 												<td className="px-6 py-4 font-bold text-slate-600 dark:text-slate-400">{order.customerName}</td>
@@ -603,6 +684,48 @@ const Finance = () => {
 								</table>
 							</div>
 						</div>
+
+						{/* Pagination UI - Profits */}
+						{totalProfitsPages > 1 && (
+							<div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 transition-colors">
+								<p className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">
+									Hiển thị {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, orderProfits.length)} của {orderProfits.length} đơn
+								</p>
+								<div className="flex items-center gap-2">
+									<button
+										disabled={currentPage === 1}
+										onClick={() => { setCurrentPage(prev => prev - 1); window.scrollTo(0, 0); }}
+										className="size-10 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-500 disabled:opacity-30 transition-all hover:bg-slate-100 dark:hover:bg-slate-700"
+									>
+										<ChevronRight className="rotate-180" size={18} />
+									</button>
+									<div className="flex items-center gap-1">
+										{getPageNumbers(totalProfitsPages).map((page, idx) => (
+											<button
+												key={idx}
+												onClick={() => typeof page === 'number' && setCurrentPage(page)}
+												disabled={page === '...'}
+												className={`size-10 rounded-xl font-black text-xs transition-all ${page === currentPage
+													? 'bg-[#1A237E] text-white shadow-lg shadow-blue-500/20'
+													: page === '...'
+														? 'text-slate-400 cursor-default'
+														: 'bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700'
+													}`}
+											>
+												{page}
+											</button>
+										))}
+									</div>
+									<button
+										disabled={currentPage === totalProfitsPages}
+										onClick={() => { setCurrentPage(prev => prev + 1); window.scrollTo(0, 0); }}
+										className="size-10 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-500 disabled:opacity-30 transition-all hover:bg-slate-100 dark:hover:bg-slate-700"
+									>
+										<ChevronRight size={18} />
+									</button>
+								</div>
+							</div>
+						)}
 					</div>
 				)}
 

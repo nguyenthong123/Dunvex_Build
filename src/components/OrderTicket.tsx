@@ -179,32 +179,44 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 							</div>
 						</section>
 
-						<section className="px-8 pb-8 flex flex-col items-end">
-							<div className="w-[400px] space-y-4">
+						<section className="px-8 pb-8 flex justify-between items-start">
+							{/* Ghi chú on the left */}
+							<div className="flex-1 pr-10">
+								{order.note && (
+									<div className="mt-2 p-5 bg-orange-50 rounded-2xl border border-orange-100/50 text-left">
+										<p className="text-[10px] font-black text-[#9c6949] uppercase tracking-widest mb-2">Ghi chú đơn hàng:</p>
+										<p className="text-sm font-bold text-[#1c130d] italic leading-relaxed">"{order.note}"</p>
+									</div>
+								)}
+							</div>
+
+							{/* Totals on the right */}
+							<div className="w-[350px] space-y-4">
 								<div className="flex justify-between items-center text-xs font-bold text-gray-400">
 									<span className="uppercase tracking-[2px]">Cộng tiền hàng:</span>
 									<span className="text-gray-800 text-lg tabular-nums">{formatPrice(order.subTotal || 0)} ₫</span>
 								</div>
+
 								{order.discountValue > 0 && (
 									<div className="flex justify-between items-center text-red-500 font-bold">
 										<span className="text-[10px] uppercase tracking-[2px] italic">Chiết khấu giảm (-):</span>
 										<span className="text-lg tabular-nums">-{formatPrice(order.discountValue)} ₫</span>
 									</div>
 								)}
-								<div className="flex justify-between items-center border-b border-gray-200 pb-4 text-gray-400 font-bold">
-									<span className="text-[10px] uppercase tracking-[2px] italic">Phí vận chuyển (+):</span>
-									<span className="text-gray-800 text-lg tabular-nums">+{formatPrice(order.adjustmentValue || 0)} ₫</span>
-								</div>
+
+								{order.adjustmentValue > 0 && (
+									<div className="flex justify-between items-center text-gray-400 font-bold">
+										<span className="text-[10px] uppercase tracking-[2px] italic">Phí vận chuyển (+):</span>
+										<span className="text-gray-800 text-lg tabular-nums">+{formatPrice(order.adjustmentValue || 0)} ₫</span>
+									</div>
+								)}
+
+								<div className="border-b border-gray-200 pb-2"></div>
+
 								<div className="flex flex-col items-end pt-2 gap-1 text-right">
 									<span className="text-xs font-black text-gray-900 uppercase tracking-[3px]">TỔNG THANH TOÁN:</span>
 									<span className="font-black text-[#f27121] text-4xl tabular-nums tracking-tighter leading-none">{formatPrice(order.totalAmount || 0)} ₫</span>
 								</div>
-								{order.note && (
-									<div className="mt-6 p-5 bg-orange-50 rounded-2xl border border-orange-100/50 text-left">
-										<p className="text-[10px] font-black text-[#9c6949] uppercase tracking-widest mb-2">Ghi chú đơn hàng:</p>
-										<p className="text-sm font-bold text-[#1c130d] italic leading-relaxed">"{order.note}"</p>
-									</div>
-								)}
 							</div>
 						</section>
 

@@ -157,7 +157,6 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 											<th className="px-5 py-4 border-r border-white/10">Tên Hàng Hóa / Sản phẩm</th>
 											<th className="px-3 py-4 text-center border-r border-white/10 w-16">ĐVT</th>
 											<th className="px-3 py-4 text-center border-r border-white/10 w-16">SL</th>
-											<th className="px-3 py-4 text-center border-r border-white/10 w-20">KG</th>
 											<th className="px-5 py-4 text-right border-r border-white/10 w-28">Đơn Giá</th>
 											<th className="px-5 py-4 text-right w-32">Thành Tiền</th>
 										</tr>
@@ -169,9 +168,6 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 												<td className="px-5 py-4 border-r border-gray-50 font-black text-[#1A237E] uppercase tracking-tight leading-tight">{item.name}</td>
 												<td className="px-3 py-4 text-center border-r border-gray-50 text-gray-500 font-bold text-xs uppercase">{item.unit || '---'}</td>
 												<td className="px-3 py-4 text-center border-r border-gray-50 font-black text-gray-900 text-base">{item.qty}</td>
-												<td className="px-3 py-4 text-center border-r border-gray-50 text-gray-500 font-bold text-xs italic">
-													{(item.qty * (parseFloat(item.density) || 0)).toLocaleString('vi-VN', { maximumFractionDigits: 2 })}
-												</td>
 												<td className="px-5 py-4 text-right border-r border-gray-50 text-gray-600 font-bold">{formatPrice(item.price)}</td>
 												<td className="px-5 py-4 text-right font-black text-gray-900 text-base">{formatPrice(item.qty * item.price)}</td>
 											</tr>

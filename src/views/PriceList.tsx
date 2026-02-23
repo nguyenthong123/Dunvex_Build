@@ -534,14 +534,97 @@ const PriceList = () => {
 						</div>
 
 						<div
-							className="origin-top transition-all duration-500 ease-out pb-40 md:pb-20 flex justify-center"
+							className="origin-top transition-all duration-500 ease-out pb-40 md:pb-20 flex justify-center print:p-0"
 							style={{
 								transform: `scale(${zoomScale})`,
 								width: '1000px',
 								minWidth: '1000px'
 							}}
 						>
-							<div className="bg-white dark:bg-slate-900 shadow-2xl rounded-[3rem] overflow-hidden border border-slate-200 dark:border-slate-800 print:shadow-none print:rounded-none print:border-none w-full">
+							<div
+								id="price-list-paper"
+								className="bg-white dark:bg-slate-900 shadow-2xl rounded-[3rem] overflow-hidden border border-slate-200 dark:border-slate-800 print:shadow-none print:rounded-none print:border-none w-full"
+							>
+								<style>
+									{`
+									@media print {
+										/* 1. Base reset for the whole page */
+										html, body {
+											background: white !important;
+											margin: 0 !important;
+											padding: 0 !important;
+											height: auto !important;
+											overflow: visible !important;
+										}
+
+										/* 2. Visibility Trick for clean isolation */
+										body {
+											visibility: hidden;
+										}
+
+										/* Show ONLY the price list paper and its children */
+										#price-list-paper, #price-list-paper * {
+											visibility: visible;
+										}
+
+										/* 3. Positioning and Sizing for Multi-page */
+										#price-list-paper {
+											position: absolute !important;
+											left: 0 !important;
+											top: 0 !important;
+											width: 100% !important;
+											max-width: 210mm !important; /* A4 width */
+											margin: 0 auto !important;
+											padding: 10mm !important;
+											border: none !important;
+											box-shadow: none !important;
+											background: white !important;
+											border-radius: 0 !important;
+											display: block !important;
+											height: auto !important;
+											overflow: visible !important;
+										}
+
+										/* 4. Reset ancestors to prevent layout breaks */
+										#root, main, .origin-top, div {
+											position: static !important;
+											display: block !important;
+											overflow: visible !important;
+											height: auto !important;
+											padding: 0 !important;
+											margin: 0 !important;
+											transform: none !important;
+											animation: none !important;
+											background: transparent !important;
+										}
+
+										/* Hide specific UI components */
+										.no-print, header, aside, nav, button, .fixed, .shadow-xl {
+											display: none !important;
+										}
+
+										/* Ensure tables wrap correctly across pages */
+										table {
+											page-break-inside: auto;
+											width: 100% !important;
+										}
+
+										tr {
+											page-break-inside: avoid;
+											page-break-after: auto;
+										}
+
+										thead {
+											display: table-header-group;
+										}
+
+										@page {
+											size: A4;
+											margin: 15mm 0; /* Add top/bottom margin for mechanical printer grip */
+										}
+									}
+								`}
+								</style>
 
 								{/* Báo giá Header */}
 								<div className="p-12 bg-white border-b border-slate-50 relative">

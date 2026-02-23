@@ -113,7 +113,11 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 - [x] **Tối ưu Chi tiết Khách hàng**: Chuyển đổi sang dạng Bottom Sheet mượt mà trên di động, hỗ trợ gọi điện trực tiếp từ ứng dụng.
 - [x] **Bảo mật chuẩn A+**: Triển khai toàn diện CSP, XFO, HSTS, Referrer-Policy thông qua `vercel.json`.
 - [x] **Lọc theo ngày (Date Filtering)**: Đã hoàn thiện bộ lọc ngày thực tế cho danh sách công nợ và bảng kê chi tiết khách hàng.
-- [x] **In phiếu & Xuất PDF**: Đã tích hợp tính năng in phiếu báo nợ trực tiếp và tối ưu hóa tỷ lệ (Scaling/Zoom) để chụp ảnh gửi Zalo/Messenger sắc nét.
+- [x] **In phiếu & Xuất PDF Chuyên nghiệp (Feb 23 Upgrade)**: 
+    - **Đa trang (Multi-page Support)**: Tích hợp cơ chế tự động ngắt trang thông minh và lặp lại tiêu đề bảng cho Báo giá và Công nợ dài, đảm bảo bản in liền mạch và chuyên nghiệp.
+    - **Cô lập Hiển thị (Visibility Isolation)**: Áp dụng kỹ thuật ẩn mờ toàn cục để loại bỏ hoàn toàn rác giao diện (thanh menu, nút bấm) khỏi bản in.
+    - **Chuẩn hóa A4**: Ép cứng định dạng vùng in theo chuẩn giấy A4 quốc tế (210mm x 297mm) với lề an toàn cho máy in.
+    - **Tối ưu Tỷ lệ (Scaling/Zoom)**: Tự động khử toàn bộ hiệu ứng thu phóng và animations của trình duyệt khi in để bản in luôn sắc nét và bắt đầu từ đỉnh trang giấy.
 - [x] **Số dư đầu kỳ & Lịch sử Công nợ**: Đã hiển thị chính xác số dư đầu kỳ dựa trên khoảng thời gian lọc và liệt kê chi tiết lịch sử giao dịch/thanh toán.
 - [x] **Bản đồ Khách hàng Thông minh**: 
     - **Lọc thông minh**: Tự động nhận diện tất cả loại khách hàng từ dữ liệu và tạo bảng chú thích lọc (Legend) linh hoạt.

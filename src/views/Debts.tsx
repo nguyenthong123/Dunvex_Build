@@ -890,7 +890,7 @@ const Debts: React.FC = () => {
 			{/* DEBT STATEMENT MODAL */}
 			{showStatement && selectedCustomer && (
 				((owner.isPro || !owner.systemConfig.lock_free_debts) && !owner.manualLockDebts) ? (
-					<div className="fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-xl flex items-center justify-center p-0 md:p-8">
+					<div id="debt-statement-modal" className="fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-xl flex items-center justify-center p-0 md:p-8">
 						<div className="bg-white dark:bg-slate-900 w-full max-w-4xl max-h-[95vh] md:max-h-[90vh] md:rounded-[3rem] shadow-2xl relative flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 transaction-colors duration-300">
 							{/* MODAL HEADER - STICKY FOR UI BUT HIDDEN FOR SCREENSHOT ONCE SCROLLED */}
 							<div className="flex-none bg-white dark:bg-slate-900 px-8 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between z-20 md:rounded-t-[3rem] print:hidden transition-colors duration-300">
@@ -961,16 +961,71 @@ const Debts: React.FC = () => {
 									}}
 									className="flex-shrink-0 print-scale transition-transform duration-200"
 								>
-									<div className="bg-white w-[800px] shadow-[0_32px_96px_-12px_rgba(0,0,0,0.3)] min-h-[1141px] p-16 mb-20 flex flex-col font-['Inter', sans-serif] relative text-sm text-slate-900 border-2 border-slate-200">
+									<div
+										id="debt-statement-paper"
+										className="bg-white w-[800px] shadow-[0_32px_96px_-12px_rgba(0,0,0,0.3)] min-h-[1141px] p-16 mb-20 flex flex-col font-['Inter', sans-serif] relative text-sm text-slate-900 border-2 border-slate-200"
+									>
 
 										{/* INJECT PRINT STYLES */}
 										<style>
 											{`
 											@media print {
-												.no-print { display: none !important; }
-												body { background: white !important; }
-												.print-scale { transform: scale(1) !important; margin: 0 !important; width: 100% !important; }
-												.fixed { position: static !important; overflow: visible !important; }
+												/* 1. Base reset for the whole page */
+												html, body {
+													background: white !important;
+													margin: 0 !important;
+													padding: 0 !important;
+													height: auto !important;
+												}
+
+												/* 2. The Visibility Trick: Hide everything but the target */
+												body {
+													visibility: hidden;
+												}
+
+												/* Target ONLY the paper and its contents to be visible */
+												#debt-statement-paper, #debt-statement-paper * {
+													visibility: visible;
+												}
+
+												/* 3. Force the target to the top-left of the physical paper */
+												#debt-statement-paper {
+													position: absolute !important;
+													left: 0 !important;
+													top: 0 !important;
+													width: 210mm !important; /* A4 width */
+													margin: 0 !important;
+													padding: 10mm !important;
+													border: none !important;
+													box-shadow: none !important;
+													background: white !important;
+													z-index: 9999;
+												}
+
+												/* 4. Fix for React ancestors: 
+												   Ensure no parent container clips or pushes the absolutely positioned child */
+												#root, .fixed, .inset-0, .overflow-y-auto, div {
+													position: static !important;
+													display: block !important;
+													overflow: visible !important;
+													height: auto !important;
+													max-height: none !important;
+													padding: 0 !important;
+													margin: 0 !important;
+													transform: none !important;
+													background: transparent !important;
+													backdrop-filter: none !important;
+												}
+
+												/* Specific UI elements that MUST remain hidden even if children are visible */
+												header, button, .no-print, .flex-none {
+													display: none !important;
+												}
+
+												@page {
+													size: A4;
+													margin: 0;
+												}
 											}
 										`}
 										</style>

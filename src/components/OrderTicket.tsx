@@ -43,12 +43,76 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 			<style>
 				{`
 					@media print {
-						.no-print { display: none !important; }
-						body { background: white !important; padding: 0 !important; margin: 0 !important; }
-						.print-scale { transform: scale(1) !important; transform-origin: top center !important; margin: 0 !important; width: 100% !important; }
-						.fixed { position: relative !important; }
-						.inset-0 { position: relative !important; background: white !important; }
-						.overflow-y-auto { overflow: visible !important; }
+						/* Hide ALL UI components from the page */
+						.no-print, .print-hidden, .print\:hidden,
+						header, aside, nav, button, 
+						.fixed.inset-0 > div:first-child { 
+							display: none !important; 
+						}
+
+						/* Reset Body and HTML for clean print */
+						html, body {
+							background: white !important;
+							margin: 0 !important;
+							padding: 0 !important;
+							height: auto !important;
+							overflow: visible !important;
+							width: 100% !important;
+						}
+
+						/* Force all parent containers of the paper to be simple blocks */
+						.fixed.inset-0, 
+						.fixed.inset-0 > div,
+						div[style*="width: 800px"] {
+							position: static !important;
+							display: block !important;
+							padding: 0 !important;
+							margin: 0 !important;
+							width: 100% !important;
+							height: auto !important;
+							max-height: none !important;
+							max-width: none !important;
+							background: white !important;
+							border: none !important;
+							box-shadow: none !important;
+							transform: none !important;
+							animation: none !important;
+							overflow: visible !important;
+						}
+
+						/* Ensure the scale wrapper doesn't affect print layout */
+						.print-scale {
+							transform: none !important;
+							margin: 0 !important;
+							width: 100% !important;
+							height: auto !important;
+							display: block !important;
+						}
+
+						/* The Paper Sheet - A4 constraints */
+						#order-ticket-paper {
+							display: block !important;
+							position: relative !important;
+							top: 0 !important;
+							left: 0 !important;
+							width: 210mm !important;
+							min-height: 297mm !important;
+							margin: 0 auto !important;
+							padding: 15mm !important;
+							border: none !important;
+							box-shadow: none !important;
+							background: white !important;
+						}
+
+						/* Hide everything else */
+						body > *:not(.fixed.inset-0) {
+							display: none !important;
+						}
+
+						@page {
+							size: A4;
+							margin: 0;
+						}
 					}
 				`}
 			</style>
@@ -91,7 +155,10 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 				}}
 				className="flex-shrink-0 print-scale"
 			>
-				<div className="bg-white shadow-2xl overflow-hidden relative border border-gray-100">
+				<div
+					id="order-ticket-paper"
+					className="bg-white shadow-2xl overflow-hidden relative border border-gray-100"
+				>
 					<main className="bg-white text-gray-900 font-sans antialiased">
 						<header className="p-6 border-b border-gray-100">
 							<h1 className="text-3xl font-black text-center text-gray-900 uppercase mb-4 tracking-[3px]">

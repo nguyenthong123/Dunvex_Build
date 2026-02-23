@@ -23,6 +23,8 @@ import TrainingLab from './views/TrainingLab';
 import Finance from './views/Finance';
 import ReloadPrompt from './components/ReloadPrompt';
 
+import { ToastProvider } from './components/shared/Toast';
+
 function App() {
 	const [currentUser, setCurrentUser] = useState<any>(null);
 	const [loading, setLoading] = useState(true);
@@ -50,93 +52,95 @@ function App() {
 	}
 
 	return (
-		<div className="min-h-screen bg-[#f8f9fb] transition-colors duration-300 dark:bg-slate-950">
-			<Routes>
-				<Route
-					path="/login"
-					element={currentUser ? <Navigate to="/" /> : <Login />}
-				/>
+		<ToastProvider>
+			<div className="min-h-screen bg-[#f8f9fb] transition-colors duration-300 dark:bg-slate-950">
+				<Routes>
+					<Route
+						path="/login"
+						element={currentUser ? <Navigate to="/" /> : <Login />}
+					/>
 
-				{/* Protected Routes wrapped in MainLayout */}
-				<Route
-					path="/"
-					element={currentUser ? <MainLayout><Home /></MainLayout> : <Navigate to="/login" />}
-				/>
-				<Route
-					path="/debts"
-					element={currentUser ? <MainLayout><Debts /></MainLayout> : <Navigate to="/login" />}
-				/>
-				<Route
-					path="/customers"
-					element={currentUser ? <MainLayout><CustomerList /></MainLayout> : <Navigate to="/login" />}
-				/>
-				<Route
-					path="/inventory"
-					element={currentUser ? <MainLayout><ProductList /></MainLayout> : <Navigate to="/login" />}
-				/>
-				<Route
-					path="/orders"
-					element={currentUser ? <MainLayout><OrderList /></MainLayout> : <Navigate to="/login" />}
-				/>
-				<Route
-					path="/checkin"
-					element={currentUser ? <MainLayout><Checkin /></MainLayout> : <Navigate to="/login" />}
-				/>
-				<Route
-					path="/attendance"
-					element={currentUser ? <MainLayout><Attendance /></MainLayout> : <Navigate to="/login" />}
-				/>
-				<Route
-					path="/quick-order"
-					element={currentUser ? <MainLayout><QuickOrder /></MainLayout> : <Navigate to="/login" />}
-				/>
-				<Route
-					path="/quick-order/:id"
-					element={currentUser ? <MainLayout><QuickOrder /></MainLayout> : <Navigate to="/login" />}
-				/>
+					{/* Protected Routes wrapped in MainLayout */}
+					<Route
+						path="/"
+						element={currentUser ? <MainLayout><Home /></MainLayout> : <Navigate to="/login" />}
+					/>
+					<Route
+						path="/debts"
+						element={currentUser ? <MainLayout><Debts /></MainLayout> : <Navigate to="/login" />}
+					/>
+					<Route
+						path="/customers"
+						element={currentUser ? <MainLayout><CustomerList /></MainLayout> : <Navigate to="/login" />}
+					/>
+					<Route
+						path="/inventory"
+						element={currentUser ? <MainLayout><ProductList /></MainLayout> : <Navigate to="/login" />}
+					/>
+					<Route
+						path="/orders"
+						element={currentUser ? <MainLayout><OrderList /></MainLayout> : <Navigate to="/login" />}
+					/>
+					<Route
+						path="/checkin"
+						element={currentUser ? <MainLayout><Checkin /></MainLayout> : <Navigate to="/login" />}
+					/>
+					<Route
+						path="/attendance"
+						element={currentUser ? <MainLayout><Attendance /></MainLayout> : <Navigate to="/login" />}
+					/>
+					<Route
+						path="/quick-order"
+						element={currentUser ? <MainLayout><QuickOrder /></MainLayout> : <Navigate to="/login" />}
+					/>
+					<Route
+						path="/quick-order/:id"
+						element={currentUser ? <MainLayout><QuickOrder /></MainLayout> : <Navigate to="/login" />}
+					/>
 
-				{/* Business Admin (Separated) */}
-				<Route
-					path="/admin"
-					element={currentUser ? <MainLayout><AdminSettings /></MainLayout> : <Navigate to="/login" />}
-				/>
-				{/* General App Settings */}
-				<Route
-					path="/settings"
-					element={currentUser ? <MainLayout><AppSettings /></MainLayout> : <Navigate to="/login" />}
-				/>
+					{/* Business Admin (Separated) */}
+					<Route
+						path="/admin"
+						element={currentUser ? <MainLayout><AdminSettings /></MainLayout> : <Navigate to="/login" />}
+					/>
+					{/* General App Settings */}
+					<Route
+						path="/settings"
+						element={currentUser ? <MainLayout><AppSettings /></MainLayout> : <Navigate to="/login" />}
+					/>
 
-				{/* NEXUS CONTROL & PRICING */}
-				<Route
-					path="/pricing"
-					element={currentUser ? <Pricing /> : <Navigate to="/login" />}
-				/>
-				<Route
-					path="/nexus-control"
-					element={currentUser ? <NexusControl /> : <Navigate to="/login" />}
-				/>
-				<Route
-					path="/price-list"
-					element={currentUser ? <MainLayout><PriceList /></MainLayout> : <Navigate to="/login" />}
-				/>
-				<Route
-					path="/finance"
-					element={currentUser ? <MainLayout><Finance /></MainLayout> : <Navigate to="/login" />}
-				/>
-				<Route
-					path="/khoa-dao-tao"
-					element={currentUser ? <MainLayout><TrainingCatalog /></MainLayout> : <Navigate to="/login" />}
-				/>
-				<Route
-					path="/khoa-dao-tao/:id"
-					element={currentUser ? <TrainingLab /> : <Navigate to="/login" />}
-				/>
+					{/* NEXUS CONTROL & PRICING */}
+					<Route
+						path="/pricing"
+						element={currentUser ? <Pricing /> : <Navigate to="/login" />}
+					/>
+					<Route
+						path="/nexus-control"
+						element={currentUser ? <NexusControl /> : <Navigate to="/login" />}
+					/>
+					<Route
+						path="/price-list"
+						element={currentUser ? <MainLayout><PriceList /></MainLayout> : <Navigate to="/login" />}
+					/>
+					<Route
+						path="/finance"
+						element={currentUser ? <MainLayout><Finance /></MainLayout> : <Navigate to="/login" />}
+					/>
+					<Route
+						path="/khoa-dao-tao"
+						element={currentUser ? <MainLayout><TrainingCatalog /></MainLayout> : <Navigate to="/login" />}
+					/>
+					<Route
+						path="/khoa-dao-tao/:id"
+						element={currentUser ? <TrainingLab /> : <Navigate to="/login" />}
+					/>
 
-				{/* Catch all */}
-				<Route path="*" element={<Navigate to="/" />} />
-			</Routes>
-			<ReloadPrompt />
-		</div>
+					{/* Catch all */}
+					<Route path="*" element={<Navigate to="/" />} />
+				</Routes>
+				<ReloadPrompt />
+			</div>
+		</ToastProvider>
 	);
 }
 

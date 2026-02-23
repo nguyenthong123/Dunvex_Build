@@ -6,10 +6,12 @@ import OrderTicket from '../components/OrderTicket';
 import UpgradeModal from '../components/UpgradeModal';
 
 import { useOwner } from '../hooks/useOwner';
+import { useToast } from '../components/shared/Toast';
 
 const OrderList = () => {
 	const navigate = useNavigate();
 	const owner = useOwner();
+	const { showToast } = useToast();
 	const [orders, setOrders] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [searchTerm, setSearchTerm] = useState('');
@@ -127,7 +129,7 @@ const OrderList = () => {
 				createdAt: serverTimestamp()
 			});
 		} catch (error) {
-			alert("Lỗi khi cập nhật trạng thái");
+			showToast("Lỗi khi cập nhật trạng thái", "error");
 		}
 	};
 
@@ -148,8 +150,9 @@ const OrderList = () => {
 				});
 
 				setShowDetail(false);
+				showToast("Đã xóa đơn hàng", "success");
 			} catch (error) {
-				alert("Lỗi khi xóa đơn hàng");
+				showToast("Lỗi khi xóa đơn hàng", "error");
 			}
 		}
 	};

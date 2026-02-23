@@ -12,11 +12,13 @@ import {
 	HelpCircle,
 	Lock
 } from 'lucide-react';
+import { useToast } from '../components/shared/Toast';
 
 const Login = () => {
 	const navigate = useNavigate();
 	const [isLoggingIn, setIsLoggingIn] = useState(false);
 	const [loginStatus, setLoginStatus] = useState('');
+	const { showToast } = useToast();
 
 	// Tách logic xử lý User vào một hàm dùng chung
 	const processUserLogin = async (user: any) => {
@@ -123,7 +125,7 @@ const Login = () => {
 			}
 		} catch (error: any) {
 			setIsLoggingIn(false);
-			alert(`Lỗi đăng nhập: ${error.code}`);
+			showToast(`Lỗi đăng nhập: ${error.code}`, "error");
 			setLoginStatus('');
 		}
 	};

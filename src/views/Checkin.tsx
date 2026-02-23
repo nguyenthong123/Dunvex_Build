@@ -52,16 +52,16 @@ const createCustomIcon = (purpose: string, hasImage: boolean) => {
 };
 
 // Helper to calculate distance in meters (Haversine formula)
-const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+const calculateDistance = (lat1: any, lon1: any, lat2: any, lon2: any) => {
     const R = 6371e3; // metres
-    const φ1 = lat1 * Math.PI / 180;
-    const φ2 = lat2 * Math.PI / 180;
-    const Δφ = (lat2 - lat1) * Math.PI / 180;
-    const Δλ = (lon2 - lon1) * Math.PI / 180;
+    const rLat1 = Number(lat1) * Math.PI / 180;
+    const rLat2 = Number(lat2) * Math.PI / 180;
+    const dLat = (Number(lat2) - Number(lat1)) * Math.PI / 180;
+    const dLon = (Number(lon2) - Number(lon1)) * Math.PI / 180;
 
-    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-        Math.cos(φ1) * Math.cos(φ2) *
-        Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(rLat1) * Math.cos(rLat2) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
     return R * c; // in metres
@@ -88,6 +88,7 @@ const MapUpdater = ({ center, sidebarExpanded }: { center: [number, number], sid
 
 
 import { useOwner } from '../hooks/useOwner';
+import { useToast } from '../components/shared/Toast';
 
 // Map instance tracker to get L.Map in v5
 const MapInstanceTracker = ({ setMapInstance }: { setMapInstance: (map: L.Map) => void }) => {
@@ -101,6 +102,7 @@ const MapInstanceTracker = ({ setMapInstance }: { setMapInstance: (map: L.Map) =
 const Checkin = () => {
     const navigate = useNavigate();
     const owner = useOwner();
+    const { showToast } = useToast();
 
     const [customers, setCustomers] = useState<any[]>([]);
     const [recentCheckins, setRecentCheckins] = useState<any[]>([]);
@@ -146,7 +148,7 @@ const Checkin = () => {
         location: null as { lat: number, lng: number } | null,
         address: '',
         purpose: 'Viếng thăm',
-        imageUrl: ''
+        imageUrls: [] as string[]
     });
 
     const [gettingLocation, setGettingLocation] = useState(false);
@@ -174,7 +176,7 @@ const Checkin = () => {
                 await deleteDoc(doc(db, 'checkins', id));
             } catch (error) {
                 console.error("Error deleting checkin:", error);
-                alert("Lỗi khi xóa hoạt động");
+                showToast("Lỗi khi xóa hoạt động", "error");
             }
         }
     };
@@ -222,40 +224,61 @@ const Checkin = () => {
     }, [owner.loading, owner.ownerId]);
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+
+        const currentCount = formData.imageUrls.length;
+        const filesToAdd = Array.from(files).slice(0, 3 - currentCount);
+
+        if (filesToAdd.length === 0) {
+            showToast("Tối đa 3 ảnh hiện trường", "warning");
+            return;
+        }
 
         setUploading(true);
         try {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('upload_preset', 'dunvexbuil');
-            formData.append('folder', 'dunvex_checkins');
+            const uploadPromises = filesToAdd.map(async (file) => {
+                const fData = new FormData();
+                fData.append('file', file);
+                fData.append('upload_preset', 'dunvexbuil');
+                fData.append('folder', 'dunvex_checkins');
 
-            const response = await fetch(
-                `https://api.cloudinary.com/v1_1/dtx0uvb4e/image/upload`,
-                {
-                    method: 'POST',
-                    body: formData,
-                }
-            );
+                const response = await fetch(
+                    `https://api.cloudinary.com/v1_1/dtx0uvb4e/image/upload`,
+                    { method: 'POST', body: fData }
+                );
+                const result = await response.json();
+                return result.secure_url;
+            });
 
-            const data = await response.json();
-            if (data.secure_url) {
-                setFormData(prev => ({ ...prev, imageUrl: data.secure_url }));
-            } else {
-                alert("Lỗi upload Cloudinary: " + (data.error?.message || "Không xác định"));
-            }
+            const urls = await Promise.all(uploadPromises);
+            const validUrls = urls.filter(url => !!url);
+
+            setFormData(prev => ({
+                ...prev,
+                imageUrls: [...prev.imageUrls, ...validUrls]
+            }));
+
+            showToast(`Đã tải ${validUrls.length} ảnh thành công`, "success");
         } catch (error: any) {
-            alert(`Lỗi xử lý tệp: ${error.message}`);
+            showToast(`Lỗi xử lý tệp: ${error.message}`, "error");
         } finally {
             setUploading(false);
+            // Reset input
+            e.target.value = '';
         }
+    };
+
+    const removeImage = (index: number) => {
+        setFormData(prev => ({
+            ...prev,
+            imageUrls: prev.imageUrls.filter((_, i) => i !== index)
+        }));
     };
 
     const handleGetLocation = () => {
         if (!navigator.geolocation) {
-            alert("Trình duyệt của bạn không hỗ trợ định vị GPS.");
+            showToast("Trình duyệt của bạn không hỗ trợ định vị GPS.", "error");
             return;
         }
 
@@ -298,7 +321,7 @@ const Checkin = () => {
                 if (error.code === 1) msg = "Vui lòng cấp quyền truy cập vị trí (GPS) trên trình duyệt.";
                 else if (error.code === 2) msg = "Không tìm thấy tín hiệu GPS. Hãy thử di chuyển ra chỗ thoáng.";
                 else if (error.code === 3) msg = "Hết thời gian tìm vị trí. Vui lòng thử lại.";
-                alert(msg);
+                showToast(msg, "warning");
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
@@ -307,24 +330,32 @@ const Checkin = () => {
     const handleSubmitCheckin = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.customerId || !formData.location) {
-            alert("Vui lòng chọn khách hàng và lấy vị trí!");
+            showToast("Vui lòng chọn khách hàng và lấy vị trí!", "warning");
             return;
         }
 
         const customer = customers.find(c => c.id === formData.customerId);
 
-        // Distance Check (Limited to 50 meters)
-        if (customer && customer.lat && customer.lng) {
-            const distance = calculateDistance(
-                formData.location.lat,
-                formData.location.lng,
-                customer.lat,
-                customer.lng
-            );
+        // Distance Check (Enforced if customer has location data)
+        if (customer) {
+            const cLat = customer.lat ?? customer.latitude;
+            const cLng = customer.lng ?? customer.longitude;
 
-            if (distance > 50) {
-                alert(`Bạn đang cách khách hàng ${Math.round(distance)}m. Vui lòng di chuyển lại gần phạm vi 50m để check-in!`);
-                return;
+            if (cLat !== undefined && cLat !== null && cLng !== undefined && cLng !== null) {
+                const distance = calculateDistance(
+                    formData.location.lat,
+                    formData.location.lng,
+                    cLat,
+                    cLng
+                );
+
+                if (distance > 50) {
+                    showToast(`Bạn cách khách hàng ${Math.round(distance)}m. Vui lòng di chuyển lại gần phạm vi 50m!`, "warning");
+                    return;
+                }
+            } else {
+                // Warning if customer has no location data but geofencing is expected
+                console.warn("Customer has no location data. Skipping distance check.");
             }
         }
 
@@ -332,6 +363,7 @@ const Checkin = () => {
         try {
             await addDoc(collection(db, 'checkins'), {
                 ...formData,
+                imageUrl: formData.imageUrls[0] || '', // Compatibility for old views
                 customerName: customer?.name || 'Vãng lai',
                 userId: auth.currentUser?.uid,
                 userEmail: auth.currentUser?.email,
@@ -358,11 +390,11 @@ const Checkin = () => {
                 location: null,
                 address: '',
                 purpose: 'Viếng thăm',
-                imageUrl: ''
+                imageUrls: []
             });
-            alert("Checkin thành công!");
+            showToast("Checkin thành công!", "success");
         } catch (error) {
-            alert("Lỗi lưu dữ liệu.");
+            showToast("Lỗi lưu dữ liệu.", "error");
         } finally {
             setLoading(false);
         }
@@ -453,14 +485,15 @@ const Checkin = () => {
                                         <div className="p-2 min-w-[150px]">
                                             <p className="font-black text-[#1A237E] uppercase text-[10px] mb-1">{checkin.customerName}</p>
                                             <p className="text-[9px] text-slate-500 mb-2">{checkin.purpose}</p>
-                                            {checkin.imageUrl && (
+                                            {(checkin.imageUrls || (checkin.imageUrl ? [checkin.imageUrl] : [])).map((url: string, idx: number) => (
                                                 <img
-                                                    src={getImageUrl(checkin.imageUrl)}
-                                                    className="w-full h-20 object-cover rounded-lg mb-2 shadow-sm"
+                                                    key={idx}
+                                                    src={getImageUrl(url)}
+                                                    className={`w-full ${idx === 0 ? 'h-24' : 'hidden'} object-cover rounded-lg mb-2 shadow-sm`}
                                                     alt="Field"
                                                     referrerPolicy="no-referrer"
                                                 />
-                                            )}
+                                            ))}
                                             <p className="text-[8px] text-slate-400 italic">"{checkin.note || 'Không có ghi chú'}"</p>
                                             <p className="text-[7px] text-slate-300 mt-2">{checkin.address}</p>
                                         </div>
@@ -700,19 +733,27 @@ const Checkin = () => {
                                                     </div>
                                                 </div>
 
-                                                {checkin.imageUrl && (
-                                                    <div className="mb-3 lg:mb-4 rounded-xl lg:rounded-2xl overflow-hidden border border-slate-100 dark:border-slate-700 aspect-video relative group/img shadow-sm">
-                                                        <img
-                                                            src={getImageUrl(checkin.imageUrl)}
-                                                            alt="Field"
-                                                            className="size-full object-cover group-hover/img:scale-110 transition-transform duration-[1.5s]"
-                                                            referrerPolicy="no-referrer"
-                                                        />
-                                                        <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-all scale-110 group-hover/img:scale-100">
-                                                            <span className="material-symbols-outlined text-white text-3xl">zoom_in</span>
+                                                {(() => {
+                                                    const imgs = checkin.imageUrls || (checkin.imageUrl ? [checkin.imageUrl] : []);
+                                                    if (imgs.length === 0) return null;
+                                                    return (
+                                                        <div className={`mb-3 lg:mb-4 grid ${imgs.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-2 rounded-xl lg:rounded-2xl overflow-hidden`}>
+                                                            {imgs.map((url: string, idx: number) => (
+                                                                <div key={idx} className={`rounded-xl overflow-hidden border border-slate-100 dark:border-slate-700 aspect-video relative group/img shadow-sm ${imgs.length === 3 && idx === 0 ? 'col-span-2' : ''}`}>
+                                                                    <img
+                                                                        src={getImageUrl(url)}
+                                                                        alt="Field"
+                                                                        className="size-full object-cover group-hover/img:scale-110 transition-transform duration-[1.5s]"
+                                                                        referrerPolicy="no-referrer"
+                                                                    />
+                                                                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-all scale-110 group-hover/img:scale-100">
+                                                                        <span className="material-symbols-outlined text-white text-3xl">zoom_in</span>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
                                                         </div>
-                                                    </div>
-                                                )}
+                                                    );
+                                                })()}
 
                                                 {checkin.note && (
                                                     <div className="p-3 lg:p-4 bg-[#f8f7f5] dark:bg-slate-900/50 rounded-xl lg:rounded-2xl border-l-[4px] lg:border-l-[6px] border-[#1A237E] dark:border-indigo-500 mb-3 lg:mb-4 shadow-inner dark:shadow-none">
@@ -853,19 +894,19 @@ const Checkin = () => {
                                         <span className="text-[10px] text-slate-300 dark:text-slate-600 font-bold italic tracking-wider">AUTO TIMESTAMP</span>
                                     </div>
 
-                                    <div className="flex gap-4">
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                         <button
                                             type="button"
                                             onClick={() => document.getElementById('checkin-image-final')?.click()}
-                                            disabled={uploading}
-                                            className="flex-1 h-20 bg-[#f8f7f5] dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500 rounded-2xl font-black text-[10px] uppercase tracking-[2px] flex flex-col items-center justify-center gap-1 transition-all border-2 border-dashed border-slate-200 dark:border-slate-700 disabled:opacity-50"
+                                            disabled={uploading || formData.imageUrls.length >= 3}
+                                            className="h-24 bg-[#f8f7f5] dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500 rounded-2xl font-black text-[9px] uppercase tracking-[1px] flex flex-col items-center justify-center gap-1 transition-all border-2 border-dashed border-slate-200 dark:border-slate-700 disabled:opacity-30"
                                         >
                                             {uploading ? (
                                                 <div className="size-5 border-2 border-[#f27121] border-t-transparent rounded-full animate-spin"></div>
                                             ) : (
                                                 <>
                                                     <span className="material-symbols-outlined text-2xl">photo_camera</span>
-                                                    <span>{formData.imageUrl ? 'Chụp lại ảnh' : 'Chụp ảnh thực tế'}</span>
+                                                    <span>{formData.imageUrls.length}/3 Ảnh</span>
                                                 </>
                                             )}
                                         </button>
@@ -874,15 +915,23 @@ const Checkin = () => {
                                             type="file"
                                             accept="image/*"
                                             capture="environment"
+                                            multiple
                                             className="hidden"
                                             onChange={handleImageUpload}
                                         />
 
-                                        {formData.imageUrl && (
-                                            <div className="size-20 rounded-2xl overflow-hidden border-4 border-white dark:border-slate-800 shadow-xl rotate-3 shrink-0">
-                                                <img src={formData.imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                                        {formData.imageUrls.map((url, index) => (
+                                            <div key={index} className="relative group size-24">
+                                                <img src={url} alt="Preview" className="size-full object-cover rounded-2xl border-2 border-white dark:border-slate-800 shadow-lg" />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeImage(index)}
+                                                    className="absolute -top-2 -right-2 size-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                                                >
+                                                    <span className="material-symbols-outlined text-sm">close</span>
+                                                </button>
                                             </div>
-                                        )}
+                                        ))}
                                     </div>
                                 </div>
                             </div>

@@ -21,6 +21,7 @@ import {
 	Crown,
 	Calendar
 } from 'lucide-react';
+import { useToast } from '../components/shared/Toast';
 import { auth, db } from '../services/firebase';
 import {
 	collection,
@@ -40,6 +41,7 @@ const NEXUS_ADMIN_EMAIL = 'dunvex.green@gmail.com'; // User's email
 
 const NexusControl = () => {
 	const navigate = useNavigate();
+	const { showToast } = useToast();
 	const [activeTab, setActiveTab] = useState('requests');
 	const [loading, setLoading] = useState(true);
 	const [stats, setStats] = useState({
@@ -137,8 +139,9 @@ const NexusControl = () => {
 				isPro: isPro,
 				paymentConfirmedAt: serverTimestamp()
 			});
+			showToast("Cập nhật gói thành công", "success");
 		} catch (error) {
-			alert("Lỗi khi cập nhật gói");
+			showToast("Lỗi khi cập nhật gói", "error");
 		}
 	};
 
@@ -193,9 +196,9 @@ const NexusControl = () => {
 				subscriptionExpiresAt: trialDate
 			});
 
-			alert("Đã duyệt thanh toán và kích hoạt tài khoản!");
+			showToast("Đã duyệt thanh toán và kích hoạt tài khoản!", "success");
 		} catch (error) {
-			alert("Lỗi khi duyệt thanh toán.");
+			showToast("Lỗi khi duyệt thanh toán.", "error");
 		}
 	};
 
@@ -218,9 +221,9 @@ const NexusControl = () => {
 				revokeReason: reason
 			});
 
-			alert("Đã từ chối/thu hồi yêu cầu.");
+			showToast("Đã từ chối/thu hồi yêu cầu.", "info");
 		} catch (error) {
-			// Failed
+			showToast("Lỗi khi thực hiện thao tác.", "error");
 		}
 	};
 

@@ -4,11 +4,13 @@ import { auth } from '../services/firebase';
 import { signOut } from 'firebase/auth';
 import { useTheme } from '../context/ThemeContext';
 import { Moon, Sun, Globe, Bell, LogOut, User, ShieldCheck, Key, HelpCircle, ChevronRight, BookOpen, CheckCircle2, Info } from 'lucide-react';
+import { useToast } from '../components/shared/Toast';
 
 const AppSettings = () => {
 	const navigate = useNavigate();
 	const location = useLocation();
 	const { theme, toggleTheme } = useTheme();
+	const { showToast } = useToast();
 	const [showConfirmLogout, setShowConfirmLogout] = React.useState(false);
 	const [activeGuide, setActiveGuide] = React.useState<string | null>(null);
 
@@ -43,7 +45,7 @@ const AppSettings = () => {
 			navigate('/login');
 		} catch (error) {
 			console.error("Logout error:", error);
-			alert("Đã xảy ra lỗi khi đăng xuất.");
+			showToast("Đã xảy ra lỗi khi đăng xuất.", "error");
 		}
 	};
 

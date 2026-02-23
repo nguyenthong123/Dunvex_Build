@@ -3,11 +3,13 @@ import { auth, db } from '../services/firebase';
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, Timestamp, doc, writeBatch, limit, orderBy, deleteDoc, setDoc } from 'firebase/firestore';
 import { Wallet, TrendingUp, TrendingDown, Receipt, Clock, BarChart3, Plus, ArrowUpRight, ArrowDownLeft, Filter, Search, Calendar, ChevronRight, Trash2, Settings2, Target, Award } from 'lucide-react';
 import { useOwner } from '../hooks/useOwner';
+import { useToast } from '../components/shared/Toast';
 
 import { useSearchParams } from 'react-router-dom';
 
 const Finance = () => {
 	const owner = useOwner();
+	const { showToast } = useToast();
 	const isAdmin = owner.role === 'admin' || owner.accessRights?.finance_view === true;
 	const currentUserId = auth.currentUser?.uid;
 	const [searchParams, setSearchParams] = useSearchParams();
@@ -186,9 +188,10 @@ const Finance = () => {
 			console.log("Cash log added successfully:", logData);
 			setShowLogForm(false);
 			setLogData({ type: 'chi', amount: 0, category: 'Vận hành', note: '', date: new Date().toISOString().split('T')[0] });
+			showToast("Ghi sổ quỹ thành công", "success");
 		} catch (error) {
 			console.error("Error adding cash log:", error);
-			alert("Lỗi khi ghi sổ quỹ");
+			showToast("Lỗi khi ghi sổ quỹ", "error");
 		}
 	};
 
@@ -263,10 +266,11 @@ const Finance = () => {
 				ownerId: owner.ownerId,
 				updatedAt: serverTimestamp()
 			});
+			showToast("Đã lưu kế hoạch KPI", "success");
 			setShowPlanForm(false);
 		} catch (error) {
 			console.error("Error saving KPI plan:", error);
-			alert("Lỗi khi lưu kế hoạch");
+			showToast("Lỗi khi lưu kế hoạch", "error");
 		}
 	};
 
@@ -289,9 +293,10 @@ const Finance = () => {
 				details: `Đã xóa: ${log.type === 'thu' ? '+' : '-'}${formatPrice(log.amount)} - Nội dung: ${log.note} `,
 				createdAt: serverTimestamp()
 			});
+			showToast("Đã xóa ghi chép", "success");
 		} catch (error) {
 			console.error("Finance: Delete Log Error:", error);
-			alert("Lỗi khi xóa ghi chép");
+			showToast("Lỗi khi xóa ghi chép", "error");
 		}
 	};
 

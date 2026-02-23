@@ -9,10 +9,12 @@ import { Eye, EyeOff, TrendingUp, TrendingDown, AlertTriangle, Wallet } from 'lu
 import { useOwner } from '../hooks/useOwner';
 import QRScanner from '../components/shared/QRScanner';
 import { QrCode } from 'lucide-react';
+import { useToast } from '../components/shared/Toast';
 
 const Home = () => {
 	const navigate = useNavigate();
 	const owner = useOwner();
+	const { showToast } = useToast();
 	const { sidebarItems } = useNavigationConfig();
 	const [unreadCount, setUnreadCount] = useState(0);
 	const [showNotifications, setShowNotifications] = useState(false);
@@ -139,8 +141,12 @@ const Home = () => {
 
 	const handleLogout = async () => {
 		if (window.confirm("Bạn có chắc chắn muốn đăng xuất?")) {
-			await signOut(auth);
-			navigate('/login');
+			try {
+				await signOut(auth);
+				navigate('/login');
+			} catch (error) {
+				showToast("Lỗi khi đăng xuất", "error");
+			}
 		}
 	};
 

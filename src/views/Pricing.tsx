@@ -4,12 +4,14 @@ import { Check, Zap, Crown, Rocket, ShieldCheck, ArrowLeft, CreditCard, QrCode }
 import { auth, db } from '../services/firebase';
 import { collection, addDoc, serverTimestamp, query, where, limit, getDocs, doc, updateDoc, increment } from 'firebase/firestore';
 import { useOwner } from '../hooks/useOwner';
+import { useToast } from '../components/shared/Toast';
 
 import NotificationBell from '../components/NotificationBell';
 
 const Pricing = () => {
 	const navigate = useNavigate();
 	const owner = useOwner();
+	const { showToast } = useToast();
 	const [selectedPlan, setSelectedPlan] = useState<any>(null);
 	const [step, setStep] = useState(1); // 1: Pricing, 2: Checkout
 	const [loading, setLoading] = useState(false);
@@ -184,11 +186,11 @@ const Pricing = () => {
 				console.error("Failed to send payment email:", err);
 			}
 
-			alert("Yêu cầu đã được gửi! Chúng tôi sẽ kiểm tra và kích hoạt ngay sau khi nhận được thanh toán.");
+			showToast("Yêu cầu đã được gửi! Chúng tôi sẽ kiểm tra và kích hoạt ngay sau khi nhận được thanh toán.", "success");
 			navigate('/');
 		} catch (error) {
 			console.error("Error submitting payment:", error);
-			alert("Lỗi khi gửi yêu cầu thanh toán.");
+			showToast("Lỗi khi gửi yêu cầu thanh toán.", "error");
 		} finally {
 			setLoading(false);
 		}

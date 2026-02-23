@@ -131,6 +131,7 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 - [x] **Nâng cấp Bảo mật (Security Pro)**: Tối ưu hóa CSP, chặn Clickjacking và XSS theo tiêu chuẩn Mozilla HTTP Observatory thông qua `vercel.json`.
 - [x] **Ổn định hóa Nhập liệu & Kết nối**: Khắc phục lỗi "Failed to fetch" khi nhập liệu từ Google Sheets và tối ưu hóa kết nối Real-time cho Firebase bằng cách tinh chỉnh chính sách CSP.
 - [x] **Tối ưu UX Lên đơn trên Di động**: Hiển thị mặc định nút xóa sản phẩm và tăng kích thước vùng nhấp trên thiết bị cảm ứng để thao tác nhanh và chính xác hơn.
+- [x] **Toastify Toàn bộ Thông báo (Global Notification System)**: Thay thế hoàn toàn 100% các hộp thoại `alert()` mặc định của trình duyệt bằng hệ thống Toast cao cấp. Đã triển khai trên toàn bộ 18 views và components chính, mang lại trải nghiệm người dùng hiện đại, đồng bộ và chuyên nghiệp.
 - [x] **Nexus Control & Smart Billing**: 
     - Nâng cấp giao diện Nexus Control đáp ứng mọi màn hình (Responsive).
     - Triển khai cột **"Ngày vào trang"** (Joined Date) thay cho Ngày hết hạn, tự động reset mốc khi cập nhật gói (Mail xác nhận).
@@ -140,6 +141,8 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - Tinh chỉnh chính sách CSP để hỗ trợ hiển thị hình ảnh từ DiceBear SVG API cho Trung tâm đào tạo.
     - Cho phép kết nối và nạp script Google Analytics / Tag Manager theo tiêu chuẩn bảo mật cao nhất qua `vercel.json`.
 - [x] **Báo Giá Niêm Yết chuyên nghiệp (Inventory Pro)**: Tích hợp cơ chế nhập dữ liệu từ Excel/Google Sheets, quản lý lịch sử đa bản giá trên Firestore. Hỗ trợ thu phóng thông minh (60%-85%-100%) và ép khung Desktop trên Mobile giúp chụp ảnh màn hình tờ báo giá trọn vẹn, không bị nhảy dòng. Tinh chỉnh giao diện cao cấp với tiêu đề cột siêu tương phản (Slate-950).
+- [x] **Check-in Geofencing Pro (Feb 23)**: Khắc phục lỗi bỏ qua khoảng cách, hỗ trợ đa định dạng tọa độ (`lat`/`lng`, `latitude`/`longitude`) và ép kiểu số học để đảm bảo bán kính 50m luôn được thực thi nghiêm ngặt trên mọi thiết bị.
+- [x] **Check-in Đa ảnh (Multi-photo Support)**: Cho phép nhân viên tải lên tối đa **3 ảnh hiện trường** trong một lần check-in. Tích hợp giao diện Preview dạng lưới, cho phép thêm/xóa ảnh linh hoạt và tự động tối ưu hiển thị trên Feed hoạt động.
 - [x] **Xác thực & Bảo mật Đăng nhập (Auth & Security)**: Khắc phục triệt để lỗi "missing initial state" và "invalid action" trên mọi thiết bị. Tối ưu hóa CSP & COOP headers cho Firebase Auth. Tích hợp thanh trạng thái đăng nhập chi tiết và cơ chế tự động chuyển đổi giữa Popup/Redirect thông minh giúp người dùng luôn vào được hệ thống dù là trên trình duyệt Zalo, Safari hay Chrome.
 - [x] **Tối ưu Báo Giá Di động (Price List Mobile Optimization)**: Tinh chỉnh giao diện Chi tiết báo giá siêu gọn nhẹ và chuyên nghiệp trên điện thoại. Tối ưu hóa kích thước bảng giá, hỗ trợ xuống dòng thông minh và hệ thống Zoom Pill cao cấp giúp chụp ảnh màn hình báo giá trọn vẹn.
 - [x] **Tối ưu Lên đơn & Danh mục (Quick Order UX Refinement - Feb 23)**:

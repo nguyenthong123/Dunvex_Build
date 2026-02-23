@@ -11,11 +11,13 @@ import {
 } from 'lucide-react';
 import { collection, query, where, orderBy, onSnapshot, addDoc, deleteDoc } from 'firebase/firestore';
 import { useOwner } from '../hooks/useOwner';
+import { useToast } from '../components/shared/Toast';
 
 const PriceList = () => {
 	const navigate = useNavigate();
 	const location = useLocation();
 	const owner = useOwner();
+	const { showToast } = useToast();
 	const [loading, setLoading] = useState(true);
 	const [importing, setImporting] = useState(false);
 	const [companyInfo, setCompanyInfo] = useState<any>(null);
@@ -182,7 +184,7 @@ const PriceList = () => {
 			setHeaders([]);
 		} catch (error) {
 			console.error("Error saving price list:", error);
-			alert("Lỗi khi lưu báo giá.");
+			showToast("Lỗi khi lưu báo giá.", "error");
 		} finally {
 			setImporting(false);
 		}
@@ -204,7 +206,7 @@ const PriceList = () => {
 			}
 		} catch (error) {
 			console.error("Error deleting price list:", error);
-			alert("Không thể xóa bản báo giá này. Vui lòng thử lại sau.");
+			showToast("Không thể xóa bản báo giá này. Vui lòng thử lại sau.", "error");
 		}
 	};
 
@@ -223,7 +225,7 @@ const PriceList = () => {
 				const jsonData = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
 				processRawData(jsonData);
 			} catch (err) {
-				alert("Lỗi khi đọc file Excel.");
+				showToast("Lỗi khi đọc file Excel.", "error");
 			} finally {
 				setImporting(false);
 			}
@@ -253,7 +255,7 @@ const PriceList = () => {
 			const jsonData = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
 			processRawData(jsonData);
 		} catch (err: any) {
-			alert(err.message || "Lỗi khi lấy dữ liệu.");
+			showToast(err.message || "Lỗi khi lấy dữ liệu.", "error");
 		} finally {
 			setImporting(false);
 		}

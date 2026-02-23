@@ -10,11 +10,13 @@ import {
 	Clock, MapPin, CheckCircle, AlertCircle, Calendar,
 	Smartphone, ArrowLeft, LogOut, Coffee, FileText, Send, X
 } from 'lucide-react';
+import { useToast } from '../components/shared/Toast';
 
 const Attendance = () => {
 	const navigate = useNavigate();
 	const { search } = useLocation();
 	const owner = useOwner();
+	const { showToast } = useToast();
 
 	const [companySettings, setCompanySettings] = useState<any>(null);
 	const [todayLog, setTodayLog] = useState<any>(null);
@@ -104,7 +106,7 @@ const Attendance = () => {
 	const handleCheckIn = async () => {
 		if (!location || !distance || !owner.ownerId || !auth.currentUser) return;
 		if (distance > (companySettings.geofenceRadius || 100)) {
-			alert(`Bạn đang ở quá xa văn phòng (${Math.round(distance)}m). Vui lòng đến gần hơn để chấm công.`);
+			showToast(`Bạn ở quá xa văn phòng (${Math.round(distance)}m).`, "warning");
 			return;
 		}
 
@@ -136,9 +138,9 @@ const Attendance = () => {
 				createdAt: serverTimestamp()
 			});
 
-			alert("Chấm công VÀO thành công!");
+			showToast("Chấm công VÀO thành công!", "success");
 		} catch (error) {
-			alert("Lỗi khi chấm công: " + error);
+			showToast("Lỗi khi chấm công: " + error, "error");
 		} finally {
 			setChecking(false);
 		}
@@ -154,16 +156,16 @@ const Attendance = () => {
 				checkOutLocation: location,
 				updatedAt: serverTimestamp()
 			});
-			alert("Chấm công RA thành công!");
+			showToast("Chấm công RA thành công!", "success");
 		} catch (error) {
-			alert("Lỗi khi chấm công: " + error);
+			showToast("Lỗi khi chấm công: " + error, "error");
 		} finally {
 			setChecking(false);
 		}
 	};
 
 	const handleRequestSubmit = async () => {
-		if (!requestData.note) return alert("Vui lòng nhập lý do");
+		if (!requestData.note) return showToast("Vui lòng nhập lý do", "warning");
 		setChecking(true);
 		try {
 			const today = new Date().toISOString().split('T')[0];
@@ -179,11 +181,11 @@ const Attendance = () => {
 				status: 'pending',
 				createdAt: serverTimestamp()
 			});
-			alert("Gửi yêu cầu thành công!");
+			showToast("Gửi yêu cầu thành công!", "success");
 			setShowRequestModal(false);
 			setRequestData({ type: 'leave', note: '' });
 		} catch (error) {
-			alert("Lỗi khi gửi yêu cầu");
+			showToast("Lỗi khi gửi yêu cầu", "error");
 		} finally {
 			setChecking(false);
 		}

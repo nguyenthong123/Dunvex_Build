@@ -8,11 +8,13 @@ import { Camera, Plus, Trash, X, FileText, Image as ImageIcon, Mail } from 'luci
 
 import { useOwner } from '../hooks/useOwner';
 import { useScroll } from '../context/ScrollContext';
+import { useToast } from '../components/shared/Toast';
 
 const CustomerList = () => {
 	const navigate = useNavigate();
 	const owner = useOwner();
 	const { isNavVisible } = useScroll();
+	const { showToast } = useToast();
 
 	const getImageUrl = (url: string) => {
 		if (!url) return '';
@@ -87,7 +89,7 @@ const CustomerList = () => {
 	const handleGetLocation = () => {
 		setGettingLocation(true);
 		if (!navigator.geolocation) {
-			alert("Trình duyệt của bạn không hỗ trợ định vị");
+			showToast("Trình duyệt không hỗ trợ định vị", "error");
 			setGettingLocation(false);
 			return;
 		}
@@ -110,7 +112,7 @@ const CustomerList = () => {
 				setGettingLocation(false);
 			}
 		}, (error) => {
-			alert("Không thể lấy vị trí. Vui lòng cấp quyền truy cập GPS.");
+			showToast("Không thể lấy vị trí. Vui lòng cấp quyền GPS.", "warning");
 			setGettingLocation(false);
 		});
 	};
@@ -151,7 +153,7 @@ const CustomerList = () => {
 				}));
 			}
 		} catch (error) {
-			alert("Lỗi upload Cloudinary");
+			showToast("Lỗi upload Cloudinary", "error");
 		} finally {
 			setUploadingLicense(false);
 			setUploadingImages(false);
@@ -227,7 +229,7 @@ const CustomerList = () => {
 		e.preventDefault();
 		try {
 			if (!formData.name || !formData.phone) {
-				alert("Vui lòng nhập tên và số điện thoại");
+				showToast("Vui lòng nhập tên và số điện thoại", "warning");
 				return;
 			}
 			await addDoc(collection(db, 'customers'), {
@@ -251,8 +253,9 @@ const CustomerList = () => {
 
 			setShowAddForm(false);
 			resetForm();
+			showToast("Thêm khách hàng thành công", "success");
 		} catch (error) {
-			alert("Lỗi khi thêm khách hàng");
+			showToast("Lỗi khi thêm khách hàng", "error");
 		}
 	};
 
@@ -278,8 +281,9 @@ const CustomerList = () => {
 
 			setShowEditForm(false);
 			resetForm();
+			showToast("Cập nhật thành công", "success");
 		} catch (error) {
-			alert("Lỗi khi cập nhật khách hàng");
+			showToast("Lỗi khi cập nhật khách hàng", "error");
 		}
 	};
 
@@ -300,8 +304,9 @@ const CustomerList = () => {
 				});
 
 				setShowDetail(false);
+				showToast("Đã xóa khách hàng", "success");
 			} catch (error) {
-				alert("Lỗi khi xóa khách hàng");
+				showToast("Lỗi khi xóa khách hàng", "error");
 			}
 		}
 	};

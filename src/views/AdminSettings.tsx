@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 
 import { useOwner } from '../hooks/useOwner';
+import { useToast } from '../components/shared/Toast';
 
 const scrollbarHideStyle = `
   .no-scrollbar::-webkit-scrollbar {
@@ -28,6 +29,7 @@ const scrollbarHideStyle = `
 const AdminSettings = () => {
 	const { theme, toggleTheme } = useTheme();
 	const owner = useOwner();
+	const { showToast } = useToast();
 	const navigate = useNavigate();
 	const { search } = useLocation();
 	const [activeTab, setActiveTab] = useState('general');
@@ -169,16 +171,16 @@ const AdminSettings = () => {
 				updatedAt: serverTimestamp(),
 				updatedBy: auth.currentUser?.uid
 			}, { merge: true });
-			alert("Đã lưu cấu hình thành công!");
+			showToast("Đã lưu cấu hình thành công!", "success");
 		} catch (error) {
-			alert("Lỗi khi lưu cấu hình");
+			showToast("Lỗi khi lưu cấu hình", "error");
 		} finally {
 			setLoading(false);
 		}
 	};
 
 	const handleAddUser = async () => {
-		if (!newUser.email) return alert("Vui lòng nhập email");
+		if (!newUser.email) return showToast("Vui lòng nhập email", "warning");
 		setLoading(true);
 		try {
 			await setDoc(doc(db, 'permissions', newUser.email), {
@@ -211,9 +213,9 @@ const AdminSettings = () => {
 
 			setShowAddUser(false);
 			setNewUser({ email: '', role: 'sale', displayName: '' });
-			alert(`Đã thêm quyền truy cập cho ${newUser.email}`);
+			showToast(`Đã thêm quyền truy cập cho ${newUser.email}`, "success");
 		} catch (error) {
-			alert("Lỗi khi thêm nhân viên");
+			showToast("Lỗi khi thêm nhân viên", "error");
 		} finally {
 			setLoading(false);
 		}
@@ -245,7 +247,7 @@ const AdminSettings = () => {
 
 		const isLocked = (systemConfig.lock_free_sheets && !owner.isPro) || companyInfo.manualLockSheets;
 		if (isLocked) {
-			alert("Tính năng này đã bị khóa bởi hệ thống hoặc quản trị viên.");
+			showToast("Tính năng này đã bị khóa bởi hệ thống hoặc quản trị viên.", "warning");
 			return;
 		}
 
@@ -354,12 +356,12 @@ const AdminSettings = () => {
 					createdAt: serverTimestamp()
 				});
 
-				alert("Đồng bộ dữ liệu thành công!");
+				showToast("Đồng bộ dữ liệu thành công!", "success");
 			} else {
 				throw new Error(result.message);
 			}
 		} catch (error: any) {
-			alert("Lỗi đồng bộ: " + error.message);
+			showToast("Lỗi đồng bộ: " + error.message, "error");
 		} finally {
 			setSyncing(false);
 		}
@@ -449,7 +451,7 @@ const AdminSettings = () => {
 														onClick={() => {
 															navigator.geolocation.getCurrentPosition(
 																(pos) => setCompanyInfo({ ...companyInfo, lat: pos.coords.latitude, lng: pos.coords.longitude }),
-																(err) => alert("Không thể lấy vị trí: " + err.message)
+																(err) => showToast("Không thể lấy vị trí: " + err.message, "error")
 															);
 														}}
 														className="bg-blue-600 text-white p-3 rounded-xl hover:bg-blue-700 transition-all shrink-0"

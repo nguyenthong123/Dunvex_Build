@@ -5,11 +5,13 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { db, auth } from '../services/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, doc, getDoc, serverTimestamp, where, increment, writeBatch, getDocs, limit } from 'firebase/firestore';
 import { useOwner } from '../hooks/useOwner';
+import { useToast } from '../components/shared/Toast';
 
 const QuickOrder = () => {
 	const navigate = useNavigate();
 	const { id } = useParams();
 	const owner = useOwner();
+	const { showToast } = useToast();
 	const [products, setProducts] = useState<any[]>([]);
 	const [customers, setCustomers] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -200,7 +202,7 @@ const QuickOrder = () => {
 				]);
 			}
 		} else {
-			alert(`Không tìm thấy sản phẩm với mã ID: ${productId}`);
+			showToast(`Không tìm thấy sản phẩm với mã ID: ${productId}`, "warning");
 		}
 	};
 
@@ -218,7 +220,7 @@ const QuickOrder = () => {
 	const handleConfirmOrder = async () => {
 		const validItems = lineItems.filter(item => item.productId && item.qty > 0);
 		if (validItems.length === 0) {
-			alert("Vui lòng thêm sản phẩm vào đơn hàng");
+			showToast("Vui lòng thêm sản phẩm vào đơn hàng", "warning");
 			return;
 		}
 
@@ -347,7 +349,7 @@ const QuickOrder = () => {
 			}
 			setShowSuccessModal(true);
 		} catch (error) {
-			alert("Lỗi khi lưu đơn hàng: " + error);
+			showToast("Lỗi khi lưu đơn hàng: " + error, "error");
 		}
 	};
 

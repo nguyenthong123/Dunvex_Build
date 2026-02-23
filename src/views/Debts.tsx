@@ -28,11 +28,13 @@ interface DataRow {
 
 import { useOwner } from '../hooks/useOwner';
 import { useScroll } from '../context/ScrollContext';
+import { useToast } from '../components/shared/Toast';
 
 const Debts: React.FC = () => {
 	const navigate = useNavigate();
 	const owner = useOwner();
 	const { isNavVisible } = useScroll();
+	const { showToast } = useToast();
 
 	const [currentTime, setCurrentTime] = useState(new Date());
 	const [orders, setOrders] = useState<any[]>([]);
@@ -404,10 +406,10 @@ const Debts: React.FC = () => {
 			if (data.secure_url) {
 				setPaymentData(prev => ({ ...prev, proofImage: data.secure_url }));
 			} else {
-				alert("Lỗi upload Cloudinary: " + (data.error?.message || "Không xác định"));
+				showToast("Lỗi upload Cloudinary: " + (data.error?.message || "Không xác định"), "error");
 			}
 		} catch (error: any) {
-			alert(`Lỗi xử lý tệp: ${error.message}`);
+			showToast(`Lỗi xử lý tệp: ${error.message}`, "error");
 		} finally {
 			setUploadingPaymentImage(false);
 		}
@@ -416,7 +418,7 @@ const Debts: React.FC = () => {
 	const handleRecordPayment = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (!paymentData.customerId || !paymentData.amount) {
-			alert("Vui lòng nhập đầy đủ thông tin");
+			showToast("Vui lòng nhập đầy đủ thông tin", "warning");
 			return;
 		}
 
@@ -435,7 +437,7 @@ const Debts: React.FC = () => {
 					details: `Đã cập nhật thu ${paymentData.amount.toLocaleString('vi-VN')} đ từ ${paymentData.customerName}`,
 					createdAt: serverTimestamp()
 				});
-				alert("Cập nhật phiếu thu thành công");
+				showToast("Cập nhật phiếu thu thành công", "success");
 			} else {
 				await addDoc(collection(db, 'payments'), {
 					...paymentData,
@@ -454,7 +456,7 @@ const Debts: React.FC = () => {
 					details: `Đã thu ${paymentData.amount.toLocaleString('vi-VN')} đ từ ${paymentData.customerName}`,
 					createdAt: serverTimestamp()
 				});
-				alert("Ghi nhận thu nợ thành công");
+				showToast("Ghi nhận thu nợ thành công", "success");
 			}
 			setShowPaymentForm(false);
 			setEditingPaymentId(null);
@@ -468,7 +470,7 @@ const Debts: React.FC = () => {
 				proofImage: ''
 			});
 		} catch (error) {
-			alert("Lỗi khi lưu phiếu thu");
+			showToast("Lỗi khi lưu phiếu thu", "error");
 		}
 	};
 
@@ -477,9 +479,9 @@ const Debts: React.FC = () => {
 		if (!window.confirm("Bạn có chắc chắn muốn xóa phiếu thu này? Hành động này sẽ cập nhật lại dư nợ của khách hàng.")) return;
 		try {
 			await deleteDoc(doc(db, 'payments', id));
-			alert("Đã xóa phiếu thu");
+			showToast("Đã xóa phiếu thu", "success");
 		} catch (error) {
-			alert("Lỗi khi xóa phiếu thu");
+			showToast("Lỗi khi xóa phiếu thu", "error");
 		}
 	};
 	const hasPermission = owner.role === 'admin' || (owner.accessRights?.debts_manage ?? true);

@@ -6,12 +6,14 @@ import BulkImport from '../components/shared/BulkImport';
 import QRScanner from '../components/shared/QRScanner';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useOwner } from '../hooks/useOwner';
+import { useToast } from '../components/shared/Toast';
 
 
 const ProductList = () => {
 	const navigate = useNavigate();
 	const location = useLocation();
 	const owner = useOwner();
+	const { showToast } = useToast();
 
 	const [products, setProducts] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -192,12 +194,13 @@ const ProductList = () => {
 
 			if (data.secure_url) {
 				setFormData(prev => ({ ...prev, imageUrl: data.secure_url }));
+				showToast("Tải ảnh lên thành công", "success");
 			} else {
-				alert("Lỗi upload Cloudinary: " + (data.error?.message || "Không xác định"));
+				showToast("Lỗi upload Cloudinary: " + (data.error?.message || "Không xác định"), "error");
 			}
 
 		} catch (error: any) {
-			alert(`Lỗi upload: ${error.message}`);
+			showToast(`Lỗi upload: ${error.message}`, "error");
 		} finally {
 			setUploading(false);
 		}
@@ -222,7 +225,7 @@ const ProductList = () => {
 		e.preventDefault();
 		try {
 			if (!formData.name) {
-				alert("Vui lòng nhập tên sản phẩm");
+				showToast("Vui lòng nhập tên sản phẩm", "warning");
 				return;
 			}
 
@@ -276,8 +279,9 @@ const ProductList = () => {
 
 			setShowAddForm(false);
 			resetForm();
+			showToast("Thêm sản phẩm thành công", "success");
 		} catch (error) {
-			alert("Lỗi khi thêm sản phẩm");
+			showToast("Lỗi khi thêm sản phẩm", "error");
 		}
 	};
 
@@ -327,8 +331,9 @@ const ProductList = () => {
 			await batch.commit();
 			setShowEditForm(false);
 			resetForm();
+			showToast("Cập nhật sản phẩm thành công", "success");
 		} catch (error) {
-			alert("Lỗi khi cập nhật sản phẩm");
+			showToast("Lỗi khi cập nhật sản phẩm", "error");
 		}
 	};
 
@@ -337,8 +342,9 @@ const ProductList = () => {
 			try {
 				await deleteDoc(doc(db, 'products', id));
 				setSelectedIds(prev => prev.filter(item => item !== id));
+				showToast("Đã xóa sản phẩm", "success");
 			} catch (error) {
-				alert("Lỗi khi xóa sản phẩm");
+				showToast("Lỗi khi xóa sản phẩm", "error");
 			}
 		}
 	};
@@ -364,9 +370,9 @@ const ProductList = () => {
 
 			await batch.commit();
 			setSelectedIds([]);
-			alert(`Đã xóa ${selectedIds.length} sản phẩm thành công`);
+			showToast(`Đã xóa ${selectedIds.length} sản phẩm thành công`, "success");
 		} catch (error) {
-			alert("Lỗi khi xóa hàng loạt sản phẩm");
+			showToast("Lỗi khi xóa hàng loạt sản phẩm", "error");
 		}
 	};
 
@@ -458,7 +464,7 @@ const ProductList = () => {
 	const printQRLabel = (product: any) => {
 		const printWindow = window.open('', '_blank');
 		if (!printWindow) {
-			alert("Vui lòng cho phép mở popup để in tem.");
+			showToast("Vui lòng cho phép mở popup để in tem.", "warning");
 			return;
 		}
 
@@ -547,7 +553,7 @@ const ProductList = () => {
 		if (product) {
 			openDetail(product);
 		} else {
-			alert(`Không tìm thấy sản phẩm với mã ID: ${productId}`);
+			showToast(`Không tìm thấy sản phẩm với mã ID: ${productId}`, "error");
 		}
 	};
 

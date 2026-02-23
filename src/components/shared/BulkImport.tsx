@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import { db, auth } from '../../services/firebase';
 import { collection, writeBatch, doc, serverTimestamp, addDoc, getDocs, query, where } from 'firebase/firestore';
 import { X, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Download, Link as LinkIcon, Globe } from 'lucide-react';
+import { useToast } from './Toast';
 
 interface BulkImportProps {
 	type: 'customers' | 'products';
@@ -21,6 +22,7 @@ interface FieldConfig {
 }
 
 const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onClose, onSuccess }) => {
+	const { showToast } = useToast();
 	const [data, setData] = useState<any[]>([]);
 	const [columns, setColumns] = useState<string[]>([]);
 	const [loading, setLoading] = useState(false);
@@ -382,10 +384,10 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 
 			onSuccess?.();
 			onClose();
-			alert(`Thành công! Đã cập nhật ${totalUpdated} và thêm mới ${totalCreated} ${config.title}.`);
+			showToast(`Thành công! Đã cập nhật ${totalUpdated} và thêm mới ${totalCreated} ${config.title}.`, "success");
 		} catch (err: any) {
 			console.error("Import error:", err);
-			alert("Lỗi khi nhập dữ liệu: " + err.message);
+			showToast("Lỗi khi nhập dữ liệu: " + err.message, "error");
 		} finally {
 			setImporting(false);
 		}

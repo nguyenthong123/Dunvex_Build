@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { useToast } from './shared/Toast';
 
 // Fix for Leaflet marker icon issue in React
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
@@ -88,6 +89,7 @@ const MapController = ({ customers = [], focusLocation = null }: { customers?: a
 };
 
 const CustomerMap: React.FC<CustomerMapProps> = ({ customers = [], onClose }) => {
+	const { showToast } = useToast();
 	const [searchQuery, setSearchQuery] = useState('');
 	const [focusLocation, setFocusLocation] = useState<[number, number] | null>(null);
 	const [showSearchResults, setShowSearchResults] = useState(false);
@@ -148,7 +150,7 @@ const CustomerMap: React.FC<CustomerMapProps> = ({ customers = [], onClose }) =>
 
 	const handleGetMyLocation = () => {
 		if (!navigator.geolocation) {
-			alert('Trình duyệt không hỗ trợ định vị');
+			showToast('Trình duyệt không hỗ trợ định vị', "error");
 			return;
 		}
 		setIsLocating(true);
@@ -161,7 +163,7 @@ const CustomerMap: React.FC<CustomerMapProps> = ({ customers = [], onClose }) =>
 			},
 			() => {
 				setIsLocating(false);
-				alert('Không thể lấy vị trí. Hãy bật GPS và cho phép truy cập.');
+				showToast('Không thể lấy vị trí. Hãy bật GPS và cho phép truy cập.', "warning");
 			},
 			{ enableHighAccuracy: true, timeout: 5000 }
 		);

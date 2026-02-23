@@ -8,6 +8,7 @@ import {
 import { db } from '../services/firebase';
 import { collection, query, where, getDocs, doc, getDoc, limit, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useOwner } from '../hooks/useOwner';
+import { useToast } from '../components/shared/Toast';
 
 // Lab Task definitions
 const labData: Record<string, any> = {
@@ -205,6 +206,7 @@ const TrainingLab = () => {
 	const { id } = useParams();
 	const navigate = useNavigate();
 	const owner = useOwner();
+	const { showToast } = useToast();
 	const lab = labData[id || 'lab-01'] || labData['lab-01'];
 
 	const [timeLeft, setTimeLeft] = useState(lab.duration);
@@ -312,7 +314,7 @@ const TrainingLab = () => {
 				if (isCorrect) {
 					count = 1;
 				} else {
-					alert("Đáp án chưa chính xác. Vui lòng kiểm tra lại dữ liệu trong Sheet!");
+					showToast("Đáp án chưa chính xác. Vui lòng kiểm tra lại dữ liệu trong Sheet!", "warning");
 					setChecking(null);
 					return;
 				}
@@ -387,7 +389,7 @@ const TrainingLab = () => {
 			});
 		} catch (err) {
 			console.error("Verification error:", err);
-			alert("Lỗi khi kiểm tra: " + err);
+			showToast("Lỗi khi kiểm tra: " + err, "error");
 		} finally {
 			setChecking(null);
 		}

@@ -1,4 +1,75 @@
 {
-	"indexes": [],
+	"indexes": [
+		{
+			"collectionGroup": "orders",
+			"queryScope": "COLLECTION",
+			"fields": [
+				{
+					"fieldPath": "ownerId",
+					"order": "ASCENDING"
+				},
+				{
+					"fieldPath": "createdByEmail",
+					"order": "ASCENDING"
+				}
+			]
+		},
+		{
+			"collectionGroup": "customers",
+			"queryScope": "COLLECTION",
+			"fields": [
+				{
+					"fieldPath": "ownerId",
+					"order": "ASCENDING"
+				},
+				{
+					"fieldPath": "createdByEmail",
+					"order": "ASCENDING"
+				}
+			]
+		},
+		{
+			"collectionGroup": "payments",
+			"queryScope": "COLLECTION",
+			"fields": [
+				{
+					"fieldPath": "ownerId",
+					"order": "ASCENDING"
+				},
+				{
+					"fieldPath": "createdByEmail",
+					"order": "ASCENDING"
+				}
+			]
+		},
+		{
+			"collectionGroup": "audit_logs",
+			"queryScope": "COLLECTION",
+			"fields": [
+				{
+					"fieldPath": "ownerId",
+					"order": "ASCENDING"
+				},
+				{
+					"fieldPath": "userId",
+					"order": "ASCENDING"
+				}
+			]
+		},
+		{
+			"collectionGroup": "coupons",
+			"queryScope": "COLLECTION",
+			"fields": [
+				{
+					"fieldPath": "ownerId",
+					"order": "ASCENDING"
+				},
+				{
+					"fieldPath": "code",
+					"order": "ASCENDING"
+				}
+			]
+		}
+	],
 	"fieldOverrides": []
 }

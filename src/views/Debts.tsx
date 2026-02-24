@@ -151,6 +151,7 @@ const Debts: React.FC = () => {
 		printWindow.document.write(`
 			<html>
 				<head>
+					<base href="${window.location.origin}/">
 					<title>In Công Nợ - ${selectedCustomer?.name || ''}</title>
 					${styles}
 					<style>
@@ -190,8 +191,10 @@ const Debts: React.FC = () => {
 						window.onload = () => {
 							setTimeout(() => {
 								window.print();
-								window.close();
-							}, 500);
+								if (!/Android|iPhone|iPad/i.test(navigator.userAgent)) {
+									window.close();
+								}
+							}, 800);
 						};
 					</script>
 				</body>

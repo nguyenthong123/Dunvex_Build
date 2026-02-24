@@ -53,6 +53,7 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 		printWindow.document.write(`
 			<html>
 				<head>
+					<base href="${window.location.origin}/">
 					<title>In Phiếu Giao Hàng - ${order.orderId || ''}</title>
 					${styles}
 					<style>
@@ -92,8 +93,10 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 						window.onload = () => {
 							setTimeout(() => {
 								window.print();
-								window.close();
-							}, 500);
+								if (!/Android|iPhone|iPad/i.test(navigator.userAgent)) {
+									window.close();
+								}
+							}, 800);
 						};
 					</script>
 				</body>

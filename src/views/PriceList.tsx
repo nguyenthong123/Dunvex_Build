@@ -280,6 +280,7 @@ const PriceList = () => {
 		printWindow.document.write(`
 			<html>
 				<head>
+					<base href="${window.location.origin}/">
 					<title>In Báo Giá - ${selectedList?.title || ''}</title>
 					${styles}
 					<style>
@@ -320,8 +321,10 @@ const PriceList = () => {
 						window.onload = () => {
 							setTimeout(() => {
 								window.print();
-								window.close();
-							}, 500);
+								if (!/Android|iPhone|iPad/i.test(navigator.userAgent)) {
+									window.close();
+								}
+							}, 800);
 						};
 					</script>
 				</body>

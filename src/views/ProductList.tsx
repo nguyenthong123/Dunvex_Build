@@ -478,6 +478,7 @@ const ProductList = () => {
 		printWindow.document.write(`
 			<html>
 				<head>
+					<base href="${window.location.origin}/">
 					<title>In Tem QR - ${product.name}</title>
 					<style>
 						@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');

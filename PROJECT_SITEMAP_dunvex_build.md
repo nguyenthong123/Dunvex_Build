@@ -115,6 +115,7 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 - [x] **Lọc theo ngày (Date Filtering)**: Đã hoàn thiện bộ lọc ngày thực tế cho danh sách công nợ và bảng kê chi tiết khách hàng.
 - [x] **In phiếu & Xuất PDF Chuyên nghiệp (Feb 24 Upgrade - The Print Engine V2)**: 
     - **Cơ chế Popup Độc lập (Print to New Window)**: Chuyển đổi toàn bộ hệ thống in ấn sang cơ chế mở cửa sổ popup riêng biệt. Điều này giúp cách ly hoàn toàn Tờ Phiếu khỏi mã nguồn rác của ứng dụng (Sidebar, Nav), đảm bảo độ ổn định tuyệt đối 100% và không bao giờ bị trắng trang.
+    - **Fix Lỗi In trên Di động (Mobile Print Fix)**: Tích hợp thẻ `<base>` để đồng bộ Style và khắc phục triệt để lỗi "Đã xảy ra sự cố" trên Android/iOS. Điều chỉnh logic đóng cửa sổ thông minh giúp quá trình tạo PDF trên di động mượt mà và không bị ngắt quãng.
     - **Cân bằng & Thẳng hàng Tuyệt đối**: Ép cấu trúc Grid 2 cột cho phần thông tin Khách hàng - Người lập phiếu, khắc phục triệt để lỗi "cái cao cái thấp" do trình duyệt tự ý co dãn.
     - **Chống lấp nội dung (Anti-Clipping)**: Gỡ bỏ giới hạn chiều cao và ép trạng thái `overflow: visible`, đảm bảo phần Tổng tiền và Chữ ký ở cuối phiếu luôn hiển thị đầy đủ, không bị cắt mất khi đơn hàng dài.
     - **Đa module (Order, Debt, Price)**: Áp dụng đồng bộ cho Phiếu giao hàng, Bảng kê công nợ và Báo giá hệ thống.

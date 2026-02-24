@@ -1,17 +1,19 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import * as XLSX from 'xlsx';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
 	Settings, User, Bell, Shield, Database, Globe, Moon, Sun, Users, Activity,
 	FileText, Save, Plus, Trash2, Edit2, CheckCircle, XCircle, Crown, Clock,
 	Rocket, Lock, RefreshCcw, ExternalLink, MapPin, Calendar, X,
-	ChevronLeft, ChevronRight
+	ChevronLeft, ChevronRight, Download
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
-import { auth, db } from '../services/firebase';
+import { auth, db, functions } from '../services/firebase';
 import {
 	collection, query, onSnapshot, doc, updateDoc, addDoc, serverTimestamp,
 	orderBy, limit, deleteDoc, getDoc, setDoc, where, getDocs
 } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
@@ -62,6 +64,8 @@ const AdminSettings = () => {
 		end: new Date().toISOString().split('T')[0]
 	});
 	const [systemConfig, setSystemConfig] = useState<any>({ lock_free_sheets: false });
+	const [exportLoading, setExportLoading] = useState(false);
+	const [exportCount, setExportCount] = useState(0);
 
 	// User Management
 	const [activeEmployees, setActiveEmployees] = useState<any[]>([]);
@@ -140,6 +144,16 @@ const AdminSettings = () => {
 			setFieldCheckins(snap.docs.map(d => ({ id: d.id, ...d.data() })));
 		});
 
+		// 4. Listen to Export Usage
+		const currentMonth = new Date().toISOString().slice(0, 7);
+		const unsubUsage = onSnapshot(doc(db, 'usage_limits', `${owner.ownerId}_${currentMonth}`), (snap) => {
+			if (snap.exists()) {
+				setExportCount(snap.data().count || 0);
+			} else {
+				setExportCount(0);
+			}
+		});
+
 		return () => {
 			unsubUsers();
 			unsubPerms();
@@ -147,6 +161,7 @@ const AdminSettings = () => {
 			unsubConfig();
 			unsubAtt();
 			unsubField();
+			unsubUsage();
 		};
 	}, [owner.loading, owner.ownerId]);
 
@@ -367,6 +382,127 @@ const AdminSettings = () => {
 		}
 	};
 
+	const handleExportData = async () => {
+		if (!owner.ownerId) return;
+
+		const isLocked = (systemConfig.lock_free_sheets && !owner.isPro) || companyInfo.manualLockSheets;
+		if (isLocked) {
+			showToast("Tính năng trích xuất dữ liệu đã bị khóa. Vui lòng nâng cấp Pro hoặc liên hệ Admin.", "warning");
+			return;
+		}
+
+		if (exportCount >= 5) {
+			showToast("Bạn đã hết lượt tải về trong tháng này.", "error");
+			return;
+		}
+
+		setExportLoading(true);
+		try {
+			// 1. Prepare data containers
+			const collections = ['products', 'customers', 'orders', 'debts', 'finance_transactions', 'checkins'];
+			const workbook = XLSX.utils.book_new();
+
+			// 2. Prepare Time Range
+			const startTS = syncRange.start ? new Date(syncRange.start + 'T00:00:00') : null;
+			const endTS = syncRange.end ? new Date(syncRange.end + 'T23:59:59') : null;
+
+			// 3. Fetch and Process each collection
+			const orderDetails: any[] = [];
+
+			for (const colName of collections) {
+				const q = query(collection(db, colName), where('ownerId', '==', owner.ownerId), limit(5000));
+				const snap = await getDocs(q);
+
+				let data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+				// Apply date filtering client-side for transactional data
+				if (['orders', 'debts', 'finance_transactions', 'checkins'].includes(colName) && startTS && endTS) {
+					data = data.filter((item: any) => {
+						if (!item.createdAt) return false;
+						const itemDate = item.createdAt.seconds ? new Date(item.createdAt.seconds * 1000) : new Date(item.createdAt);
+						return itemDate >= startTS && itemDate <= endTS;
+					});
+				}
+
+				if (data.length > 0) {
+					// Special handling for orders: extract details
+					if (colName === 'orders') {
+						data.forEach((order: any) => {
+							if (order.items && Array.isArray(order.items)) {
+								order.items.forEach((item: any) => {
+									orderDetails.push({
+										orderId: order.id,
+										orderDate: order.orderDate || (order.createdAt?.seconds ? new Date(order.createdAt.seconds * 1000).toLocaleDateString('vi-VN') : ''),
+										customerName: order.customerName || '',
+										customerBusiness: order.customerBusinessName || '',
+										...item
+									});
+								});
+							}
+						});
+					}
+
+					// Format specific fields for readability in Excel
+					const formattedData = data.map(item => {
+						const newItem: any = { ...item };
+						Object.keys(newItem).forEach(key => {
+							const val = newItem[key];
+							if (val && typeof val === 'object') {
+								if (val.seconds) {
+									// Firestore Timestamp
+									newItem[key] = new Date(val.seconds * 1000).toLocaleString('vi-VN');
+								} else {
+									// Other objects/arrays - stringify to avoid [object Object]
+									newItem[key] = JSON.stringify(val);
+								}
+							}
+						});
+						return newItem;
+					});
+
+					const worksheet = XLSX.utils.json_to_sheet(formattedData);
+					XLSX.utils.book_append_sheet(workbook, worksheet, colName);
+				}
+			}
+
+			// Add the specific details sheet if we have order items
+			if (orderDetails.length > 0) {
+				const detailsSheet = XLSX.utils.json_to_sheet(orderDetails);
+				XLSX.utils.book_append_sheet(workbook, detailsSheet, 'order_details');
+			}
+
+			// 4. Download File
+			XLSX.writeFile(workbook, `Dunvex_Export_${owner.ownerId}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+
+			// 5. Update Usage Count in Firestore
+			const currentMonth = new Date().toISOString().slice(0, 7);
+			const usageRef = doc(db, 'usage_limits', `${owner.ownerId}_${currentMonth}`);
+			await setDoc(usageRef, {
+				ownerId: owner.ownerId,
+				count: exportCount + 1,
+				lastExportAt: serverTimestamp(),
+				lastExportBy: auth.currentUser?.email || 'Admin'
+			}, { merge: true });
+
+			// 6. Audit Log
+			await addDoc(collection(db, 'audit_logs'), {
+				action: 'Bộ lưu dữ liệu (Export - Client)',
+				user: auth.currentUser?.email || 'Admin',
+				userId: auth.currentUser?.uid,
+				ownerId: owner.ownerId,
+				details: `Đã xuất dữ liệu ra Excel (Lần thứ ${exportCount + 1} trong tháng)`,
+				createdAt: serverTimestamp()
+			});
+
+			showToast("Tải dữ liệu thành công!", "success");
+		} catch (error: any) {
+			console.error("Export Error:", error);
+			showToast("Lỗi khi trích xuất dữ liệu: " + (error.message || "Vui lòng thử lại sau"), "error");
+		} finally {
+			setExportLoading(false);
+		}
+	};
+
 	const handleTogglePermission = async (user: any, resource: string) => {
 		const currentVal = user.accessRights?.[resource] ?? true;
 		const newVal = !currentVal;
@@ -477,12 +613,17 @@ const AdminSettings = () => {
 
 							<div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800">
 								<div className="flex items-center gap-4 mb-6">
-									<div className="bg-emerald-50 dark:bg-emerald-900/20 p-3 rounded-xl text-emerald-600 dark:text-emerald-400">
-										<FileText size={24} />
+									<div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-xl text-indigo-600 dark:text-indigo-400">
+										<Download size={24} />
 									</div>
 									<div>
-										<h3 className="text-xl font-bold dark:text-white">Sao lưu Google Sheets</h3>
-										<p className="text-sm text-slate-500 dark:text-slate-400">Tự động đẩy toàn bộ dữ liệu từ Firestore về Google Sheets.</p>
+										<h3 className="text-xl font-bold dark:text-white">Bộ lưu dữ liệu (Export)</h3>
+										<p className="text-sm text-slate-500 dark:text-slate-400">Trích xuất dữ liệu tùy chọn theo mốc thời gian ra file Excel.</p>
+									</div>
+									<div className="ml-auto flex flex-col items-end">
+										<span className={`text-[10px] font-black px-2 py-1 rounded-lg ${exportCount >= 5 ? 'bg-rose-100 text-rose-600' : 'bg-blue-100 text-blue-600'}`}>
+											SỬ DỤNG: {exportCount}/5 LẦN/THÁNG
+										</span>
 									</div>
 									{isSyncLocked && (
 										<div className="ml-auto bg-rose-500/10 text-rose-500 px-3 py-1 rounded-lg flex items-center gap-1.5 animate-pulse">
@@ -492,74 +633,53 @@ const AdminSettings = () => {
 									)}
 								</div>
 
-								<div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-700">
-									{companyInfo.spreadsheetUrl ? (
-										<div className="space-y-4">
-											<div className="flex items-center justify-between">
-												<div className="flex items-center gap-3">
-													<div className="size-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center text-green-600 dark:text-green-400">
-														<Database size={20} />
-													</div>
-													<div>
-														<p className="text-xs font-black text-slate-400 uppercase tracking-widest">File liên kết</p>
-														<a href={companyInfo.spreadsheetUrl} target="_blank" rel="noreferrer" className="text-sm font-bold text-blue-600 hover:underline flex items-center gap-1">Mở Sheets <ExternalLink size={12} /></a>
-													</div>
-												</div>
-												<div className="text-right">
-													<p className="text-[10px] font-black text-slate-400">ID: {companyInfo.spreadsheetId?.slice(0, 8)}...</p>
-													<p className="text-[10px] font-bold text-emerald-500">Cập nhật: {companyInfo.lastSyncAt ? new Date(companyInfo.lastSyncAt.seconds * 1000).toLocaleDateString() : 'Never'}</p>
-												</div>
-											</div>
-
-											<div className="grid grid-cols-2 gap-4 pt-2">
-												<div className="space-y-1">
-													<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Từ ngày</label>
-													<input
-														type="date"
-														className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs font-bold dark:text-white outline-none focus:ring-2 focus:ring-green-500/20"
-														value={syncRange.start}
-														onChange={(e) => setSyncRange({ ...syncRange, start: e.target.value })}
-													/>
-												</div>
-												<div className="space-y-1">
-													<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Đến ngày</label>
-													<input
-														type="date"
-														className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs font-bold dark:text-white outline-none focus:ring-2 focus:ring-green-500/20"
-														value={syncRange.end}
-														onChange={(e) => setSyncRange({ ...syncRange, end: e.target.value })}
-													/>
-												</div>
-											</div>
-
-											<div className="space-y-1">
-												<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Lịch đồng bộ tự động</label>
-												<select
-													className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-xs font-bold dark:text-white outline-none focus:ring-2 focus:ring-green-500/20"
-													value={companyInfo.autoSyncSchedule}
-													onChange={(e) => setCompanyInfo({ ...companyInfo, autoSyncSchedule: e.target.value })}
-												>
-													<option value="none">Tắt tự động</option>
-													<option value="weekly">Hàng tuần</option>
-													<option value="monthly">Hàng tháng</option>
-													<option value="quarterly">Cuối mỗi quý</option>
-												</select>
-												<p className="text-[9px] text-slate-400 font-medium px-1 mt-1">
-													{companyInfo.autoSyncSchedule === 'weekly' && "Hệ thống sẽ tự động đồng bộ mỗi 7 ngày."}
-													{companyInfo.autoSyncSchedule === 'monthly' && "Hệ thống sẽ đồng bộ vào ngày đầu tiên mỗi tháng."}
-													{companyInfo.autoSyncSchedule === 'quarterly' && "Hệ thống sẽ đồng bộ khi kết thúc mỗi quý (31/3, 30/6, 30/9, 31/12)."}
-												</p>
-											</div>
-											<button onClick={handleSheetSync} disabled={syncing || isSyncLocked} className="w-full bg-[#1A237E] dark:bg-indigo-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 enabled:hover:bg-blue-800 transition-all disabled:opacity-50">
-												{syncing ? <><RefreshCcw size={18} className="animate-spin" /> Đang đồng bộ...</> : isSyncLocked ? <><Lock size={18} /> TÍNH NĂNG ĐÃ BỊ KHÓA</> : <><Rocket size={18} /> CẬP NHẬT DỮ LIỆU NGAY</>}
-											</button>
+								<div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700">
+									<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+										<div className="space-y-1">
+											<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Từ ngày</label>
+											<input
+												type="date"
+												className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20"
+												value={syncRange.start}
+												onChange={(e) => setSyncRange({ ...syncRange, start: e.target.value })}
+											/>
 										</div>
-									) : (
-										<div className="text-center py-6">
-											<p className="text-slate-500 text-sm mb-6">Bạn chưa tạo file sao lưu. Hệ thống sẽ tự động khởi tạo file mới cho bạn.</p>
-											<button onClick={handleSheetSync} disabled={syncing || isSyncLocked} className="bg-[#00a859] text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2 mx-auto">
-												{syncing ? <><RefreshCcw size={20} className="animate-spin" /> Đang thiết lập...</> : isSyncLocked ? <><Lock size={20} /> TÍNH NĂNG ĐÃ BỊ KHÓA</> : <><Plus size={20} /> KHỞI TẠO FILE SAO LƯU</>}
-											</button>
+										<div className="space-y-1">
+											<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Đến ngày</label>
+											<input
+												type="date"
+												className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20"
+												value={syncRange.end}
+												onChange={(e) => setSyncRange({ ...syncRange, end: e.target.value })}
+											/>
+										</div>
+									</div>
+
+									<div className="flex flex-col md:flex-row items-center gap-6">
+										<div className="flex-1">
+											<h4 className="font-bold text-slate-800 dark:text-white mb-2">Tải dữ liệu nâng cao</h4>
+											<p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+												Hệ thống sẽ lọc dữ liệu (Đơn hàng, Công nợ, Checkin) theo khoảng thời gian bạn chọn và tạo file Excel trực tiếp.
+												Hành động này giúp báo cáo gọn nhẹ và xử lý nhanh hơn. (Yêu cầu tài khoản PRO)
+											</p>
+										</div>
+										<button
+											onClick={handleExportData}
+											disabled={exportLoading || exportCount >= 5 || isSyncLocked}
+											className="w-full md:w-auto bg-[#1A237E] dark:bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center gap-3 shadow-xl shadow-indigo-500/10"
+										>
+											{exportLoading ? (
+												<><RefreshCcw size={20} className="animate-spin" /> Đang xử lý...</>
+											) : isSyncLocked ? (
+												<><Lock size={20} /> ĐÃ BỊ KHÓA</>
+											) : (
+												<><Download size={20} /> Tải dữ liệu về</>
+											)}
+										</button>
+									</div>
+									{(exportCount >= 5 || isSyncLocked) && (
+										<div className="mt-4 p-3 bg-rose-50 dark:bg-rose-900/10 rounded-xl flex items-center gap-2 text-rose-600 dark:text-rose-400 text-[10px] font-bold">
+											<Lock size={14} /> {isSyncLocked ? "Vui lòng nâng cấp lên gói PRO để sử dụng tính năng trích xuất dữ liệu." : `Bạn đã đạt giới hạn tải về trong tháng này. Lượt dùng: ${exportCount}/5.`}
 										</div>
 									)}
 								</div>

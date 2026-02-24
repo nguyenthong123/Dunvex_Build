@@ -249,7 +249,7 @@ const NexusControl = () => {
 			const featureMap: Record<string, string> = {
 				'manualLockOrders': 'Chi tiết Đơn hàng',
 				'manualLockDebts': 'Công nợ Chi tiết',
-				'manualLockSheets': 'Đồng bộ Google Sheets'
+				'manualLockSheets': 'Tải & Đồng bộ dữ liệu (Export)'
 			};
 			const featureName = featureMap[field] || 'Chính sách hệ thống';
 

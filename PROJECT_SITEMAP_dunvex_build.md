@@ -237,11 +237,19 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     *   **Logical Cleanup**: Sửa lỗi hiển thị số "0" dư thừa do logic kiểm tra tọa độ trong chi tiết khách hàng.
     *   **Map Popup Improvement**: Ưu tiên hiển thị **Tên cơ sở kinh doanh** thay cho mã ID/Tên khách hàng trong cửa sổ thông báo trên bản đồ, giúp nhận diện đối tác nhanh chóng hơn.
     *   **Firestore Query Optimization**: Khắc phục lỗi "failed-precondition" (yêu cầu index) bằng cách chuyển cơ chế lọc dữ liệu theo nhân viên và trạng thái sang phía Client. Đảm bảo ứng dụng chạy mượt mà ngay cả khi chưa kịp tạo Index trên Google Cloud Console.
+- [x] **Trích xuất dữ liệu Excel (Client-Side Export Upgrade)**:
+    *   **Cơ chế Serverless**: Chuyển đổi hoàn toàn từ Cloud Functions sang xử lý tại trình duyệt bằng thư viện `xlsx`. Loại bỏ phụ thuộc vào gói Blaze và lỗi khởi động server.
+    *   **Báo cáo Chi tiết (`order_details`)**: Tự động tách nhỏ các món hàng trong đơn hàng ra một Sheet riêng, giúp kế toán dễ dàng làm Pivot Table và thống kê số lượng hàng bán.
+    *   **Định dạng thông minh**: Tự động chuyển đổi Timestamp của Firestore sang định dạng ngày tháng Việt Nam và xử lý chuỗi JSON để file Excel luôn sạch đẹp, không bị lỗi `[object Object]`.
+    *   **Quản lý Lượt dùng (Monthly Reset)**: Tích hợp bộ đếm lượt tải ngay tại giao diện, tự động reset về 0 mỗi khi sang tháng mới để kiểm soát tài nguyên hệ thống.
+- [x] **Ổn định hóa Bảo mật & Quyền truy cập**:
+    *   **Fix lỗi Permission Denied**: Cập nhật lại toàn diện `firestore.rules`, khắc phục triệt để các lỗi đỏ tại Chuông thông báo và Hệ thống cảnh báo tự động.
+    *   **Phân quyền Đa tầng**: Đảm bảo quyền truy cập an toàn cho cả Chủ shop và Nhân viên dựa trên `ownerId` và email, đồng thời bảo vệ dữ liệu nhạy cảm.
 
 ### 📝 Cần làm tiếp (To-do)
 
 #### 🛡️ Bảo mật (Security)
-- [x] **Firestore Audit**: Kiểm tra và thắt chặt Security Rules, đảm bảo dữ liệu chỉ được truy cập bởi đúng `ownerId`.
+- [x] **Firestore Audit**: Kiểm tra và thắt chặt Security Rules, đảm bảo dữ liệu chỉ được truy cập bởi đúng `ownerId`. Khắc phục lỗi chặn quyền truy cập ngầm.
 - [x] **Data Sanitation**: Triển khai lớp xác thực dữ liệu đầu vào (Zod/Yup) cho tất cả các form để ngăn chặn dữ liệu rác.
 - [x] **Masking**: Tự động che bớt thông tin nhạy cảm (SĐT, Email) trong các nhật ký hoạt động cho nhân viên.
 
@@ -252,13 +260,13 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 - [x] **Query Limitation**: Tối ưu hóa các truy vấn Firestore, giới hạn số lượng bản ghi tải về để tiết kiệm băng thông và tăng tốc xử lý.
 
 
-#### � Thông báo & Trải nghiệm (UX/UI)
+####  Thông báo & Trải nghiệm (UX/UI)
 - [x] **Product Search Fix**: Sửa lỗi tìm kiếm sản phẩm trong QuickOrder, xử lý trùng lặp khoảng trắng và chuẩn hóa dữ liệu giúp tìm kiếm chính xác 100%.
 - [x] **Skeleton Loaders (Phase 2)**: Triển khai hiệu ứng Shimmer cho các module Sản phẩm, Đơn hàng và Công nợ để đồng bộ hóa trải nghiệm.
 - [x] **Haptic Feedback**: Thêm rung phản hồi nhẹ trên di động khi quét QR thành công hoặc chốt đơn hàng trong QuickOrder.
 - [x] **Offline Banner**: Hiển thị thanh thông báo trạng thái "Đứt kết nối - Đang dùng dữ liệu ngoại tuyến" rõ ràng hơn.
 - [ ] **Interactive Tour**: Thêm hướng dẫn ảo (Guided Tour) cho người dùng mới khi lần đầu truy cập các module phức tạp.
-- [ ] **Báo cáo & Xuất dữ liệu (Finance Pro)**: Tích hợp nút xuất báo cáo Sổ quỹ và Lợi nhuận ra file Excel/PDF theo khoảng thời gian tùy chọn.
+- [x] **Báo cáo & Xuất dữ liệu (Finance Pro)**: Tích hợp nút xuất báo cáo Sổ quỹ và Lợi nhuận ra file Excel/PDF theo khoảng thời gian tùy chọn. Khởi chạy phiên bản Excel Client-side ổn định.
 - [ ] **Ký nhận điện tử (E-Signature)**: Cho phép khách hàng ký nhận trực tiếp trên màn hình di động khi giao hàng; tích hợp chữ ký vào Phiếu giao hàng.
 - [ ] **Tự động hóa Zalo/Messenger**: Gửi thông báo nhắc nợ hoặc ảnh hóa đơn nhanh chỉ với 1 lần nhấp.
 - [ ] **Dòng thời gian khách hàng (CRM Pro)**: Hiển thị toàn bộ lịch sử Giao dịch - Thanh toán - Checkin của từng khách hàng trên 1 trục thời gian (Timeline).

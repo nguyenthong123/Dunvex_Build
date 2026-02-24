@@ -26,4 +26,8 @@ export const db = initializeFirestore(app, {
 
 export const storage = getStorage(app);
 
+// Initialize Functions
+import { getFunctions } from "firebase/functions";
+export const functions = getFunctions(app);
+
 export default app;

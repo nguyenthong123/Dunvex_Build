@@ -13,6 +13,17 @@ const QuickOrder = () => {
 	const owner = useOwner();
 	const { showToast } = useToast();
 	const normalizeText = (text: string) => text ? text.normalize('NFC').trim().toLowerCase() : '';
+	const removeAccents = (str: string) => {
+		return str.normalize('NFD')
+			.replace(/[\u0300-\u036f]/g, '')
+			.replace(/đ/g, 'd')
+			.replace(/Đ/g, 'D');
+	};
+	const isMatch = (target: string, query: string) => {
+		const t = normalizeText(target);
+		const q = normalizeText(query);
+		return t.includes(q) || removeAccents(t).includes(removeAccents(q));
+	};
 	const [products, setProducts] = useState<any[]>([]);
 	const [customers, setCustomers] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -734,13 +745,21 @@ const QuickOrder = () => {
 														/>
 													</div>
 													<div className="max-h-72 overflow-y-auto py-2 no-scrollbar">
-														{products
+														{(products
 															.filter(p => !item.category || normalizeText(p.category) === normalizeText(item.category))
-															.filter(p =>
-																normalizeText(p.name).includes(normalizeText(lineSearchQuery)) ||
-																(p.sku && normalizeText(p.sku).includes(normalizeText(lineSearchQuery)))
-															)
-															.slice(0, 50)
+															.filter(p => isMatch(p.name, lineSearchQuery) || (p.sku && isMatch(p.sku, lineSearchQuery))).length > 0
+															? products.filter(p => !item.category || normalizeText(p.category) === normalizeText(item.category))
+															: products) // Fallback to global search if no matches in category
+															.filter(p => isMatch(p.name, lineSearchQuery) || (p.sku && isMatch(p.sku, lineSearchQuery)))
+															.sort((a, b) => {
+																// Prioritize products that start with the query
+																const aStarts = normalizeText(a.name).startsWith(normalizeText(lineSearchQuery));
+																const bStarts = normalizeText(b.name).startsWith(normalizeText(lineSearchQuery));
+																if (aStarts && !bStarts) return -1;
+																if (!aStarts && bStarts) return 1;
+																return a.name.localeCompare(b.name);
+															})
+															.slice(0, 100)
 															.map(p => {
 																const effStock = getEffectiveStock(p);
 																return (

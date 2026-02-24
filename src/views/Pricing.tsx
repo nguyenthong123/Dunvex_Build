@@ -84,12 +84,9 @@ const Pricing = () => {
 			const code = promoCode.trim().toUpperCase();
 			if (!code) return;
 
-			// No regex formatting check needed based on user request
-
-			// Query coupons from master account dunvex.green@gmail.com
+			// Step 1: Search for the code globally in the coupons collection
 			const q = query(
 				collection(db, 'coupons'),
-				where('ownerEmail', '==', 'dunvex.green@gmail.com'),
 				where('code', '==', code),
 				limit(1)
 			);
@@ -100,26 +97,32 @@ const Pricing = () => {
 				const promoDoc = querySnapshot.docs[0];
 				const promoData = promoDoc.data();
 
-				// 1. Kiểm tra trạng thái
+				// Step 2: Security check - must be created by Dunvex Master account
+				if (promoData.ownerEmail !== 'dunvex.green@gmail.com') {
+					setPromoError('Mã này không được cấp phép để nâng cấp gói dịch vụ');
+					return;
+				}
+
+				// Step 3: Check status
 				if (promoData.status !== 'active') {
 					setPromoError('Mã giảm giá này hiện không khả dụng');
 					return;
 				}
 
-				// 2. Kiểm tra ngày hết hạn (YYYY-MM-DD)
+				// Step 4: Check expiry
 				const today = new Date().toISOString().split('T')[0];
 				if (promoData.expiry && promoData.expiry < today) {
 					setPromoError('Mã giảm giá này đã hết hạn');
 					return;
 				}
 
-				// 3. Kiểm tra lượt sử dụng
-				if (promoData.usageLimit > 0 && promoData.usageCount >= promoData.usageLimit) {
+				// Step 5: Check usage limit
+				if (promoData.usageLimit > 0 && (promoData.usageCount || 0) >= promoData.usageLimit) {
 					setPromoError('Mã này đã hết lượt sử dụng');
 					return;
 				}
 
-				// 4. Tính toán mức giảm
+				// Step 6: Calculate discount
 				let discount = 0;
 				const discountVal = promoData.discount || '';
 
@@ -127,8 +130,7 @@ const Pricing = () => {
 					const percent = parseFloat(discountVal) || 0;
 					discount = (selectedPlan.price * percent) / 100;
 				} else if (promoData.type === 'fixed') {
-					// Handle cases like "500k" or "500000"
-					let valText = discountVal.toLowerCase();
+					let valText = String(discountVal).toLowerCase();
 					if (valText.endsWith('k')) {
 						discount = parseFloat(valText) * 1000;
 					} else {
@@ -145,11 +147,11 @@ const Pricing = () => {
 					setPromoError('Mã này không có giá trị giảm giá hợp lệ');
 				}
 			} else {
-				setPromoError('Mã giảm giá không tồn tại hoặc không thuộc hệ thống Dunvex');
+				setPromoError('Mã giảm giá không tồn tại trên hệ thống');
 			}
 		} catch (error) {
 			console.error("Error applying promo:", error);
-			setPromoError('Không thể kiểm tra mã giảm giá lúc này');
+			setPromoError('Lỗi kết nối máy chủ, vui lòng thử lại');
 		} finally {
 			setIsApplying(false);
 		}

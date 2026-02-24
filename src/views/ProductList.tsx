@@ -569,8 +569,8 @@ const ProductList = () => {
 		return url;
 	};
 
-	const hasViewPermission = owner.role === 'admin' || (owner.accessRights?.inventory_view ?? true);
-	const hasManagePermission = owner.role === 'admin' || (owner.accessRights?.inventory_manage ?? true);
+	const hasViewPermission = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee || (owner.accessRights?.inventory_view ?? true);
+	const hasManagePermission = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
 
 	if (owner.loading) return null;
 

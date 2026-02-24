@@ -208,6 +208,11 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     *   **Đồng nhất hóa (Standardization)**: Áp dụng bộ điều khiển phân trang hiện đại (10 bản ghi/trang) trên toàn bộ hệ thống: **Khách hàng, Đơn hàng, Công nợ, Lịch sử báo giá, Sổ quỹ và Lợi nhuận**.
     *   **Điều hướng thông minh**: Cơ chế hiển thị "3 trang đầu - 3 trang cuối" kèm dấu ba chấm (ellipsis) và nút mũi tên, tối ưu cho tập dữ liệu lớn.
     *   **Trải nghiệm mượt mà**: Tự động quay về trang 1 khi lọc dữ liệu và tự động cuộn lên đầu trang khi chuyển trang.
+- [x] **Cô lập dữ liệu & Phân quyền (Enterprise Data Security - Feb 24)**:
+    *   **Data Isolation (Nhân viên)**: Triển khai cơ chế cô lập dữ liệu triệt để tại các module **Khách hàng, Đơn hàng, Công nợ và Dashboard**. Nhân viên chỉ xem và quản lý được dữ liệu do chính mình tạo ra (`createdByEmail`).
+    *   **Phân quyền Quản lý Sản phẩm**: Thiết lập quyền Admin tối cao cho việc **Thêm/Sửa/Xóa/Nhập khẩu** sản phẩm. Nhân viên chỉ có quyền xem danh sách và sử dụng dữ liệu sản phẩm chung để lên đơn hàng.
+    *   **Audit Logs Pro**: Tự động lọc nhật ký hoạt động theo người dùng. Nhân viên chỉ thấy lịch sử của mình, Admin quản lý toàn bộ vết (Trace) của hệ thống.
+    *   **Chuẩn hóa Tìm kiếm (Normalization)**: Nâng cấp bộ lọc tìm kiếm sản phẩm hỗ trợ chuẩn hóa tiếng Việt (NFC) và không phân biệt hoa/thường, đảm bảo tìm kiếm chính xác tuyệt đối trên mọi nền tảng.
 - [x] **Tối ưu Hệ thống Ưu đãi & Điều hướng (Feb 24 Updates)**:
     *   **Coupon Mobile UI Pro**: Nâng cấp toàn diện giao diện Quản lý mã giảm giá trên điện thoại. Chuyển đổi form tạo mã sang dạng Bottom Sheet cuộn thông minh, cố định nút bấm giúp thao tác cực kỳ mượt mà.
     *   **Dynamic Navigation Context**: Tự động thay đổi nhãn và icon nút Center thành **"Tạo mã mới"** khi người dùng truy cập trang Ưu đãi, giúp tăng tốc quy trình vận hành.

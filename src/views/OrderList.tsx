@@ -263,7 +263,26 @@ const OrderList = () => {
 						</thead>
 						<tbody className="divide-y divide-gray-100 dark:divide-slate-800">
 							{loading ? (
-								<tr><td colSpan={5} className="py-8 text-center text-slate-400 dark:text-slate-500">Đang tải dữ liệu...</td></tr>
+								[1, 2, 3, 4, 5].map(i => (
+									<tr key={i} className="animate-pulse">
+										<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800">
+											<div className="w-20 h-4 skeleton mb-2" />
+											<div className="w-32 h-3 skeleton opacity-50" />
+										</td>
+										<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800">
+											<div className="flex items-center gap-3">
+												<div className="size-8 rounded-full skeleton" />
+												<div className="space-y-2">
+													<div className="w-32 h-4 skeleton" />
+													<div className="w-20 h-3 skeleton opacity-50" />
+												</div>
+											</div>
+										</td>
+										<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800"><div className="w-20 h-6 skeleton mx-auto rounded-full" /></td>
+										<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800"><div className="w-24 h-5 skeleton ml-auto" /></td>
+										<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800"><div className="w-16 h-8 skeleton ml-auto rounded-lg" /></td>
+									</tr>
+								))
 							) : paginatedOrders.length === 0 ? (
 								<tr><td colSpan={5} className="py-12 text-center">
 									<div className="flex flex-col items-center gap-2">
@@ -314,7 +333,26 @@ const OrderList = () => {
 
 				{/* Mobile List */}
 				<div className="md:hidden space-y-4 pb-12">
-					{paginatedOrders.map((order) => (
+					{loading ? (
+						[1, 2, 3, 4, 5].map(i => (
+							<div key={i} className="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-800 animate-pulse space-y-4">
+								<div className="flex justify-between items-start">
+									<div className="flex items-center gap-3">
+										<div className="size-10 rounded-xl skeleton" />
+										<div className="space-y-2">
+											<div className="w-24 h-4 skeleton" />
+											<div className="w-32 h-3 skeleton" />
+										</div>
+									</div>
+									<div className="w-16 h-6 skeleton rounded-lg" />
+								</div>
+								<div className="flex justify-between items-center pt-2 border-t border-gray-50 dark:border-slate-800">
+									<div className="w-20 h-3 skeleton" />
+									<div className="w-24 h-6 skeleton" />
+								</div>
+							</div>
+						))
+					) : paginatedOrders.map((order) => (
 						<div key={order.id} className="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-slate-800 active:scale-[0.98] transition-all" onClick={() => { setSelectedOrder(order); setShowDetail(true); }}>
 							<div className="flex justify-between items-start mb-3">
 								<div className="flex items-center gap-3">

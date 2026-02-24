@@ -12,7 +12,12 @@ const QuickOrder = () => {
 	const { id } = useParams();
 	const owner = useOwner();
 	const { showToast } = useToast();
-	const normalizeText = (text: string) => text ? text.normalize('NFC').trim().toLowerCase() : '';
+	const normalizeText = (text: string) => text ? text.normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase() : '';
+	const vibrate = (pattern: number | number[]) => {
+		if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) {
+			window.navigator.vibrate(pattern);
+		}
+	};
 	const removeAccents = (str: string) => {
 		return str.normalize('NFD')
 			.replace(/[\u0300-\u036f]/g, '')
@@ -205,6 +210,7 @@ const QuickOrder = () => {
 	const handleQRScan = (productId: string) => {
 		const product = products.find(p => p.id === productId);
 		if (product) {
+			vibrate(50); // Short tap feedback
 			// Find first empty item or add new one
 			const emptyIdx = lineItems.findIndex(item => !item.productId);
 			if (emptyIdx !== -1) {
@@ -450,6 +456,8 @@ const QuickOrder = () => {
 
 				await batch.commit();
 			}
+			// 6. Show Success
+			vibrate([100, 50, 100]); // Victory pattern
 			setShowSuccessModal(true);
 		} catch (error) {
 			showToast("Lỗi khi lưu đơn hàng: " + error, "error");
@@ -745,52 +753,63 @@ const QuickOrder = () => {
 														/>
 													</div>
 													<div className="max-h-72 overflow-y-auto py-2 no-scrollbar">
-														{(products
-															.filter(p => !item.category || normalizeText(p.category) === normalizeText(item.category))
-															.filter(p => isMatch(p.name, lineSearchQuery) || (p.sku && isMatch(p.sku, lineSearchQuery))).length > 0
-															? products.filter(p => !item.category || normalizeText(p.category) === normalizeText(item.category))
-															: products) // Fallback to global search if no matches in category
-															.filter(p => isMatch(p.name, lineSearchQuery) || (p.sku && isMatch(p.sku, lineSearchQuery)))
-															.sort((a, b) => {
-																// Prioritize products that start with the query
-																const aStarts = normalizeText(a.name).startsWith(normalizeText(lineSearchQuery));
-																const bStarts = normalizeText(b.name).startsWith(normalizeText(lineSearchQuery));
-																if (aStarts && !bStarts) return -1;
-																if (!aStarts && bStarts) return 1;
-																return a.name.localeCompare(b.name);
-															})
-															.slice(0, 100)
-															.map(p => {
-																const effStock = getEffectiveStock(p);
-																return (
-																	<div
-																		key={p.id}
-																		className={`px-5 py-4 hover:bg-[#1A237E]/5 dark:hover:bg-indigo-500/10 cursor-pointer border-b border-slate-50 dark:border-slate-700/50 last:border-none transition-all flex items-center justify-between group/prod ${effStock <= 0 ? 'opacity-50 grayscale' : ''}`}
-																		onClick={() => {
-																			if (effStock > 0) {
-																				updateLineItem(index, 'productId', p.id);
-																				setActiveRow(null);
-																				setActiveField(null);
-																			}
-																		}}
-																	>
-																		<div className="flex flex-col gap-1 max-w-[70%]">
-																			<span className="text-xs font-black text-slate-800 dark:text-slate-200 group-hover/prod:text-[#1A237E] dark:group-hover/prod:text-indigo-400 transition-colors uppercase leading-tight line-clamp-2">{p.name}</span>
-																			<div className="flex items-center gap-2">
-																				<span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded text-[9px] font-black text-slate-500 uppercase">{p.sku || 'N/A'}</span>
-																				<span className="text-[9px] font-bold text-slate-400">{p.unit}</span>
+														{(() => {
+															const normalizedSearch = normalizeText(lineSearchQuery);
+															const currentCategory = normalizeText(item.category);
+
+															// Step 1: Search within the current category if one is selected
+															let matches = products.filter(p => {
+																const isCatMatch = !item.category || normalizeText(p.category) === currentCategory;
+																const isProductMatch = isMatch(p.name, lineSearchQuery) || (p.sku && isMatch(p.sku, lineSearchQuery));
+																return isCatMatch && isProductMatch;
+															});
+
+															// Step 2: Fallback to global search ONLY IF there are no matches in the selected category 
+															// AND the user has actually typed something (don't show everything by default)
+															if (matches.length === 0 && lineSearchQuery) {
+																matches = products.filter(p => isMatch(p.name, lineSearchQuery) || (p.sku && isMatch(p.sku, lineSearchQuery)));
+															}
+
+															return matches
+																.sort((a, b) => {
+																	const aStarts = normalizeText(a.name).startsWith(normalizedSearch);
+																	const bStarts = normalizeText(b.name).startsWith(normalizedSearch);
+																	if (aStarts && !bStarts) return -1;
+																	if (!aStarts && bStarts) return 1;
+																	return a.name.localeCompare(b.name);
+																})
+																.slice(0, 50)
+																.map(p => {
+																	const effStock = getEffectiveStock(p);
+																	return (
+																		<div
+																			key={p.id}
+																			className={`px-5 py-4 hover:bg-[#1A237E]/5 dark:hover:bg-indigo-500/10 cursor-pointer border-b border-slate-50 dark:border-slate-700/50 last:border-none transition-all flex items-center justify-between group/prod ${effStock <= 0 ? 'opacity-50 grayscale' : ''}`}
+																			onClick={() => {
+																				if (effStock > 0) {
+																					updateLineItem(index, 'productId', p.id);
+																					setActiveRow(null);
+																					setActiveField(null);
+																				}
+																			}}
+																		>
+																			<div className="flex flex-col gap-1 max-w-[70%]">
+																				<span className="text-xs font-black text-slate-800 dark:text-slate-200 group-hover/prod:text-[#1A237E] dark:group-hover/prod:text-indigo-400 transition-colors uppercase leading-tight line-clamp-2">{p.name}</span>
+																				<div className="flex items-center gap-2">
+																					<span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded text-[9px] font-black text-slate-500 uppercase">{p.sku || 'N/A'}</span>
+																					<span className="text-[9px] font-bold text-slate-400">{p.unit}</span>
+																				</div>
+																			</div>
+																			<div className="text-right">
+																				<div className="text-xs font-black text-[#f27121] mb-0.5">{p.priceSell.toLocaleString('vi-VN')} đ</div>
+																				<div className={`text-[9px] font-black uppercase tracking-widest ${effStock > 0 ? 'text-green-500' : 'text-rose-500'}`}>
+																					{effStock > 0 ? `TỒN: ${effStock}` : 'HẾT HÀNG'}
+																				</div>
 																			</div>
 																		</div>
-																		<div className="text-right">
-																			<div className="text-xs font-black text-[#f27121] mb-0.5">{p.priceSell.toLocaleString('vi-VN')} đ</div>
-																			<div className={`text-[9px] font-black uppercase tracking-widest ${effStock > 0 ? 'text-green-500' : 'text-rose-500'}`}>
-																				{effStock > 0 ? `TỒN: ${effStock}` : 'HẾT HÀNG'}
-																			</div>
-																		</div>
-																	</div>
-																);
-															})
-														}
+																	);
+																});
+														})()}
 													</div>
 												</div>
 											)}

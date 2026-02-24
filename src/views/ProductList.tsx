@@ -1,12 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
+import { List } from 'react-window';
+import { AutoSizer } from 'react-virtualized-auto-sizer';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, where, writeBatch, increment } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, where, writeBatch, increment, limit } from 'firebase/firestore';
 import BulkImport from '../components/shared/BulkImport';
 import QRScanner from '../components/shared/QRScanner';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
+import { getOptimizedImageUrl } from '../utils/validation';
 
 
 const ProductList = () => {
@@ -88,7 +91,8 @@ const ProductList = () => {
 
 		const q = query(
 			collection(db, 'products'),
-			where('ownerId', '==', owner.ownerId)
+			where('ownerId', '==', owner.ownerId),
+			limit(200) // Products can be more numerous, but still limited
 		);
 		const unsubscribe = onSnapshot(q, (snapshot: any) => {
 			const docs = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
@@ -558,16 +562,7 @@ const ProductList = () => {
 	};
 
 	// Helper to handle Cloudinary and legacy Drive image URLs
-	const getImageUrl = (url: string) => {
-		if (!url) return '';
-		if (url.includes('drive.google.com')) {
-			const match = url.match(/[-\w]{25,}/);
-			if (match) {
-				return `https://drive.google.com/thumbnail?id=${match[0]}&sz=w1000`;
-			}
-		}
-		return url;
-	};
+	const getImageUrl = (url: string) => getOptimizedImageUrl(url);
 
 	const hasViewPermission = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee || (owner.accessRights?.inventory_view ?? true);
 	const hasManagePermission = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
@@ -738,7 +733,20 @@ const ProductList = () => {
 								</thead>
 								<tbody className="divide-y divide-gray-100 dark:divide-slate-800">
 									{loading ? (
-										<tr><td colSpan={7} className="py-8 text-center text-slate-400 dark:text-slate-500">Đang tải dữ liệu...</td></tr>
+										[1, 2, 3, 4, 5].map(i => (
+											<tr key={i} className="animate-pulse">
+												<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800"><div className="size-4 skeleton" /></td>
+												<td className="py-4 px-2 border-b border-slate-50 dark:border-slate-800"><div className="w-24 h-4 skeleton" /></td>
+												<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800">
+													<div className="w-48 h-4 skeleton mb-2" />
+													<div className="w-20 h-3 skeleton opacity-60" />
+												</td>
+												<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800"><div className="w-12 h-4 skeleton mx-auto" /></td>
+												<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800"><div className="w-12 h-4 skeleton mx-auto" /></td>
+												<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800"><div className="w-12 h-6 skeleton mx-auto rounded-full" /></td>
+												<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800"><div className="w-20 h-8 skeleton ml-auto" /></td>
+											</tr>
+										))
 									) : paginatedProducts.length === 0 ? (
 										<tr><td colSpan={7} className="py-8 text-center text-slate-400 dark:text-slate-500">Không tìm thấy sản phẩm nào</td></tr>
 									) : (
@@ -830,52 +838,89 @@ const ProductList = () => {
 							</table>
 						</div>
 
-						{/* Grid - Mobile */}
-						<div className="md:hidden grid grid-cols-1 gap-4 pb-4">
-							{paginatedProducts.map((product) => (
-								<div key={product.id} className="bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-slate-800" onClick={() => openDetail(product)}>
-									<div className="flex justify-between items-start mb-4">
-										<div className="flex items-center gap-3">
-											<div className="size-14 rounded-xl bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 flex items-center justify-center overflow-hidden border border-gray-100 dark:border-slate-700">
-												{product.imageUrl ? (
-													<img
-														src={getImageUrl(product.imageUrl)}
-														alt={product.name}
-														className="size-full object-cover"
-														referrerPolicy="no-referrer"
-													/>
-												) : (
-													<span className="material-symbols-outlined text-2xl">package_2</span>
-												)}
-											</div>
-											<div>
-												<h3 className="font-bold text-[#1A237E] dark:text-indigo-400 leading-tight">{product.name}</h3>
-												<div className="text-[9px] text-slate-400 dark:text-slate-500 font-black uppercase tracking-widest mt-0.5">
-													{product.category}
+						{/* Grid - Mobile Virtualized */}
+						<div className="md:hidden h-[600px] pb-4 relative">
+							{loading ? (
+								<div className="space-y-4">
+									{[1, 2, 3, 4, 5].map(i => (
+										<div key={i} className="bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-slate-800 space-y-4 animate-pulse">
+											<div className="flex justify-between items-start">
+												<div className="flex items-center gap-3">
+													<div className="size-14 rounded-xl skeleton" />
+													<div className="space-y-2">
+														<div className="w-32 h-4 skeleton" />
+														<div className="w-20 h-3 skeleton" />
+													</div>
 												</div>
-												<p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{product.sku || 'Không có mã'}</p>
+												<div className="w-20 h-6 skeleton rounded-full" />
+											</div>
+											<div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-50 dark:border-slate-800">
+												<div className="space-y-2"><div className="w-12 h-3 skeleton" /><div className="w-20 h-5 skeleton" /></div>
+												<div className="space-y-2 flex flex-col items-end"><div className="w-12 h-3 skeleton" /><div className="w-20 h-5 skeleton" /></div>
 											</div>
 										</div>
-										<div className="flex flex-col items-end gap-2" onClick={(e) => e.stopPropagation()}>
-											<span className="px-2 py-1 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 text-[10px] font-bold rounded uppercase">{product.category}</span>
-											<div className="flex gap-1">
-												<button onClick={() => openEdit(product)} className="p-1 text-[#1A237E] dark:text-indigo-400"><span className="material-symbols-outlined text-sm">edit</span></button>
-												<button onClick={() => handleDeleteProduct(product.id)} className="p-1 text-red-500 dark:text-red-400"><span className="material-symbols-outlined text-sm">delete</span></button>
-											</div>
-										</div>
-									</div>
-									<div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-50 dark:border-slate-800">
-										<div>
-											<p className="text-[10px] uppercase text-gray-400 dark:text-slate-500 font-bold">Giá bán</p>
-											<p className="text-[#1A237E] dark:text-indigo-400 font-black">{formatPrice(product.priceSell)}</p>
-										</div>
-										<div className="text-right">
-											<p className="text-[10px] uppercase text-gray-400 dark:text-slate-500 font-bold">Tồn kho</p>
-											<p className={`font-black ${product.stock <= 5 ? 'text-red-500 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>{product.stock} {product.unit}</p>
-										</div>
-									</div>
+									))}
 								</div>
-							))}
+							) : (
+								<AutoSizer renderProp={({ height, width }) => (
+									<List
+										style={{ height: height || 600, width: width || '100%' }}
+										rowCount={paginatedProducts.length}
+										rowHeight={220}
+										rowProps={{}}
+										className="no-scrollbar"
+										rowComponent={({ index, style }) => {
+											const product = paginatedProducts[index];
+											if (!product) return null;
+											return (
+												<div style={{ ...style, paddingBottom: '16px' }}>
+													<div className="bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-md border border-gray-200 dark:border-slate-800 h-full flex flex-col justify-between" onClick={() => openDetail(product)}>
+														<div className="flex justify-between items-start mb-4">
+															<div className="flex items-center gap-3">
+																<div className="size-14 rounded-xl bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 flex items-center justify-center overflow-hidden border border-gray-100 dark:border-slate-700 shrink-0">
+																	{product.imageUrl ? (
+																		<img
+																			src={getImageUrl(product.imageUrl)}
+																			alt={product.name}
+																			className="size-full object-cover"
+																			referrerPolicy="no-referrer"
+																		/>
+																	) : (
+																		<span className="material-symbols-outlined text-2xl">package_2</span>
+																	)}
+																</div>
+																<div>
+																	<h3 className="font-bold text-[#1A237E] dark:text-indigo-400 leading-tight uppercase text-xs">{product.name}</h3>
+																	<div className="text-[9px] text-slate-400 dark:text-slate-500 font-black uppercase tracking-widest mt-0.5">
+																		{product.category}
+																	</div>
+																	<p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">{product.sku || 'Không có mã'}</p>
+																</div>
+															</div>
+															<div className="flex flex-col items-end gap-2" onClick={(e) => e.stopPropagation()}>
+																<div className="flex gap-1">
+																	<button onClick={() => openEdit(product)} className="p-1 text-[#1A237E] dark:text-indigo-400"><span className="material-symbols-outlined text-sm">edit</span></button>
+																	<button onClick={() => handleDeleteProduct(product.id)} className="p-1 text-red-500 dark:text-red-400"><span className="material-symbols-outlined text-sm">delete</span></button>
+																</div>
+															</div>
+														</div>
+														<div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-50 dark:border-slate-800">
+															<div>
+																<p className="text-[10px] uppercase text-gray-400 dark:text-slate-500 font-bold">Giá bán</p>
+																<p className="text-[#1A237E] dark:text-indigo-400 font-black text-sm">{formatPrice(product.priceSell)}</p>
+															</div>
+															<div className="text-right">
+																<p className="text-[10px] uppercase text-gray-400 dark:text-slate-500 font-bold">Tồn kho</p>
+																<p className={`font-black text-sm ${product.stock <= 5 ? 'text-red-500 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>{product.stock} {product.unit}</p>
+															</div>
+														</div>
+													</div>
+												</div>
+											);
+										}}
+									/>
+								)} />
+							)}
 						</div>
 
 						{/* Pagination Controls */}

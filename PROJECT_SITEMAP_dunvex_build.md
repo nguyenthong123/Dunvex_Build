@@ -217,29 +217,34 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     *   **Coupon Mobile UI Pro**: Nâng cấp toàn diện giao diện Quản lý mã giảm giá trên điện thoại. Chuyển đổi form tạo mã sang dạng Bottom Sheet cuộn thông minh, cố định nút bấm giúp thao tác cực kỳ mượt mà.
     *   **Dynamic Navigation Context**: Tự động thay đổi nhãn và icon nút Center thành **"Tạo mã mới"** khi người dùng truy cập trang Ưu đãi, giúp tăng tốc quy trình vận hành.
     *   **Deep Linking (URL Actions)**: Tích hợp tham số `?action=new` vào URL, cho phép mở nhanh trình tạo mã từ bất kỳ đâu (thanh điều hướng hoặc phím tắt).
-    *   **Bảo mật & Ổn định (Bug Fixes)**: Khắc phục triệt để các lỗi Console (NaN values, syntax errors) và tối ưu hóa logic nhập liệu cho các trường giới hạn lượt dùng.
+    *   **Bảo mật & Ổn định (Bug Fixes)**: Khắc phục triệt để các lỗi Console (NaN values, syntax errors) and tối ưu hóa logic nhập liệu cho các trường giới hạn lượt dùng.
     *   **Clean Code & Performance**: Loại bỏ các import dư thừa và tối ưu hóa React state để ứng dụng phản hồi tức thì trên mọi thiết bị di động.
+- [x] **Nâng cấp Hệ thống Skeleton Loaders & UX (Feb 24 Refinement)**:
+    *   **Shimmer Effect (Premium UX)**: Triển khai hiệu ứng Shimmer (xương) cao cấp thay thế cho các vòng xoay loading tại **Trang chủ** và **Danh sách Khách hàng**, mang lại cảm giác tải trang hiện đại và mượt mà.
+    *   **Vá lỗi JSX & Cấu trúc**: Khắc phục triệt để các lỗi cú pháp JSX, unclosed fragments và sai lệch thẻ `div` trong module Khách hàng, đảm bảo tính ổn định tuyệt đối.
+    *   **Tối ưu Mobile List & Pagination**: Tinh chỉnh giao diện danh sách di động và logic phân trang, tự động cuộn lên đầu và hiển thị trạng thái loading đồng nhất trên mọi thiết bị.
+    *   **Giao diện Modal Cao cấp**: Hoàn thiện thiết kế Modal Chi tiết và Thêm/Sửa khách hàng với phong cách Glassmorphism và tối ưu hóa khả năng tương tác.
 
 ### 📝 Cần làm tiếp (To-do)
 
 #### 🛡️ Bảo mật (Security)
-- [ ] **Firestore Audit**: Kiểm tra và thắt chặt Security Rules, đảm bảo dữ liệu chỉ được truy cập bởi đúng `ownerId`.
-- [ ] **Data Sanitation**: Triển khai lớp xác thực dữ liệu đầu vào (Zod/Yup) cho tất cả các form để ngăn chặn dữ liệu rác.
-- [ ] **Masking**: Tự động che bớt thông tin nhạy cảm (SĐT, Email) trong các nhật ký hoạt động cho nhân viên.
+- [x] **Firestore Audit**: Kiểm tra và thắt chặt Security Rules, đảm bảo dữ liệu chỉ được truy cập bởi đúng `ownerId`.
+- [x] **Data Sanitation**: Triển khai lớp xác thực dữ liệu đầu vào (Zod/Yup) cho tất cả các form để ngăn chặn dữ liệu rác.
+- [x] **Masking**: Tự động che bớt thông tin nhạy cảm (SĐT, Email) trong các nhật ký hoạt động cho nhân viên.
 
 #### ⚡ Hiệu suất & Mượt mà (Performance)
-- [ ] **Lazy Loading Routines**: Chuyển đổi sang `React.lazy` và `Suspense` cho tất cả các Routes để giảm dung lượng tải trang đầu tiên.
-- [ ] **List Virtualization**: Áp dụng `react-window` cho danh sách Khách hàng và Sản phẩm để xử lý mượt mà hàng ngàn bản ghi.
-- [ ] **Cloudinary Dynamic Optimization**: Tự động thêm tham số `f_auto,q_auto` vào mọi link ảnh để tối ưu băng thông và tốc độ tải.
-- [ ] **Query Limitation**: Tối ưu hóa các truy vấn Firestore, giới hạn số lượng bản ghi tải về mỗi lần (Pagination thực tế tại DB).
+- [x] **Lazy Loading Routines**: Triển khai `React.lazy` và `Suspense` giúp ứng dụng tải trang ban đầu siêu nhanh.
+- [x] **List Virtualization**: Áp dụng `react-window` cho danh sách Khách hàng và Sản phẩm, giúp cuộn mượt mà ngay cả với hàng nghìn bản ghi.
+- [x] **Cloudinary Dynamic Optimization**: Tự động tối ưu hóa định dạng (`f_auto`) và chất lượng (`q_auto`) hình ảnh theo thiết bị.
+- [x] **Query Limitation**: Tối ưu hóa các truy vấn Firestore, giới hạn số lượng bản ghi tải về để tiết kiệm băng thông và tăng tốc xử lý.
 
-#### 🔔 Thông báo & Trải nghiệm (UX/UI)
-- [ ] **Skeleton Loaders**: Thay thế các vòng xoay loading bằng hiệu ứng Shimmer (xương) giúp cảm giác tải trang "xịn" hơn.
-- [ ] **Haptic Feedback**: Thêm rung phản hồi nhẹ trên di động khi quét QR thành công hoặc chốt đơn hàng.
-- [ ] **Offline Banner**: Hiển thị thanh thông báo trạng thái "Đứt kết nối - Đang dùng dữ liệu ngoại tuyến" rõ ràng hơn.
+
+#### � Thông báo & Trải nghiệm (UX/UI)
+- [x] **Product Search Fix**: Sửa lỗi tìm kiếm sản phẩm trong QuickOrder, xử lý trùng lặp khoảng trắng và chuẩn hóa dữ liệu giúp tìm kiếm chính xác 100%.
+- [x] **Skeleton Loaders (Phase 2)**: Triển khai hiệu ứng Shimmer cho các module Sản phẩm, Đơn hàng và Công nợ để đồng bộ hóa trải nghiệm.
+- [x] **Haptic Feedback**: Thêm rung phản hồi nhẹ trên di động khi quét QR thành công hoặc chốt đơn hàng trong QuickOrder.
+- [x] **Offline Banner**: Hiển thị thanh thông báo trạng thái "Đứt kết nối - Đang dùng dữ liệu ngoại tuyến" rõ ràng hơn.
 - [ ] **Interactive Tour**: Thêm hướng dẫn ảo (Guided Tour) cho người dùng mới khi lần đầu truy cập các module phức tạp.
-
-#### 📊 Chức năng bổ sung (Roadmap)
 - [ ] **Báo cáo & Xuất dữ liệu (Finance Pro)**: Tích hợp nút xuất báo cáo Sổ quỹ và Lợi nhuận ra file Excel/PDF theo khoảng thời gian tùy chọn.
 - [ ] **Ký nhận điện tử (E-Signature)**: Cho phép khách hàng ký nhận trực tiếp trên màn hình di động khi giao hàng; tích hợp chữ ký vào Phiếu giao hàng.
 - [ ] **Tự động hóa Zalo/Messenger**: Gửi thông báo nhắc nợ hoặc ảnh hóa đơn nhanh chỉ với 1 lần nhấp.

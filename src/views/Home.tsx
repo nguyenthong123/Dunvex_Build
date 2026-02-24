@@ -10,10 +10,12 @@ import { useOwner } from '../hooks/useOwner';
 import QRScanner from '../components/shared/QRScanner';
 import { QrCode } from 'lucide-react';
 import { useToast } from '../components/shared/Toast';
+import { maskSensitiveData } from '../utils/validation';
 
 const Home = () => {
 	const navigate = useNavigate();
 	const owner = useOwner();
+	const isAdmin = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
 	const { showToast } = useToast();
 	const { sidebarItems } = useNavigationConfig();
 	const [unreadCount, setUnreadCount] = useState(0);
@@ -279,7 +281,7 @@ const Home = () => {
 	// --- PERMISSION CHECK ---
 	const hasDashboardAccess = owner.role === 'admin' || (owner.accessRights?.dashboard ?? true);
 
-	if (owner.loading) return null;
+	if (owner.loading) return <DashboardSkeleton />;
 
 	if (!hasDashboardAccess) {
 		return (
@@ -598,10 +600,10 @@ const Home = () => {
 												key={log.id}
 												icon={log.user?.[0] || 'NV'}
 												color="bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300"
-												name={log.user || 'Hệ thống'}
-												task={log.action}
-												value={log.details?.split('-')[1] || ''}
-												time={formatTimeAgo(log.createdAt)}
+												name={log.user}
+												task={maskSensitiveData(log.action, isAdmin)}
+												value={maskSensitiveData(log.details, isAdmin)}
+												time={log.createdAt ? new Date(log.createdAt.seconds * 1000).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '...'}
 											/>
 										))}
 									</tbody>
@@ -671,5 +673,64 @@ const ActivityRow = ({ icon, color, name, task, value, time }: any) => (
 	</tr>
 );
 
+
+const DashboardSkeleton = () => (
+	<div className="min-h-screen bg-[#f8f9fb] dark:bg-slate-950 p-4 md:p-8 space-y-8 animate-pulse transition-colors duration-300">
+		<div className="max-w-[1400px] mx-auto">
+			{/* Header Skeleton */}
+			<div className="flex justify-between items-center mb-10">
+				<div className="flex items-center gap-4">
+					<div className="w-12 h-12 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 skeleton" />
+					<div>
+						<div className="w-48 h-6 skeleton mb-2" />
+						<div className="w-32 h-4 skeleton opacity-50" />
+					</div>
+				</div>
+				<div className="flex gap-3">
+					<div className="w-10 h-10 rounded-full skeleton" />
+					<div className="w-10 h-10 rounded-full skeleton" />
+				</div>
+			</div>
+
+			{/* Stats Grid */}
+			<div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-10">
+				{[1, 2, 3, 4].map(i => (
+					<div key={i} className="bg-white dark:bg-slate-900 rounded-[2.5rem] p-7 shadow-sm border border-slate-100 dark:border-slate-800">
+						<div className="w-10 h-10 rounded-2xl skeleton mb-5" />
+						<div className="w-24 h-3 skeleton mb-3 opacity-50" />
+						<div className="w-32 h-8 skeleton" />
+					</div>
+				))}
+			</div>
+
+			{/* Middle Row */}
+			<div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+				<div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-[2.5rem] p-8 shadow-sm border border-slate-100 dark:border-slate-800">
+					<div className="flex justify-between mb-10">
+						<div className="w-64 h-8 skeleton" />
+						<div className="w-32 h-10 rounded-xl skeleton" />
+					</div>
+					<div className="w-full h-80 skeleton rounded-[2rem] opacity-30" />
+				</div>
+				<div className="space-y-6">
+					<div className="bg-white dark:bg-slate-900 rounded-[2.5rem] p-8 shadow-sm border border-slate-100 dark:border-slate-800">
+						<div className="w-40 h-6 skeleton mb-8" />
+						<div className="space-y-4">
+							{[1, 2, 3, 4, 5].map(i => (
+								<div key={i} className="flex items-center gap-4">
+									<div className="w-10 h-10 rounded-full skeleton shrink-0" />
+									<div className="flex-1 space-y-2">
+										<div className="w-3/4 h-3 skeleton" />
+										<div className="w-1/2 h-2 skeleton opacity-50" />
+									</div>
+								</div>
+							))}
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+);
 
 export default Home;

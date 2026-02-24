@@ -1,0 +1,63 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Auth Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function getOwnerId() {
+      // If the user has an ownerId in their profile, use it. Otherwise they are the owner themselves.
+      let data = getUserData();
+      return data.ownerId == null ? request.auth.uid : data.ownerId;
+    }
+
+    // Collection matchers
+    
+    // User profile - only the user can read/write their own
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || getUserData().role == 'admin');
+      allow write: if isSignedIn() && request.auth.uid == userId;
+    }
+    
+    // Global Config - everyone registered can read
+    match /system_config/{configId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+    
+    // Settings - only owner can read/write
+    match /settings/{ownerId} {
+      allow read, write: if isSignedIn() && (request.auth.uid == ownerId || request.auth.token.email == ownerId || getOwnerId() == ownerId);
+    }
+    
+    // Main business data
+    match /{collection}/{docId} {
+      // List of collections that should be multi-tenant by ownerId
+      allow read, write: if isSignedIn() && 
+        (collection in [
+          'customers', 'orders', 'products', 'audit_logs', 
+          'inventory_logs', 'payments', 'categories', 
+          'notifications', 'coupons', 'price_lists', 
+          'attendance', 'finance', 'debt_history'
+        ]) &&
+        (
+          // If reading, the document must have the same ownerId
+          (resource != null && (resource.data.ownerId == getOwnerId() || resource.data.ownerId == request.auth.token.email)) ||
+          // If writing, the new document must have the same ownerId
+          (request.resource != null && (request.resource.data.ownerId == getOwnerId() || request.resource.data.ownerId == request.auth.token.email))
+        );
+    }
+
+    // Training / Labs (Global or User specific)
+    match /training_labs/{labId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn(); // Progress is saved here usually
+    }
+  }
+}

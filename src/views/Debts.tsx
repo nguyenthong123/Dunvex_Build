@@ -688,7 +688,28 @@ const Debts: React.FC = () => {
 								</thead>
 								<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
 									{loading ? (
-										<tr><td colSpan={5} className="py-20 text-center text-slate-400 dark:text-slate-500 uppercase font-black text-xs tracking-[4px]">Đang tải dữ liệu...</td></tr>
+										[1, 2, 3, 4, 5].map(i => (
+											<tr key={i} className="animate-pulse">
+												<td className="px-8 py-5 border-b border-slate-50 dark:border-slate-800">
+													<div className="flex items-center gap-4">
+														<div className="size-12 rounded-2xl skeleton" />
+														<div className="space-y-2">
+															<div className="w-32 h-4 skeleton" />
+															<div className="w-20 h-3 skeleton opacity-50" />
+														</div>
+													</div>
+												</td>
+												<td className="px-8 py-5 border-b border-slate-50 dark:border-slate-800"><div className="w-20 h-4 skeleton ml-auto" /></td>
+												<td className="px-8 py-5 border-b border-slate-50 dark:border-slate-800"><div className="w-20 h-4 skeleton ml-auto" /></td>
+												<td className="px-8 py-5 border-b border-slate-50 dark:border-slate-800"><div className="w-24 h-5 skeleton ml-auto" /></td>
+												<td className="px-6 py-5 border-b border-slate-50 dark:border-slate-800">
+													<div className="flex justify-end gap-2">
+														<div className="size-10 rounded-xl skeleton" />
+														<div className="size-10 rounded-xl skeleton" />
+													</div>
+												</td>
+											</tr>
+										))
 									) : paginatedData.length === 0 ? (
 										<tr><td colSpan={5} className="py-20 text-center text-slate-400 dark:text-slate-500 uppercase font-black text-xs tracking-[4px]">Không tìm thấy đối tác nào</td></tr>
 									) : paginatedData.map((row) => (

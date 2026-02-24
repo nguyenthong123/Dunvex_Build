@@ -12,6 +12,7 @@ const QuickOrder = () => {
 	const { id } = useParams();
 	const owner = useOwner();
 	const { showToast } = useToast();
+	const normalizeText = (text: string) => text ? text.normalize('NFC').trim().toLowerCase() : '';
 	const [products, setProducts] = useState<any[]>([]);
 	const [customers, setCustomers] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -453,7 +454,7 @@ const QuickOrder = () => {
 	const categories = Array.from(new Map([
 		'Tôn lợp', 'Xà gồ', 'Sắt hộp', 'Phụ kiện', 'Inox',
 		...products.map(p => p.category)
-	].filter(Boolean).map(cat => [cat.toLowerCase(), cat])).values()).sort((a: any, b: any) => String(a).localeCompare(String(b)));
+	].filter(Boolean).map(cat => [normalizeText(cat), cat])).values()).sort((a: any, b: any) => String(a).localeCompare(String(b)));
 
 	const hasOrderPermission = owner.role === 'admin' || (owner.accessRights?.orders_create ?? true);
 
@@ -734,10 +735,10 @@ const QuickOrder = () => {
 													</div>
 													<div className="max-h-72 overflow-y-auto py-2 no-scrollbar">
 														{products
-															.filter(p => !item.category || p.category?.toLowerCase() === item.category?.toLowerCase())
+															.filter(p => !item.category || normalizeText(p.category) === normalizeText(item.category))
 															.filter(p =>
-																String(p.name || '').toLowerCase().includes(lineSearchQuery.toLowerCase()) ||
-																(p.sku && String(p.sku).toLowerCase().includes(lineSearchQuery.toLowerCase()))
+																normalizeText(p.name).includes(normalizeText(lineSearchQuery)) ||
+																(p.sku && normalizeText(p.sku).includes(normalizeText(lineSearchQuery)))
 															)
 															.slice(0, 50)
 															.map(p => {

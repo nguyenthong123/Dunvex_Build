@@ -360,6 +360,8 @@ const NexusControl = () => {
 										<tr className="bg-slate-800/50 text-[10px] font-black uppercase tracking-widest text-slate-500">
 											<th className="px-8 py-5">Khách hàng</th>
 											<th className="px-8 py-5">Gói đăng ký</th>
+											<th className="px-8 py-5">Ngày gửi</th>
+											<th className="px-8 py-5">Coupon</th>
 											<th className="px-8 py-5">Nội dung chuyển</th>
 											<th className="px-8 py-5">Số tiền</th>
 											<th className="px-8 py-5 text-right">Hành động</th>
@@ -383,6 +385,17 @@ const NexusControl = () => {
 													<span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase ${req.planId === 'premium_yearly' ? 'bg-amber-500/10 text-amber-500' : 'bg-indigo-500/10 text-indigo-500'}`}>
 														{req.planName}
 													</span>
+												</td>
+												<td className="px-8 py-6 text-slate-400 font-medium">
+													{req.createdAt?.toDate ? req.createdAt.toDate().toLocaleString('vi-VN', {
+														hour: '2-digit',
+														minute: '2-digit',
+														day: '2-digit',
+														month: '2-digit'
+													}) : '---'}
+												</td>
+												<td className="px-8 py-6 font-black text-rose-500 uppercase tracking-widest">
+													{req.appliedCode || '---'}
 												</td>
 												<td className="px-8 py-6 text-indigo-400 font-black tracking-widest">{req.transferCode || '---'}</td>
 												<td className="px-8 py-6 font-black text-white">{req.amount.toLocaleString()}đ</td>

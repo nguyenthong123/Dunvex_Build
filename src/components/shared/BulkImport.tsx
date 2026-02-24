@@ -258,7 +258,10 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 			// Try XLSX format first which is better for data types, but include GID
 			const exportUrl = `https://docs.google.com/spreadsheets/d/${ssId}/export?format=xlsx&gid=${gid}`;
 
-			const response = await fetch(exportUrl);
+			const response = await fetch(exportUrl, {
+				credentials: 'omit',
+				cache: 'no-cache'
+			});
 			if (!response.ok) {
 				throw new Error("Không thể truy cập trang tính. Hãy chắc chắn bạn đã bật quyền 'Bất kỳ ai có liên kết đều có thể xem'.");
 			}
@@ -403,7 +406,7 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 	};
 
 	return (
-		<div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+		<div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
 			<div className="bg-white dark:bg-slate-900 w-full max-w-4xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-white/20 dark:border-slate-800 animate-in zoom-in-95 duration-200">
 				{/* Header */}
 				<div className="px-8 py-6 bg-[#1A237E] dark:bg-slate-900 border-b border-white/10 flex items-center justify-between text-white transition-colors">

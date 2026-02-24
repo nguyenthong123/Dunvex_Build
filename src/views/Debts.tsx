@@ -879,7 +879,7 @@ const Debts: React.FC = () => {
 
 			{/* PAYMENT FORM MODAL */}
 			{showPaymentForm && (
-				<div className="fixed inset-0 z-[100] bg-[#1A237E]/80 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+				<div className="fixed inset-0 z-[150] bg-[#1A237E]/80 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
 					<div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 transition-colors duration-300">
 						<div className="px-8 py-6 bg-[#1A237E] dark:bg-indigo-900 text-white flex items-center justify-between">
 							<div className="flex items-center gap-3">
@@ -1004,7 +1004,7 @@ const Debts: React.FC = () => {
 			{/* DEBT STATEMENT MODAL */}
 			{showStatement && selectedCustomer && (
 				((owner.isPro || !owner.systemConfig.lock_free_debts) && !owner.manualLockDebts) ? (
-					<div id="debt-statement-modal" className="fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-xl flex items-center justify-center p-0 md:p-8">
+					<div id="debt-statement-modal" className="fixed inset-0 z-[160] bg-slate-900/95 backdrop-blur-xl flex items-center justify-center p-0 md:p-8">
 						<div className="bg-white dark:bg-slate-900 w-full max-w-4xl max-h-[95vh] md:max-h-[90vh] md:rounded-[3rem] shadow-2xl relative flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 transaction-colors duration-300">
 							{/* MODAL HEADER - STICKY FOR UI BUT HIDDEN FOR SCREENSHOT ONCE SCROLLED */}
 							<div className="flex-none bg-white dark:bg-slate-900 px-8 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between z-20 md:rounded-t-[3rem] print:hidden transition-colors duration-300">

@@ -226,6 +226,10 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     *   **Vá lỗi JSX & Cấu trúc**: Khắc phục triệt để các lỗi cú pháp JSX, unclosed fragments và sai lệch thẻ `div` trong module Khách hàng, đảm bảo tính ổn định tuyệt đối.
     *   **Tối ưu Mobile List & Pagination**: Tinh chỉnh giao diện danh sách di động và logic phân trang, tự động cuộn lên đầu và hiển thị trạng thái loading đồng nhất trên mọi thiết bị.
     *   **Giao diện Modal Cao cấp**: Hoàn thiện thiết kế Modal Chi tiết và Thêm/Sửa khách hàng với phong cách Glassmorphism và tối ưu hóa khả năng tương tác.
+- [x] **Khắc phục Google Sheets & UI Di động (Feb 24 Night Updates)**:
+    *   **Mobile Sheet Import Fix**: Đã khắc phục triệt để lỗi "Không thể truy cập trang tính" trên iPhone/Android bằng cơ chế `credentials: 'omit'`, đảm bảo yêu cầu fetch dữ liệu từ Google luôn thành công trên trình duyệt di động.
+    *   **Z-index & Layout Fix**: Chuẩn hóa Z-index lên `150/160` và thêm padding dưới giúp nút "Xóa khách" không bị che bởi thanh điều hướng.
+    *   **Logical Cleanup**: Sửa lỗi hiển thị số "0" dư thừa do logic kiểm tra tọa độ trong chi tiết khách hàng.
 
 ### 📝 Cần làm tiếp (To-do)
 

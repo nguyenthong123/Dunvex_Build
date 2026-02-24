@@ -798,7 +798,7 @@ const CustomerList = () => {
 			{/* ADD/EDIT MODAL */}
 			{
 				(showAddForm || showEditForm) && (
-					<div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-[#1A237E]/80 dark:bg-black/80 backdrop-blur-sm">
+					<div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-[#1A237E]/80 dark:bg-black/80 backdrop-blur-sm">
 						<div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] transition-colors duration-300">
 							<div className="px-8 py-6 bg-[#1A237E] dark:bg-indigo-900 text-white flex items-center justify-between">
 								<h3 className="text-xl font-black uppercase tracking-tight">{showAddForm ? 'Thêm Khách Hàng' : 'Cập Nhật Hồ Sơ'}</h3>
@@ -1003,11 +1003,11 @@ const CustomerList = () => {
 			{/* DETAIL MODAL */}
 			{
 				showDetail && selectedCustomer && (
-					<div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm transition-all duration-500 overflow-hidden">
+					<div className="fixed inset-0 z-[160] flex items-end sm:items-center justify-center bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm transition-all duration-500 overflow-hidden">
 						<div className="absolute inset-0" onClick={() => setShowDetail(false)}></div>
-						<div className="bg-white dark:bg-slate-900 w-full sm:max-w-lg rounded-t-[2.5rem] sm:rounded-[3rem] shadow-2xl relative z-10 transition-all duration-500 animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-0 sm:zoom-in-95 max-h-[95vh] overflow-y-auto custom-scrollbar border-t sm:border border-white/20 dark:border-slate-800">
+						<div className="bg-white dark:bg-slate-900 w-full sm:max-w-lg rounded-t-[2.5rem] sm:rounded-[3rem] shadow-2xl relative z-10 transition-all duration-500 animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-0 sm:zoom-in-95 max-h-[90vh] sm:max-h-[85vh] overflow-y-auto custom-scrollbar border-t sm:border border-white/20 dark:border-slate-800">
 							<div className="w-12 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full mx-auto mt-4 mb-2 sm:hidden"></div>
-							<div className="px-6 sm:px-10 py-6 sm:py-10 flex flex-col items-center text-center relative overflow-hidden">
+							<div className="px-6 sm:px-10 py-6 sm:pt-10 pb-20 sm:pb-12 flex flex-col items-center text-center relative">
 								<div className="absolute top-0 left-0 w-full h-40 bg-gradient-to-b from-[#1A237E]/5 dark:from-indigo-500/5 to-transparent pointer-events-none"></div>
 								<button onClick={() => setShowDetail(false)} className="absolute top-4 sm:top-6 right-4 sm:right-6 p-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-rose-500 transition-all shadow-sm">
 									<span className="material-symbols-outlined text-xl">close</span>
@@ -1070,7 +1070,7 @@ const CustomerList = () => {
 									</div>
 									{/* Actions */}
 									<div className="flex flex-wrap gap-3 pt-4 pb-2">
-										{selectedCustomer.lat && selectedCustomer.lng && (
+										{!!(selectedCustomer.lat && selectedCustomer.lng) && (
 											<button onClick={() => { setShowDetail(false); setShowMap(true); }} className="flex-1 min-w-[140px] bg-green-500 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-green-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 h-14">
 												<span className="material-symbols-outlined text-lg">map</span> Xem vị trí
 											</button>

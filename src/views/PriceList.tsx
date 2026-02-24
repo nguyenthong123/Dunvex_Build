@@ -245,8 +245,11 @@ const PriceList = () => {
 			const gid = gidMatch ? gidMatch[1] : '0';
 			const exportUrl = `https://docs.google.com/spreadsheets/d/${ssId}/export?format=csv&gid=${gid}`;
 
-			const response = await fetch(exportUrl);
-			if (!response.ok) throw new Error("Không thể truy cập trang tính");
+			const response = await fetch(exportUrl, {
+				credentials: 'omit',
+				cache: 'no-cache'
+			});
+			if (!response.ok) throw new Error("Không thể truy cập trang tính. Hãy chắc chắn bạn đã bật quyền 'Bất kỳ ai có liên kết đều có thể xem'.");
 
 			const csvText = await response.text();
 			const wb = XLSX.read(csvText, { type: 'string' });
@@ -725,7 +728,7 @@ const PriceList = () => {
 
 			{/* IMPORT MODAL */}
 			{showImportModal && (
-				<div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
+				<div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
 					<div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col border border-white/20 dark:border-slate-800 transition-colors">
 						<div className="px-8 py-6 bg-indigo-600 dark:bg-slate-800 text-white flex items-center justify-between">
 							<div className="flex items-center gap-3">

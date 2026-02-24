@@ -204,7 +204,7 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 - [x] **Tối ưu Mobile UI & Điều hướng (Feb 21 Refinement)**:
     - **Header & Nav Pro**: Nâng cấp Header Glassmorphism và Bottom Nav hỗ trợ Safe Area. Gỡ bỏ các wrapper dư thừa cho biểu tượng thông báo giúp giao diện thoáng hơn.
     - **Nút Trung tâm tối giản (Dynamic FAB)**: Rút gọn nút Center thành dạng hình tròn (Icon-only) màu cam nổi bật. Tối ưu logic: Hiện **"Lên đơn"** tại Trang chủ để thao tác nhanh, hiện **"Thu nợ"** tại trang Công nợ.
-- [x] **Dọn dẹp & Tinh gọn Hệ thống**: Gỡ bỏ hoàn toàn tính năng Affiliate và hệ thống mã giảm giá (Coupon/Promo) trên toàn bộ ứng dụng (Pricing, Quick Order) để tối ưu hiệu suất.
+- [x] **Dọn dẹp & Tinh gọn Hệ thống**: Gỡ bỏ tính năng Affiliate cũ. Hệ thống Mã giảm giá (Coupon) được tái thiết lập với cơ chế bảo mật mới phục vụ riêng cho Nâng cấp tài khoản.
 - [x] **PWA Reliability**: Cập nhật cơ chế precache HTML giúp sửa lỗi điều hướng khi sử dụng Service Worker.
 - [x] **Hệ thống Phân trang Chuyên nghiệp (Refined Pagination - Feb 23)**:
     *   **Đồng nhất hóa (Standardization)**: Áp dụng bộ điều khiển phân trang hiện đại (10 bản ghi/trang) trên toàn bộ hệ thống: **Khách hàng, Đơn hàng, Công nợ, Lịch sử báo giá, Sổ quỹ và Lợi nhuận**.
@@ -215,6 +215,11 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     *   **Phân quyền Quản lý Sản phẩm**: Thiết lập quyền Admin tối cao cho việc **Thêm/Sửa/Xóa/Nhập khẩu** sản phẩm. Nhân viên chỉ có quyền xem danh sách và sử dụng dữ liệu sản phẩm chung để lên đơn hàng.
     *   **Audit Logs Pro**: Tự động lọc nhật ký hoạt động theo người dùng. Nhân viên chỉ thấy lịch sử của mình, Admin quản lý toàn bộ vết (Trace) của hệ thống.
     *   **Chuẩn hóa Tìm kiếm (Normalization)**: Nâng cấp bộ lọc tìm kiếm sản phẩm hỗ trợ chuẩn hóa tiếng Việt (NFC) và không phân biệt hoa/thường, đảm bảo tìm kiếm chính xác tuyệt đối trên mọi nền tảng.
+- [x] **Tối ưu Kho & Trải nghiệm Đối tác (Feb 24 Final Refinement)**:
+    *   **Inventory Sync (Chỉnh sửa/Xóa)**: Hoàn thiện logic đồng bộ kho tự động khi chỉnh sửa đơn hàng cũ (hoàn kho cũ - trừ kho mới) và tự động hoàn kho khi xóa đơn đơn hàng, đảm bảo tính nguyên tử (Atomicity) qua `writeBatch`.
+    *   **Prioritize Business Name**: Nâng cấp UI đồng bộ trên các module **Công nợ, Đơn hàng, Khách hàng và Quick Order** để ưu tiên hiển thị **Tên cơ sở kinh doanh** lên hàng đầu, giúp nhận diện đối tác nhanh và chuyên nghiệp hơn.
+    *   **Secure Coupon System (Plan Upgrade)**: Tái thiết lập hệ thống mã giảm giá bảo mật cho nâng cấp tài khoản (Gói Năm). Kiểm tra 4 điều kiện: Mã khớp, Chủ sở hữu hệ thống (`dunvex.green@gmail.com`), Chưa hết hạn và Còn lượt sử dụng.
+    *   **Centralized Coupon Tracking**: Bổ sung cơ chế lưu vết `ownerEmail` cho mã giảm giá, cho phép hệ thống phân biệt mã nội bộ cửa hàng và mã ưu đãi hệ thống từ Dunvex Digital.
 - [x] **Tối ưu Hệ thống Ưu đãi & Điều hướng (Feb 24 Updates)**:
     *   **Coupon Mobile UI Pro**: Nâng cấp toàn diện giao diện Quản lý mã giảm giá trên điện thoại. Chuyển đổi form tạo mã sang dạng Bottom Sheet cuộn thông minh, cố định nút bấm giúp thao tác cực kỳ mượt mà.
     *   **Dynamic Navigation Context**: Tự động thay đổi nhãn và icon nút Center thành **"Tạo mã mới"** khi người dùng truy cập trang Ưu đãi, giúp tăng tốc quy trình vận hành.

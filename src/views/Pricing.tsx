@@ -81,21 +81,14 @@ const Pricing = () => {
 		setPromoProdId('');
 
 		try {
-			const code = promoCode.trim();
+			const code = promoCode.trim().toUpperCase();
 			if (!code) return;
 
-			// Kiểm tra định dạng: 2 chữ - 3 số (Ví dụ: DV-476)
-			const promoRegex = /^[A-Za-z]{2}-[0-9]{3}$/;
-			if (!promoRegex.test(code)) {
-				setPromoError('Mã giảm giá không đúng định dạng (VD: XX-000)');
-				return;
-			}
-
-			// Query products from master account dunvex.green@gmail.com
+			// Query coupons from master account dunvex.green@gmail.com
 			const q = query(
-				collection(db, 'products'),
+				collection(db, 'coupons'),
 				where('ownerEmail', '==', 'dunvex.green@gmail.com'),
-				where('sku', '==', code),
+				where('code', '==', code),
 				limit(1)
 			);
 
@@ -105,13 +98,41 @@ const Pricing = () => {
 				const promoDoc = querySnapshot.docs[0];
 				const promoData = promoDoc.data();
 
-				// Kiểm tra tồn kho (số lần sử dụng còn lại)
-				if (Number(promoData.stock || 0) <= 0) {
+				// 1. Kiểm tra trạng thái
+				if (promoData.status !== 'active') {
+					setPromoError('Mã giảm giá này hiện không khả dụng');
+					return;
+				}
+
+				// 2. Kiểm tra ngày hết hạn (YYYY-MM-DD)
+				const today = new Date().toISOString().split('T')[0];
+				if (promoData.expiry && promoData.expiry < today) {
+					setPromoError('Mã giảm giá này đã hết hạn');
+					return;
+				}
+
+				// 3. Kiểm tra lượt sử dụng
+				if (promoData.usageLimit > 0 && promoData.usageCount >= promoData.usageLimit) {
 					setPromoError('Mã này đã hết lượt sử dụng');
 					return;
 				}
 
-				const discount = Number(promoData.priceSell) || 0;
+				// 4. Tính toán mức giảm
+				let discount = 0;
+				const discountVal = promoData.discount || '';
+
+				if (promoData.type === 'percentage') {
+					const percent = parseFloat(discountVal) || 0;
+					discount = (selectedPlan.price * percent) / 100;
+				} else if (promoData.type === 'fixed') {
+					// Handle cases like "500k" or "500000"
+					let valText = discountVal.toLowerCase();
+					if (valText.endsWith('k')) {
+						discount = parseFloat(valText) * 1000;
+					} else {
+						discount = parseFloat(valText) || 0;
+					}
+				}
 
 				if (discount > 0) {
 					const finalDiscount = Math.min(discount, selectedPlan.price);
@@ -119,10 +140,10 @@ const Pricing = () => {
 					setAppliedCode(code);
 					setPromoProdId(promoDoc.id);
 				} else {
-					setPromoError('Mã này không có giá trị giảm giá');
+					setPromoError('Mã này không có giá trị giảm giá hợp lệ');
 				}
 			} else {
-				setPromoError('Mã giảm giá không tồn tại');
+				setPromoError('Mã giảm giá không tồn tại hoặc không thuộc hệ thống Dunvex');
 			}
 		} catch (error) {
 			console.error("Error applying promo:", error);
@@ -152,15 +173,15 @@ const Pricing = () => {
 				createdAt: serverTimestamp()
 			});
 
-			// Giảm số lượng mã (stock) sau khi dùng thành công
+			// Tăng số lượt sử dụng mã giảm giá
 			if (promoProdId) {
 				try {
-					const promoRef = doc(db, 'products', promoProdId);
+					const promoRef = doc(db, 'coupons', promoProdId);
 					await updateDoc(promoRef, {
-						stock: increment(-1)
+						usageCount: increment(1)
 					});
 				} catch (err) {
-					console.error("Failed to decrement promo stock:", err);
+					console.error("Failed to update coupon usage:", err);
 				}
 			}
 

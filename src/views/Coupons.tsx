@@ -159,6 +159,7 @@ const Coupons = () => {
 				...formData,
 				code: formData.code.toUpperCase().trim(),
 				ownerId: owner.ownerId,
+				ownerEmail: owner.ownerEmail,
 				updatedAt: serverTimestamp()
 			};
 

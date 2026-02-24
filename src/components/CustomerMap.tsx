@@ -275,11 +275,15 @@ const CustomerMap: React.FC<CustomerMapProps> = ({ customers = [], onClose }) =>
 										<div className="p-1 min-w-[150px]">
 											<div className="flex items-center gap-2 mb-2">
 												<div className="size-8 rounded-lg bg-blue-50 dark:bg-blue-900/40 text-blue-600 flex items-center justify-center font-black text-xs shrink-0">
-													{(customer.name?.[0] || 'K').toUpperCase()}
+													{(customer.businessName || customer.name || 'K')[0].toUpperCase()}
 												</div>
 												<div className="overflow-hidden">
-													<h4 className="font-black text-[#1A237E] dark:text-indigo-300 uppercase text-xs leading-none truncate">{customer.name}</h4>
-													<span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{type}</span>
+													<h4 className="font-black text-[#1A237E] dark:text-indigo-300 uppercase text-xs leading-none truncate">
+														{customer.businessName || customer.name}
+													</h4>
+													<span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">
+														{customer.businessName ? customer.name : type}
+													</span>
 												</div>
 											</div>
 											<p className="text-[10px] text-slate-600 dark:text-slate-400 leading-relaxed mb-3 font-medium">

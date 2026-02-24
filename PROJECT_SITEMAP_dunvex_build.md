@@ -230,6 +230,7 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     *   **Mobile Sheet Import Fix**: Đã khắc phục triệt để lỗi "Không thể truy cập trang tính" trên iPhone/Android bằng cơ chế `credentials: 'omit'`, đảm bảo yêu cầu fetch dữ liệu từ Google luôn thành công trên trình duyệt di động.
     *   **Z-index & Layout Fix**: Chuẩn hóa Z-index lên `150/160` và thêm padding dưới giúp nút "Xóa khách" không bị che bởi thanh điều hướng.
     *   **Logical Cleanup**: Sửa lỗi hiển thị số "0" dư thừa do logic kiểm tra tọa độ trong chi tiết khách hàng.
+    *   **Map Popup Improvement**: Ưu tiên hiển thị **Tên cơ sở kinh doanh** thay cho mã ID/Tên khách hàng trong cửa sổ thông báo trên bản đồ, giúp nhận diện đối tác nhanh chóng hơn.
 
 ### 📝 Cần làm tiếp (To-do)
 

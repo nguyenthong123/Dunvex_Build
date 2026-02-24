@@ -170,7 +170,8 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 									<span className="text-slate-900">
 										{(() => {
 											const totalPackages = order.items?.reduce((sum: number, item: any) => {
-												const packaging = parseFloat(item.packaging) || 1;
+												const packaging = parseFloat(item.packaging) || 0;
+												if (packaging <= 0) return sum;
 												return sum + (Number(item.qty) / packaging);
 											}, 0) || 0;
 											return totalPackages.toLocaleString('vi-VN', { maximumFractionDigits: 2 });

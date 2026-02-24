@@ -908,15 +908,27 @@ const QuickOrder = () => {
 
 										{/* PACKAGING - DESKTOP ONLY INFOS */}
 										<div className="hidden md:flex flex-col items-center">
-											<span className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-tighter">{item.packaging || '0'}</span>
-											<span className="text-[9px] font-bold text-slate-300 uppercase">{item.unit || '-'}</span>
+											<span className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-tighter">
+												{(() => {
+													const pkg = parseFloat(item.packaging) || 0;
+													if (pkg <= 0) return '0';
+													return (Number(item.qty) / pkg).toLocaleString('vi-VN', { maximumFractionDigits: 2 });
+												})()}
+											</span>
+											<span className="text-[9px] font-bold text-slate-300 uppercase">KIỆN</span>
 										</div>
 
 										{/* TOTAL PER ITEM */}
 										<div className="col-span-2 md:col-auto mt-4 md:mt-0 pt-4 md:pt-0 border-t md:border-none border-slate-100 dark:border-slate-800 flex items-center justify-between md:justify-end">
 											<div className="md:hidden flex flex-col">
 												<span className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">THÀNH TIỀN</span>
-												<span className="text-[10px] font-bold text-slate-300 uppercase">Kiện: {item.packaging || 0} {item.unit}</span>
+												<span className="text-[10px] font-bold text-slate-300 uppercase">
+													Kiện: {(() => {
+														const pkg = parseFloat(item.packaging) || 0;
+														if (pkg <= 0) return '0';
+														return (Number(item.qty) / pkg).toLocaleString('vi-VN', { maximumFractionDigits: 2 });
+													})()} KIỆN
+												</span>
 											</div>
 											<span className="text-base md:text-sm font-black text-[#f27121] tabular-nums">
 												{(Number(item.price) * Number(item.qty || 0)).toLocaleString('vi-VN')} đ

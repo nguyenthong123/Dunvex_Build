@@ -206,6 +206,65 @@ const QuickOrder = () => {
 		}
 	};
 
+	const handleApplyCoupon = async () => {
+		if (!couponCode) {
+			showToast("Vui lòng nhập mã giảm giá", "warning");
+			return;
+		}
+
+		try {
+			const q = query(
+				collection(db, 'coupons'),
+				where('ownerId', '==', owner.ownerId),
+				where('code', '==', couponCode.toUpperCase().trim()),
+				limit(1)
+			);
+			const querySnapshot = await getDocs(q);
+
+			if (querySnapshot.empty) {
+				showToast("Mã giảm giá không tồn tại hoặc không hợp lệ", "error");
+				return;
+			}
+
+			const coupon = querySnapshot.docs[0].data();
+
+			// Validation
+			if (coupon.status !== 'active') {
+				showToast("Mã giảm giá này hiện không khả dụng", "warning");
+				return;
+			}
+
+			const today = new Date().toISOString().split('T')[0];
+			if (coupon.expiry && coupon.expiry < today) {
+				showToast("Mã giảm giá đã hết hạn sử dụng", "warning");
+				return;
+			}
+
+			if (coupon.usageLimit > 0 && (coupon.usageCount || 0) >= coupon.usageLimit) {
+				showToast("Mã giảm giá đã đạt giới hạn lượt sử dụng", "warning");
+				return;
+			}
+
+			// Calculate Discount
+			let discount = 0;
+			const discountVal = parseFloat(coupon.discount) || 0;
+
+			if (coupon.type === 'percentage') {
+				discount = subTotal * (discountVal / 100);
+			} else if (coupon.type === 'fixed') {
+				discount = discountVal;
+			} else if (coupon.type === 'shipping') {
+				discount = Number(shippingFee);
+			}
+
+			setDiscountAmt(discount);
+			showToast(`Đã áp dụng: ${coupon.title}`, "success");
+
+		} catch (error) {
+			showToast("Lỗi khi áp dụng mã: " + error, "error");
+		}
+	};
+
 	const subTotal = lineItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 0), 0);
 	const finalTotal = subTotal + Number(shippingFee) - Number(discountAmt);
 
@@ -250,6 +309,7 @@ const QuickOrder = () => {
 				totalWeight: Number(totalWeight) || 0,
 				note: orderNote,
 				status: orderStatus,
+				couponCode: couponCode || null,
 				// NEW FIELDS FOR OWNER TRACKING
 				ownerId: owner.ownerId,
 				ownerEmail: owner.ownerEmail,
@@ -334,14 +394,30 @@ const QuickOrder = () => {
 					}
 				});
 
-				// 4. Log Audit
+				// 4. Update Coupon Usage if applicable
+				if (couponCode) {
+					const couponQ = query(
+						collection(db, 'coupons'),
+						where('ownerId', '==', owner.ownerId),
+						where('code', '==', couponCode.toUpperCase().trim()),
+						limit(1)
+					);
+					const couponSnap = await getDocs(couponQ);
+					if (!couponSnap.empty) {
+						batch.update(doc(db, 'coupons', couponSnap.docs[0].id), {
+							usageCount: increment(1)
+						});
+					}
+				}
+
+				// 5. Log Audit
 				const logRef = doc(collection(db, 'audit_logs'));
 				batch.set(logRef, {
 					action: 'Lên đơn hàng mới',
 					user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
 					userId: auth.currentUser?.uid,
 					ownerId: owner.ownerId,
-					details: `Đã tạo đơn hàng cho ${orderData.customerName} - Tổng tiền: ${finalTotal.toLocaleString('vi-VN')} đ`,
+					details: `Đã tạo đơn hàng cho ${orderData.customerName} - Tổng tiền: ${finalTotal.toLocaleString('vi-VN')} đ${couponCode ? ` (Mã: ${couponCode})` : ''}`,
 					createdAt: serverTimestamp()
 				});
 
@@ -436,6 +512,7 @@ const QuickOrder = () => {
 								<Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-600" />
 								<input
 									type="text"
+									autoComplete="one-time-code"
 									placeholder="Nhập tên hoặc tìm khách hàng..."
 									className="w-full pl-12 pr-4 h-14 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#f27121]/10 focus:border-[#f27121] transition-all placeholder:text-slate-300 dark:placeholder:text-slate-600"
 									value={searchCustomerQuery}
@@ -516,6 +593,7 @@ const QuickOrder = () => {
 							<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 ml-1">GHI CHÚ ĐƠN HÀNG</label>
 							<textarea
 								rows={2}
+								autoComplete="off"
 								placeholder="Yêu cầu giao hàng sớm..."
 								className="w-full p-5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#f27121]/10 resize-none min-h-[100px] placeholder:text-slate-300 dark:placeholder:text-slate-600"
 								value={orderNote}
@@ -527,217 +605,248 @@ const QuickOrder = () => {
 
 				{/* SECTION 2: PRODUCT LIST */}
 				<div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-colors duration-300">
-					<div className="p-8 border-b border-slate-50 dark:border-slate-800 flex items-center justify-between">
+					<div className="px-8 py-6 border-b border-slate-50 dark:border-slate-800 flex items-center justify-between">
 						<h3 className="text-sm font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">DANH SÁCH SẢN PHẨM</h3>
 					</div>
+					<div className="p-4 md:p-8">
+						{/* DESKTOP HEADER - HIDDEN ON MOBILE */}
+						<div className="hidden md:grid grid-cols-[180px_1fr_100px_150px_60px_120px_40px] gap-4 mb-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest border-b border-slate-50 dark:border-slate-800 pb-4">
+							<div>DANH MỤC</div>
+							<div>SẢN PHẨM</div>
+							<div className="text-center">SỐ LƯỢNG</div>
+							<div className="text-center">ĐƠN GIÁ</div>
+							<div className="text-center">KIỆN</div>
+							<div className="text-right">THÀNH TIỀN</div>
+							<div></div>
+						</div>
 
-					<div className="p-4 md:p-8 overflow-x-auto no-scrollbar">
-						<table className="w-full min-w-[1000px]">
-							<thead>
-								<tr className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px] border-b border-slate-50 dark:border-slate-800">
-									<th className="pb-4 text-left font-black w-[200px]">DANH MỤC</th>
-									<th className="pb-4 text-left font-black w-[350px]">SẢN PHẨM</th>
-									<th className="pb-4 text-center font-black w-24">SỐ LƯỢNG</th>
-									<th className="pb-4 text-center font-black w-32">ĐƠN GIÁ</th>
-									<th className="pb-4 text-center font-black w-20">KIỆN</th>
-									<th className="pb-4 text-right font-black w-32">THÀNH TIỀN</th>
-									<th className="pb-4 w-12"></th>
-								</tr>
-							</thead>
-							<tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-								{lineItems.map((item, index) => (
-									<tr key={index} className="group transition-colors">
-										<td className="py-6">
-											<div className="relative" ref={activeRow === index && activeField === 'category' ? dropdownRef : null}>
-												<div
-													className="w-full h-12 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl px-4 flex items-center justify-between cursor-pointer hover:border-[#f27121] transition-colors"
-													onClick={() => {
-														setActiveRow(index);
-														setActiveField('category');
-														setLineSearchQuery('');
-													}}
-												>
-													<span className={`text-xs font-bold ${item.category ? 'text-slate-900 dark:text-white' : 'text-slate-300 dark:text-slate-600'}`}>
-														{item.category || 'Tìm danh mục...'}
-													</span>
-													<ChevronDown size={14} className="text-slate-300" />
-												</div>
+						{/* LIST OF ITEMS */}
+						<div className="space-y-6 md:space-y-0">
+							{lineItems.map((item, index) => (
+								<div key={index} className="group relative bg-[#fcfdfe] dark:bg-slate-800/30 md:bg-transparent rounded-[2rem] md:rounded-none p-5 md:p-0 border border-slate-100 dark:border-slate-800/50 md:border-t-0 md:border-x-0 md:border-b md:dark:border-slate-800 md:grid md:grid-cols-[180px_1fr_100px_150px_60px_120px_40px] md:gap-4 md:items-center md:py-6 transition-all">
 
-												{activeRow === index && activeField === 'category' && (
-													<div className="absolute z-[100] top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl shadow-2xl overflow-hidden min-w-[250px]">
-														<div className="p-2 border-b border-slate-50 dark:border-slate-700">
-															<input
-																autoFocus
-																type="text"
-																placeholder="Gõ để tìm nhanh..."
-																className="w-full h-10 px-3 bg-slate-50 dark:bg-slate-900 border-none rounded-lg text-xs font-bold focus:ring-0"
-																value={lineSearchQuery}
-																onChange={(e) => setLineSearchQuery(e.target.value)}
-															/>
+									{/* SELECTION AREA (CATEGORY & PRODUCT) */}
+									<div className="grid grid-cols-1 md:contents gap-4">
+										{/* CATEGORY SELECT */}
+										<div className="relative" ref={activeRow === index && activeField === 'category' ? dropdownRef : null}>
+											<label className="md:hidden text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px] mb-2 block ml-1">DANH MỤC</label>
+											<div
+												className="w-full h-12 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl px-4 flex items-center justify-between cursor-pointer hover:border-[#f27121] transition-all"
+												onClick={() => {
+													setActiveRow(index);
+													setActiveField('category');
+													setLineSearchQuery('');
+												}}
+											>
+												<span className={`text-[12px] font-bold truncate ${item.category ? 'text-slate-900 dark:text-white' : 'text-slate-300 dark:text-slate-600'}`}>
+													{item.category || 'Tìm danh mục...'}
+												</span>
+												<ChevronDown size={14} className="text-slate-300 shrink-0" />
+											</div>
+
+											{activeRow === index && activeField === 'category' && (
+												<div className="absolute z-[100] top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden min-w-[280px]">
+													<div className="p-2 border-b border-slate-50 dark:border-slate-700">
+														<input
+															autoFocus
+															type="text"
+															placeholder="Gõ để tìm nhanh..."
+															className="w-full h-11 px-4 bg-slate-50 dark:bg-slate-900 border-none rounded-xl text-xs font-bold focus:ring-0"
+															value={lineSearchQuery}
+															onChange={(e) => setLineSearchQuery(e.target.value)}
+														/>
+													</div>
+													<div className="max-h-64 overflow-y-auto py-2 no-scrollbar">
+														<div
+															className="px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer text-xs font-bold text-slate-400 border-b border-slate-50 dark:border-slate-700"
+															onClick={() => {
+																updateLineItem(index, 'category', '');
+																setActiveRow(null);
+																setActiveField(null);
+															}}
+														>
+															-- Tất cả danh mục --
 														</div>
-														<div className="max-h-60 overflow-y-auto py-2">
-															<div
-																className="px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer text-xs font-bold text-slate-400"
-																onClick={() => {
-																	updateLineItem(index, 'category', '');
-																	setActiveRow(null);
-																	setActiveField(null);
-																}}
-															>
-																-- Tất cả danh mục --
-															</div>
-															{categories
-																.filter(cat => cat.toLowerCase().includes(lineSearchQuery.toLowerCase()))
-																.map(cat => (
+														{categories
+															.filter(cat => String(cat).toLowerCase().includes(lineSearchQuery.toLowerCase()))
+															.map(cat => (
+																<div
+																	key={cat}
+																	className="px-5 py-4 hover:bg-[#f27121]/5 dark:hover:bg-[#f27121]/10 hover:text-[#f27121] cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between transition-colors"
+																	onClick={() => {
+																		updateLineItem(index, 'category', cat);
+																		setActiveRow(null);
+																		setActiveField(null);
+																	}}
+																>
+																	{cat}
+																	{item.category === cat && <CheckCircle size={14} className="text-[#f27121]" />}
+																</div>
+															))}
+													</div>
+												</div>
+											)}
+										</div>
+
+										{/* PRODUCT SELECT */}
+										<div className="relative md:pl-0" ref={activeRow === index && activeField === 'productId' ? dropdownRef : null}>
+											<label className="md:hidden text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px] mb-2 block ml-1">SẢN PHẨM</label>
+											<div
+												className="w-full h-12 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl px-4 flex items-center justify-between cursor-pointer hover:border-[#f27121] transition-all"
+												onClick={() => {
+													setActiveRow(index);
+													setActiveField('productId');
+													setLineSearchQuery('');
+												}}
+											>
+												<span className={`text-[12px] font-bold truncate ${item.name ? 'text-slate-900 dark:text-white' : 'text-slate-300 dark:text-slate-600'} mr-2`}>
+													{item.name || 'Tìm sản phẩm...'}
+												</span>
+												<ChevronDown size={14} className="text-slate-300 shrink-0" />
+											</div>
+
+											{activeRow === index && activeField === 'productId' && (
+												<div className="absolute z-[100] top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden min-w-[320px] md:min-w-[400px]">
+													<div className="p-2 border-b border-slate-50 dark:border-slate-700">
+														<input
+															autoFocus
+															type="text"
+															placeholder="Tìm theo tên hoặc SKU..."
+															className="w-full h-11 px-4 bg-slate-50 dark:bg-slate-900 border-none rounded-xl text-xs font-bold focus:ring-0"
+															value={lineSearchQuery}
+															onChange={(e) => setLineSearchQuery(e.target.value)}
+														/>
+													</div>
+													<div className="max-h-72 overflow-y-auto py-2 no-scrollbar">
+														{products
+															.filter(p => !item.category || p.category === item.category)
+															.filter(p =>
+																String(p.name || '').toLowerCase().includes(lineSearchQuery.toLowerCase()) ||
+																(p.sku && String(p.sku).toLowerCase().includes(lineSearchQuery.toLowerCase()))
+															)
+															.slice(0, 50)
+															.map(p => {
+																const effStock = getEffectiveStock(p);
+																return (
 																	<div
-																		key={cat}
-																		className="px-4 py-3 hover:bg-[#f27121]/5 dark:hover:bg-[#f27121]/10 hover:text-[#f27121] cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between transition-colors"
+																		key={p.id}
+																		className={`px-5 py-4 hover:bg-[#1A237E]/5 dark:hover:bg-indigo-500/10 cursor-pointer border-b border-slate-50 dark:border-slate-700/50 last:border-none transition-all flex items-center justify-between group/prod ${effStock <= 0 ? 'opacity-50 grayscale' : ''}`}
 																		onClick={() => {
-																			updateLineItem(index, 'category', cat);
-																			setActiveRow(null);
-																			setActiveField(null);
+																			if (effStock > 0) {
+																				updateLineItem(index, 'productId', p.id);
+																				setActiveRow(null);
+																				setActiveField(null);
+																			}
 																		}}
 																	>
-																		{cat}
-																		{item.category === cat && <CheckCircle size={14} className="text-[#f27121]" />}
-																	</div>
-																))}
-														</div>
-													</div>
-												)}
-											</div>
-										</td>
-										<td className="py-6 pl-4">
-											<div className="relative" ref={activeRow === index && activeField === 'productId' ? dropdownRef : null}>
-												<div
-													className="w-full h-12 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl px-4 flex items-center justify-between cursor-pointer hover:border-[#f27121] transition-colors"
-													onClick={() => {
-														setActiveRow(index);
-														setActiveField('productId');
-														setLineSearchQuery('');
-													}}
-												>
-													<span className={`text-xs font-bold ${item.name ? 'text-slate-900 dark:text-white' : 'text-slate-300 dark:text-slate-600'} truncate mr-2`}>
-														{item.name || 'Tìm SP...'}
-													</span>
-													<ChevronDown size={14} className="text-slate-300 shrink-0" />
-												</div>
-
-												{activeRow === index && activeField === 'productId' && (
-													<div className="absolute z-[100] top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl shadow-2xl overflow-hidden min-w-[300px]">
-														<div className="p-2 border-b border-slate-50 dark:border-slate-700">
-															<input
-																autoFocus
-																type="text"
-																placeholder="Tìm theo tên hoặc SKU..."
-																className="w-full h-10 px-3 bg-slate-50 dark:bg-slate-900 border-none rounded-lg text-xs font-bold focus:ring-0"
-																value={lineSearchQuery}
-																onChange={(e) => setLineSearchQuery(e.target.value)}
-															/>
-														</div>
-														<div className="max-h-60 overflow-y-auto py-2">
-															{products
-																.filter(p => !item.category || p.category === item.category)
-																.filter(p =>
-																	p.name.toLowerCase().includes(lineSearchQuery.toLowerCase()) ||
-																	(p.sku && p.sku.toLowerCase().includes(lineSearchQuery.toLowerCase()))
-																)
-																.slice(0, 50) // Limit for performance
-																.map(p => {
-																	const effStock = getEffectiveStock(p);
-																	return (
-																		<div
-																			key={p.id}
-																			className={`px-4 py-3 hover:bg-[#f27121]/5 dark:hover:bg-[#f27121]/10 hover:text-[#f27121] cursor-pointer text-xs font-bold flex items-center justify-between border-b border-slate-50 dark:border-slate-700/50 last:border-none transition-colors ${effStock <= 0 ? 'opacity-50 grayscale' : ''}`}
-																			onClick={() => {
-																				if (effStock > 0) {
-																					updateLineItem(index, 'productId', p.id);
-																					setActiveRow(null);
-																					setActiveField(null);
-																				}
-																			}}
-																		>
-																			<div className="flex flex-col gap-0.5">
-																				<span>{p.name}</span>
-																				<span className="text-[9px] font-black text-slate-400">{p.sku || 'No SKU'} • {p.unit}</span>
-																			</div>
-																			<div className="text-right">
-																				<div className="text-[#f27121]">{p.priceSell.toLocaleString('vi-VN')} đ</div>
-																				<div className={`text-[9px] ${effStock > 0 ? 'text-green-500' : 'text-rose-500'}`}>
-																					Tồn: {effStock}
-																				</div>
+																		<div className="flex flex-col gap-1 max-w-[70%]">
+																			<span className="text-xs font-black text-slate-800 dark:text-slate-200 group-hover/prod:text-[#1A237E] dark:group-hover/prod:text-indigo-400 transition-colors uppercase leading-tight line-clamp-2">{p.name}</span>
+																			<div className="flex items-center gap-2">
+																				<span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded text-[9px] font-black text-slate-500 uppercase">{p.sku || 'N/A'}</span>
+																				<span className="text-[9px] font-bold text-slate-400">{p.unit}</span>
 																			</div>
 																		</div>
-																	);
-																})
-															}
-															{products.filter(p => !item.category || p.category === item.category).filter(p => p.name.toLowerCase().includes(lineSearchQuery.toLowerCase()) || (p.sku && p.sku.toLowerCase().includes(lineSearchQuery.toLowerCase()))).length === 0 && (
-																<div className="px-4 py-8 text-center text-slate-400 text-xs font-medium">
-																	Không tìm thấy sản phẩm nào
-																</div>
-															)}
-														</div>
+																		<div className="text-right">
+																			<div className="text-xs font-black text-[#f27121] mb-0.5">{p.priceSell.toLocaleString('vi-VN')} đ</div>
+																			<div className={`text-[9px] font-black uppercase tracking-widest ${effStock > 0 ? 'text-green-500' : 'text-rose-500'}`}>
+																				{effStock > 0 ? `TỒN: ${effStock}` : 'HẾT HÀNG'}
+																			</div>
+																		</div>
+																	</div>
+																);
+															})
+														}
 													</div>
-												)}
-											</div>
-										</td>
-										<td className="py-6">
-											<div className="flex justify-center px-4">
+												</div>
+											)}
+										</div>
+									</div>
+
+									{/* NUMERIC AREA (QTY & PRICE) */}
+									<div className="grid grid-cols-2 md:contents gap-4 mt-4 md:mt-0">
+										{/* QUANTITY */}
+										<div className="flex flex-col md:items-center">
+											<label className="md:hidden text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px] mb-2 block ml-1">SỐ LƯỢNG</label>
+											<div className="relative w-full md:w-24">
 												<input
 													type="number"
 													step="any"
-													className="w-24 h-12 text-center bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white focus:ring-[#f27121]"
+													className="w-full h-12 text-center bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl text-sm font-black text-slate-900 dark:text-white focus:ring-2 focus:ring-[#f27121]/10 focus:border-[#f27121] transition-all"
 													value={item.qty}
 													onChange={(e) => updateLineItem(index, 'qty', e.target.value)}
-													placeholder="0.00"
-												/>
-											</div>
-										</td>
-										<td className="py-6">
-											<div className="flex justify-center px-2">
-												<input
-													type="number"
-													className="w-full h-12 text-center bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl text-[10px] font-black text-slate-400 dark:text-slate-500"
-													value={item.price === 0 ? '' : item.price}
-													onChange={(e) => updateLineItem(index, 'price', e.target.value === '' ? 0 : Number(e.target.value))}
 													placeholder="0"
 												/>
 											</div>
-										</td>
-										<td className="py-6 text-center">
-											<span className="text-xs font-bold text-slate-900 dark:text-white">{item.packaging || '0'}</span>
-										</td>
-										<td className="py-6 text-right">
-											<span className="text-xs font-black text-[#f27121]">{(item.price * item.qty).toLocaleString('vi-VN')} đ</span>
-										</td>
-										<td className="py-6 text-right pl-4">
-											<button
-												onClick={() => removeLineItem(index)}
-												className="size-10 rounded-xl flex items-center justify-center text-rose-500 bg-rose-50 dark:bg-rose-900/20 md:bg-transparent md:text-rose-200 md:hover:bg-rose-50 md:hover:text-rose-500 transition-all md:opacity-0 md:group-hover:opacity-100"
-											>
-												<X size={18} />
-											</button>
-										</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
+										</div>
 
-						<button
-							onClick={addLineItem}
-							className="w-full py-4 mt-6 border-2 border-dashed border-orange-100 dark:border-orange-900/30 rounded-2xl text-[#f27121] font-black text-xs uppercase tracking-[2px] flex items-center justify-center gap-2 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-all active:scale-[0.99]"
-						>
-							<Plus size={16} strokeWidth={3} />
-							+ THÊM SẢN PHẨM
-						</button>
+										{/* PRICE */}
+										<div className="flex flex-col md:items-center">
+											<label className="md:hidden text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px] mb-2 block ml-1">ĐƠN GIÁ</label>
+											<div className="relative w-full md:w-32">
+												<input
+													type="number"
+													className="w-full h-12 text-center bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl text-[11px] font-black text-slate-500 dark:text-slate-400 focus:ring-2 focus:ring-[#f27121]/10 focus:border-[#f27121] transition-all"
+													value={item.price === 0 ? '' : item.price}
+													onChange={(e) => updateLineItem(index, 'price', e.target.value === '' ? 0 : Number(e.target.value))}
+													placeholder="Giá bán"
+												/>
+											</div>
+										</div>
 
-						<button
-							onClick={() => setShowScanner(true)}
-							className="w-full py-4 mt-3 border-2 border-dashed border-blue-100 dark:border-blue-900/30 rounded-2xl text-blue-600 font-black text-xs uppercase tracking-[2px] flex items-center justify-center gap-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all active:scale-[0.99]"
-						>
-							<QrCode size={16} strokeWidth={3} />
-							+ QUÉT MÃ QR SẢN PHẨM
-						</button>
+										{/* PACKAGING - DESKTOP ONLY INFOS */}
+										<div className="hidden md:flex flex-col items-center">
+											<span className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-tighter">{item.packaging || '0'}</span>
+											<span className="text-[9px] font-bold text-slate-300 uppercase">{item.unit || '-'}</span>
+										</div>
+
+										{/* TOTAL PER ITEM */}
+										<div className="col-span-2 md:col-auto mt-4 md:mt-0 pt-4 md:pt-0 border-t md:border-none border-slate-100 dark:border-slate-800 flex items-center justify-between md:justify-end">
+											<div className="md:hidden flex flex-col">
+												<span className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">THÀNH TIỀN</span>
+												<span className="text-[10px] font-bold text-slate-300 uppercase">Kiện: {item.packaging || 0} {item.unit}</span>
+											</div>
+											<span className="text-base md:text-sm font-black text-[#f27121] tabular-nums">
+												{(Number(item.price) * Number(item.qty || 0)).toLocaleString('vi-VN')} đ
+											</span>
+										</div>
+									</div>
+
+									{/* REMOVE BUTTON */}
+									<div className="absolute top-2 right-2 md:static md:flex md:justify-end">
+										<button
+											onClick={() => removeLineItem(index)}
+											className="size-9 md:size-10 rounded-xl flex items-center justify-center text-rose-500 bg-rose-50 dark:bg-rose-900/20 md:bg-transparent md:text-slate-200 md:dark:text-slate-700 md:hover:bg-rose-50 md:dark:hover:bg-rose-900/20 md:hover:text-rose-500 transition-all active:scale-90"
+											title="Xóa dòng"
+										>
+											<Trash2 size={16} />
+										</button>
+									</div>
+								</div>
+							))}
+						</div>
+
+						{/* ADD BUTTONS */}
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
+							<button
+								onClick={addLineItem}
+								className="group relative h-16 bg-white dark:bg-slate-900 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl flex items-center justify-center gap-3 transition-all hover:border-[#f27121] hover:bg-orange-50/30 dark:hover:bg-orange-950/10 active:scale-[0.98]"
+							>
+								<div className="size-8 rounded-full bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center text-[#f27121] group-hover:scale-110 transition-transform">
+									<Plus size={18} strokeWidth={3} />
+								</div>
+								<span className="text-sm font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest">Thêm Sản Phẩm</span>
+							</button>
+
+							<button
+								onClick={() => setShowScanner(true)}
+								className="group relative h-16 bg-white dark:bg-slate-900 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl flex items-center justify-center gap-3 transition-all hover:border-blue-500 hover:bg-blue-50/30 dark:hover:bg-blue-950/10 active:scale-[0.98]"
+							>
+								<div className="size-8 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform">
+									<QrCode size={18} strokeWidth={3} />
+								</div>
+								<span className="text-sm font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest">Quét Mã QR</span>
+							</button>
+						</div>
 					</div>
 				</div>
 
@@ -755,6 +864,7 @@ const QuickOrder = () => {
 											<Ticket size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
 											<input
 												type="text"
+												autoComplete="off"
 												placeholder="Nhập mã..."
 												className="w-full h-14 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl pl-12 pr-4 text-sm font-black text-indigo-600 uppercase focus:ring-indigo-500 transition-all"
 												value={couponCode}
@@ -762,6 +872,7 @@ const QuickOrder = () => {
 											/>
 										</div>
 										<button
+											onClick={handleApplyCoupon}
 											className="px-6 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase shadow-lg shadow-indigo-200 dark:shadow-none hover:bg-slate-900 transition-all active:scale-95"
 										>
 											ÁP DỤNG
@@ -772,6 +883,7 @@ const QuickOrder = () => {
 									<label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Phí vận chuyển (+)</label>
 									<input
 										type="number"
+										autoComplete="off"
 										placeholder="0"
 										className="w-full h-14 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl px-6 text-sm font-bold text-slate-900 dark:text-white focus:ring-[#f27121]"
 										value={shippingFee === 0 ? '' : shippingFee}
@@ -782,6 +894,7 @@ const QuickOrder = () => {
 									<label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Số tiền Chiết khấu (-)</label>
 									<input
 										type="number"
+										autoComplete="off"
 										placeholder="0"
 										className="w-full h-14 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl px-6 text-sm font-bold text-slate-900 dark:text-white focus:ring-[#f27121]"
 										value={discountAmt === 0 ? '' : discountAmt}

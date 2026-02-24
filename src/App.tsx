@@ -21,6 +21,7 @@ import PriceList from './views/PriceList';
 import TrainingCatalog from './views/TrainingCatalog';
 import TrainingLab from './views/TrainingLab';
 import Finance from './views/Finance';
+import Coupons from './views/Coupons';
 import ReloadPrompt from './components/ReloadPrompt';
 
 import { ToastProvider } from './components/shared/Toast';
@@ -125,6 +126,10 @@ function App() {
 					<Route
 						path="/finance"
 						element={currentUser ? <MainLayout><Finance /></MainLayout> : <Navigate to="/login" />}
+					/>
+					<Route
+						path="/coupons"
+						element={currentUser ? <MainLayout><Coupons /></MainLayout> : <Navigate to="/login" />}
 					/>
 					<Route
 						path="/khoa-dao-tao"

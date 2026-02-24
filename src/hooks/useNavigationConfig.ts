@@ -117,6 +117,15 @@ export const useNavigationConfig = () => {
 			};
 		}
 
+		if (path === '/coupons') {
+			return {
+				icon: 'confirmation_number',
+				label: 'Tạo mã mới',
+				path: '/coupons?action=new',
+				permissionKey: 'admin' // Only admins can create coupons usually
+			};
+		}
+
 
 		// Mặc định cho các trang khác (checkin...)
 		return {
@@ -139,6 +148,7 @@ export const useNavigationConfig = () => {
 		{ icon: 'inventory_2', label: 'Sản phẩm', path: '/inventory', desktopOnly: true, permissionKey: 'inventory_view' },
 		{ icon: 'request_quote', label: 'Báo giá', path: '/price-list' },
 		{ icon: 'history', label: 'Hoạt động', path: '/checkin?action=history', permissionKey: 'checkin_create' },
+		{ icon: 'confirmation_number', label: 'Ưu đãi', path: '/coupons' },
 		{ icon: 'timer', label: 'Chấm công', path: '/attendance' },
 		{ icon: 'school', label: 'Đào tạo', path: '/khoa-dao-tao' },
 		{ icon: 'settings', label: 'Cài đặt', path: '/settings' },
@@ -184,8 +194,8 @@ export const useNavigationConfig = () => {
 				allItems[0], // Trang chủ
 				allItems[1], // Đơn hàng
 				allItems[2], // Center (Thu nợ)
-				allItems[4], // Tài chính (Thay cho Hoạt động)
-				allItems[7], // Báo giá
+				allItems[7], // Ưu đãi (Thay cho Tài chính/Hoạt động)
+				allItems[8], // Báo giá
 			];
 		} else if (path === '/admin') {
 			items = [
@@ -242,6 +252,14 @@ export const useNavigationConfig = () => {
 				allItems[2], // Center (Thu/Chi)
 				{ icon: 'query_stats', label: 'Lợi nhuận', path: '/finance?tab=profit' },
 				allItems[6], // Khách hàng
+			];
+		} else if (path === '/coupons') {
+			items = [
+				allItems[0], // Trang chủ
+				allItems[1], // Đơn hàng
+				allItems[2], // Center (Tạo mã)
+				{ icon: 'history', label: 'Lịch sử', path: '/checkin?action=history' },
+				allItems[12], // Cài đặt
 			];
 		} else {
 			items = [

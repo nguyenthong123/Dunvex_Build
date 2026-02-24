@@ -4,7 +4,7 @@ import { signOut } from 'firebase/auth';
 import { collection, query, where, onSnapshot, updateDoc, doc, writeBatch, getDocs, limit, orderBy } from 'firebase/firestore';
 import React, { useState, useEffect } from 'react';
 import { useNavigationConfig } from '../hooks/useNavigationConfig';
-import { Eye, EyeOff, TrendingUp, TrendingDown, AlertTriangle, Wallet } from 'lucide-react';
+import { Eye, EyeOff, TrendingUp, TrendingDown, AlertTriangle, Wallet, Gift } from 'lucide-react';
 
 import { useOwner } from '../hooks/useOwner';
 import QRScanner from '../components/shared/QRScanner';
@@ -403,6 +403,28 @@ const Home = () => {
 							className="size-11 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex items-center justify-center text-[#FF6D00] active:scale-90 transition-transform"
 						>
 							<QrCode size={22} />
+						</button>
+					</div>
+				</div>
+
+				{/* PROMO BANNER */}
+				<div
+					onClick={() => navigate('/coupons')}
+					className="mb-8 relative overflow-hidden bg-gradient-to-r from-[#1A237E] via-[#283593] to-[#1A237E] rounded-[2.5rem] p-6 md:p-10 shadow-xl shadow-indigo-500/10 cursor-pointer group active:scale-[0.99] transition-all"
+				>
+					<div className="absolute top-0 right-0 bottom-0 w-1/3 bg-gradient-to-l from-[#FF6D00]/20 to-transparent skew-x-12 translate-x-10 group-hover:translate-x-0 transition-transform duration-700"></div>
+					<div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+						<div className="flex items-center gap-6">
+							<div className="size-16 md:size-20 bg-white/10 backdrop-blur-xl rounded-3xl flex items-center justify-center text-[#ffcc00] shadow-inner">
+								<Gift size={36} strokeWidth={2.5} className="group-hover:rotate-12 transition-transform" />
+							</div>
+							<div>
+								<h2 className="text-xl md:text-3xl font-black text-white uppercase tracking-tight leading-none mb-2">Ưu đãi độc quyền</h2>
+								<p className="text-white/60 text-xs md:text-sm font-medium max-w-md leading-relaxed">Khám phá danh sách mã giảm giá và khuyến mãi mới nhất dành riêng cho doanh nghiệp của bạn.</p>
+							</div>
+						</div>
+						<button className="h-12 md:h-14 px-8 bg-[#ffcc00] text-slate-900 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-white transition-all shadow-lg shadow-yellow-500/20">
+							Xem Ưu Đãi
 						</button>
 					</div>
 				</div>

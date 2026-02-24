@@ -208,14 +208,38 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     *   **Đồng nhất hóa (Standardization)**: Áp dụng bộ điều khiển phân trang hiện đại (10 bản ghi/trang) trên toàn bộ hệ thống: **Khách hàng, Đơn hàng, Công nợ, Lịch sử báo giá, Sổ quỹ và Lợi nhuận**.
     *   **Điều hướng thông minh**: Cơ chế hiển thị "3 trang đầu - 3 trang cuối" kèm dấu ba chấm (ellipsis) và nút mũi tên, tối ưu cho tập dữ liệu lớn.
     *   **Trải nghiệm mượt mà**: Tự động quay về trang 1 khi lọc dữ liệu và tự động cuộn lên đầu trang khi chuyển trang.
+- [x] **Tối ưu Hệ thống Ưu đãi & Điều hướng (Feb 24 Updates)**:
+    *   **Coupon Mobile UI Pro**: Nâng cấp toàn diện giao diện Quản lý mã giảm giá trên điện thoại. Chuyển đổi form tạo mã sang dạng Bottom Sheet cuộn thông minh, cố định nút bấm giúp thao tác cực kỳ mượt mà.
+    *   **Dynamic Navigation Context**: Tự động thay đổi nhãn và icon nút Center thành **"Tạo mã mới"** khi người dùng truy cập trang Ưu đãi, giúp tăng tốc quy trình vận hành.
+    *   **Deep Linking (URL Actions)**: Tích hợp tham số `?action=new` vào URL, cho phép mở nhanh trình tạo mã từ bất kỳ đâu (thanh điều hướng hoặc phím tắt).
+    *   **Bảo mật & Ổn định (Bug Fixes)**: Khắc phục triệt để các lỗi Console (NaN values, syntax errors) và tối ưu hóa logic nhập liệu cho các trường giới hạn lượt dùng.
+    *   **Clean Code & Performance**: Loại bỏ các import dư thừa và tối ưu hóa React state để ứng dụng phản hồi tức thì trên mọi thiết bị di động.
 
 ### 📝 Cần làm tiếp (To-do)
+
+#### 🛡️ Bảo mật (Security)
+- [ ] **Firestore Audit**: Kiểm tra và thắt chặt Security Rules, đảm bảo dữ liệu chỉ được truy cập bởi đúng `ownerId`.
+- [ ] **Data Sanitation**: Triển khai lớp xác thực dữ liệu đầu vào (Zod/Yup) cho tất cả các form để ngăn chặn dữ liệu rác.
+- [ ] **Masking**: Tự động che bớt thông tin nhạy cảm (SĐT, Email) trong các nhật ký hoạt động cho nhân viên.
+
+#### ⚡ Hiệu suất & Mượt mà (Performance)
+- [ ] **Lazy Loading Routines**: Chuyển đổi sang `React.lazy` và `Suspense` cho tất cả các Routes để giảm dung lượng tải trang đầu tiên.
+- [ ] **List Virtualization**: Áp dụng `react-window` cho danh sách Khách hàng và Sản phẩm để xử lý mượt mà hàng ngàn bản ghi.
+- [ ] **Cloudinary Dynamic Optimization**: Tự động thêm tham số `f_auto,q_auto` vào mọi link ảnh để tối ưu băng thông và tốc độ tải.
+- [ ] **Query Limitation**: Tối ưu hóa các truy vấn Firestore, giới hạn số lượng bản ghi tải về mỗi lần (Pagination thực tế tại DB).
+
+#### 🔔 Thông báo & Trải nghiệm (UX/UI)
+- [ ] **Skeleton Loaders**: Thay thế các vòng xoay loading bằng hiệu ứng Shimmer (xương) giúp cảm giác tải trang "xịn" hơn.
+- [ ] **Haptic Feedback**: Thêm rung phản hồi nhẹ trên di động khi quét QR thành công hoặc chốt đơn hàng.
+- [ ] **Offline Banner**: Hiển thị thanh thông báo trạng thái "Đứt kết nối - Đang dùng dữ liệu ngoại tuyến" rõ ràng hơn.
+- [ ] **Interactive Tour**: Thêm hướng dẫn ảo (Guided Tour) cho người dùng mới khi lần đầu truy cập các module phức tạp.
+
+#### 📊 Chức năng bổ sung (Roadmap)
 - [ ] **Báo cáo & Xuất dữ liệu (Finance Pro)**: Tích hợp nút xuất báo cáo Sổ quỹ và Lợi nhuận ra file Excel/PDF theo khoảng thời gian tùy chọn.
 - [ ] **Ký nhận điện tử (E-Signature)**: Cho phép khách hàng ký nhận trực tiếp trên màn hình di động khi giao hàng; tích hợp chữ ký vào Phiếu giao hàng.
-- [ ] **Tự động hóa quy trình (Automation)**: Gửi thông báo nhắc nợ hoặc ảnh hóa đơn qua Zalo/Messenger nhanh chỉ với 1 lần nhấp.
+- [ ] **Tự động hóa Zalo/Messenger**: Gửi thông báo nhắc nợ hoặc ảnh hóa đơn nhanh chỉ với 1 lần nhấp.
 - [ ] **Dòng thời gian khách hàng (CRM Pro)**: Hiển thị toàn bộ lịch sử Giao dịch - Thanh toán - Checkin của từng khách hàng trên 1 trục thời gian (Timeline).
 - [ ] **Dự báo dòng tiền (AI Forecast)**: Phân tích lịch sử thu chi để dự báo số dư khả dụng trong 30 ngày tiếp theo.
-- [x] **Hệ thống KPI & Phân vùng**: Thống kê doanh số theo nhân viên để tính hoa hồng và phân chia khách hàng theo tuyến bán hàng.
-- [ ] **Smart Search**: Tìm kiếm nhanh bằng gợi ý thông minh dựa trên hành vi người dùng.
+- [ ] **Smart Search**: Tìm kiếm gợi ý thông minh dựa trên hành vi và lịch sử thao tác của người dùng.
 
 *Ghi chú: File `upload_script.gs` đã được cập nhật logic gửi email.*

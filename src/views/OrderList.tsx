@@ -26,10 +26,22 @@ const OrderList = () => {
 	useEffect(() => {
 		if (owner.loading || !owner.ownerId) return;
 
-		const q = query(
-			collection(db, 'orders'),
-			where('ownerId', '==', owner.ownerId)
-		);
+		const isAdmin = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
+
+		let q;
+		if (isAdmin) {
+			q = query(
+				collection(db, 'orders'),
+				where('ownerId', '==', owner.ownerId)
+			);
+		} else {
+			q = query(
+				collection(db, 'orders'),
+				where('ownerId', '==', owner.ownerId),
+				where('createdByEmail', '==', auth.currentUser?.email)
+			);
+		}
+
 		const unsubscribe = onSnapshot(q, (snapshot: any) => {
 			const docs = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
 			const sortedDocs = [...docs].sort((a, b) => {
@@ -41,7 +53,7 @@ const OrderList = () => {
 			setLoading(false);
 		});
 		return unsubscribe;
-	}, [owner.loading, owner.ownerId]);
+	}, [owner.loading, owner.ownerId, owner.role, owner.isEmployee]);
 
 	useEffect(() => {
 		const params = new URLSearchParams(search);

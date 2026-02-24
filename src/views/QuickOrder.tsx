@@ -61,22 +61,37 @@ const QuickOrder = () => {
 	useEffect(() => {
 		if (owner.loading || !owner.ownerId) return;
 
-		const qProd = query(collection(db, 'products'), where('ownerId', '==', owner.ownerId)); // Query by Owner
-		const unsubProd = onSnapshot(qProd, (snap) => {
+		const isAdmin = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
+
+		const qProds = query(collection(db, 'products'), where('ownerId', '==', owner.ownerId));
+		const unsubProds = onSnapshot(qProds, (snap) => {
 			setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
 		});
 
-		const qCust = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId)); // Query by Owner
-		const unsubCust = onSnapshot(qCust, (snap) => {
+		let qCusts;
+		if (isAdmin) {
+			qCusts = query(
+				collection(db, 'customers'),
+				where('ownerId', '==', owner.ownerId)
+			);
+		} else {
+			qCusts = query(
+				collection(db, 'customers'),
+				where('ownerId', '==', owner.ownerId),
+				where('createdByEmail', '==', auth.currentUser?.email)
+			);
+		}
+
+		const unsubCusts = onSnapshot(qCusts, (snap) => {
 			setCustomers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-			setLoading(false);
 		});
 
+		setLoading(false);
 		return () => {
-			unsubProd();
-			unsubCust();
+			unsubProds();
+			unsubCusts();
 		};
-	}, [owner.loading, owner.ownerId]);
+	}, [owner.loading, owner.ownerId, owner.role, owner.isEmployee]);
 
 	// Fetch Order for Editing
 	useEffect(() => {

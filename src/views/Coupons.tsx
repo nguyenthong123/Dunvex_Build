@@ -33,7 +33,7 @@ const Coupons = () => {
 		usageCount: 0
 	});
 
-	const isAdmin = owner.role === 'admin';
+	const isAdmin = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
 
 	// Handle center button action from URL
 	useEffect(() => {
@@ -241,7 +241,7 @@ const Coupons = () => {
 					{isAdmin && (
 						<button
 							onClick={() => handleOpenModal()}
-							className="hidden md:flex bg-[#1A237E] text-white px-6 py-4 rounded-2xl font-black text-xs uppercase tracking-widest items-center gap-2 hover:bg-slate-900 shadow-xl shadow-indigo-100 dark:shadow-none transition-all active:scale-95 shrink-0"
+							className="bg-[#1A237E] text-white px-4 md:px-6 py-3 md:py-4 rounded-xl md:rounded-2xl font-black text-[10px] md:text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-slate-900 shadow-xl shadow-indigo-100 dark:shadow-none transition-all active:scale-95 shrink-0"
 						>
 							<Plus size={18} />
 							Tạo mã mới

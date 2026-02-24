@@ -55,30 +55,51 @@ const Home = () => {
 		});
 
 		// 3. Fetch Data for Dashboard Calculations (Owner specific)
-		const qOrders = query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId));
-		const qAudit = query(
-			collection(db, 'audit_logs'),
-			where('ownerId', '==', owner.ownerId),
-			limit(50)
-		);
+		const isAdmin = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
+
+		let qOrders, qAudit, qCust, qPay;
+
+		if (isAdmin) {
+			qOrders = query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId));
+			qAudit = query(collection(db, 'audit_logs'), where('ownerId', '==', owner.ownerId), limit(50));
+			qCust = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
+			qPay = query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId));
+		} else {
+			qOrders = query(
+				collection(db, 'orders'),
+				where('ownerId', '==', owner.ownerId),
+				where('createdByEmail', '==', auth.currentUser?.email)
+			);
+			qAudit = query(
+				collection(db, 'audit_logs'),
+				where('ownerId', '==', owner.ownerId),
+				where('userId', '==', auth.currentUser?.uid),
+				limit(50)
+			);
+			qCust = query(
+				collection(db, 'customers'),
+				where('ownerId', '==', owner.ownerId),
+				where('createdByEmail', '==', auth.currentUser?.email)
+			);
+			qPay = query(
+				collection(db, 'payments'),
+				where('ownerId', '==', owner.ownerId),
+				where('createdByEmail', '==', auth.currentUser?.email)
+			);
+		}
+
 		const unsubAudit = onSnapshot(qAudit, (snap) => {
 			const logs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-			// Sắp xếp client-side để tránh lỗi Firestore Index
 			const sorted = logs.sort((a: any, b: any) => {
 				const timeA = a.createdAt?.seconds || 0;
 				const timeB = b.createdAt?.seconds || 0;
 				return timeB - timeA;
 			});
 			setAuditLogs(sorted.slice(0, 10));
-		}, (err) => {
-			console.error("Home: Audit Logs Error:", err);
-		});
+		}, (err) => console.error("Home: Audit Logs Error:", err));
 
-		const qCust = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
-		const qPay = query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId));
 		const qProd = query(collection(db, 'products'), where('ownerId', '==', owner.ownerId));
 
-		// Add error handlers to other snapshots for better debugging
 		const unsubOrders = onSnapshot(qOrders, (snap) => {
 			setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })));
 		}, (err: any) => console.error("Home: Orders Error:", err));
@@ -103,7 +124,7 @@ const Home = () => {
 			unsubProd();
 			unsubAudit();
 		};
-	}, [owner.loading, owner.ownerId]);
+	}, [owner.loading, owner.ownerId, owner.role, owner.isEmployee]);
 
 	const markAllAsRead = async () => {
 		if (!auth.currentUser) return;

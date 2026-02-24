@@ -154,30 +154,50 @@ const Debts: React.FC = () => {
 	useEffect(() => {
 		if (owner.loading || !owner.ownerId) return;
 
-		const qOrders = query(
-			collection(db, 'orders'),
-			where('ownerId', '==', owner.ownerId)
-		);
+		const isAdmin = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
+
+		let qOrders, qPayments, qCustomers;
+
+		if (isAdmin) {
+			qOrders = query(
+				collection(db, 'orders'),
+				where('ownerId', '==', owner.ownerId)
+			);
+			qPayments = query(
+				collection(db, 'payments'),
+				where('ownerId', '==', owner.ownerId)
+			);
+			qCustomers = query(
+				collection(db, 'customers'),
+				where('ownerId', '==', owner.ownerId)
+			);
+		} else {
+			qOrders = query(
+				collection(db, 'orders'),
+				where('ownerId', '==', owner.ownerId),
+				where('createdByEmail', '==', auth.currentUser?.email)
+			);
+			qPayments = query(
+				collection(db, 'payments'),
+				where('ownerId', '==', owner.ownerId),
+				where('createdByEmail', '==', auth.currentUser?.email)
+			);
+			qCustomers = query(
+				collection(db, 'customers'),
+				where('ownerId', '==', owner.ownerId),
+				where('createdByEmail', '==', auth.currentUser?.email)
+			);
+		}
 
 		const unsubOrders = onSnapshot(qOrders, (snapshot) => {
 			const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 			setOrders(docs);
 		});
 
-		const qPayments = query(
-			collection(db, 'payments'),
-			where('ownerId', '==', owner.ownerId)
-		);
-
 		const unsubPayments = onSnapshot(qPayments, (snapshot) => {
 			const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 			setPayments(docs);
 		});
-
-		const qCustomers = query(
-			collection(db, 'customers'),
-			where('ownerId', '==', owner.ownerId)
-		);
 
 		const unsubCustomers = onSnapshot(qCustomers, (snapshot) => {
 			const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -190,7 +210,7 @@ const Debts: React.FC = () => {
 			unsubPayments();
 			unsubCustomers();
 		};
-	}, [owner.loading, owner.ownerId]);
+	}, [owner.loading, owner.ownerId, owner.role, owner.isEmployee]);
 
 	const formatPrice = (price: number) => {
 		return new Intl.NumberFormat('vi-VN').format(price || 0) + ' đ';

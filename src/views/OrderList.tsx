@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
-import { collection, query, orderBy, onSnapshot, updateDoc, doc, deleteDoc, serverTimestamp, where, addDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, updateDoc, doc, deleteDoc, serverTimestamp, where, addDoc, getDocs, writeBatch, increment } from 'firebase/firestore';
 import OrderTicket from '../components/OrderTicket';
 import UpgradeModal from '../components/UpgradeModal';
 
@@ -145,10 +145,29 @@ const OrderList = () => {
 		if (window.confirm("Bạn có chắc chắn muốn xóa đơn hàng này?")) {
 			try {
 				const order = orders.find(o => o.id === id);
-				await deleteDoc(doc(db, 'orders', id));
+				const batch = writeBatch(db);
 
-				// Log Delete Order
-				await addDoc(collection(db, 'audit_logs'), {
+				// 1. Revert Inventory
+				const logsQ = query(collection(db, 'inventory_logs'), where('orderId', '==', id));
+				const logsSnap = await getDocs(logsQ);
+
+				logsSnap.docs.forEach((logDoc: any) => {
+					const logData = logDoc.data();
+					if (logData.productId && logData.qty) {
+						const prodRef = doc(db, 'products', logData.productId);
+						batch.update(prodRef, {
+							stock: increment(logData.qty)
+						});
+					}
+					batch.delete(logDoc.ref);
+				});
+
+				// 2. Delete Order
+				batch.delete(doc(db, 'orders', id));
+
+				// 3. Log Audit
+				const auditRef = doc(collection(db, 'audit_logs'));
+				batch.set(auditRef, {
 					action: 'Xóa đơn hàng',
 					user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
 					userId: auth.currentUser?.uid,
@@ -157,10 +176,13 @@ const OrderList = () => {
 					createdAt: serverTimestamp()
 				});
 
+				await batch.commit();
+
 				setShowDetail(false);
-				showToast("Đã xóa đơn hàng", "success");
+				showToast("Đã xóa đơn hàng và hoàn lại kho", "success");
 			} catch (error) {
 				showToast("Lỗi khi xóa đơn hàng", "error");
+				console.error(error);
 			}
 		}
 	};

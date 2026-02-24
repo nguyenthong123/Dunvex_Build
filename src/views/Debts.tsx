@@ -762,10 +762,12 @@ const Debts: React.FC = () => {
 										<tr key={row.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer" onClick={() => openStatement(row)}>
 											<td className="px-8 py-5">
 												<div className="flex items-center gap-4">
-													<div className={`size-12 rounded-2xl bg-[#1A237E]/10 dark:bg-indigo-500/10 flex items-center justify-center text-[#1A237E] dark:text-indigo-400 font-black text-sm shrink-0 shadow-sm border border-slate-200 dark:border-slate-800`}>{row.initials}</div>
+													<div className={`size-12 rounded-2xl bg-[#1A237E]/10 dark:bg-indigo-500/10 flex items-center justify-center text-[#1A237E] dark:text-indigo-400 font-black text-sm shrink-0 shadow-sm border border-slate-200 dark:border-slate-800`}>
+														{(row.businessName || row.name || 'KH').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+													</div>
 													<div>
-														<p className="text-sm font-black text-slate-900 dark:text-indigo-400 uppercase tracking-tight leading-tight">{row.name}</p>
-														<p className="text-[10px] text-slate-500 dark:text-slate-500 font-black mt-1 tracking-wider uppercase">{row.phone || row.id.slice(-6)}</p>
+														<p className="text-sm font-black text-slate-900 dark:text-indigo-400 uppercase tracking-tight leading-tight">{row.businessName || row.name}</p>
+														<p className="text-[10px] text-slate-500 dark:text-slate-500 font-black mt-1 tracking-wider uppercase">{row.phone || (row.businessName ? row.name : row.id.slice(-6))}</p>
 													</div>
 												</div>
 											</td>

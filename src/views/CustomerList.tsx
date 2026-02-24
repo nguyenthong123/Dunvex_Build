@@ -600,11 +600,13 @@ const CustomerList = () => {
 									<td className="py-4 px-6">
 										<div className="flex items-center gap-3">
 											<div className="size-10 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 flex items-center justify-center font-black text-xs border border-blue-200 dark:border-blue-800">
-												{(customer.name?.[0] || 'K').toUpperCase()}
+												{(customer.businessName || customer.name || 'K')[0].toUpperCase()}
 											</div>
 											<div>
-												<div className="font-black text-slate-900 dark:text-indigo-400 uppercase tracking-tight">{customer.name}</div>
-												<div className="text-[10px] text-slate-500 dark:text-slate-500 font-black tracking-widest">#{customer.id.slice(-6)}</div>
+												<div className="font-black text-slate-900 dark:text-indigo-400 uppercase tracking-tight">{customer.businessName || customer.name}</div>
+												<div className="text-[10px] text-slate-500 dark:text-slate-500 font-black tracking-widest">
+													{customer.businessName ? customer.name : `#${customer.id.slice(-6)}`}
+												</div>
 											</div>
 										</div>
 									</td>

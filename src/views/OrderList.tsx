@@ -317,10 +317,10 @@ const OrderList = () => {
 									<td className="py-4 px-6">
 										<div className="flex items-center gap-3">
 											<div className="size-8 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center font-black text-xs text-slate-700 dark:text-indigo-400 border border-slate-300 dark:border-slate-700">
-												{order.customerName?.[0] || 'K'}
+												{(order.customerBusinessName || order.customerName || 'K')[0].toUpperCase()}
 											</div>
 											<div>
-												<div className="font-black text-slate-800 dark:text-slate-200">{order.customerName || 'Khách vãng lai'}</div>
+												<div className="font-black text-slate-800 dark:text-slate-200">{order.customerBusinessName || order.customerName || 'Khách vãng lai'}</div>
 												<div className="text-[10px] text-slate-500 dark:text-slate-500 font-bold">{order.customerPhone || '---'}</div>
 											</div>
 										</div>

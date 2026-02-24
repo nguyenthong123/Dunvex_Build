@@ -625,18 +625,18 @@ const QuickOrder = () => {
 											className="w-full px-6 py-4 text-left hover:bg-slate-50 dark:hover:bg-slate-700/50 flex items-center justify-between border-b border-slate-50 dark:border-slate-700 last:border-none group"
 											onClick={() => {
 												setSelectedCustomer(c);
-												setSearchCustomerQuery(c.name);
+												setSearchCustomerQuery(c.businessName || c.name);
 												setShowCustomerResults(false);
 											}}
 										>
 											<div>
 												<p className="font-black text-sm uppercase text-slate-800 dark:text-slate-200 group-hover:text-[#f27121]">
-													{c.name}
+													{c.businessName || c.name}
 												</p>
 												{c.businessName && (
 													<p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1 uppercase">
-														<span className="material-symbols-outlined text-[12px]">domain</span>
-														{c.businessName}
+														<span className="material-symbols-outlined text-[12px]">person</span>
+														{c.name}
 													</p>
 												)}
 												<p className="text-xs text-slate-400 dark:text-slate-500 font-medium">{c.phone}</p>

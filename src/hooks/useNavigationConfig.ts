@@ -151,6 +151,7 @@ export const useNavigationConfig = () => {
 		{ icon: 'confirmation_number', label: 'Ưu đãi', path: '/coupons' },
 		{ icon: 'timer', label: 'Chấm công', path: '/attendance' },
 		{ icon: 'school', label: 'Đào tạo', path: '/khoa-dao-tao' },
+		{ icon: 'admin_panel_settings', label: 'Quản trị hệ thống', path: '/admin', permissionKey: 'admin' },
 		{ icon: 'settings', label: 'Cài đặt', path: '/settings' },
 	];
 

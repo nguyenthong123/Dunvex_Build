@@ -113,10 +113,11 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 - [x] **Tối ưu Chi tiết Khách hàng**: Chuyển đổi sang dạng Bottom Sheet mượt mà trên di động, hỗ trợ gọi điện trực tiếp từ ứng dụng.
 - [x] **Bảo mật chuẩn A+**: Triển khai toàn diện CSP, XFO, HSTS, Referrer-Policy thông qua `vercel.json`.
 - [x] **Lọc theo ngày (Date Filtering)**: Đã hoàn thiện bộ lọc ngày thực tế cho danh sách công nợ và bảng kê chi tiết khách hàng.
-- [x] **In phiếu & Xuất PDF Chuyên nghiệp (Feb 23 Upgrade)**: 
-    - **Đa trang (Multi-page Support)**: Tích hợp cơ chế tự động ngắt trang thông minh và lặp lại tiêu đề bảng cho Báo giá và Công nợ dài, đảm bảo bản in liền mạch và chuyên nghiệp.
-    - **Cô lập Hiển thị (Visibility Isolation)**: Áp dụng kỹ thuật ẩn mờ toàn cục để loại bỏ hoàn toàn rác giao diện (thanh menu, nút bấm) khỏi bản in.
-    - **Chuẩn hóa A4**: Ép cứng định dạng vùng in theo chuẩn giấy A4 quốc tế (210mm x 297mm) với lề an toàn cho máy in.
+- [x] **In phiếu & Xuất PDF Chuyên nghiệp (Feb 24 Upgrade - The Print Engine)**: 
+    - **Cô lập Hiển thị Cấp độ Cao (Nuclear Clean Print)**: Đã nâng cấp toàn bộ hệ thống in ấn lên cơ chế "Isolation Strategy". Tự động "thanh lọc" 100% rác giao diện (Sidebar, Header, Bottom Nav, Nút bấm) ngay khi lệnh In được thực thi.
+    - **Đa trang (Multi-page Support)**: Tích hợp cơ chế tự động ngắt trang thông minh và lặp lại tiêu đề bảng cho Báo giá, Phiếu giao hàng và Công nợ dài, đảm bảo bản in liền mạch và chuyên nghiệp.
+    - **Chuẩn hóa A4 & Anti-Blank**: Ép cứng định dạng vùng in theo chuẩn giấy A4 quốc tế (210mm x 297mm). Khắc phục triệt để lỗi in ra trang trắng trắng bằng cơ chế Reset cấu trúc DOM (Flattening) linh hoạt.
+    - **Fix Mobile Print Leak**: Loại bỏ hoàn toàn hiện tượng thanh menu di động lọt vào bản in trên smartphone bằng cách định danh CSS chính xác cho các thẻ điều hướng.
     - **Tối ưu Tỷ lệ (Scaling/Zoom)**: Tự động khử toàn bộ hiệu ứng thu phóng và animations của trình duyệt khi in để bản in luôn sắc nét và bắt đầu từ đỉnh trang giấy.
 - [x] **Số dư đầu kỳ & Lịch sử Công nợ**: Đã hiển thị chính xác số dư đầu kỳ dựa trên khoảng thời gian lọc và liệt kê chi tiết lịch sử giao dịch/thanh toán.
 - [x] **Bản đồ Khách hàng Thông minh**: 

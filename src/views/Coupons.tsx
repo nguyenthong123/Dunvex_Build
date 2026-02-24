@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Tag, Copy, Check, Ticket, Clock, Info, Search, ChevronRight, Gift, Percent, Filter, Plus, Trash2, Edit3, X, Calendar, Truck, DollarSign, RotateCcw } from 'lucide-react';
 import { collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../services/firebase';
+import { db, auth } from '../services/firebase';
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -159,7 +159,9 @@ const Coupons = () => {
 				...formData,
 				code: formData.code.toUpperCase().trim(),
 				ownerId: owner.ownerId,
-				ownerEmail: owner.ownerEmail,
+				ownerEmail: owner.ownerEmail || auth.currentUser?.email || '',
+				createdByEmail: auth.currentUser?.email || '',
+				createdByUid: auth.currentUser?.uid || '',
 				updatedAt: serverTimestamp()
 			};
 

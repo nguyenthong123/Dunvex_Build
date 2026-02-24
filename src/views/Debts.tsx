@@ -228,51 +228,26 @@ const Debts: React.FC = () => {
 		const isAdmin = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
 
 		let qOrders, qPayments, qCustomers;
-
-		if (isAdmin) {
-			qOrders = query(
-				collection(db, 'orders'),
-				where('ownerId', '==', owner.ownerId)
-			);
-			qPayments = query(
-				collection(db, 'payments'),
-				where('ownerId', '==', owner.ownerId)
-			);
-			qCustomers = query(
-				collection(db, 'customers'),
-				where('ownerId', '==', owner.ownerId)
-			);
-		} else {
-			qOrders = query(
-				collection(db, 'orders'),
-				where('ownerId', '==', owner.ownerId),
-				where('createdByEmail', '==', auth.currentUser?.email)
-			);
-			qPayments = query(
-				collection(db, 'payments'),
-				where('ownerId', '==', owner.ownerId),
-				where('createdByEmail', '==', auth.currentUser?.email)
-			);
-			qCustomers = query(
-				collection(db, 'customers'),
-				where('ownerId', '==', owner.ownerId),
-				where('createdByEmail', '==', auth.currentUser?.email)
-			);
-		}
+		qOrders = query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId));
+		qPayments = query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId));
+		qCustomers = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
 
 		const unsubOrders = onSnapshot(qOrders, (snapshot) => {
 			const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-			setOrders(docs);
+			const filtered = isAdmin ? docs : docs.filter((o: any) => o.createdByEmail === auth.currentUser?.email);
+			setOrders(filtered);
 		});
 
 		const unsubPayments = onSnapshot(qPayments, (snapshot) => {
 			const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-			setPayments(docs);
+			const filtered = isAdmin ? docs : docs.filter((p: any) => p.createdByEmail === auth.currentUser?.email);
+			setPayments(filtered);
 		});
 
 		const unsubCustomers = onSnapshot(qCustomers, (snapshot) => {
 			const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-			setCustomers(docs);
+			const filtered = isAdmin ? docs : docs.filter((c: any) => c.createdByEmail === auth.currentUser?.email);
+			setCustomers(filtered);
 			setLoading(false);
 		});
 

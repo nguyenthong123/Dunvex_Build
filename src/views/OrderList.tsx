@@ -29,22 +29,18 @@ const OrderList = () => {
 		const isAdmin = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
 
 		let q;
-		if (isAdmin) {
-			q = query(
-				collection(db, 'orders'),
-				where('ownerId', '==', owner.ownerId)
-			);
-		} else {
-			q = query(
-				collection(db, 'orders'),
-				where('ownerId', '==', owner.ownerId),
-				where('createdByEmail', '==', auth.currentUser?.email)
-			);
-		}
+		q = query(
+			collection(db, 'orders'),
+			where('ownerId', '==', owner.ownerId)
+		);
 
 		const unsubscribe = onSnapshot(q, (snapshot: any) => {
 			const docs = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
-			const sortedDocs = [...docs].sort((a, b) => {
+
+			// Apply client-side filter for employees
+			const filteredByRole = isAdmin ? docs : docs.filter((o: any) => o.createdByEmail === auth.currentUser?.email);
+
+			const sortedDocs = [...filteredByRole].sort((a, b) => {
 				const dateA = a.createdAt?.seconds || 0;
 				const dateB = b.createdAt?.seconds || 0;
 				return dateB - dateA;

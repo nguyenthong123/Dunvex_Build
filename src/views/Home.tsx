@@ -67,32 +67,21 @@ const Home = () => {
 			qCust = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
 			qPay = query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId));
 		} else {
-			qOrders = query(
-				collection(db, 'orders'),
-				where('ownerId', '==', owner.ownerId),
-				where('createdByEmail', '==', auth.currentUser?.email)
-			);
-			qAudit = query(
-				collection(db, 'audit_logs'),
-				where('ownerId', '==', owner.ownerId),
-				where('userId', '==', auth.currentUser?.uid),
-				limit(50)
-			);
-			qCust = query(
-				collection(db, 'customers'),
-				where('ownerId', '==', owner.ownerId),
-				where('createdByEmail', '==', auth.currentUser?.email)
-			);
-			qPay = query(
-				collection(db, 'payments'),
-				where('ownerId', '==', owner.ownerId),
-				where('createdByEmail', '==', auth.currentUser?.email)
-			);
+			// For employees, we still query by ownerId but filter by user email/id client-side 
+			// to avoid needing composite indexes (Firestore requires indexes for multiple equality filters sometimes)
+			qOrders = query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId));
+			qAudit = query(collection(db, 'audit_logs'), where('ownerId', '==', owner.ownerId), limit(50));
+			qCust = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
+			qPay = query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId));
 		}
 
+		// ... inside onSnapshot or effects, apply filtering if not admin
 		const unsubAudit = onSnapshot(qAudit, (snap) => {
 			const logs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-			const sorted = logs.sort((a: any, b: any) => {
+			// Apply client-side filter for employees
+			const filteredLogs = isAdmin ? logs : logs.filter((l: any) => l.userId === auth.currentUser?.uid);
+
+			const sorted = filteredLogs.sort((a: any, b: any) => {
 				const timeA = a.createdAt?.seconds || 0;
 				const timeB = b.createdAt?.seconds || 0;
 				return timeB - timeA;
@@ -103,15 +92,21 @@ const Home = () => {
 		const qProd = query(collection(db, 'products'), where('ownerId', '==', owner.ownerId));
 
 		const unsubOrders = onSnapshot(qOrders, (snap) => {
-			setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+			const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+			const filtered = isAdmin ? docs : docs.filter((o: any) => o.createdByEmail === auth.currentUser?.email);
+			setOrders(filtered);
 		}, (err: any) => console.error("Home: Orders Error:", err));
 
 		const unsubCust = onSnapshot(qCust, (snap) => {
-			setCustomers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+			const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+			const filtered = isAdmin ? docs : docs.filter((c: any) => c.createdByEmail === auth.currentUser?.email);
+			setCustomers(filtered);
 		}, (err: any) => console.error("Home: Customers Error:", err));
 
 		const unsubPay = onSnapshot(qPay, (snap) => {
-			setPayments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+			const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+			const filtered = isAdmin ? docs : docs.filter((p: any) => p.createdByEmail === auth.currentUser?.email);
+			setPayments(filtered);
 		}, (err: any) => console.error("Home: Payments Error:", err));
 
 		const unsubProd = onSnapshot(qProd, (snap) => {

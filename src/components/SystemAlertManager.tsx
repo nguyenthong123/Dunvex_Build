@@ -82,10 +82,10 @@ const SystemAlertManager: React.FC = () => {
 			try {
 				const orderSnap = await getDocs(query(
 					collection(db, 'orders'),
-					where('ownerId', '==', owner.ownerId),
-					where('status', '==', 'Đơn chốt')
+					where('ownerId', '==', owner.ownerId)
 				));
-				const orders = orderSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+				// Filter status client-side to avoid complex index requirements
+				const orders = orderSnap.docs.map(d => ({ id: d.id, ...d.data() as any })).filter(o => o.status === 'Đơn chốt');
 
 				const paymentSnap = await getDocs(query(
 					collection(db, 'payments'),
@@ -280,12 +280,13 @@ const SystemAlertManager: React.FC = () => {
 
 			const existingSnap = await getDocs(query(
 				collection(db, 'notifications'),
-				where('userId', '==', auth.currentUser?.uid),
-				where('type', '==', type)
+				where('userId', '==', auth.currentUser?.uid)
 			));
 
+			// Filter type client-side
 			const isAlreadyAlertedToday = existingSnap.docs.some(d => {
 				const data = d.data();
+				if (data.type !== type) return false;
 				if ((type === 'low_stock' ? data.productId : data.orderId) !== refId) return false;
 				const created = data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
 				return created >= today;

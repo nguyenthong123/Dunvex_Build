@@ -393,7 +393,7 @@ const Finance = () => {
 						<h2 className="text-lg md:text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight">Quản Lý Tài Chính</h2>
 					</div>
 
-					<div className="flex bg-slate-100/50 dark:bg-slate-800/50 p-1.5 rounded-2xl border border-slate-100/50 dark:border-slate-800/50">
+					<div className="flex bg-slate-100/50 dark:bg-slate-800/50 p-1.5 rounded-2xl border border-slate-100/50 dark:border-slate-800/50 overflow-x-auto no-scrollbar touch-pan-x shrink-0 max-w-[calc(100vw-180px)] md:max-w-none">
 						{isAdmin && (
 							<>
 								<button
@@ -415,7 +415,7 @@ const Finance = () => {
 						)}
 						<button
 							onClick={() => setActiveTab('performance')}
-							className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'performance' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+							className={`px-4 md:px-6 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'performance' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
 							{isAdmin ? 'KPI Đội Ngũ' : 'KPI Cá Nhân'}
 						</button>
 					</div>
@@ -739,14 +739,14 @@ const Finance = () => {
 						{/* Enhanced Header Cards */}
 						<div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden p-8 mb-8">
 							<div className="flex items-center gap-6 mb-8">
-								<div className="size-16 bg-indigo-50 dark:bg-indigo-900/40 rounded-[1.5rem] flex items-center justify-center text-indigo-600 shadow-inner">
-									<TrendingUp size={32} />
+								<div className="size-12 md:size-16 bg-indigo-50 dark:bg-indigo-900/40 rounded-[1.2rem] md:rounded-[1.5rem] flex items-center justify-center text-indigo-600 shadow-inner">
+									<TrendingUp size={24} className="md:w-8 md:h-8" />
 								</div>
 								<div>
-									<h3 className="text-2xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight">
+									<h3 className="text-lg md:text-2xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight">
 										{isAdmin ? 'Thống kê hiệu suất đội ngũ' : 'Hiệu suất cá nhân của bạn'}
 									</h3>
-									<p className="text-[10px] font-black text-slate-400 uppercase tracking-[2px] mt-1">Sơ đồ hoa hồng & Hoạt động thực tế</p>
+									<p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-[2px] mt-1">Sơ đồ hoa hồng & Hoạt động thực tế</p>
 								</div>
 							</div>
 
@@ -843,6 +843,7 @@ const Finance = () => {
 													if (!productSummary[key]) {
 														const pData = products.find(p => (sku && p.sku === sku) || (item.id && p.id === item.id));
 														productSummary[key] = {
+															key: key,
 															name: item.name || pData?.name || 'Sản phẩm khác',
 															sku: sku || 'N/A',
 															qty: 0,
@@ -880,7 +881,7 @@ const Finance = () => {
 														const commissionAmount = totalProfit * (discountRate / 100);
 
 														return (
-															<tr key={item.sku} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-all group">
+															<tr key={item.key} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-all group">
 																<td className="px-10 py-4">
 																	<p className="text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase leading-snug group-hover:text-indigo-600 transition-colors">{item.name}</p>
 																	<p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">{item.sku}</p>

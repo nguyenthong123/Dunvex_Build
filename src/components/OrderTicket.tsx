@@ -35,92 +35,76 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 	};
 
 	const handlePrint = () => {
-		window.print();
+		const printContent = document.getElementById('order-ticket-paper');
+		if (!printContent) return;
+
+		const printWindow = window.open('', '_blank', 'width=1000,height=1000');
+		if (!printWindow) {
+			alert("Vui lòng cho phép trình duyệt mở popup để in!");
+			return;
+		}
+
+		// Collect current styles
+		let styles = '';
+		document.querySelectorAll('style, link[rel="stylesheet"]').forEach(node => {
+			styles += node.outerHTML;
+		});
+
+		printWindow.document.write(`
+			<html>
+				<head>
+					<title>In Phiếu Giao Hàng - ${order.orderId || ''}</title>
+					${styles}
+					<style>
+						body { 
+							background: #f1f5f9; 
+							padding: 0; margin: 0; 
+							display: flex; justify-content: center;
+						}
+						#order-ticket-paper {
+							margin: 0 !important;
+							box-shadow: none !important;
+							border: none !important;
+							width: 210mm !important;
+							min-height: 297mm !important;
+							padding: 15mm !important;
+							background: white !important;
+							visibility: visible !important;
+							display: block !important;
+						}
+						/* Force high fidelity colors */
+						* {
+							-webkit-print-color-adjust: exact !important;
+							print-color-adjust: exact !important;
+						}
+						@media print {
+							body { background: white; margin: 0; padding: 0; }
+							#order-ticket-paper { margin: 0 !important; }
+							@page { size: A4; margin: 0; }
+						}
+					</style>
+				</head>
+				<body>
+					<div class="print-container">
+						${printContent.outerHTML}
+					</div>
+					<script>
+						window.onload = () => {
+							setTimeout(() => {
+								window.print();
+								window.close();
+							}, 500);
+						};
+					</script>
+				</body>
+			</html>
+		`);
+		printWindow.document.close();
 	};
 
 	return (
-		<div className="fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-xl flex flex-col items-center overflow-y-auto pt-32 md:pt-10 pb-10 custom-scrollbar">
-			<style>
-				{`
-					@media print {
-						/* 1. Reset Global Page & Paper */
-						html, body {
-							background: white !important;
-							margin: 0 !important;
-							padding: 0 !important;
-							height: auto !important;
-							width: auto !important;
-							overflow: visible !important;
-						}
+		<div className="fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-xl flex flex-col items-center overflow-y-auto pt-32 md:pt-10 pb-10 custom-scrollbar print:hidden">
 
-						/* 2. Target specific large layout components and completely remove them */
-						aside, nav, footer, .no-print, .fixed.top-4.right-4, header:not(#order-ticket-paper header), .z-\\[60\\] {
-							display: none !important;
-						}
-
-						/* 3. Structural Reset: Force all containers of the modal to be standard blocks */
-						#root, main, .flex-1, .min-h-full, .max-w-7xl, .mb-8, .grid, .bg-white.rounded-2xl {
-							display: block !important;
-							position: static !important;
-							width: 100% !important;
-							height: auto !important;
-							min-height: 0 !important;
-							margin: 0 !important;
-							padding: 0 !important;
-							overflow: visible !important;
-							transform: none !important;
-							box-shadow: none !important;
-							border: none !important;
-							background: transparent !important;
-						}
-
-						/* Hide ALL children of main/root that are NOT the modal container */
-						header.print\\:hidden, 
-						div.print\\:hidden,
-						section.print\\:hidden,
-						div.fixed.bottom-0.left-0.right-0 { /* Target Mobile Bottom Nav precisely */
-							display: none !important;
-						}
-
-						/* 4. The Modal Wrapper Reset */
-						div.fixed.inset-0.z-\\[100\\] {
-							display: block !important;
-							position: static !important;
-							width: 100% !important;
-							height: auto !important;
-							min-height: 0 !important;
-							overflow: visible !important;
-							background: white !important;
-							padding: 0 !important;
-							margin: 0 !important;
-							z-index: auto !important;
-						}
-
-						/* 5. The Paper Sheet Styling */
-						#order-ticket-paper {
-							display: block !important;
-							width: 210mm !important;
-							min-height: 297mm !important;
-							margin: 0 auto !important;
-							padding: 15mm !important;
-							background: white !important;
-							border: none !important;
-							box-shadow: none !important;
-							position: relative !important;
-						}
-
-						/* 6. Enforce correct Table Page Breaks */
-						table { page-break-inside: auto !important; width: 100% !important; border-collapse: collapse !important; }
-						tr    { page-break-inside: avoid !important; page-break-after: auto !important; }
-						thead { display: table-header-group !important; }
-
-						@page {
-							size: A4;
-							margin: 0;
-						}
-					}
-				`}
-			</style>
 
 			{/* CONTROLS - Hidden when printing */}
 			<div className="fixed top-4 right-4 flex items-center gap-3 z-[110] no-print">

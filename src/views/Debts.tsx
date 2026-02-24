@@ -132,6 +132,74 @@ const Debts: React.FC = () => {
 		setShowStatement(true);
 	};
 
+	const handlePrintStatement = () => {
+		const printContent = document.getElementById('debt-statement-paper');
+		if (!printContent) return;
+
+		const printWindow = window.open('', '_blank', 'width=1000,height=1000');
+		if (!printWindow) {
+			alert("Vui lòng cho phép trình duyệt mở popup để in!");
+			return;
+		}
+
+		// Collect current styles
+		let styles = '';
+		document.querySelectorAll('style, link[rel="stylesheet"]').forEach(node => {
+			styles += node.outerHTML;
+		});
+
+		printWindow.document.write(`
+			<html>
+				<head>
+					<title>In Công Nợ - ${selectedCustomer?.name || ''}</title>
+					${styles}
+					<style>
+						body { 
+							background: #f1f5f9; 
+							padding: 0; margin: 0; 
+							display: flex; justify-content: center;
+						}
+						#debt-statement-paper {
+							margin: 0 !important;
+							box-shadow: none !important;
+							border: none !important;
+							width: 210mm !important;
+							min-height: 297mm !important;
+							padding: 15mm !important;
+							background: white !important;
+							visibility: visible !important;
+							display: block !important;
+						}
+						/* Force high fidelity colors */
+						* {
+							-webkit-print-color-adjust: exact !important;
+							print-color-adjust: exact !important;
+						}
+						@media print {
+							body { background: white; margin: 0; padding: 0; }
+							#debt-statement-paper { margin: 0 !important; }
+							@page { size: A4; margin: 0; }
+						}
+					</style>
+				</head>
+				<body>
+					<div class="print-container">
+						${printContent.outerHTML}
+					</div>
+					<script>
+						window.onload = () => {
+							setTimeout(() => {
+								window.print();
+								window.close();
+							}, 500);
+						};
+					</script>
+				</body>
+			</html>
+		`);
+		printWindow.document.close();
+	};
+
 	// Form state for payment
 	const [paymentData, setPaymentData] = useState({
 		customerId: '',
@@ -947,7 +1015,7 @@ const Debts: React.FC = () => {
 									</div>
 								</div>
 								<div className="flex items-center gap-2">
-									<button onClick={() => window.print()} className="h-10 px-4 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center gap-2 font-bold text-xs uppercase hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">
+									<button onClick={handlePrintStatement} className="h-10 px-4 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center gap-2 font-bold text-xs uppercase hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">
 										<Printer size={16} /> <span className="hidden md:inline">In phiếu</span>
 									</button>
 									<button onClick={() => setShowStatement(false)} className="size-10 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center transition-colors">
@@ -1008,94 +1076,6 @@ const Debts: React.FC = () => {
 										id="debt-statement-paper"
 										className="bg-white w-[800px] shadow-[0_32px_96px_-12px_rgba(0,0,0,0.3)] min-h-[1141px] p-16 mb-20 flex flex-col font-['Inter', sans-serif] relative text-sm text-slate-900 border-2 border-slate-200"
 									>
-
-										{/* INJECT PRINT STYLES */}
-										<style>
-											{`
-											@media print {
-												/* 1. Reset Global Page & Paper */
-												html, body {
-													background: white !important;
-													margin: 0 !important;
-													padding: 0 !important;
-													height: auto !important;
-													width: auto !important;
-													overflow: visible !important;
-												}
-
-												/* 2. NUCLEAR STRUCTURAL RESET: Hide ALL structural parents/siblings */
-												aside, nav, footer, .no-print, .z-\\[60\\], header:not(#debt-statement-paper header) {
-													display: none !important;
-												}
-
-												/* Structural Reset: Force all containers of the modal to be standard blocks */
-												#root, main, .flex-1, .min-h-full, .max-w-7xl, .mb-8, .grid, .bg-white.rounded-2xl {
-													display: block !important;
-													position: static !important;
-													width: 100% !important;
-													height: auto !important;
-													min-height: 0 !important;
-													margin: 0 !important;
-													padding: 0 !important;
-													overflow: visible !important;
-													transform: none !important;
-													box-shadow: none !important;
-													border: none !important;
-													background: transparent !important;
-												}
-
-												/* Hide ALL children of main/root that are NOT the modal container */
-												header.print\\:hidden, 
-												div.print\\:hidden,
-												section.print\\:hidden,
-												div.fixed.bottom-0.left-0.right-0 { /* Hide Mobile Bottom Nav */
-													display: none !important;
-												}
-
-												/* 4. The Modal Wrapper Reset */
-												div.fixed.inset-0.z-\\[100\\] {
-													display: block !important;
-													position: static !important;
-													width: 100% !important;
-													height: auto !important;
-													min-height: 0 !important;
-													overflow: visible !important;
-													background: white !important;
-													padding: 0 !important;
-													margin: 0 !important;
-													z-index: auto !important;
-												}
-
-												/* Hide the zoom/print controls of the modal */
-												div.fixed.top-4.right-4.flex {
-													display: none !important;
-												}
-
-												/* 5. The Paper Sheet Styling */
-												#debt-statement-paper {
-													display: block !important;
-													width: 210mm !important;
-													min-height: 297mm !important;
-													margin: 0 auto !important;
-													padding: 15mm !important;
-													background: white !important;
-													border: none !important;
-													box-shadow: none !important;
-													position: relative !important;
-												}
-
-												/* 6. Enforce correct Table Page Breaks */
-												table { page-break-inside: auto !important; width: 100% !important; border-collapse: collapse !important; }
-												tr    { page-break-inside: avoid !important; page-break-after: auto !important; }
-												thead { display: table-header-group !important; }
-
-												@page {
-													size: A4;
-													margin: 0;
-												}
-											}
-										`}
-										</style>
 
 										{/* 2. Customer & Cycle Info Grid */}
 										{(() => {

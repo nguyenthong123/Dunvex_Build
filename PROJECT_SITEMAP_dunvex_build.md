@@ -113,12 +113,12 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 - [x] **Tối ưu Chi tiết Khách hàng**: Chuyển đổi sang dạng Bottom Sheet mượt mà trên di động, hỗ trợ gọi điện trực tiếp từ ứng dụng.
 - [x] **Bảo mật chuẩn A+**: Triển khai toàn diện CSP, XFO, HSTS, Referrer-Policy thông qua `vercel.json`.
 - [x] **Lọc theo ngày (Date Filtering)**: Đã hoàn thiện bộ lọc ngày thực tế cho danh sách công nợ và bảng kê chi tiết khách hàng.
-- [x] **In phiếu & Xuất PDF Chuyên nghiệp (Feb 24 Upgrade - The Print Engine)**: 
-    - **Cô lập Hiển thị Cấp độ Cao (Nuclear Clean Print)**: Đã nâng cấp toàn bộ hệ thống in ấn lên cơ chế "Isolation Strategy". Tự động "thanh lọc" 100% rác giao diện (Sidebar, Header, Bottom Nav, Nút bấm) ngay khi lệnh In được thực thi.
-    - **Đa trang (Multi-page Support)**: Tích hợp cơ chế tự động ngắt trang thông minh và lặp lại tiêu đề bảng cho Báo giá, Phiếu giao hàng và Công nợ dài, đảm bảo bản in liền mạch và chuyên nghiệp.
-    - **Chuẩn hóa A4 & Anti-Blank**: Ép cứng định dạng vùng in theo chuẩn giấy A4 quốc tế (210mm x 297mm). Khắc phục triệt để lỗi in ra trang trắng trắng bằng cơ chế Reset cấu trúc DOM (Flattening) linh hoạt.
-    - **Fix Mobile Print Leak**: Loại bỏ hoàn toàn hiện tượng thanh menu di động lọt vào bản in trên smartphone bằng cách định danh CSS chính xác cho các thẻ điều hướng.
-    - **Tối ưu Tỷ lệ (Scaling/Zoom)**: Tự động khử toàn bộ hiệu ứng thu phóng và animations của trình duyệt khi in để bản in luôn sắc nét và bắt đầu từ đỉnh trang giấy.
+- [x] **In phiếu & Xuất PDF Chuyên nghiệp (Feb 24 Upgrade - The Print Engine V2)**: 
+    - **Cơ chế Popup Độc lập (Print to New Window)**: Chuyển đổi toàn bộ hệ thống in ấn sang cơ chế mở cửa sổ popup riêng biệt. Điều này giúp cách ly hoàn toàn Tờ Phiếu khỏi mã nguồn rác của ứng dụng (Sidebar, Nav), đảm bảo độ ổn định tuyệt đối 100% và không bao giờ bị trắng trang.
+    - **Cân bằng & Thẳng hàng Tuyệt đối**: Ép cấu trúc Grid 2 cột cho phần thông tin Khách hàng - Người lập phiếu, khắc phục triệt để lỗi "cái cao cái thấp" do trình duyệt tự ý co dãn.
+    - **Chống lấp nội dung (Anti-Clipping)**: Gỡ bỏ giới hạn chiều cao và ép trạng thái `overflow: visible`, đảm bảo phần Tổng tiền và Chữ ký ở cuối phiếu luôn hiển thị đầy đủ, không bị cắt mất khi đơn hàng dài.
+    - **Đa module (Order, Debt, Price)**: Áp dụng đồng bộ cho Phiếu giao hàng, Bảng kê công nợ và Báo giá hệ thống.
+    - **Chuẩn hóa A4 & High Fidelity**: Ép cứng định dạng A4 (210mm) và bảo toàn 100% màu sắc, đường kẻ bảng sắc nét cho bản in và xuất PDF chuyên nghiệp.
 - [x] **Số dư đầu kỳ & Lịch sử Công nợ**: Đã hiển thị chính xác số dư đầu kỳ dựa trên khoảng thời gian lọc và liệt kê chi tiết lịch sử giao dịch/thanh toán.
 - [x] **Bản đồ Khách hàng Thông minh**: 
     - **Lọc thông minh**: Tự động nhận diện tất cả loại khách hàng từ dữ liệu và tạo bảng chú thích lọc (Legend) linh hoạt.

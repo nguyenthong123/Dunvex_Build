@@ -84,6 +84,8 @@ const Pricing = () => {
 			const code = promoCode.trim().toUpperCase();
 			if (!code) return;
 
+			// No regex formatting check needed based on user request
+
 			// Query coupons from master account dunvex.green@gmail.com
 			const q = query(
 				collection(db, 'coupons'),

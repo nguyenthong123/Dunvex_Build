@@ -177,7 +177,7 @@ const OrderList = () => {
 
 	return (
 		<div className="flex flex-col h-full bg-[#f8f9fa] dark:bg-slate-950 transition-colors duration-300">
-			<header className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 h-16 md:h-20 flex items-center justify-between px-4 md:px-8 shrink-0 transition-colors duration-300">
+			<header className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 h-16 md:h-20 flex items-center justify-between px-4 md:px-8 shrink-0 transition-colors duration-300 print:hidden">
 				<div className="flex items-center gap-3">
 					<button
 						onClick={() => navigate('/')}
@@ -212,7 +212,7 @@ const OrderList = () => {
 			</header>
 
 			{/* CONTENT */}
-			<div className="flex-1 p-4 md:p-8 overflow-y-auto custom-scrollbar">
+			<div className="flex-1 p-4 md:p-8 overflow-y-auto custom-scrollbar print:hidden">
 
 				{/* Mobile Search Bar - Conditional */}
 				{showMobileSearch && (

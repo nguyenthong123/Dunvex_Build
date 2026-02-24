@@ -10,7 +10,7 @@ const MobileNav = () => {
 
 	return (
 		<div
-			className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-t border-slate-100 dark:border-slate-800 px-4 flex justify-between items-center z-[100] h-20 shadow-[0_-8px_30px_rgba(0,0,0,0.08)]"
+			className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-t border-slate-100 dark:border-slate-800 px-4 flex justify-between items-center z-[100] h-20 shadow-[0_-8px_30px_rgba(0,0,0,0.08)] print:hidden"
 			style={{
 				WebkitBackdropFilter: 'blur(20px)',
 				paddingBottom: 'env(safe-area-inset-bottom, 12px)'

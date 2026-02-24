@@ -43,71 +43,76 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 			<style>
 				{`
 					@media print {
-						/* Hide ALL UI components from the page */
-						.no-print, .print-hidden, .print\:hidden,
-						header, aside, nav, button, 
-						.fixed.inset-0 > div:first-child { 
-							display: none !important; 
-						}
-
-						/* Reset Body and HTML for clean print */
+						/* 1. Reset Global Page & Paper */
 						html, body {
 							background: white !important;
 							margin: 0 !important;
 							padding: 0 !important;
 							height: auto !important;
+							width: auto !important;
 							overflow: visible !important;
-							width: 100% !important;
 						}
 
-						/* Force all parent containers of the paper to be simple blocks */
-						.fixed.inset-0, 
-						.fixed.inset-0 > div,
-						div[style*="width: 800px"] {
-							position: static !important;
+						/* 2. Target specific large layout components and completely remove them */
+						aside, nav, footer, .no-print, .fixed.top-4.right-4, header:not(#order-ticket-paper header), .z-\\[60\\] {
+							display: none !important;
+						}
+
+						/* 3. Structural Reset: Force all containers of the modal to be standard blocks */
+						#root, main, .flex-1, .min-h-full, .max-w-7xl, .mb-8, .grid, .bg-white.rounded-2xl {
 							display: block !important;
+							position: static !important;
+							width: 100% !important;
+							height: auto !important;
+							min-height: 0 !important;
+							margin: 0 !important;
+							padding: 0 !important;
+							overflow: visible !important;
+							transform: none !important;
+							box-shadow: none !important;
+							border: none !important;
+							background: transparent !important;
+						}
+
+						/* Hide ALL children of main/root that are NOT the modal container */
+						header.print\\:hidden, 
+						div.print\\:hidden,
+						section.print\\:hidden,
+						div.fixed.bottom-0.left-0.right-0 { /* Target Mobile Bottom Nav precisely */
+							display: none !important;
+						}
+
+						/* 4. The Modal Wrapper Reset */
+						div.fixed.inset-0.z-\\[100\\] {
+							display: block !important;
+							position: static !important;
+							width: 100% !important;
+							height: auto !important;
+							min-height: 0 !important;
+							overflow: visible !important;
+							background: white !important;
 							padding: 0 !important;
 							margin: 0 !important;
-							width: 100% !important;
-							height: auto !important;
-							max-height: none !important;
-							max-width: none !important;
-							background: white !important;
-							border: none !important;
-							box-shadow: none !important;
-							transform: none !important;
-							animation: none !important;
-							overflow: visible !important;
+							z-index: auto !important;
 						}
 
-						/* Ensure the scale wrapper doesn't affect print layout */
-						.print-scale {
-							transform: none !important;
-							margin: 0 !important;
-							width: 100% !important;
-							height: auto !important;
-							display: block !important;
-						}
-
-						/* The Paper Sheet - A4 constraints */
+						/* 5. The Paper Sheet Styling */
 						#order-ticket-paper {
 							display: block !important;
-							position: relative !important;
-							top: 0 !important;
-							left: 0 !important;
 							width: 210mm !important;
 							min-height: 297mm !important;
 							margin: 0 auto !important;
 							padding: 15mm !important;
+							background: white !important;
 							border: none !important;
 							box-shadow: none !important;
-							background: white !important;
+							position: relative !important;
 						}
 
-						/* Hide everything else */
-						body > *:not(.fixed.inset-0) {
-							display: none !important;
-						}
+						/* 6. Enforce correct Table Page Breaks */
+						table { page-break-inside: auto !important; width: 100% !important; border-collapse: collapse !important; }
+						tr    { page-break-inside: avoid !important; page-break-after: auto !important; }
+						thead { display: table-header-group !important; }
 
 						@page {
 							size: A4;

@@ -526,7 +526,7 @@ const Debts: React.FC = () => {
 	return (
 		<div className="flex flex-col h-full bg-[#f8f9fa] dark:bg-slate-950 transition-colors duration-300">
 			{/* Header */}
-			<header className="h-16 md:h-20 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between px-4 md:px-8 shrink-0 transition-colors duration-300">
+			<header className="h-16 md:h-20 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between px-4 md:px-8 shrink-0 transition-colors duration-300 print:hidden">
 				<div className="flex items-center gap-4">
 					<div className="flex flex-col">
 						<h2 className="text-slate-900 dark:text-indigo-400 text-lg md:text-2xl font-black uppercase tracking-tight">Quản Lý Công Nợ</h2>
@@ -572,7 +572,7 @@ const Debts: React.FC = () => {
 			</header>
 
 			{/* Content Area */}
-			<div className="flex-1 p-4 md:p-8">
+			<div className="flex-1 p-4 md:p-8 print:hidden">
 				<div className="max-w-7xl mx-auto flex flex-col gap-6 md:gap-8">
 					{/* KPI Cards Section */}
 					<div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 mb-0 transition-colors duration-300">
@@ -1013,57 +1013,81 @@ const Debts: React.FC = () => {
 										<style>
 											{`
 											@media print {
-												/* 1. Base reset for the whole page */
+												/* 1. Reset Global Page & Paper */
 												html, body {
 													background: white !important;
 													margin: 0 !important;
 													padding: 0 !important;
 													height: auto !important;
-												}
-
-												/* 2. The Visibility Trick: Hide everything but the target */
-												body {
-													visibility: hidden;
-												}
-
-												/* Target ONLY the paper and its contents to be visible */
-												#debt-statement-paper, #debt-statement-paper * {
-													visibility: visible;
-												}
-
-												/* 3. Force the target to the top-left of the physical paper */
-												#debt-statement-paper {
-													position: absolute !important;
-													left: 0 !important;
-													top: 0 !important;
-													width: 210mm !important; /* A4 width */
-													margin: 0 !important;
-													padding: 10mm !important;
-													border: none !important;
-													box-shadow: none !important;
-													background: white !important;
-													z-index: 9999;
-												}
-
-												/* 4. Fix for React ancestors: 
-												   Ensure no parent container clips or pushes the absolutely positioned child */
-												#root, .fixed, .inset-0, .overflow-y-auto, div {
-													position: static !important;
-													display: block !important;
+													width: auto !important;
 													overflow: visible !important;
-													height: auto !important;
-													max-height: none !important;
-													padding: 0 !important;
-													margin: 0 !important;
-													transform: none !important;
-													background: transparent !important;
-													backdrop-filter: none !important;
 												}
 
-												/* Specific UI elements that MUST remain hidden even if children are visible */
-												header, button, .no-print, .flex-none {
+												/* 2. NUCLEAR STRUCTURAL RESET: Hide ALL structural parents/siblings */
+												aside, nav, footer, .no-print, .z-\\[60\\], header:not(#debt-statement-paper header) {
 													display: none !important;
 												}
+
+												/* Structural Reset: Force all containers of the modal to be standard blocks */
+												#root, main, .flex-1, .min-h-full, .max-w-7xl, .mb-8, .grid, .bg-white.rounded-2xl {
+													display: block !important;
+													position: static !important;
+													width: 100% !important;
+													height: auto !important;
+													min-height: 0 !important;
+													margin: 0 !important;
+													padding: 0 !important;
+													overflow: visible !important;
+													transform: none !important;
+													box-shadow: none !important;
+													border: none !important;
+													background: transparent !important;
+												}
+
+												/* Hide ALL children of main/root that are NOT the modal container */
+												header.print\\:hidden, 
+												div.print\\:hidden,
+												section.print\\:hidden,
+												div.fixed.bottom-0.left-0.right-0 { /* Hide Mobile Bottom Nav */
+													display: none !important;
+												}
+
+												/* 4. The Modal Wrapper Reset */
+												div.fixed.inset-0.z-\\[100\\] {
+													display: block !important;
+													position: static !important;
+													width: 100% !important;
+													height: auto !important;
+													min-height: 0 !important;
+													overflow: visible !important;
+													background: white !important;
+													padding: 0 !important;
+													margin: 0 !important;
+													z-index: auto !important;
+												}
+
+												/* Hide the zoom/print controls of the modal */
+												div.fixed.top-4.right-4.flex {
+													display: none !important;
+												}
+
+												/* 5. The Paper Sheet Styling */
+												#debt-statement-paper {
+													display: block !important;
+													width: 210mm !important;
+													min-height: 297mm !important;
+													margin: 0 auto !important;
+													padding: 15mm !important;
+													background: white !important;
+													border: none !important;
+													box-shadow: none !important;
+													position: relative !important;
+												}
+
+												/* 6. Enforce correct Table Page Breaks */
+												table { page-break-inside: auto !important; width: 100% !important; border-collapse: collapse !important; }
+												tr    { page-break-inside: avoid !important; page-break-after: auto !important; }
+												thead { display: table-header-group !important; }
 
 												@page {
 													size: A4;

@@ -561,12 +561,12 @@ const PriceList = () => {
 
 										/* 2. Visibility Trick for clean isolation */
 										body {
-											visibility: hidden;
+											visibility: hidden !important;
 										}
 
 										/* Show ONLY the price list paper and its children */
 										#price-list-paper, #price-list-paper * {
-											visibility: visible;
+											visibility: visible !important;
 										}
 
 										/* 3. Positioning and Sizing for Multi-page */
@@ -574,9 +574,8 @@ const PriceList = () => {
 											position: absolute !important;
 											left: 0 !important;
 											top: 0 !important;
-											width: 100% !important;
-											max-width: 210mm !important; /* A4 width */
-											margin: 0 auto !important;
+											width: 210mm !important; /* A4 width */
+											margin: 0 !important;
 											padding: 10mm !important;
 											border: none !important;
 											box-shadow: none !important;
@@ -585,6 +584,7 @@ const PriceList = () => {
 											display: block !important;
 											height: auto !important;
 											overflow: visible !important;
+											z-index: 99999 !important;
 										}
 
 										/* 4. Reset ancestors to prevent layout breaks */
@@ -601,7 +601,7 @@ const PriceList = () => {
 										}
 
 										/* Hide specific UI components */
-										.no-print, header, aside, nav, button, .fixed, .shadow-xl {
+										.no-print, header, aside, nav, button, .lucide, .fixed {
 											display: none !important;
 										}
 
@@ -622,7 +622,7 @@ const PriceList = () => {
 
 										@page {
 											size: A4;
-											margin: 15mm 0; /* Add top/bottom margin for mechanical printer grip */
+											margin: 0;
 										}
 									}
 								`}

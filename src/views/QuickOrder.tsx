@@ -351,23 +351,82 @@ const QuickOrder = () => {
 			};
 
 			if (id) {
-				// If editing, we might need complex logic to revert old stock and deduct new stock. 
-				// For now, let's just update the order details without changing stock to avoid inconsistencies.
-				await updateDoc(doc(db, 'orders', id), {
+				const batch = writeBatch(db);
+
+				// 1. Update Order
+				batch.update(doc(db, 'orders', id), {
 					...orderData,
 					updatedAt: serverTimestamp()
 				});
 
-				// Log Update
-				await addDoc(collection(db, 'audit_logs'), {
+				// 2. Sync Inventory: Revert old logs and apply new ones
+				// Since we can't query inside a batch, we fetch existing logs first
+				const existingLogsQ = query(
+					collection(db, 'inventory_logs'),
+					where('orderId', '==', id)
+				);
+				const existingLogsSnap = await getDocs(existingLogsQ);
+
+				// Revert previous stock changes
+				existingLogsSnap.docs.forEach(logDoc => {
+					const logData = logDoc.data();
+					if (logData.productId && logData.qty) {
+						const oldProdRef = doc(db, 'products', logData.productId);
+						batch.update(oldProdRef, {
+							stock: increment(logData.qty) // Revert the deduction
+						});
+					}
+					batch.delete(logDoc.ref);
+				});
+
+				// Apply new stock changes
+				validItems.forEach(item => {
+					if (item.productId) {
+						const sourceProduct = products.find(p => p.id === item.productId);
+						let stockProductId = item.productId;
+
+						if (sourceProduct?.linkedProductId) {
+							stockProductId = sourceProduct.linkedProductId;
+						} else if (sourceProduct?.sku) {
+							const master = products.find(p => p.sku === sourceProduct.sku && !p.linkedProductId);
+							if (master) stockProductId = master.id;
+						}
+
+						const prodRef = doc(db, 'products', stockProductId);
+						batch.update(prodRef, {
+							stock: increment(-item.qty)
+						});
+
+						const invLogRef = doc(collection(db, 'inventory_logs'));
+						batch.set(invLogRef, {
+							productId: stockProductId,
+							orderId: id,
+							customerName: orderData.customerName,
+							productName: item.name,
+							type: 'out',
+							qty: item.qty,
+							note: `Cập nhật đơn hàng cho ${orderData.customerName}`,
+							ownerId: owner.ownerId,
+							user: auth.currentUser?.displayName || auth.currentUser?.email,
+							createdAt: serverTimestamp()
+						});
+					}
+				});
+
+				// 3. Log Audit
+				const auditRef = doc(collection(db, 'audit_logs'));
+				batch.set(auditRef, {
 					action: 'Cập nhật đơn hàng',
 					user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
 					userId: auth.currentUser?.uid,
 					ownerId: owner.ownerId,
-					details: `Đã cập nhật đơn hàng của ${orderData.customerName} - Tổng tiền: ${finalTotal.toLocaleString('vi-VN')} đ`,
+					details: `Đã cập nhật đơn hàng: ${orderData.customerName} - Tổng: ${finalTotal.toLocaleString('vi-VN')} đ`,
 					createdAt: serverTimestamp()
 				});
-			} else {
+
+				await batch.commit();
+			}
+			else {
 				orderData.createdAt = serverTimestamp();
 
 				// Batch write: Create Order + Create Notification + Deduct Stock

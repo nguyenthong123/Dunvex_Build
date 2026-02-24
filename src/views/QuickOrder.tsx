@@ -450,10 +450,10 @@ const QuickOrder = () => {
 		String(c.phone || '').includes(searchCustomerQuery)
 	);
 
-	const categories = Array.from(new Set([
+	const categories = Array.from(new Map([
 		'Tôn lợp', 'Xà gồ', 'Sắt hộp', 'Phụ kiện', 'Inox',
 		...products.map(p => p.category)
-	])).filter(Boolean).sort((a: any, b: any) => String(a).localeCompare(String(b)));
+	].filter(Boolean).map(cat => [cat.toLowerCase(), cat])).values()).sort((a: any, b: any) => String(a).localeCompare(String(b)));
 
 	const hasOrderPermission = owner.role === 'admin' || (owner.accessRights?.orders_create ?? true);
 
@@ -734,7 +734,7 @@ const QuickOrder = () => {
 													</div>
 													<div className="max-h-72 overflow-y-auto py-2 no-scrollbar">
 														{products
-															.filter(p => !item.category || p.category === item.category)
+															.filter(p => !item.category || p.category?.toLowerCase() === item.category?.toLowerCase())
 															.filter(p =>
 																String(p.name || '').toLowerCase().includes(lineSearchQuery.toLowerCase()) ||
 																(p.sku && String(p.sku).toLowerCase().includes(lineSearchQuery.toLowerCase()))

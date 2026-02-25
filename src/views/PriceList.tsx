@@ -288,22 +288,24 @@ const PriceList = () => {
 					${styles}
 					<style>
 						body { 
-							background: #f1f5f9; 
+							background: #f8fafc; 
 							padding: 0; margin: 0; 
 							display: flex; justify-content: center;
 						}
 						#price-list-paper {
 							margin: 0 !important;
 							box-shadow: none !important;
-							border: none !important;
+							border: 1px solid #e2e8f0 !important;
 							width: 210mm !important;
 							min-height: 297mm !important;
-							padding: 15mm !important;
+							padding: 10mm !important;
 							background: white !important;
 							visibility: visible !important;
 							display: block !important;
 							border-radius: 0 !important;
 						}
+						table { border-collapse: collapse !important; width: 100% !important; }
+						th, td { border: 1px solid #e2e8f0 !important; }
 						/* Force high fidelity colors */
 						* {
 							-webkit-print-color-adjust: exact !important;
@@ -311,7 +313,7 @@ const PriceList = () => {
 						}
 						@media print {
 							body { background: white; margin: 0; padding: 0; }
-							#price-list-paper { margin: 0 !important; }
+							#price-list-paper { margin: 0 !important; border: none !important; }
 							@page { size: A4; margin: 0; }
 						}
 					</style>
@@ -623,38 +625,38 @@ const PriceList = () => {
 									<div className="flex justify-between items-start gap-8">
 										<div className="space-y-6">
 											<div className="flex items-center gap-4">
-												<div className="size-16 bg-[#5C5CFF] rounded-2xl flex items-center justify-center text-white shadow-xl shadow-blue-500/20 shrink-0">
+												<div className="size-16 bg-[#FF6D00] rounded-2xl flex items-center justify-center text-white shadow-xl shadow-orange-500/20 shrink-0">
 													<Building2 size={36} />
 												</div>
-												<h1 className="text-4xl font-black text-[#1A237E] uppercase tracking-tighter leading-tight">
+												<h1 className="text-4xl font-black text-[#E65100] uppercase tracking-tighter leading-tight">
 													{companyInfo?.name || 'DUNVEX'}
 												</h1>
 											</div>
 
 											<div className="space-y-2.5 pl-1">
-												<div className="flex items-start gap-3 text-slate-500">
-													<MapPin size={14} className="text-indigo-600 shrink-0 mt-0.5" />
-													<span className="text-xs font-bold uppercase tracking-wide leading-tight">{companyInfo?.address || 'XÃ KIẾN ĐỨC , LÂM ĐỒNG'}</span>
+												<div className="flex items-start gap-3 text-slate-700">
+													<MapPin size={14} className="text-[#FF6D00] shrink-0 mt-0.5" />
+													<span className="text-xs font-black uppercase tracking-wide leading-tight">{companyInfo?.address || 'XÃ KIẾN ĐỨC , LÂM ĐỒNG'}</span>
 												</div>
 												<div className="flex items-center gap-6">
-													<div className="flex items-center gap-2 text-slate-500">
-														<Phone size={14} className="text-indigo-600" />
-														<span className="text-sm font-bold">{companyInfo?.phone || '0988765444'}</span>
+													<div className="flex items-center gap-2 text-slate-800">
+														<Phone size={14} className="text-[#FF6D00]" />
+														<span className="text-sm font-black">{companyInfo?.phone || '0988765444'}</span>
 													</div>
-													<div className="flex items-center gap-2 text-slate-500">
-														<Mail size={14} className="text-indigo-600" />
-														<span className="text-sm font-bold">{companyInfo?.email || 'dunvex.green@gmail.com'}</span>
+													<div className="flex items-center gap-2 text-slate-800">
+														<Mail size={14} className="text-[#FF6D00]" />
+														<span className="text-sm font-black">{companyInfo?.email || 'dunvex.green@gmail.com'}</span>
 													</div>
 												</div>
 											</div>
 										</div>
 
 										<div className="text-right">
-											<h2 className="text-6xl font-normal text-[#1A237E] uppercase tracking-[0.2em] mb-1">Báo Giá</h2>
-											<p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.4em] mb-8">Niêm Yết Hệ Thống</p>
+											<h2 className="text-6xl font-black text-[#E65100] uppercase tracking-[0.2em] mb-1">Báo Giá</h2>
+											<p className="text-[12px] font-black text-[#FF6D00] uppercase tracking-[0.4em] mb-8">Niêm Yết Hệ Thống</p>
 
-											<div className="w-32 h-px bg-slate-100 ml-auto mb-4"></div>
-											<p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+											<div className="w-32 h-1 bg-[#FF6D00]/20 ml-auto mb-4"></div>
+											<p className="text-[11px] font-black text-slate-900 uppercase tracking-widest bg-orange-50 px-3 py-1 rounded-lg w-fit ml-auto">
 												Ngày cập nhật: {selectedList?.updatedAt?.seconds ? new Date(selectedList.updatedAt.seconds * 1000).toLocaleDateString('vi-VN') : new Date().toLocaleDateString('vi-VN')}
 											</p>
 										</div>
@@ -666,26 +668,26 @@ const PriceList = () => {
 									<div className="overflow-x-auto print:overflow-visible -mx-4 px-4 custom-scrollbar">
 										<table className="w-full text-left border-collapse min-w-[700px] md:min-w-full">
 											<thead>
-												<tr>
-													<th className="py-6 px-4 text-[11px] font-black text-indigo-400 uppercase tracking-[0.2em] border-b border-slate-100 text-center w-10">STT</th>
+												<tr className="bg-orange-50/50">
+													<th className="py-5 px-4 text-[11px] font-black text-[#E65100] uppercase tracking-[0.1em] border border-slate-200 text-center w-12">STT</th>
 													{headers.map((header, idx) => (
 														<th
 															key={idx}
-															className="py-6 px-4 text-[12px] font-black text-slate-950 uppercase tracking-[0.2em] border-b border-slate-100 whitespace-normal break-words"
+															className="py-5 px-4 text-[12px] font-black text-slate-950 uppercase tracking-[0.05em] border border-slate-200 whitespace-normal break-words"
 														>
 															{header}
 														</th>
 													))}
 												</tr>
 											</thead>
-											<tbody className="divide-y divide-slate-50">
+											<tbody className="divide-y divide-slate-200">
 												{filteredData.map((row, rowIdx) => (
-													<tr key={rowIdx} className="hover:bg-slate-50/50 transition-colors">
-														<td className="py-6 px-4 text-[11px] font-black text-slate-200 text-center">{rowIdx + 1}</td>
+													<tr key={rowIdx} className="hover:bg-orange-50/30 transition-colors">
+														<td className="py-4 px-4 text-[12px] font-black text-slate-500 text-center border border-slate-200 bg-slate-50/30">{rowIdx + 1}</td>
 														{headers.map((header, colIdx) => (
 															<td
 																key={colIdx}
-																className={`py-6 px-4 text-[13px] font-bold whitespace-normal break-words ${colIdx === 0 ? 'text-[#1A237E] leading-relaxed w-[350px]' : 'text-slate-500'}`}
+																className={`py-4 px-4 text-[13px] font-black whitespace-normal break-words border border-slate-200 ${colIdx === 0 ? 'text-[#E65100] leading-relaxed w-[350px] bg-orange-50/10' : 'text-slate-900'}`}
 															>
 																{row[header]?.toLocaleString() || '---'}
 															</td>
@@ -698,24 +700,24 @@ const PriceList = () => {
 								</div>
 
 								{/* Footer Details */}
-								<div className="p-12 bg-white border-t border-slate-50">
+								<div className="p-12 bg-white border-t border-slate-100">
 									<div className="flex flex-col md:flex-row justify-between items-end gap-8">
 										<div className="max-w-xl space-y-4">
-											<h4 className="flex items-center gap-2 text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em]">
+											<h4 className="flex items-center gap-2 text-[11px] font-black text-[#FF6D00] uppercase tracking-[0.2em]">
 												<Info size={14} /> Chính sách áp dụng
 											</h4>
-											<p className="text-[10px] font-bold text-slate-400 leading-relaxed italic opacity-80">
+											<p className="text-[11px] font-black text-slate-500 leading-relaxed italic border-l-4 border-orange-500 pl-4">
 												* Báo giá trên là giá niêm yết chính thức, chưa bao gồm chiết khấu linh hoạt theo số lượng.
 												Mọi thắc mắc vui lòng liên hệ trực tiếp hotline hoặc truy cập website công ty để biết thêm chi tiết.
 											</p>
 										</div>
 										<div className="text-right space-y-3">
-											<div className="size-24 bg-slate-50 rounded-3xl mx-auto md:ml-auto flex items-center justify-center text-slate-100">
+											<div className="size-24 bg-orange-50 rounded-3xl mx-auto md:ml-auto flex items-center justify-center text-orange-200 border border-orange-100">
 												<QrCode size={48} />
 											</div>
 											<div>
-												<p className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Xác nhận bởi</p>
-												<p className="text-lg font-black text-[#1A237E] uppercase tracking-tighter mt-0.5">{companyInfo?.name || 'DUNVEX'}</p>
+												<p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Xác nhận bởi</p>
+												<p className="text-lg font-black text-[#E65100] uppercase tracking-tighter mt-0.5">{companyInfo?.name || 'DUNVEX'}</p>
 											</div>
 										</div>
 									</div>

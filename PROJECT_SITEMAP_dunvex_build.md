@@ -245,6 +245,10 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 - [x] **Ổn định hóa Bảo mật & Quyền truy cập**:
     *   **Fix lỗi Permission Denied**: Cập nhật lại toàn diện `firestore.rules`, khắc phục triệt để các lỗi đỏ tại Chuông thông báo và Hệ thống cảnh báo tự động.
     *   **Phân quyền Đa tầng**: Đảm bảo quyền truy cập an toàn cho cả Chủ shop và Nhân viên dựa trên `ownerId` và email, đồng thời bảo vệ dữ liệu nhạy cảm.
+- [x] **Nâng cấp Giao diện Báo Giá & Quản lý Khách hàng (Feb 25)**:
+    *   **Price List Redesign**: Chuyển đổi toàn bộ giao diện báo giá sang tông màu Vàng Cam (Amber/Orange) cao cấp, tăng cường độ tương phản văn bản và bổ sung hệ thống đường kẻ ô (Grid lines) giúp tra cứu dữ liệu cực kỳ dễ dàng.
+    *   **Customer CRM Enhancements**: Cho phép Admin chỉnh sửa email nhân viên phụ trách (`createdByEmail`) để bàn giao khách hàng. Tích hợp nút sao chép nhanh ghi chú chi tiết và hiển thị thông tin nhân viên phụ trách trong bảng chi tiết khách hàng.
+    *   **Check-in Lookup Optimization**: Đồng bộ hóa trình tìm kiếm khách hàng tại module Check-in, ưu tiên hiển thị Tên cơ sở kinh doanh và sửa lỗi placeholder tìm kiếm.
 
 ### 📝 Cần làm tiếp (To-do)
 

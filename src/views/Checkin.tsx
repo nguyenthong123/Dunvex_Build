@@ -151,6 +151,22 @@ const Checkin = () => {
         imageUrls: [] as string[]
     });
 
+    const [searchCustomerQuery, setSearchCustomerQuery] = useState('');
+    const [showCustomerResults, setShowCustomerResults] = useState(false);
+    const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
+    const customerSearchRef = React.useRef<HTMLDivElement>(null);
+
+    // Handle outside click for customer search dropdown
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (customerSearchRef.current && !customerSearchRef.current.contains(event.target as Node)) {
+                setShowCustomerResults(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
     const [gettingLocation, setGettingLocation] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [sidebarExpanded, setSidebarExpanded] = useState(true);
@@ -276,6 +292,12 @@ const Checkin = () => {
         }));
     };
 
+    const filteredCustomersForCheckin = customers.filter(c =>
+        String(c.name || '').toLowerCase().includes(searchCustomerQuery.toLowerCase()) ||
+        String(c.businessName || '').toLowerCase().includes(searchCustomerQuery.toLowerCase()) ||
+        String(c.phone || '').includes(searchCustomerQuery)
+    );
+
     const handleGetLocation = () => {
         if (!navigator.geolocation) {
             showToast("Trình duyệt của bạn không hỗ trợ định vị GPS.", "error");
@@ -365,6 +387,7 @@ const Checkin = () => {
                 ...formData,
                 imageUrl: formData.imageUrls[0] || '', // Compatibility for old views
                 customerName: customer?.name || 'Vãng lai',
+                customerBusinessName: customer?.businessName || '',
                 userId: auth.currentUser?.uid,
                 userEmail: auth.currentUser?.email,
                 ownerId: owner.ownerId,
@@ -392,6 +415,8 @@ const Checkin = () => {
                 purpose: 'Viếng thăm',
                 imageUrls: []
             });
+            setSearchCustomerQuery('');
+            setSelectedCustomer(null);
             showToast("Checkin thành công!", "success");
         } catch (error) {
             showToast("Lỗi lưu dữ liệu.", "error");
@@ -464,7 +489,7 @@ const Checkin = () => {
                         const filtered = recentCheckins.filter(item => {
                             const itemDate = item.createdAt?.seconds ? new Date(item.createdAt.seconds * 1000).toISOString().split('T')[0] : '';
                             const matchDate = itemDate >= dateRange.start && itemDate <= dateRange.end;
-                            const matchSearch = item.customerName.toLowerCase().includes(searchQuery.toLowerCase());
+                            const matchSearch = (item.customerBusinessName || item.customerName || '').toLowerCase().includes(searchQuery.toLowerCase());
                             return matchDate && matchSearch;
                         });
 
@@ -483,7 +508,8 @@ const Checkin = () => {
                                 >
                                     <Popup className="custom-popup">
                                         <div className="p-2 min-w-[150px]">
-                                            <p className="font-black text-[#1A237E] uppercase text-[10px] mb-1">{checkin.customerName}</p>
+                                            <p className="font-black text-[#1A237E] uppercase text-[10px] mb-1">{checkin.customerBusinessName || checkin.customerName}</p>
+                                            {checkin.customerBusinessName && <p className="text-[8px] text-slate-400 uppercase font-bold mb-1">{checkin.customerName}</p>}
                                             <p className="text-[9px] text-slate-500 mb-2">{checkin.purpose}</p>
                                             {(checkin.imageUrls || (checkin.imageUrl ? [checkin.imageUrl] : [])).map((url: string, idx: number) => (
                                                 <img
@@ -677,7 +703,7 @@ const Checkin = () => {
                             const filtered = recentCheckins.filter(item => {
                                 const itemDate = item.createdAt?.seconds ? new Date(item.createdAt.seconds * 1000).toISOString().split('T')[0] : '';
                                 const matchDate = itemDate >= dateRange.start && itemDate <= dateRange.end;
-                                const matchSearch = item.customerName.toLowerCase().includes(searchQuery.toLowerCase());
+                                const matchSearch = (item.customerBusinessName || item.customerName || '').toLowerCase().includes(searchQuery.toLowerCase());
                                 return matchDate && matchSearch;
                             });
 
@@ -698,14 +724,15 @@ const Checkin = () => {
                                     {paginated.map((checkin) => (
                                         <div key={checkin.id} className="flex gap-3 lg:gap-5 relative group">
                                             <div className="flex-none pt-1 lg:pt-2 relative">
-                                                <div className="size-10 lg:size-14 rounded-xl lg:rounded-2xl bg-[#1A237E] dark:bg-indigo-900 flex items-center justify-center text-white font-black text-base lg:text-xl shadow-xl shadow-blue-900/10 border-2 border-white dark:border-slate-800 ring-4 ring-transparent group-hover:ring-blue-50 dark:group-hover:ring-indigo-900/30 transition-all">
-                                                    {checkin.customerName[0]}
+                                                <div className="size-10 lg:size-14 rounded-xl lg:rounded-2xl bg-[#1A237E] dark:bg-indigo-900 flex items-center justify-center text-white font-black text-base lg:text-xl shadow-xl shadow-blue-900/10 border-2 border-white dark:border-slate-800 ring-4 ring-transparent group-hover:ring-blue-50 dark:group-hover:ring-indigo-900/30 transition-all uppercase">
+                                                    {(checkin.customerBusinessName || checkin.customerName)[0]}
                                                 </div>
                                             </div>
                                             <div className="flex-1 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-4 lg:p-5 rounded-[1.5rem] lg:rounded-[2rem] shadow-sm hover:shadow-2xl transition-all cursor-pointer group-hover:-translate-y-1 overflow-hidden">
                                                 <div className="flex justify-between items-start mb-3 gap-2">
                                                     <div className="space-y-0.5 min-w-0">
-                                                        <h4 className="text-[13px] lg:text-sm font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight leading-tight truncate">{checkin.customerName}</h4>
+                                                        <h4 className="text-[13px] lg:text-sm font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight leading-tight truncate">{checkin.customerBusinessName || checkin.customerName}</h4>
+                                                        {checkin.customerBusinessName && <p className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-tight truncate">{checkin.customerName}</p>}
                                                         <div className="flex flex-wrap items-center gap-1.5 lg:gap-2">
                                                             <span className={`px-1.5 py-0.5 rounded text-[7px] lg:text-[8px] font-black uppercase tracking-widest ${checkin.purpose === 'Khiếu nại' ? 'bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400' :
                                                                 checkin.purpose === 'Khách mới' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 dark:text-emerald-400' :
@@ -817,21 +844,66 @@ const Checkin = () => {
                             <div className="space-y-6">
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px] pl-1 mb-2 text-center md:text-left">Chọn Khách Hàng Mục Tiêu *</label>
-                                    <div className="relative">
-                                        <div className="absolute left-5 top-1/2 -translate-y-1/2 text-[#f27121] dark:text-orange-400">
+                                    <div className="relative" ref={customerSearchRef}>
+                                        <div className="absolute left-5 top-1/2 -translate-y-1/2 text-[#f27121] dark:text-orange-400 z-10">
                                             <span className="material-symbols-outlined">person</span>
                                         </div>
-                                        <select
+                                        <input
                                             required
-                                            className="w-full pl-14 pr-4 h-16 bg-[#f8f7f5] dark:bg-slate-800 border-none rounded-2xl text-sm font-black focus:ring-2 focus:ring-[#f27121]/50 appearance-none text-[#181411] dark:text-white"
-                                            value={formData.customerId}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, customerId: e.target.value }))}
-                                        >
-                                            <option value="">-- Danh sách khách hàng --</option>
-                                            {customers.map(c => (
-                                                <option key={c.id} value={c.id}>{c.name} - {c.phone}</option>
-                                            ))}
-                                        </select>
+                                            type="text"
+                                            autoComplete="off"
+                                            placeholder="Tìm theo tên khách hàng, chi nhánh hoặc số điện thoại..."
+                                            className="w-full pl-14 pr-4 h-16 bg-[#f8f7f5] dark:bg-slate-800 border-none rounded-2xl text-sm font-black focus:ring-2 focus:ring-[#f27121]/50 text-[#181411] dark:text-white placeholder:text-slate-400 placeholder:font-bold"
+                                            value={searchCustomerQuery}
+                                            onChange={(e) => {
+                                                setSearchCustomerQuery(e.target.value);
+                                                setShowCustomerResults(true);
+                                                if (selectedCustomer && e.target.value !== (selectedCustomer.businessName || selectedCustomer.name)) {
+                                                    setSelectedCustomer(null);
+                                                    setFormData(prev => ({ ...prev, customerId: '' }));
+                                                }
+                                            }}
+                                            onFocus={() => setShowCustomerResults(true)}
+                                        />
+                                        {showCustomerResults && searchCustomerQuery && (
+                                            <div className="absolute z-[2100] left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl shadow-2xl max-h-60 overflow-y-auto custom-scrollbar">
+                                                {filteredCustomersForCheckin.map(c => (
+                                                    <button
+                                                        key={c.id}
+                                                        type="button"
+                                                        className="w-full px-6 py-4 text-left hover:bg-slate-50 dark:hover:bg-slate-700/50 flex items-center justify-between border-b border-slate-50 dark:border-slate-700 last:border-none group"
+                                                        onClick={() => {
+                                                            setSelectedCustomer(c);
+                                                            setSearchCustomerQuery(c.businessName || c.name);
+                                                            setFormData(prev => ({ ...prev, customerId: c.id }));
+                                                            setShowCustomerResults(false);
+                                                        }}
+                                                    >
+                                                        <div>
+                                                            <p className="font-black text-sm uppercase text-slate-800 dark:text-slate-200 group-hover:text-[#f27121]">
+                                                                {c.businessName || c.name}
+                                                            </p>
+                                                            <div className="flex flex-col gap-0.5 mt-1">
+                                                                {c.businessName && (
+                                                                    <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1 uppercase">
+                                                                        <span className="material-symbols-outlined text-[12px]">person</span>
+                                                                        {c.name}
+                                                                    </p>
+                                                                )}
+                                                                <p className="text-[10px] text-slate-400 dark:text-slate-500 font-black uppercase tracking-widest">{c.phone}</p>
+                                                            </div>
+                                                        </div>
+                                                        {selectedCustomer?.id === c.id && <CheckCircle2 size={18} className="text-[#f27121]" />}
+                                                    </button>
+                                                ))}
+                                                {filteredCustomersForCheckin.length === 0 && (
+                                                    <div className="px-6 py-8 text-center">
+                                                        <span className="material-symbols-outlined text-4xl text-slate-200 dark:text-slate-700 mb-2">person_search</span>
+                                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Không tìm thấy khách hàng</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 

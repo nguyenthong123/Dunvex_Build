@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
 	Settings, User, Bell, Shield, Database, Globe, Moon, Sun, Users, Activity,
-	FileText, Save, Plus, Trash2, Edit2, CheckCircle, XCircle, Crown, Clock,
+	FileText, Save, Plus, Trash2, Edit2, Edit3, CheckCircle, XCircle, Crown, Clock,
 	Rocket, Lock, RefreshCcw, ExternalLink, MapPin, Calendar, X,
 	ChevronLeft, ChevronRight, Download
 } from 'lucide-react';
@@ -72,6 +72,7 @@ const AdminSettings = () => {
 	const [pendingInvites, setPendingInvites] = useState<any[]>([]);
 	const [showAddUser, setShowAddUser] = useState(false);
 	const [newUser, setNewUser] = useState({ email: '', role: 'sale', displayName: '' });
+	const [editingUser, setEditingUser] = useState<any>(null);
 
 	// Derived User List (Active + Pending)
 	const userList = [
@@ -247,14 +248,35 @@ const AdminSettings = () => {
 	};
 
 	const deleteUser = async (user: any) => {
-		if (!window.confirm(`Bạn có chắc muốn xóa nhân viên ${user.email}?`)) return;
+		if (!window.confirm(`Bạn có chắc muốn xóa nhân viên ${user.displayName || user.email}?`)) return;
 		try {
 			if (user.status === 'pending') {
 				await deleteDoc(doc(db, 'permissions', user.id));
 			} else {
 				await deleteDoc(doc(db, 'users', user.id));
 			}
-		} catch (error) { }
+			showToast("Đã xóa nhân viên thành công", "success");
+		} catch (error) {
+			showToast("Lỗi khi xóa: " + (error as any).message, "error");
+		}
+	};
+
+	const handleUpdateUser = async () => {
+		if (!editingUser) return;
+		try {
+			setLoading(true);
+			const collectionName = editingUser.status === 'pending' ? 'permissions' : 'users';
+			await updateDoc(doc(db, collectionName, editingUser.id), {
+				displayName: editingUser.displayName,
+				role: editingUser.role
+			});
+			showToast("Cập nhật thành công", "success");
+			setEditingUser(null);
+		} catch (error: any) {
+			showToast("Lỗi: " + error.message, "error");
+		} finally {
+			setLoading(false);
+		}
 	};
 
 	const handleSheetSync = async () => {
@@ -725,7 +747,22 @@ const AdminSettings = () => {
 						</div>
 					)}
 
-					{activeTab === 'users' && <UserManagement userList={userList} onAdd={() => setShowAddUser(true)} onUpdateRole={updateUserRole} onDelete={deleteUser} showAdd={showAddUser} onShowAdd={setShowAddUser} newUser={newUser} setNewUser={setNewUser} handleAddUser={handleAddUser} />}
+					{activeTab === 'users' && (
+						<UserManagement
+							userList={userList}
+							onAdd={() => setShowAddUser(true)}
+							onUpdateRole={updateUserRole}
+							onDelete={deleteUser}
+							showAdd={showAddUser}
+							onShowAdd={setShowAddUser}
+							newUser={newUser}
+							setNewUser={setNewUser}
+							handleAddUser={handleAddUser}
+							editingUser={editingUser}
+							setEditingUser={setEditingUser}
+							handleUpdateUser={handleUpdateUser}
+						/>
+					)}
 
 					{activeTab === 'attendance' && <AttendanceAdmin logs={attendanceLogs} fieldLogs={fieldCheckins} companyInfo={companyInfo} setCompanyInfo={setCompanyInfo} onSave={handleSaveSettings} />}
 
@@ -803,59 +840,135 @@ const InputSection = ({ label, value, onChange, fullWidth = false, type = 'text'
 	</div>
 );
 
-const UserManagement = ({ userList, showAdd, onShowAdd, newUser, setNewUser, handleAddUser, onUpdateRole, onDelete }: any) => (
+const UserManagement = ({ userList, showAdd, onShowAdd, newUser, setNewUser, handleAddUser, onUpdateRole, onDelete, editingUser, setEditingUser, handleUpdateUser }: any) => (
 	<div className="space-y-6">
 		<div className="flex justify-between items-center">
 			<h2 className="text-xl font-black uppercase text-slate-800 dark:text-white tracking-tight">Danh sách nhân sự</h2>
 			<button onClick={() => onShowAdd(true)} className="flex items-center gap-2 bg-[#FF6D00] text-white px-4 py-2 rounded-xl font-bold text-xs uppercase hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/20"><Plus size={16} /> Thêm nhân viên</button>
 		</div>
+
+		{/* Add User Form */}
 		{showAdd && (
-			<div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 mb-6">
+			<div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 mb-6 animate-in fade-in slide-in-from-top-4 duration-300">
 				<h3 className="font-bold text-lg mb-4 dark:text-white">Mời nhân viên mới</h3>
 				<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-					<input type="text" placeholder="Tên hiển thị" className="bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold text-sm dark:text-white" value={newUser.displayName} onChange={e => setNewUser({ ...newUser, displayName: e.target.value })} />
-					<input type="email" placeholder="Email Google" className="bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold text-sm dark:text-white" value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })} />
-					<select className="bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold text-sm dark:text-white" value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })}>
-						<option value="sale">Nhân viên Sale</option>
-						<option value="warehouse">Thủ kho</option>
-						<option value="accountant">Kế toán</option>
-						<option value="admin">Quản trị viên</option>
-					</select>
+					<div className="space-y-1">
+						<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Tên hiển thị</label>
+						<input type="text" placeholder="VD: Nguyễn Văn A" className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold text-sm dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" value={newUser.displayName} onChange={e => setNewUser({ ...newUser, displayName: e.target.value })} />
+					</div>
+					<div className="space-y-1">
+						<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Email Google</label>
+						<input type="email" placeholder="email@gmail.com" className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold text-sm dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })} />
+					</div>
+					<div className="space-y-1">
+						<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Vai trò</label>
+						<select className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold text-sm dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })}>
+							<option value="sale">Nhân viên Sale</option>
+							<option value="warehouse">Thủ kho</option>
+							<option value="accountant">Kế toán</option>
+							<option value="admin">Quản trị viên</option>
+						</select>
+					</div>
 				</div>
 				<div className="flex justify-end gap-3 mt-4">
-					<button onClick={() => onShowAdd(false)} className="px-4 py-2 text-slate-500 font-bold text-sm">Hủy</button>
-					<button onClick={handleAddUser} className="px-4 py-2 bg-indigo-600 text-white font-bold text-sm rounded-lg">Gửi lời mời</button>
+					<button onClick={() => onShowAdd(false)} className="px-6 py-2 text-slate-500 dark:text-slate-400 font-bold text-sm hover:text-slate-700 transition-colors">Hủy</button>
+					<button onClick={handleAddUser} className="px-6 py-2 bg-[#1A237E] dark:bg-indigo-600 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-200 dark:shadow-none hover:opacity-90 transition-all">Gửi lời mời</button>
 				</div>
 			</div>
 		)}
+
+		{/* Edit User Form/Modal */}
+		{editingUser && (
+			<div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+				<div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-[2rem] shadow-2xl border border-slate-100 dark:border-slate-800 p-8">
+					<div className="flex justify-between items-center mb-6">
+						<div>
+							<h3 className="text-xl font-black uppercase text-[#1A237E] dark:text-indigo-400">Chỉnh sửa nhân sự</h3>
+							<p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-1">{editingUser.email}</p>
+						</div>
+						<button onClick={() => setEditingUser(null)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400 transition-colors"><XCircle size={24} /></button>
+					</div>
+
+					<div className="space-y-5">
+						<div className="space-y-2">
+							<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Tên hiển thị</label>
+							<input
+								type="text"
+								className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20"
+								value={editingUser.displayName}
+								onChange={e => setEditingUser({ ...editingUser, displayName: e.target.value })}
+							/>
+						</div>
+
+						<div className="space-y-2">
+							<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Vai trò</label>
+							<select
+								className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20"
+								value={editingUser.role}
+								onChange={e => setEditingUser({ ...editingUser, role: e.target.value })}
+							>
+								<option value="sale">Nhân viên Sale</option>
+								<option value="warehouse">Thủ kho</option>
+								<option value="accountant">Kế toán</option>
+								<option value="admin">Quản trị viên</option>
+							</select>
+						</div>
+
+						<div className="flex gap-3 pt-4">
+							<button onClick={() => setEditingUser(null)} className="flex-1 px-4 py-3 text-slate-500 dark:text-slate-400 font-bold text-sm hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all">Bỏ qua</button>
+							<button onClick={handleUpdateUser} className="flex-1 px-4 py-3 bg-[#1A237E] dark:bg-indigo-600 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-200 dark:shadow-none hover:scale-[1.02] active:scale-[0.98] transition-all">Lưu thay đổi</button>
+						</div>
+					</div>
+				</div>
+			</div>
+		)}
+
 		<div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
-			<table className="w-full text-left">
-				<thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-400">
-					<tr><th className="px-6 py-4">Họ tên</th><th className="px-6 py-4">Email</th><th className="px-6 py-4">Vai trò</th><th className="px-6 py-4">Trạng thái</th><th className="px-6 py-4 text-right">#</th></tr>
-				</thead>
-				<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-					{userList.map((user: any) => (
-						<tr key={user.id}>
-							<td className="px-6 py-4 font-bold text-sm dark:text-white">{user.displayName || 'Guest'}</td>
-							<td className="px-6 py-4 text-sm text-slate-500">{user.email}</td>
-							<td className="px-6 py-4">
-								<select className="bg-transparent border-none text-xs font-bold outline-none cursor-pointer dark:text-white" value={user.role || 'sale'} onChange={e => onUpdateRole(user, e.target.value)}>
-									<option value="sale">Sale</option>
-									<option value="warehouse">Kho</option>
-									<option value="accountant">Kế toán</option>
-									<option value="admin">Admin</option>
-								</select>
-							</td>
-							<td className="px-6 py-4">
-								<span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase ${user.status === 'active' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'}`}>{user.status}</span>
-							</td>
-							<td className="px-6 py-4 text-right">
-								<button onClick={() => onDelete(user)} className="text-slate-400 hover:text-red-500"><Trash2 size={16} /></button>
-							</td>
-						</tr>
-					))}
-				</tbody>
-			</table>
+			<div className="overflow-x-auto">
+				<table className="w-full text-left min-w-[700px]">
+					<thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-400">
+						<tr><th className="px-6 py-4">Nhân viên</th><th className="px-6 py-4">Vai trò</th><th className="px-6 py-4">Trạng thái</th><th className="px-6 py-4 text-right">Hành động</th></tr>
+					</thead>
+					<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+						{userList.map((user: any) => (
+							<tr key={user.id} className="group hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
+								<td className="px-6 py-4">
+									<div className="font-bold text-sm dark:text-white">{user.displayName || 'Guest'}</div>
+									<div className="text-[10px] text-slate-400 font-bold lowercase">{user.email}</div>
+								</td>
+								<td className="px-6 py-4">
+									<span className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight">
+										{user.role === 'admin' ? 'Quản trị' : user.role === 'sale' ? 'Sale' : user.role === 'warehouse' ? 'Kho' : 'Kế toán'}
+									</span>
+								</td>
+								<td className="px-6 py-4">
+									<span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter ${user.status === 'active' ? 'bg-emerald-100 text-emerald-600' : 'bg-orange-100 text-orange-600'}`}>
+										{user.status === 'active' ? 'Đã kích hoạt' : 'Chờ xác nhận'}
+									</span>
+								</td>
+								<td className="px-6 py-4 text-right">
+									<div className="flex items-center justify-end gap-2">
+										<button
+											onClick={() => setEditingUser(user)}
+											className="p-2 text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-all"
+											title="Chỉnh sửa"
+										>
+											<Edit3 size={18} />
+										</button>
+										<button
+											onClick={() => onDelete(user)}
+											className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-all"
+											title="Xóa nhân viên"
+										>
+											<Trash2 size={18} />
+										</button>
+									</div>
+								</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
 		</div>
 	</div>
 );

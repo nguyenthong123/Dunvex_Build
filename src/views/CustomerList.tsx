@@ -48,6 +48,7 @@ const CustomerList = () => {
 		note: '',
 		status: 'Hoạt động',
 		route: '',
+		createdByEmail: '',
 		lat: null as number | null,
 		lng: null as number | null,
 		licenseUrls: [] as string[],
@@ -241,7 +242,7 @@ const CustomerList = () => {
 			const validationData = {
 				...formData,
 				ownerId: owner.ownerId,
-				createdByEmail: auth.currentUser?.email || ''
+				createdByEmail: formData.createdByEmail || auth.currentUser?.email || ''
 			};
 
 			const result = CustomerSchema.safeParse(validationData);
@@ -284,7 +285,7 @@ const CustomerList = () => {
 			const validationData = {
 				...formData,
 				ownerId: owner.ownerId,
-				createdByEmail: selectedCustomer.createdByEmail || auth.currentUser?.email || ''
+				createdByEmail: formData.createdByEmail || selectedCustomer.createdByEmail || auth.currentUser?.email || ''
 			};
 
 			const result = CustomerSchema.safeParse(validationData);
@@ -354,6 +355,7 @@ const CustomerList = () => {
 			note: '',
 			status: 'Hoạt động',
 			route: '',
+			createdByEmail: '',
 			lat: null,
 			lng: null,
 			licenseUrls: [],
@@ -373,6 +375,7 @@ const CustomerList = () => {
 			note: customer.note || '',
 			status: customer.status || 'Hoạt động',
 			route: customer.route || '',
+			createdByEmail: customer.createdByEmail || '',
 			lat: customer.lat || null,
 			lng: customer.lng || null,
 			licenseUrls: customer.licenseUrls || (customer.licenseUrl ? [customer.licenseUrl] : []),
@@ -747,8 +750,10 @@ const CustomerList = () => {
 															{(customer.name?.[0] || 'K').toUpperCase()}
 														</div>
 														<div>
-															<div className="font-black text-[#1A237E] dark:text-indigo-400 uppercase truncate max-w-[150px]">{customer.name}</div>
-															<div className="text-xs text-slate-500 dark:text-slate-400 font-medium">{customer.phone}</div>
+															<div className="font-black text-[#1A237E] dark:text-indigo-400 uppercase truncate max-w-[150px]">{customer.businessName || customer.name}</div>
+															<div className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+																{customer.businessName ? customer.name : customer.phone}
+															</div>
 														</div>
 													</div>
 													<div className="flex flex-col items-end gap-1">
@@ -878,6 +883,17 @@ const CustomerList = () => {
 												onChange={(e) => setFormData({ ...formData, route: e.target.value })}
 											/>
 										</div>
+									</div>
+
+									<div>
+										<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Nhân viên phụ trách (Email)</label>
+										<input
+											type="email"
+											className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
+											placeholder="Email nhân viên phụ trách khách hàng này..."
+											value={formData.createdByEmail}
+											onChange={(e) => setFormData({ ...formData, createdByEmail: e.target.value })}
+										/>
 									</div>
 
 									<div>
@@ -1068,6 +1084,39 @@ const CustomerList = () => {
 													<p className="text-sm font-bold text-slate-700 dark:text-white leading-relaxed truncate">{selectedCustomer.email}</p>
 												</div>
 											)}
+										</div>
+									</div>
+
+									<div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-3xl border border-slate-100 dark:border-slate-800">
+										<div className="flex justify-between items-start mb-2">
+											<p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+												<span className="material-symbols-outlined text-sm">assignment</span>
+												Ghi chú chi tiết
+											</p>
+											{selectedCustomer.note && (
+												<button
+													onClick={() => {
+														navigator.clipboard.writeText(selectedCustomer.note);
+														showToast("Đã sao chép ghi chú", "success");
+													}}
+													className="text-[10px] font-black text-[#FF6D00] uppercase flex items-center gap-1 hover:opacity-70 transition-opacity"
+												>
+													<span className="material-symbols-outlined text-sm">content_copy</span>
+													Sao chép
+												</button>
+											)}
+										</div>
+										<p className="text-sm font-bold text-slate-700 dark:text-white leading-relaxed whitespace-pre-wrap italic">
+											{selectedCustomer.note || 'Không có ghi chú nào được thêm.'}
+										</p>
+										<div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
+											<p className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+												<span className="material-symbols-outlined text-[12px]">account_circle</span>
+												NV phụ trách:
+											</p>
+											<p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 lowercase truncate max-w-[150px]">
+												{selectedCustomer.createdByEmail || 'N/A'}
+											</p>
 										</div>
 									</div>
 									{/* Actions */}

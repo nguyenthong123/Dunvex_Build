@@ -734,7 +734,8 @@ const AdminSettings = () => {
 												{(() => {
 													const expireAt = owner.subscriptionExpiresAt || owner.trialEndsAt;
 													if (expireAt) {
-														const days = Math.ceil((expireAt.toDate().getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+														const expireDate = expireAt.toDate ? expireAt.toDate() : new Date(expireAt);
+														const days = Math.ceil((expireDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
 														return days > 0 ? `${days} ngày` : 'Đã hết hạn';
 													}
 													return owner.subscriptionStatus === 'active' ? 'Vô thời hạn' : 'Hết hạn';

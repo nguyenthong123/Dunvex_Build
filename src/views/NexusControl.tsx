@@ -134,33 +134,46 @@ const NexusControl = () => {
 		if (!window.confirm(`Xác nhận đổi gói sang ${newPlan === 'free' ? 'FREE' : newPlan === 'premium_monthly' ? '1 tháng' : '1 năm'}? Ngày hiệu lực sẽ được đặt về hôm nay.`)) return;
 		try {
 			const isPro = newPlan !== 'free';
+			const expireDate = new Date();
+
+			if (newPlan === 'premium_monthly') {
+				expireDate.setMonth(expireDate.getMonth() + 1);
+			} else if (newPlan === 'premium_yearly') {
+				expireDate.setFullYear(expireDate.getFullYear() + 1);
+			} else {
+				// Free plan policy: 60 days
+				expireDate.setDate(expireDate.getDate() + 60);
+			}
+
 			await updateDoc(doc(db, 'settings', ownerId), {
 				planId: newPlan,
 				isPro: isPro,
-				paymentConfirmedAt: serverTimestamp()
+				subscriptionStatus: isPro ? 'active' : 'trial',
+				paymentConfirmedAt: serverTimestamp(),
+				subscriptionExpiresAt: expireDate
 			});
-			showToast("Cập nhật gói thành công", "success");
+			showToast("Cập nhật gói thành công. Số ngày còn lại đã được đồng bộ!", "success");
 		} catch (error) {
 			showToast("Lỗi khi cập nhật gói", "error");
 		}
 	};
 
 	const getEffectiveStatus = (c: any) => {
-		const joinedAt = c.paymentConfirmedAt?.toDate ? c.paymentConfirmedAt.toDate() : (c.paymentConfirmedAt?.seconds ? new Date(c.paymentConfirmedAt.seconds * 1000) : null);
-		if (!joinedAt) return { isExpired: false, daysUsed: 0, locks: { orders: c.manualLockOrders, debts: c.manualLockDebts, sheets: c.manualLockSheets } };
-
 		const now = new Date();
-		const diffDays = Math.floor((now.getTime() - joinedAt.getTime()) / (1000 * 60 * 60 * 24));
+		const joinedAt = c.paymentConfirmedAt?.toDate ? c.paymentConfirmedAt.toDate() : (c.paymentConfirmedAt?.seconds ? new Date(c.paymentConfirmedAt.seconds * 1000) : null);
+		const expireAt = c.subscriptionExpiresAt?.toDate ? c.subscriptionExpiresAt.toDate() : (c.subscriptionExpiresAt?.seconds ? new Date(c.subscriptionExpiresAt.seconds * 1000) : null);
+
+		const diffDays = joinedAt ? Math.floor((now.getTime() - joinedAt.getTime()) / (1000 * 60 * 60 * 24)) : 0;
 
 		let isExpired = false;
-		const plan = c.planId || (c.isPro ? 'premium_monthly' : 'free');
-
-		if (plan === 'free') {
-			if (diffDays > 60) isExpired = true;
-		} else if (plan === 'premium_monthly') {
-			if (diffDays > 30) isExpired = true;
-		} else if (plan === 'premium_yearly') {
-			if (diffDays > 365) isExpired = true;
+		if (expireAt) {
+			isExpired = expireAt < now;
+		} else if (joinedAt) {
+			// Legacy fallback if expireAt is missing
+			const plan = c.planId || (c.isPro ? 'premium_monthly' : 'free');
+			if (plan === 'free' && diffDays > 60) isExpired = true;
+			else if (plan === 'premium_monthly' && diffDays > 30) isExpired = true;
+			else if (plan === 'premium_yearly' && diffDays > 365) isExpired = true;
 		}
 
 		return {
@@ -185,15 +198,19 @@ const NexusControl = () => {
 			});
 
 			const isYearly = request.planId === 'premium_yearly';
-			const trialDate = new Date();
-			trialDate.setMonth(trialDate.getMonth() + (isYearly ? 12 : 1));
+			const expireDate = new Date();
+			if (isYearly) {
+				expireDate.setFullYear(expireDate.getFullYear() + 1);
+			} else {
+				expireDate.setMonth(expireDate.getMonth() + 1);
+			}
 
 			await updateDoc(doc(db, 'settings', request.ownerId), {
 				subscriptionStatus: 'active',
 				isPro: true,
 				planId: request.planId,
 				paymentConfirmedAt: serverTimestamp(),
-				subscriptionExpiresAt: trialDate
+				subscriptionExpiresAt: expireDate
 			});
 
 			showToast("Đã duyệt thanh toán và kích hoạt tài khoản!", "success");

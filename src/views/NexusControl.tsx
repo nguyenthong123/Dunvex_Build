@@ -145,15 +145,16 @@ const NexusControl = () => {
 				expireDate.setDate(expireDate.getDate() + 60);
 			}
 
-			await updateDoc(doc(db, 'settings', ownerId), {
+			await setDoc(doc(db, 'settings', ownerId), {
 				planId: newPlan,
 				isPro: isPro,
 				subscriptionStatus: isPro ? 'active' : 'trial',
 				paymentConfirmedAt: serverTimestamp(),
 				subscriptionExpiresAt: expireDate
-			});
+			}, { merge: true });
 			showToast("Cập nhật gói thành công. Số ngày còn lại đã được đồng bộ!", "success");
 		} catch (error) {
+			console.error("Plan Update Error:", error);
 			showToast("Lỗi khi cập nhật gói", "error");
 		}
 	};
@@ -205,16 +206,17 @@ const NexusControl = () => {
 				expireDate.setMonth(expireDate.getMonth() + 1);
 			}
 
-			await updateDoc(doc(db, 'settings', request.ownerId), {
+			await setDoc(doc(db, 'settings', request.ownerId), {
 				subscriptionStatus: 'active',
 				isPro: true,
 				planId: request.planId,
 				paymentConfirmedAt: serverTimestamp(),
 				subscriptionExpiresAt: expireDate
-			});
+			}, { merge: true });
 
 			showToast("Đã duyệt thanh toán và kích hoạt tài khoản!", "success");
 		} catch (error) {
+			console.error("Approve Payment Error:", error);
 			showToast("Lỗi khi duyệt thanh toán.", "error");
 		}
 	};
@@ -231,15 +233,16 @@ const NexusControl = () => {
 				handledBy: auth.currentUser?.email
 			});
 
-			await updateDoc(doc(db, 'settings', request.ownerId), {
+			await setDoc(doc(db, 'settings', request.ownerId), {
 				subscriptionStatus: 'expired',
 				isPro: false,
 				revokedAt: serverTimestamp(),
 				revokeReason: reason
-			});
+			}, { merge: true });
 
 			showToast("Đã từ chối/thu hồi yêu cầu.", "info");
 		} catch (error) {
+			console.error("Reject Payment Error:", error);
 			showToast("Lỗi khi thực hiện thao tác.", "error");
 		}
 	};

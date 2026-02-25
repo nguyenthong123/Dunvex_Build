@@ -249,6 +249,7 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     *   **Price List Redesign**: Chuyển đổi toàn bộ giao diện báo giá sang tông màu Vàng Cam (Amber/Orange) cao cấp, tăng cường độ tương phản văn bản và bổ sung hệ thống đường kẻ ô (Grid lines) giúp tra cứu dữ liệu cực kỳ dễ dàng.
     *   **Customer CRM Enhancements**: Cho phép Admin chỉnh sửa email nhân viên phụ trách (`createdByEmail`) để bàn giao khách hàng. Tích hợp nút sao chép nhanh ghi chú chi tiết và hiển thị thông tin nhân viên phụ trách trong bảng chi tiết khách hàng.
     *   **Check-in Lookup Optimization**: Đồng bộ hóa trình tìm kiếm khách hàng tại module Check-in, ưu tiên hiển thị Tên cơ sở kinh doanh và sửa lỗi placeholder tìm kiếm.
+    *   **Subscription Logic Fix**: Khắc phục lỗi hiển thị sai số ngày còn lại của Gói Dịch Vụ bằng cách tự động hóa việc tính toán ngày hết hạn (`subscriptionExpiresAt`) khi thay đổi gói trong Nexus Control. Chuyển sang cơ chế `setDoc` (merge) để đảm bảo cập nhật ổn định ngay cả khi tài liệu cấu hình chưa tồn tại.
 
 ### 📝 Cần làm tiếp (To-do)
 

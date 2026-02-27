@@ -309,6 +309,19 @@ const QuickOrder = () => {
 		return sum + (qty * density);
 	}, 0);
 
+	const formatPrice = (num: number) => {
+		return new Intl.NumberFormat('vi-VN').format(num || 0);
+	};
+
+	const copyToClipboard = (text: string, label: string = 'mã') => {
+		if (!text || text === 'N/A' || text === '---') return;
+		navigator.clipboard.writeText(text).then(() => {
+			showToast(`Đã copy ${label}: ${text}`, "success");
+		}).catch(() => {
+			showToast("Không thể copy. Vui lòng thử lại.", "error");
+		});
+	};
+
 	const handleConfirmOrder = async () => {
 		const validItems = lineItems.filter(item => item.productId && item.qty > 0);
 		if (validItems.length === 0) {
@@ -618,7 +631,7 @@ const QuickOrder = () => {
 								/>
 							</div>
 							{showCustomerResults && searchCustomerQuery && (
-								<div className="absolute z-50 left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl shadow-2xl max-h-60 overflow-y-auto">
+								<div className="absolute z-50 left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl shadow-2xl max-h-60 overflow-y-auto overscroll-contain custom-scrollbar">
 									{filteredCustomers.map(c => (
 										<button
 											key={c.id}
@@ -698,7 +711,7 @@ const QuickOrder = () => {
 				</div>
 
 				{/* SECTION 2: PRODUCT LIST */}
-				<div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-colors duration-300">
+				<div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm transition-colors duration-300 relative z-10">
 					<div className="px-8 py-6 border-b border-slate-50 dark:border-slate-800 flex items-center justify-between">
 						<h3 className="text-sm font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">DANH SÁCH SẢN PHẨM</h3>
 					</div>
@@ -750,7 +763,7 @@ const QuickOrder = () => {
 															onChange={(e) => setLineSearchQuery(e.target.value)}
 														/>
 													</div>
-													<div className="max-h-64 overflow-y-auto py-2 no-scrollbar">
+													<div className="max-h-64 overflow-y-auto py-2 overscroll-contain custom-scrollbar border-b border-slate-50 dark:border-slate-700/50">
 														<div
 															className="px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer text-xs font-bold text-slate-400 border-b border-slate-50 dark:border-slate-700"
 															onClick={() => {
@@ -793,9 +806,21 @@ const QuickOrder = () => {
 													setLineSearchQuery('');
 												}}
 											>
-												<span className={`text-[12px] font-bold truncate ${item.name ? 'text-slate-900 dark:text-white' : 'text-slate-300 dark:text-slate-600'} mr-2`}>
-													{item.name || 'Tìm sản phẩm...'}
-												</span>
+												<div className="flex flex-col">
+													<span className={`text-[12px] font-bold truncate ${item.name ? 'text-slate-900 dark:text-white' : 'text-slate-300 dark:text-slate-600'} mr-2`}>
+														{item.name || 'Tìm sản phẩm...'}
+													</span>
+													{item.sku && (
+														<span
+															className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase flex items-center gap-1 hover:text-[#f27121] transition-colors"
+															onClick={(e) => { e.stopPropagation(); copyToClipboard(item.sku, 'mã SKU'); }}
+															title="Copy SKU"
+														>
+															{item.sku}
+															<span className="material-symbols-outlined text-[10px]">content_copy</span>
+														</span>
+													)}
+												</div>
 												<ChevronDown size={14} className="text-slate-300 shrink-0" />
 											</div>
 
@@ -811,7 +836,7 @@ const QuickOrder = () => {
 															onChange={(e) => setLineSearchQuery(e.target.value)}
 														/>
 													</div>
-													<div className="max-h-72 overflow-y-auto py-2 no-scrollbar">
+													<div className="max-h-80 overflow-y-auto py-2 overscroll-contain custom-scrollbar border-b border-slate-50 dark:border-slate-700/50">
 														{(() => {
 															const normalizedSearch = normalizeText(lineSearchQuery);
 															const currentCategory = normalizeText(item.category);
@@ -855,7 +880,19 @@ const QuickOrder = () => {
 																			<div className="flex flex-col gap-1 max-w-[70%]">
 																				<span className="text-xs font-black text-slate-800 dark:text-slate-200 group-hover/prod:text-[#1A237E] dark:group-hover/prod:text-indigo-400 transition-colors uppercase leading-tight line-clamp-2">{p.name}</span>
 																				<div className="flex items-center gap-2">
-																					<span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded text-[9px] font-black text-slate-500 uppercase">{p.sku || 'N/A'}</span>
+																					<div
+																						className="flex items-center gap-1 cursor-pointer group/sku"
+																						onClick={(e) => {
+																							e.stopPropagation();
+																							copyToClipboard(p.sku, 'mã SKU');
+																						}}
+																						title="Copy mã SKU"
+																					>
+																						<span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded text-[9px] font-black text-slate-500 uppercase group-hover/sku:bg-indigo-100 dark:group-hover/sku:bg-indigo-900/40 group-hover/sku:text-indigo-600 transition-colors">
+																							{p.sku || 'N/A'}
+																						</span>
+																						{p.sku && <span className="material-symbols-outlined text-[10px] text-slate-300 opacity-0 group-hover/sku:opacity-100 transition-opacity">content_copy</span>}
+																					</div>
 																					<span className="text-[9px] font-bold text-slate-400">{p.unit}</span>
 																				</div>
 																			</div>

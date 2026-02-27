@@ -403,6 +403,15 @@ const ProductList = () => {
 		return `${prefix}-${randomPart}`;
 	};
 
+	const copyToClipboard = (text: string, label: string = 'mã') => {
+		if (!text || text === '---') return;
+		navigator.clipboard.writeText(text).then(() => {
+			showToast(`Đã copy ${label}: ${text}`, "success");
+		}).catch(() => {
+			showToast("Không thể copy. Vui lòng thử lại.", "error");
+		});
+	};
+
 	const resetForm = () => {
 		setFormData({
 			name: '',
@@ -761,10 +770,17 @@ const ProductList = () => {
 														onChange={() => toggleSelect(product.id)}
 													/>
 												</td>
-												<td className="py-4 px-2">
-													<span className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-														{product.sku || '#' + product.id.slice(-6).toUpperCase()}
-													</span>
+												<td className="py-4 px-2" onClick={(e) => e.stopPropagation()}>
+													<div
+														className="flex items-center gap-1.5 cursor-pointer hover:text-blue-600 dark:hover:text-indigo-400 transition-colors group/sku"
+														onClick={() => copyToClipboard(product.sku || '#' + product.id.slice(-6).toUpperCase(), 'mã SKU')}
+														title="Copy mã SKU"
+													>
+														<span className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+															{product.sku || '#' + product.id.slice(-6).toUpperCase()}
+														</span>
+														<span className="material-symbols-outlined text-[14px] opacity-0 group-hover/sku:opacity-100 transition-opacity">content_copy</span>
+													</div>
 												</td>
 												<td className="py-4 px-6">
 													<div className="font-black text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-indigo-400 transition-colors">
@@ -895,7 +911,14 @@ const ProductList = () => {
 																	<div className="text-[9px] text-slate-400 dark:text-slate-500 font-black uppercase tracking-widest mt-0.5">
 																		{product.category}
 																	</div>
-																	<p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">{product.sku || 'Không có mã'}</p>
+																	<div
+																		className="flex items-center gap-1.5 mt-1 cursor-pointer"
+																		onClick={(e) => { e.stopPropagation(); copyToClipboard(product.sku || product.id, 'mã SKU'); }}
+																		title="Copy mã SKU"
+																	>
+																		<p className="text-[10px] text-slate-400 dark:text-slate-500">{product.sku || 'Không có mã'}</p>
+																		{(product.sku || product.id) && <span className="material-symbols-outlined text-[12px] text-slate-300">content_copy</span>}
+																	</div>
 																</div>
 															</div>
 															<div className="flex flex-col items-end gap-2" onClick={(e) => e.stopPropagation()}>
@@ -1120,14 +1143,24 @@ const ProductList = () => {
 													value={formData.sku}
 													onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
 												/>
-												<button
-													type="button"
-													className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full text-slate-400 hover:text-orange-500 transition-all"
-													title="Tạo mã mới"
-													onClick={() => setFormData(prev => ({ ...prev, sku: generateSKU() }))}
-												>
-													<span className="material-symbols-outlined text-xl">autorenew</span>
-												</button>
+												<div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+													<button
+														type="button"
+														className="p-2 rounded-full text-slate-400 hover:text-blue-500 transition-all"
+														title="Copy mã SKU"
+														onClick={() => copyToClipboard(formData.sku, 'mã SKU')}
+													>
+														<span className="material-symbols-outlined text-xl">content_copy</span>
+													</button>
+													<button
+														type="button"
+														className="p-2 rounded-full text-slate-400 hover:text-orange-500 transition-all"
+														title="Tạo mã mới"
+														onClick={() => setFormData(prev => ({ ...prev, sku: generateSKU() }))}
+													>
+														<span className="material-symbols-outlined text-xl">autorenew</span>
+													</button>
+												</div>
 											</div>
 										</div>
 										<div>
@@ -1285,7 +1318,16 @@ const ProductList = () => {
 									<div className="flex-1 min-w-0">
 										<p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider mb-1">{selectedProduct.category}</p>
 										<h2 className="text-xl font-black text-[#1A237E] dark:text-indigo-400 leading-tight break-words">{selectedProduct.name}</h2>
-										<p className="text-xs font-bold text-gray-400 dark:text-slate-500 mt-1">SKU: {selectedProduct.sku || '---'}</p>
+										<div
+											className="flex items-center gap-2 mt-1 cursor-pointer group/copy"
+											onClick={() => copyToClipboard(selectedProduct.sku || selectedProduct.id, 'mã SKU')}
+											title="Copy mã SKU"
+										>
+											<p className="text-xs font-bold text-gray-400 dark:text-slate-500">SKU: {selectedProduct.sku || '---'}</p>
+											{(selectedProduct.sku || selectedProduct.id) && (
+												<span className="material-symbols-outlined text-[14px] text-gray-300 group-hover/copy:text-blue-500 transition-colors">content_copy</span>
+											)}
+										</div>
 									</div>
 								</div>
 

@@ -1179,15 +1179,17 @@ const ProductList = () => {
 									</div>
 
 									<div className="grid grid-cols-2 gap-4">
-										<div>
-											<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Giá nhập</label>
-											<input
-												type="number"
-												className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-slate-900 dark:text-white font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
-												value={formData.priceBuy === 0 ? '' : formData.priceBuy}
-												onChange={(e) => setFormData({ ...formData, priceBuy: e.target.value === '' ? 0 : Number(e.target.value) })}
-											/>
-										</div>
+										{hasManagePermission && (
+											<div>
+												<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Giá nhập</label>
+												<input
+													type="number"
+													className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-slate-900 dark:text-white font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
+													value={formData.priceBuy === 0 ? '' : formData.priceBuy}
+													onChange={(e) => setFormData({ ...formData, priceBuy: e.target.value === '' ? 0 : Number(e.target.value) })}
+												/>
+											</div>
+										)}
 										<div>
 											<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Giá bán</label>
 											<input
@@ -1342,11 +1344,13 @@ const ProductList = () => {
 									</div>
 								</div>
 
-								<div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border-l-4 border-orange-500">
-									<p className="text-[10px] font-bold text-orange-400 uppercase mb-1">Lợi nhuận gộp ước tính</p>
-									<p className="text-green-600 dark:text-green-400 font-black text-xl">{formatPrice(selectedProduct.priceSell - selectedProduct.priceBuy)}</p>
-									<p className="text-[10px] text-gray-400 dark:text-slate-500 font-medium">Giá nhập: {formatPrice(selectedProduct.priceBuy)}</p>
-								</div>
+								{hasManagePermission && (
+									<div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border-l-4 border-orange-500">
+										<p className="text-[10px] font-bold text-orange-400 uppercase mb-1">Lợi nhuận gộp ước tính</p>
+										<p className="text-green-600 dark:text-green-400 font-black text-xl">{formatPrice(selectedProduct.priceSell - selectedProduct.priceBuy)}</p>
+										<p className="text-[10px] text-gray-400 dark:text-slate-500 font-medium">Giá nhập: {formatPrice(selectedProduct.priceBuy)}</p>
+									</div>
+								)}
 
 								<div className="grid grid-cols-3 gap-3">
 									<div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-slate-100 dark:border-slate-700">

@@ -22,8 +22,13 @@ export const useNavigationConfig = () => {
 
 	const hasPermission = (key?: string) => {
 		if (!key) return true;
-		if (owner.role === 'admin') return true;
-		return owner.accessRights?.[key] ?? true; // Default to true if not explicitly set
+		if (owner.role === 'admin' && !owner.isEmployee) return true;
+		// If it's an employee, they MUST have the explicit right
+		if (owner.isEmployee) {
+			return owner.accessRights?.[key] === true;
+		}
+		// For other owners/admins, default to true if not explicitly denied
+		return owner.accessRights?.[key] ?? true;
 	};
 
 	// 1. Cấu hình nút cộng ở giữa thay đổi theo trang

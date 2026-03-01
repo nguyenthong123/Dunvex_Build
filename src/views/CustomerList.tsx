@@ -49,8 +49,8 @@ const CustomerList = () => {
 		status: 'Hoạt động',
 		route: '',
 		createdByEmail: '',
-		lat: null as number | null,
-		lng: null as number | null,
+		lat: undefined as number | undefined,
+		lng: undefined as number | undefined,
 		licenseUrls: [] as string[],
 		additionalImages: [] as string[]
 	});
@@ -247,6 +247,7 @@ const CustomerList = () => {
 
 			const result = CustomerSchema.safeParse(validationData);
 			if (!result.success) {
+				console.warn("Customer validation failed:", result.error.format());
 				const firstError = result.error.issues[0]?.message || "Dữ liệu không hợp lệ";
 				showToast(firstError, "warning");
 				return;
@@ -273,8 +274,9 @@ const CustomerList = () => {
 			setShowAddForm(false);
 			resetForm();
 			showToast("Thêm khách hàng thành công", "success");
-		} catch (error) {
-			showToast("Lỗi khi thêm khách hàng", "error");
+		} catch (error: any) {
+			console.error("Add customer error:", error);
+			showToast("Lỗi khi thêm khách hàng: " + (error.message || ""), "error");
 		}
 	};
 
@@ -356,8 +358,8 @@ const CustomerList = () => {
 			status: 'Hoạt động',
 			route: '',
 			createdByEmail: '',
-			lat: null,
-			lng: null,
+			lat: undefined,
+			lng: undefined,
 			licenseUrls: [],
 			additionalImages: []
 		});

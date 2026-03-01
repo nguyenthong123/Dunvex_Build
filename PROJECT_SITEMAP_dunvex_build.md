@@ -2,6 +2,10 @@
 
 Dưới đây là sơ đồ tóm tắt các trang và luồng dữ liệu chính để phục vụ việc kiểm tra và phát triển tiếp vào ngày mai.
 
+## 0. Môi trường Phát triển (Development) 🚀
+- **Địa chỉ Local**: `http://localhost:5173/`
+- **Lưu ý**: Luôn triển khai trên cổng **5173** để tránh phải khai báo lại địa chỉ truy cập.
+
 ## 1. Bản đồ Điều hướng (Sitemap)
 
 - **Trang Đăng nhập (`/login`)**: Xác thực qua Google / Firebase. Hỗ trợ cơ chế "Mời nhân viên" tự động điều hướng về công ty của Admin.
@@ -254,6 +258,15 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     *   **Loại bỏ Đơn nháp**: Cập nhật logic trừ kho chỉ áp dụng cho các đơn hàng có trạng thái **"Đơn chốt"** hoặc **"Đang giao"**. Các đơn nháp sẽ không còn làm sai lệch tồn kho.
     *   **Tự động Hoàn kho (Auto-Revert)**: Cơ chế tự động cộng trả lại số lượng vào kho khi chuyển đơn hàng từ trạng thái chốt về "Đơn nháp" hoặc khi xóa đơn hàng, đảm bảo tính nhất quán dữ liệu.
     *   **Chính xác 100%**: Đảm bảo số liệu tồn kho, báo cáo sản phẩm và hệ thống cảnh báo hết kho luôn phản ánh đúng thực tế hàng hóa đã xuất đi.
+- [x] **Bảo mật Tài chính & Phân quyền Nhân viên (Finance Security - Mar 1)**:
+    *   **Khóa module Tài chính**: Chặn hoàn toàn quyền truy cập của tài khoản nhân viên vào các tab nhạy cảm: **Sổ quỹ, Tuổi nợ và Lợi nhuận**. Nhân viên sẽ tự động bị chuyển về tab KPI cá nhân.
+    *   **Ẩn Thông tin Lợi nhuận (Product List)**: Nhân viên không thể xem **Giá nhập** và **Lợi nhuận gộp** ước tính trong chi tiết sản phẩm. Chức năng sửa Giá nhập cũng bị khóa cho nhân viên.
+    *   **KPI Privacy**: Trong bảng tính hoa hồng, nhân viên chỉ thấy số lượng bán và hoa hồng thực nhận. Các cột liên quan đến lợi nhuận gộp của công ty được ẩn đi hoàn toàn.
+    *   **Permission Logic Hardening**: Cập nhật `hasPermission` mặc định trả về **false** cho nhân viên nếu không có quyền cụ thể, đảm bảo tính bảo mật "Whitelist" thay vì "Blacklist".
+- [x] **Sửa lỗi Thêm Khách hàng (Customer List Bug Fix - Mar 1)**:
+    *   **Zod Schema Update**: Sửa lỗi validation trường `lat` (vĩ độ) và `lng` (kinh độ), cho phép giá trị `null` hoặc `undefined` khi chưa lấy được tọa độ.
+    *   **Enhanced Debugging**: Thêm hệ thống log chi tiết và cảnh báo Toast giúp xác định chính xác nguyên nhân nếu việc thêm khách hàng thất bại.
+    *   **Initial State Fix**: Chuẩn hóa dữ liệu khởi tạo form giúp đồng bộ hoàn hảo với schema validation.
 
 ### 📝 Cần làm tiếp (To-do)
 

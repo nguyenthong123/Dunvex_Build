@@ -818,15 +818,21 @@ const Finance = () => {
 							<div className="overflow-x-auto">
 								<table className="w-full text-left text-sm">
 									<thead className="bg-[#FFFCEB] dark:bg-slate-800/80 text-[9px] font-black text-slate-500 uppercase tracking-[2px] text-center">
-										<tr>
-											<th className="px-8 py-5 text-left w-[25%] font-black uppercase">Nhân viên & Sản phẩm</th>
-											<th className="px-6 py-5 font-black uppercase">Thực bán</th>
-											<th className="px-6 py-5 font-black uppercase">Giá Bán TB</th>
-											<th className="px-6 py-5 font-black uppercase">LN Gộp / SP</th>
-											<th className="px-6 py-5 font-black uppercase">Tổng LN</th>
-											<th className="px-6 py-5 font-black uppercase">Chiết khấu</th>
-											<th className="px-8 py-5 text-right font-black uppercase">Hoa hồng</th>
-										</tr>
+										<thead className="bg-[#FFFCEB] dark:bg-slate-800/80 text-[9px] font-black text-slate-500 uppercase tracking-[2px] text-center">
+											<tr>
+												<th className="px-8 py-5 text-left w-[25%] font-black uppercase">Nhân viên & Sản phẩm</th>
+												<th className="px-6 py-5 font-black uppercase">Thực bán</th>
+												<th className="px-6 py-5 font-black uppercase">Giá Bán TB</th>
+												{isAdmin && (
+													<>
+														<th className="px-6 py-5 font-black uppercase">LN Gộp / SP</th>
+														<th className="px-6 py-5 font-black uppercase">Tổng LN</th>
+													</>
+												)}
+												<th className="px-6 py-5 font-black uppercase">Chiết khấu</th>
+												<th className="px-8 py-5 text-right font-black uppercase">Hoa hồng</th>
+											</tr>
+										</thead>
 									</thead>
 									<tbody className="divide-y divide-slate-50 dark:divide-slate-800">
 										{staffs.filter(s => isAdmin || s.id === currentUserId).map(s => {
@@ -892,10 +898,14 @@ const Finance = () => {
 																	</span>
 																</td>
 																<td className="px-6 py-4 text-center font-bold text-slate-600 dark:text-slate-400">{formatPrice(avgPrice)}</td>
-																<td className={`px-6 py-4 text-center font-bold ${profitPerUnit > 0 ? 'text-emerald-500' : 'text-rose-400'}`}>
-																	{formatPrice(profitPerUnit)}
-																</td>
-																<td className="px-6 py-4 text-center font-black text-slate-900 dark:text-white">{formatPrice(totalProfit)}</td>
+																{isAdmin && (
+																	<>
+																		<td className={`px-6 py-4 text-center font-bold ${profitPerUnit > 0 ? 'text-emerald-500' : 'text-rose-400'}`}>
+																			{formatPrice(profitPerUnit)}
+																		</td>
+																		<td className="px-6 py-4 text-center font-black text-slate-900 dark:text-white">{formatPrice(totalProfit)}</td>
+																	</>
+																)}
 																<td className="px-6 py-4 text-center">
 																	<span className="px-3 py-1 bg-amber-50 dark:bg-amber-900/20 text-amber-600 rounded-full text-[10px] font-black border border-amber-100/50 dark:border-amber-900/20">
 																		{discountRate}%

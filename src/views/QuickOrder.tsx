@@ -380,7 +380,7 @@ const QuickOrder = () => {
 				);
 				const existingLogsSnap = await getDocs(existingLogsQ);
 
-				// Revert previous stock changes
+				// Revert previous stock changes (from all previous logs)
 				existingLogsSnap.docs.forEach(logDoc => {
 					const logData = logDoc.data();
 					if (logData.productId && logData.qty) {
@@ -392,39 +392,41 @@ const QuickOrder = () => {
 					batch.delete(logDoc.ref);
 				});
 
-				// Apply new stock changes
-				validItems.forEach(item => {
-					if (item.productId) {
-						const sourceProduct = products.find(p => p.id === item.productId);
-						let stockProductId = item.productId;
+				// Apply NEW stock changes ONLY IF status is 'Đơn chốt' or 'Đang giao'
+				if (orderStatus === 'Đơn chốt' || orderStatus === 'Đang giao') {
+					validItems.forEach(item => {
+						if (item.productId) {
+							const sourceProduct = products.find(p => p.id === item.productId);
+							let stockProductId = item.productId;
 
-						if (sourceProduct?.linkedProductId) {
-							stockProductId = sourceProduct.linkedProductId;
-						} else if (sourceProduct?.sku) {
-							const master = products.find(p => p.sku === sourceProduct.sku && !p.linkedProductId);
-							if (master) stockProductId = master.id;
+							if (sourceProduct?.linkedProductId) {
+								stockProductId = sourceProduct.linkedProductId;
+							} else if (sourceProduct?.sku) {
+								const master = products.find(p => p.sku === sourceProduct.sku && !p.linkedProductId);
+								if (master) stockProductId = master.id;
+							}
+
+							const prodRef = doc(db, 'products', stockProductId);
+							batch.update(prodRef, {
+								stock: increment(-item.qty)
+							});
+
+							const invLogRef = doc(collection(db, 'inventory_logs'));
+							batch.set(invLogRef, {
+								productId: stockProductId,
+								orderId: id,
+								customerName: orderData.customerName,
+								productName: item.name,
+								type: 'out',
+								qty: item.qty,
+								note: `Cập nhật đơn hàng cho ${orderData.customerName}`,
+								ownerId: owner.ownerId,
+								user: auth.currentUser?.displayName || auth.currentUser?.email,
+								createdAt: serverTimestamp()
+							});
 						}
-
-						const prodRef = doc(db, 'products', stockProductId);
-						batch.update(prodRef, {
-							stock: increment(-item.qty)
-						});
-
-						const invLogRef = doc(collection(db, 'inventory_logs'));
-						batch.set(invLogRef, {
-							productId: stockProductId,
-							orderId: id,
-							customerName: orderData.customerName,
-							productName: item.name,
-							type: 'out',
-							qty: item.qty,
-							note: `Cập nhật đơn hàng cho ${orderData.customerName}`,
-							ownerId: owner.ownerId,
-							user: auth.currentUser?.displayName || auth.currentUser?.email,
-							createdAt: serverTimestamp()
-						});
-					}
-				});
+					});
+				}
 
 				// 3. Log Audit
 				const auditRef = doc(collection(db, 'audit_logs'));
@@ -461,43 +463,45 @@ const QuickOrder = () => {
 					createdAt: serverTimestamp()
 				});
 
-				// 3. Deduct Stock & Create Inventory Logs
-				validItems.forEach(item => {
-					// Only decrement for saved products (have productId from DB)
-					if (item.productId) {
-						// Check if this product is linked to another for inventory
-						const sourceProduct = products.find(p => p.id === item.productId);
-						let stockProductId = item.productId;
+				// 3. Deduct Stock & Create Inventory Logs ONLY IF status is 'Đơn chốt' or 'Đang giao'
+				if (orderStatus === 'Đơn chốt' || orderStatus === 'Đang giao') {
+					validItems.forEach(item => {
+						// Only decrement for saved products (have productId from DB)
+						if (item.productId) {
+							// Check if this product is linked to another for inventory
+							const sourceProduct = products.find(p => p.id === item.productId);
+							let stockProductId = item.productId;
 
-						// Determine stock source: manual link > SKU master > self
-						if (sourceProduct?.linkedProductId) {
-							stockProductId = sourceProduct.linkedProductId;
-						} else if (sourceProduct?.sku) {
-							const master = products.find(p => p.sku === sourceProduct.sku && !p.linkedProductId);
-							if (master) stockProductId = master.id;
+							// Determine stock source: manual link > SKU master > self
+							if (sourceProduct?.linkedProductId) {
+								stockProductId = sourceProduct.linkedProductId;
+							} else if (sourceProduct?.sku) {
+								const master = products.find(p => p.sku === sourceProduct.sku && !p.linkedProductId);
+								if (master) stockProductId = master.id;
+							}
+
+							const prodRef = doc(db, 'products', stockProductId);
+							batch.update(prodRef, {
+								stock: increment(-item.qty)
+							});
+
+							// Add Inventory Log
+							const invLogRef = doc(collection(db, 'inventory_logs'));
+							batch.set(invLogRef, {
+								productId: stockProductId,
+								orderId: newOrderRef.id,
+								customerName: orderData.customerName,
+								productName: item.name,
+								type: 'out',
+								qty: item.qty,
+								note: `Xuất đơn hàng cho ${orderData.customerName}`,
+								ownerId: owner.ownerId,
+								user: auth.currentUser?.displayName || auth.currentUser?.email,
+								createdAt: serverTimestamp()
+							});
 						}
-
-						const prodRef = doc(db, 'products', stockProductId);
-						batch.update(prodRef, {
-							stock: increment(-item.qty)
-						});
-
-						// Add Inventory Log
-						const invLogRef = doc(collection(db, 'inventory_logs'));
-						batch.set(invLogRef, {
-							productId: stockProductId,
-							orderId: newOrderRef.id,
-							customerName: orderData.customerName,
-							productName: item.name,
-							type: 'out',
-							qty: item.qty,
-							note: `Xuất đơn hàng cho ${orderData.customerName}`,
-							ownerId: owner.ownerId,
-							user: auth.currentUser?.displayName || auth.currentUser?.email,
-							createdAt: serverTimestamp()
-						});
-					}
-				});
+					});
+				}
 
 				// 4. Update Coupon Usage if applicable
 				if (couponCode) {

@@ -249,7 +249,11 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     *   **Price List Redesign**: Chuyển đổi toàn bộ giao diện báo giá sang tông màu Vàng Cam (Amber/Orange) cao cấp, tăng cường độ tương phản văn bản và bổ sung hệ thống đường kẻ ô (Grid lines) giúp tra cứu dữ liệu cực kỳ dễ dàng.
     *   **Customer CRM Enhancements**: Cho phép Admin chỉnh sửa email nhân viên phụ trách (`createdByEmail`) để bàn giao khách hàng. Tích hợp nút sao chép nhanh ghi chú chi tiết và hiển thị thông tin nhân viên phụ trách trong bảng chi tiết khách hàng.
     *   **Check-in Lookup Optimization**: Đồng bộ hóa trình tìm kiếm khách hàng tại module Check-in, ưu tiên hiển thị Tên cơ sở kinh doanh và sửa lỗi placeholder tìm kiếm.
-    *   **Subscription Logic Fix**: Khắc phục lỗi hiển thị sai số ngày còn lại của Gói Dịch Vụ bằng cách tự động hóa việc tính toán ngày hết hạn (`subscriptionExpiresAt`) khi thay đổi gói trong Nexus Control. Chuyển sang cơ chế `setDoc` (merge) để đảm bảo cập nhật ổn định ngay cả khi tài liệu cấu hình chưa tồn tại.
+    	*   **Subscription Logic Fix**: Khắc phục lỗi hiển thị sai số ngày còn lại của Gói Dịch Vụ bằng cách tự động hóa việc tính toán ngày hết hạn (`subscriptionExpiresAt`) khi thay đổi gói trong Nexus Control. Chuyển sang cơ chế `setDoc` (merge) để đảm bảo cập nhật ổn định ngay cả khi tài liệu cấu hình chưa tồn tại.
+- [x] **Logic Xuất kho Thông minh (Inventory Status Logic - Mar 1)**:
+    *   **Loại bỏ Đơn nháp**: Cập nhật logic trừ kho chỉ áp dụng cho các đơn hàng có trạng thái **"Đơn chốt"** hoặc **"Đang giao"**. Các đơn nháp sẽ không còn làm sai lệch tồn kho.
+    *   **Tự động Hoàn kho (Auto-Revert)**: Cơ chế tự động cộng trả lại số lượng vào kho khi chuyển đơn hàng từ trạng thái chốt về "Đơn nháp" hoặc khi xóa đơn hàng, đảm bảo tính nhất quán dữ liệu.
+    *   **Chính xác 100%**: Đảm bảo số liệu tồn kho, báo cáo sản phẩm và hệ thống cảnh báo hết kho luôn phản ánh đúng thực tế hàng hóa đã xuất đi.
 
 ### 📝 Cần làm tiếp (To-do)
 

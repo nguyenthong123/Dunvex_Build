@@ -13,8 +13,10 @@ export const CustomerSchema = z.object({
 		.optional()
 		.transform(val => val?.trim() || ''),
 	phone: z.string()
-		.regex(/^[0-9+ \-.()]{8,15}$/, "Số điện thoại không hợp lệ")
-		.trim(),
+		.optional()
+		.or(z.literal(''))
+		.refine(val => !val || /^[0-9+ \-.()]{8,15}$/.test(val), "Số điện thoại không hợp lệ")
+		.transform(val => val?.trim() || ''),
 	email: z.string()
 		.email("Email không đúng định dạng")
 		.optional()

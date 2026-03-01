@@ -841,9 +841,9 @@ const CustomerList = () => {
 
 									<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 										<div>
-											<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Số điện thoại *</label>
+											<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Số điện thoại</label>
 											<input
-												type="tel" required
+												type="tel"
 												className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
 												value={formData.phone}
 												onChange={(e) => setFormData({ ...formData, phone: e.target.value })}

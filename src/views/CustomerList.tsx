@@ -49,8 +49,8 @@ const CustomerList = () => {
 		status: 'Hoạt động',
 		route: '',
 		createdByEmail: '',
-		lat: undefined as number | undefined,
-		lng: undefined as number | undefined,
+		lat: null as number | null,
+		lng: null as number | null,
 		licenseUrls: [] as string[],
 		additionalImages: [] as string[]
 	});
@@ -358,8 +358,8 @@ const CustomerList = () => {
 			status: 'Hoạt động',
 			route: '',
 			createdByEmail: '',
-			lat: undefined,
-			lng: undefined,
+			lat: null,
+			lng: null,
 			licenseUrls: [],
 			additionalImages: []
 		});

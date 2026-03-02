@@ -265,8 +265,13 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     *   **Permission Logic Hardening**: Cập nhật `hasPermission` mặc định trả về **false** cho nhân viên nếu không có quyền cụ thể, đảm bảo tính bảo mật "Whitelist" thay vì "Blacklist".
 - [x] **Sửa lỗi Thêm Khách hàng (Customer List Bug Fix - Mar 1)**:
     *   **Zod Schema Update**: Sửa lỗi validation trường `lat` (vĩ độ) và `lng` (kinh độ), cho phép giá trị `null` hoặc `undefined` khi chưa lấy được tọa độ.
+    *   **Trường tùy chọn (Optional Fields)**: Bỏ bắt buộc nhập **Địa chỉ** và **Số điện thoại** trong form khách hàng, giúp lên đơn nhanh cho khách lẻ.
     *   **Enhanced Debugging**: Thêm hệ thống log chi tiết và cảnh báo Toast giúp xác định chính xác nguyên nhân nếu việc thêm khách hàng thất bại.
     *   **Initial State Fix**: Chuẩn hóa dữ liệu khởi tạo form giúp đồng bộ hoàn hảo với schema validation.
+- [x] **Tự động hóa Mã giảm giá (Coupon Automation - Mar 2)**:
+    *   **Auto-Deletion**: Hệ thống tự động quét và xóa các mã giảm giá đã hết hạn ngay khi Admin truy cập trang Ưu đãi.
+    *   **Thông báo Sắp hết hạn (Expiry Alerts)**: Tự động gửi cảnh báo Toast cho các mã còn dưới 3 ngày sử dụng, giúp Admin chủ động gia hạn hoặc thay thế chương trình.
+    *   **Cơ chế Throttling**: Thông báo mã hết hạn được giới hạn hiển thị 12 giờ một lần để tránh spam người dùng.
 
 ### 📝 Cần làm tiếp (To-do)
 

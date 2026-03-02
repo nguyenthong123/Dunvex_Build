@@ -102,6 +102,55 @@ const Coupons = () => {
 		return () => unsubscribe();
 	}, [owner.loading, owner.ownerId]);
 
+	// Automatic Expiration Management
+	useEffect(() => {
+		if (owner.loading || !owner.ownerId || coupons.length === 0 || !isAdmin) return;
+
+		const today = new Date();
+		today.setHours(0, 0, 0, 0);
+
+		const checkExpirations = async () => {
+			const expiredCoupons = coupons.filter(c => !c.isDemo && c.expiry && new Date(c.expiry) < today);
+			const nearlyExpiredCoupons = coupons.filter(c => {
+				if (c.isDemo || !c.expiry) return false;
+				const expDate = new Date(c.expiry);
+				const diffTime = expDate.getTime() - today.getTime();
+				const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+				return diffDays >= 0 && diffDays <= 3;
+			});
+
+			// Auto-delete expired
+			if (expiredCoupons.length > 0) {
+				let deletedCount = 0;
+				for (const coupon of expiredCoupons) {
+					try {
+						await deleteDoc(doc(db, 'coupons', coupon.id));
+						deletedCount++;
+					} catch (err) {
+						console.error("Error auto-deleting coupon:", err);
+					}
+				}
+				if (deletedCount > 0) {
+					showToast(`Đã tự động xoá ${deletedCount} mã giảm giá hết hạn`, "info");
+				}
+			}
+
+			// Notify nearly expired (throttled to once every 12h)
+			const notifiedKey = `last_notified_expiring_${owner.ownerId}`;
+			const lastNotified = localStorage.getItem(notifiedKey);
+			const now = Date.now();
+
+			if (nearlyExpiredCoupons.length > 0 && (!lastNotified || now - parseInt(lastNotified) > 12 * 60 * 60 * 1000)) {
+				nearlyExpiredCoupons.forEach(c => {
+					showToast(`Mã "${c.code}" sắp hết hạn (còn dưới 3 ngày) và sẽ bị xóa theo quy định`, "warning");
+				});
+				localStorage.setItem(notifiedKey, now.toString());
+			}
+		};
+
+		checkExpirations();
+	}, [coupons, isAdmin, owner.ownerId]);
+
 	const handleCopy = (code: string) => {
 		navigator.clipboard.writeText(code);
 		setCopiedCode(code);

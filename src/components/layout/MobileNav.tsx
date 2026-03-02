@@ -17,7 +17,8 @@ const MobileNav = () => {
 			}}
 		>
 			{navItems.map((item) => {
-				const isActive = currentPath === item.path;
+				const fullCurrentPath = window.location.pathname + window.location.search;
+				const isActive = fullCurrentPath === item.path || (item.path === '/debts' && window.location.pathname === '/debts' && (!window.location.search || window.location.search === '?tab=customers'));
 
 				if (item.isCenter) {
 					return (

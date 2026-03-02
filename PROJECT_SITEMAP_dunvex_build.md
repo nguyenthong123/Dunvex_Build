@@ -280,6 +280,9 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     *   **Tab Lịch sử mới**: Thêm phân hệ "Lịch sử thu nợ" ngay trong trang Quản lý công nợ, cho phép tra cứu toàn bộ các phiếu thu đã ghi nhận.
     *   **Chỉnh sửa & Xóa**: Chủ doanh nghiệp có thể sửa thông tin hoặc xóa các phiếu thu bị lên sai, hệ thống sẽ tự động tính toán lại dư nợ khách hàng ngay lập tức.
     *   **Giao diện Đa nền tảng**: Tối ưu hiển thị dạng thẻ (Cards) trên điện thoại và dạng bảng chuyên nghiệp trên máy tính.
+- [x] **Cập nhật Nav-Bar Mobile (Mobile UI Enhancement - Mar 2)**:
+    *   **Phím tắt Lịch sử thu nợ**: Tại trang Quản lý công nợ trên điện thoại, nút "Sản phẩm" đã được thay bằng phím tắt "Lịch sử thu nợ" để giúp người dùng truy xuất nhanh các phiếu thu.
+    *   **Đồng bộ Tab**: Hỗ trợ chuyển đổi Tab linh hoạt thông qua đường dẫn URL, giúp phím tắt Mobile hoạt động chính xác.
 - [x] **Tối ưu Giao diện Đơn hàng Mobile (Order List UI - Mar 2)**:
     *   **Ưu tiên Tên cơ sở**: Thay đổi hiển thị trong danh sách đơn hàng trên điện thoại, đưa **Tên cơ sở kinh doanh** lên làm tiêu đề chính (chữ đậm) thay vì mã đơn hàng.
     *   **Thứ tự Thông tin**: Mã đơn hàng được chuyển xuống dòng phụ giúp chủ doanh nghiệp và nhân viên nhận diện khách hàng nhanh chóng hơn khi lướt danh sách.

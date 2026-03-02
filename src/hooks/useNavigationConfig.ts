@@ -192,8 +192,8 @@ export const useNavigationConfig = () => {
 				allItems[0], // Trang chủ
 				allItems[1], // Đơn hàng
 				allItems[2], // Center (Thu nợ)
-				allItems[6], // Khách hàng (Thay cho Công nợ)
-				getSlot5(),  // Cài đặt
+				{ icon: 'history', label: 'Lịch sử thu nợ', path: '/debts?tab=history' },
+				getSlot5(),  // Slot động (Báo giá)
 			];
 		} else if (path === '/') {
 			items = [

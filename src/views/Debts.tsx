@@ -79,10 +79,14 @@ const Debts: React.FC = () => {
 		const params = new URLSearchParams(search);
 		if (params.get('payment') === 'true') {
 			setShowPaymentForm(true);
-			// Optional: clean up URL
-			navigate('/debts', { replace: true });
 		}
-	}, [search, navigate]);
+		const tabParam = params.get('tab');
+		if (tabParam === 'history') {
+			setActiveTab('history');
+		} else if (tabParam === 'customers') {
+			setActiveTab('customers');
+		}
+	}, [search]);
 
 	const markAllAsRead = async () => {
 		if (!auth.currentUser) return;

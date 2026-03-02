@@ -272,6 +272,9 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     *   **Auto-Deletion**: Hệ thống tự động quét và xóa các mã giảm giá đã hết hạn ngay khi Admin truy cập trang Ưu đãi.
     *   **Thông báo Sắp hết hạn (Expiry Alerts)**: Tự động gửi cảnh báo Toast cho các mã còn dưới 3 ngày sử dụng, giúp Admin chủ động gia hạn hoặc thay thế chương trình.
     *   **Cơ chế Throttling**: Thông báo mã hết hạn được giới hạn hiển thị 12 giờ một lần để tránh spam người dùng.
+- [x] **Tối ưu Giao diện Đơn hàng Mobile (Order List UI - Mar 2)**:
+    *   **Ưu tiên Tên cơ sở**: Thay đổi hiển thị trong danh sách đơn hàng trên điện thoại, đưa **Tên cơ sở kinh doanh** lên làm tiêu đề chính (chữ đậm) thay vì mã đơn hàng.
+    *   **Thứ tự Thông tin**: Mã đơn hàng được chuyển xuống dòng phụ giúp chủ doanh nghiệp và nhân viên nhận diện khách hàng nhanh chóng hơn khi lướt danh sách.
 
 ### 📝 Cần làm tiếp (To-do)
 

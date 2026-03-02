@@ -379,9 +379,9 @@ const OrderList = () => {
 									</div>
 									<div>
 										<div className="flex items-center gap-2">
-											<div className="font-bold text-[#1A237E] dark:text-indigo-400">#{order.id.slice(0, 8).toUpperCase()}</div>
+											<div className="font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight">{order.customerBusinessName || order.customerName || 'Khách vãng lai'}</div>
 										</div>
-										<div className="text-xs text-slate-500 dark:text-slate-400 font-medium">{order.customerName || 'Khách vãng lai'}</div>
+										<div className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">#{order.id.slice(0, 8).toUpperCase()}</div>
 									</div>
 								</div>
 								<div className="flex flex-col items-end gap-2">

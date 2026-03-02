@@ -129,11 +129,9 @@ const Debts: React.FC = () => {
 
 	const openStatement = (customer: any) => {
 		setSelectedCustomer(customer);
-		// Default to current month
-		const now = new Date();
-		const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-		setStatementFromDate(firstDay.toISOString().split('T')[0]);
-		setStatementToDate(now.toISOString().split('T')[0]);
+		// Follow the main screen's filter if it exists
+		setStatementFromDate(fromDate || '');
+		setStatementToDate(toDate || '');
 		setShowStatement(true);
 	};
 
@@ -343,9 +341,10 @@ const Debts: React.FC = () => {
 			return p.customerId === customer.id;
 		});
 
-		// Always calculate currentDebt from 'Đơn chốt' only as per user rule
-		const confirmedOrders = customerOrders.filter(o => o.status === 'Đơn chốt');
-		const totalWaited = confirmedOrders.reduce((sum: any, o: any) => sum + (o.totalAmount || 0), 0);
+		// Inclusion of 'Đơn chốt' and 'Đang giao' as current debt
+		const confirmedStatuses = ['Đơn chốt', 'Đang giao'];
+		const debtOrders = customerOrders.filter(o => confirmedStatuses.includes(o.status));
+		const totalWaited = debtOrders.reduce((sum: any, o: any) => sum + (o.totalAmount || 0), 0);
 		const totalPaid = customerPayments.reduce((sum: any, p: any) => sum + (p.amount || 0), 0);
 		const currentDebt = totalWaited - totalPaid;
 
@@ -1204,11 +1203,15 @@ const Debts: React.FC = () => {
 
 											// Normalized date extraction for grouping
 											const getNormDate = (tx: any) => {
-												if (tx.orderDate) return tx.orderDate; // "2026-02-10"
-												if (tx.date) return tx.date; // "2026-02-10"
+												if (tx.orderDate && typeof tx.orderDate === 'string') return tx.orderDate; // "2026-02-10"
+												if (tx.date && typeof tx.date === 'string') return tx.date; // "2026-02-10"
 
 												let d;
-												if (tx.createdAt?.seconds) {
+												if (tx.orderDate?.seconds) {
+													d = new Date(tx.orderDate.seconds * 1000);
+												} else if (tx.date?.seconds) {
+													d = new Date(tx.date.seconds * 1000);
+												} else if (tx.createdAt?.seconds) {
 													d = new Date(tx.createdAt.seconds * 1000);
 												} else if (tx.createdAt) {
 													d = new Date(tx.createdAt);
@@ -1230,7 +1233,7 @@ const Debts: React.FC = () => {
 														return (!o.customerId || !registeredMap.has(o.customerId)) && (o.customerName === selectedCustomer.name || (!o.customerName && selectedCustomer.name === 'Khách vãng lai'));
 													}
 													return o.customerId === selectedCustomer.id;
-												}).filter(o => o.status === 'Đơn chốt').map(o => ({ ...o, txType: 'order' })),
+												}).filter(o => ['Đơn chốt', 'Đang giao'].includes(o.status)).map(o => ({ ...o, txType: 'order' })),
 												...payments.filter(p => {
 													if (selectedCustomer.isGuest) {
 														return (!p.customerId || !registeredMap.has(p.customerId)) && (p.customerName === selectedCustomer.name || (!p.customerName && selectedCustomer.name === 'Khách vãng lai'));

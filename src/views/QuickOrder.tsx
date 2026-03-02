@@ -175,14 +175,43 @@ const QuickOrder = () => {
 		// 1. Prioritize explicit manual link
 		if (prod.linkedProductId) {
 			const linked = products.find(p => p.id === prod.linkedProductId);
-			if (linked) return linked.stock || 0;
+			return linked?.stock || 0;
 		}
-		// 2. Fallback to SKU-based link (Find the first product with same SKU that has no linkedProductId)
-		if (prod.sku) {
-			const master = products.find(p => p.sku === prod.sku && !p.linkedProductId);
-			if (master) return master.stock || 0;
+		// 2. Fallback to SKU-based link (Sum all products with same SKU that have no linkedProductId)
+		if (prod.sku && String(prod.sku).trim()) {
+			const sku = String(prod.sku).trim().toLowerCase();
+			const skuMasterProducts = products.filter(p =>
+				p.sku &&
+				String(p.sku).trim().toLowerCase() === sku &&
+				!p.linkedProductId
+			);
+			const totalStock = skuMasterProducts.reduce((sum, p) => sum + (Number(p.stock) || 0), 0);
+			return totalStock;
 		}
 		return prod.stock || 0;
+	};
+
+	// Helper to find the best source of stock for a given product when deducting
+	const getStockSourceId = (sourceProductId: string) => {
+		const sourceProduct = products.find(p => p.id === sourceProductId);
+		if (sourceProduct?.linkedProductId) {
+			return sourceProduct.linkedProductId;
+		}
+		if (sourceProduct?.sku && String(sourceProduct.sku).trim()) {
+			const sku = String(sourceProduct.sku).trim().toLowerCase();
+			// Find all potential masters for this SKU (exclude those explicitly linked elsewhere)
+			const masters = products.filter(p =>
+				p.sku &&
+				String(p.sku).trim().toLowerCase() === sku &&
+				!p.linkedProductId
+			);
+			// Pick the one with the CURRENT MOST stock as the official source to deduct from
+			if (masters.length > 0) {
+				const bestMaster = [...masters].sort((a, b) => (Number(b.stock) || 0) - (Number(a.stock) || 0))[0];
+				return bestMaster.id;
+			}
+		}
+		return sourceProductId;
 	};
 
 	const updateLineItem = (index: number, field: string, value: any) => {
@@ -396,15 +425,7 @@ const QuickOrder = () => {
 				if (orderStatus === 'Đơn chốt' || orderStatus === 'Đang giao') {
 					validItems.forEach(item => {
 						if (item.productId) {
-							const sourceProduct = products.find(p => p.id === item.productId);
-							let stockProductId = item.productId;
-
-							if (sourceProduct?.linkedProductId) {
-								stockProductId = sourceProduct.linkedProductId;
-							} else if (sourceProduct?.sku) {
-								const master = products.find(p => p.sku === sourceProduct.sku && !p.linkedProductId);
-								if (master) stockProductId = master.id;
-							}
+							const stockProductId = getStockSourceId(item.productId);
 
 							const prodRef = doc(db, 'products', stockProductId);
 							batch.update(prodRef, {
@@ -468,17 +489,8 @@ const QuickOrder = () => {
 					validItems.forEach(item => {
 						// Only decrement for saved products (have productId from DB)
 						if (item.productId) {
-							// Check if this product is linked to another for inventory
-							const sourceProduct = products.find(p => p.id === item.productId);
-							let stockProductId = item.productId;
-
-							// Determine stock source: manual link > SKU master > self
-							if (sourceProduct?.linkedProductId) {
-								stockProductId = sourceProduct.linkedProductId;
-							} else if (sourceProduct?.sku) {
-								const master = products.find(p => p.sku === sourceProduct.sku && !p.linkedProductId);
-								if (master) stockProductId = master.id;
-							}
+							// Determine stock source using standardized helper
+							const stockProductId = getStockSourceId(item.productId);
 
 							const prodRef = doc(db, 'products', stockProductId);
 							batch.update(prodRef, {

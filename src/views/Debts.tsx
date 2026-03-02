@@ -36,6 +36,7 @@ const Debts: React.FC = () => {
 	const { isNavVisible } = useScroll();
 	const { showToast } = useToast();
 
+	const [activeTab, setActiveTab] = useState<'customers' | 'history'>('customers');
 	const [currentTime, setCurrentTime] = useState(new Date());
 	const [orders, setOrders] = useState<any[]>([]);
 	const [payments, setPayments] = useState<any[]>([]);
@@ -665,189 +666,357 @@ const Debts: React.FC = () => {
 						</div>
 					</div>
 
-					{/* Filters */}
-					<div className="flex flex-col gap-4">
-						<div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-							<div className="flex gap-2 overflow-x-auto no-scrollbar w-full md:w-auto">
-								{['Tất cả', 'Đơn chốt', 'Đơn nháp'].map((status) => (
-									<button
-										key={status}
-										onClick={() => setStatusFilter(status)}
-										className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${statusFilter === status
-											? 'bg-[#1A237E] dark:bg-indigo-600 text-white shadow-lg shadow-blue-900/20 dark:shadow-indigo-900/20'
-											: 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'
-											}`}
-									>
-										{status}
-									</button>
-								))}
-							</div>
-							<div className="flex items-center gap-2 w-full md:w-auto">
-								<button
-									onClick={() => setShowFilterOptions(!showFilterOptions)}
-									className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${showFilterOptions ? 'bg-[#1A237E] dark:bg-indigo-600 text-white' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 shadow-sm'}`}
-								>
-									<Filter size={16} /> Lọc thời gian
-								</button>
-								<button className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-[#FF6D00] rounded-xl text-[10px] font-black uppercase tracking-widest text-white shadow-lg shadow-orange-500/20">
-									<Download size={16} /> Xuất File
-								</button>
-							</div>
-						</div>
-
-						{showFilterOptions && (
-							<div className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-top-4 duration-300 transition-colors duration-300">
-								<div>
-									<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">Từ ngày</label>
-									<input
-										type="date"
-										className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#1A237E]/20 dark:focus:ring-indigo-500/20"
-										value={fromDate}
-										onChange={(e) => setFromDate(e.target.value)}
-									/>
-								</div>
-								<div>
-									<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">Đến ngày</label>
-									<input
-										type="date"
-										className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#1A237E]/20 dark:focus:ring-indigo-500/20"
-										value={toDate}
-										onChange={(e) => setToDate(e.target.value)}
-									/>
-								</div>
-							</div>
-						)}
+					{/* View Toggle Tabs */}
+					<div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-800/50 rounded-2xl w-fit mb-2">
+						<button
+							onClick={() => setActiveTab('customers')}
+							className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'customers'
+								? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm'
+								: 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+								}`}
+						>
+							Bảng công nợ
+						</button>
+						<button
+							onClick={() => setActiveTab('history')}
+							className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'history'
+								? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm'
+								: 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+								}`}
+						>
+							Lịch sử thu nợ
+						</button>
 					</div>
 
-					{/* Table */}
-					<div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-xl shadow-blue-900/5 dark:shadow-indigo-900/5 border border-slate-100 dark:border-slate-800 overflow-hidden transition-colors duration-300">
-						<div className="overflow-x-auto">
-							<table className="w-full text-left">
-								<thead>
-									<tr className="bg-slate-100/50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
-										<th className="px-8 py-5 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest">Đối tác / Mã KH</th>
-										<th className="px-8 py-5 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest text-right">Tổng Mua</th>
-										<th className="px-8 py-5 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest text-right">Đã Trả</th>
-										<th className="px-8 py-5 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest text-right">Dư nợ hiện tại</th>
-										<th className="px-6 py-5 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest text-right">Hành động</th>
-									</tr>
-								</thead>
-								<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-									{loading ? (
-										[1, 2, 3, 4, 5].map(i => (
-											<tr key={i} className="animate-pulse">
-												<td className="px-8 py-5 border-b border-slate-50 dark:border-slate-800">
-													<div className="flex items-center gap-4">
-														<div className="size-12 rounded-2xl skeleton" />
-														<div className="space-y-2">
-															<div className="w-32 h-4 skeleton" />
-															<div className="w-20 h-3 skeleton opacity-50" />
+					{activeTab === 'customers' ? (
+						<>
+							{/* Filters */}
+							<div className="flex flex-col gap-4">
+								<div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+									<div className="flex gap-2 overflow-x-auto no-scrollbar w-full md:w-auto">
+										{['Tất cả', 'Đơn chốt', 'Đơn nháp'].map((status) => (
+											<button
+												key={status}
+												onClick={() => setStatusFilter(status)}
+												className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${statusFilter === status
+													? 'bg-[#1A237E] dark:bg-indigo-600 text-white shadow-lg shadow-blue-900/20 dark:shadow-indigo-900/20'
+													: 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'
+													}`}
+											>
+												{status}
+											</button>
+										))}
+									</div>
+									<div className="flex items-center gap-2 w-full md:w-auto">
+										<button
+											onClick={() => setShowFilterOptions(!showFilterOptions)}
+											className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${showFilterOptions ? 'bg-[#1A237E] dark:bg-indigo-600 text-white' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 shadow-sm'}`}
+										>
+											<Filter size={16} /> Lọc thời gian
+										</button>
+										<button className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-[#FF6D00] rounded-xl text-[10px] font-black uppercase tracking-widest text-white shadow-lg shadow-orange-500/20">
+											<Download size={16} /> Xuất File
+										</button>
+									</div>
+								</div>
+
+								{showFilterOptions && (
+									<div className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-top-4 duration-300 transition-colors duration-300">
+										<div>
+											<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">Từ ngày</label>
+											<input
+												type="date"
+												className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#1A237E]/20 dark:focus:ring-indigo-500/20"
+												value={fromDate}
+												onChange={(e) => setFromDate(e.target.value)}
+											/>
+										</div>
+										<div>
+											<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">Đến ngày</label>
+											<input
+												type="date"
+												className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#1A237E]/20 dark:focus:ring-indigo-500/20"
+												value={toDate}
+												onChange={(e) => setToDate(e.target.value)}
+											/>
+										</div>
+									</div>
+								)}
+							</div>
+
+							{/* Table */}
+							<div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-xl shadow-blue-900/5 dark:shadow-indigo-900/5 border border-slate-100 dark:border-slate-800 overflow-hidden transition-colors duration-300">
+								<div className="overflow-x-auto">
+									<table className="w-full text-left">
+										<thead>
+											<tr className="bg-slate-100/50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
+												<th className="px-8 py-5 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest">Đối tác / Mã KH</th>
+												<th className="px-8 py-5 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest text-right">Tổng Mua</th>
+												<th className="px-8 py-5 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest text-right">Đã Trả</th>
+												<th className="px-8 py-5 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest text-right">Dư nợ hiện tại</th>
+												<th className="px-6 py-5 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest text-right">Hành động</th>
+											</tr>
+										</thead>
+										<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+											{loading ? (
+												[1, 2, 3, 4, 5].map(i => (
+													<tr key={i} className="animate-pulse">
+														<td className="px-8 py-5 border-b border-slate-50 dark:border-slate-800">
+															<div className="flex items-center gap-4">
+																<div className="size-12 rounded-2xl skeleton" />
+																<div className="space-y-2">
+																	<div className="w-32 h-4 skeleton" />
+																	<div className="w-20 h-3 skeleton opacity-50" />
+																</div>
+															</div>
+														</td>
+														<td className="px-8 py-5 border-b border-slate-50 dark:border-slate-800"><div className="w-20 h-4 skeleton ml-auto" /></td>
+														<td className="px-8 py-5 border-b border-slate-50 dark:border-slate-800"><div className="w-20 h-4 skeleton ml-auto" /></td>
+														<td className="px-8 py-5 border-b border-slate-50 dark:border-slate-800"><div className="w-24 h-5 skeleton ml-auto" /></td>
+														<td className="px-6 py-5 border-b border-slate-50 dark:border-slate-800">
+															<div className="flex justify-end gap-2">
+																<div className="size-10 rounded-xl skeleton" />
+																<div className="size-10 rounded-xl skeleton" />
+															</div>
+														</td>
+													</tr>
+												))
+											) : paginatedData.length === 0 ? (
+												<tr><td colSpan={5} className="py-20 text-center text-slate-400 dark:text-slate-500 uppercase font-black text-xs tracking-[4px]">Không tìm thấy đối tác nào</td></tr>
+											) : paginatedData.map((row) => (
+												<tr key={row.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer" onClick={() => openStatement(row)}>
+													<td className="px-8 py-5">
+														<div className="flex items-center gap-4">
+															<div className={`size-12 rounded-2xl bg-[#1A237E]/10 dark:bg-indigo-500/10 flex items-center justify-center text-[#1A237E] dark:text-indigo-400 font-black text-sm shrink-0 shadow-sm border border-slate-200 dark:border-slate-800`}>
+																{(row.businessName || row.name || 'KH').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+															</div>
+															<div>
+																<p className="text-sm font-black text-slate-900 dark:text-indigo-400 uppercase tracking-tight leading-tight">{row.businessName || row.name}</p>
+																<p className="text-[10px] text-slate-500 dark:text-slate-500 font-black mt-1 tracking-wider uppercase">{row.phone || (row.businessName ? row.name : row.id.slice(-6))}</p>
+															</div>
 														</div>
+													</td>
+													<td className="px-8 py-5 text-right">
+														<span className="text-xs font-black text-slate-600 dark:text-slate-400">{formatPrice(row.totalOrdersAmount)}</span>
+													</td>
+													<td className="px-8 py-5 text-right">
+														<span className="text-xs font-black text-green-700 dark:text-green-400">{formatPrice(row.totalPaymentsAmount)}</span>
+													</td>
+													<td className="px-8 py-5 text-right">
+														<span className={`text-sm font-black tracking-tight ${row.currentDebt > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-[#10b981] dark:text-emerald-400'}`}>
+															{formatPrice(row.currentDebt)}
+														</span>
+													</td>
+													<td className="px-6 py-5 text-right">
+														<div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+															<button
+																onClick={() => openStatement(row)}
+																className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-2.5 rounded-xl text-slate-400 dark:text-slate-500 hover:text-[#1A237E] dark:hover:text-indigo-400 hover:border-[#1A237E] dark:hover:border-indigo-400 transition-all shadow-sm"
+																title="Xem chi tiết"
+															>
+																<FileText size={20} />
+															</button>
+															<button
+																onClick={() => {
+																	setPaymentData({ ...paymentData, customerId: row.id, customerName: row.name });
+																	setShowPaymentForm(true);
+																}}
+																className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-2.5 rounded-xl text-slate-400 dark:text-slate-500 hover:text-[#FF6D00] hover:border-[#FF6D00] transition-all shadow-sm"
+																title="Thu nợ"
+															>
+																<PlusCircle size={20} />
+															</button>
+														</div>
+													</td>
+												</tr>
+											))}
+										</tbody>
+									</table>
+								</div>
+							</div>
+
+							{/* Pagination Controls - Desktop & Mobile */}
+							{!loading && totalPages > 1 && (
+								<div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 transition-colors">
+									<p className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-2">
+										Hiển thị {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, aggregatedData.length)} của {aggregatedData.length} đối tác
+									</p>
+									<div className="flex items-center gap-2">
+										<button
+											onClick={() => { setCurrentPage(prev => Math.max(prev - 1, 1)); window.scrollTo(0, 0); }}
+											disabled={currentPage === 1}
+											className="size-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
+										>
+											<span className="material-symbols-outlined">chevron_left</span>
+										</button>
+										<div className="flex items-center gap-1">
+											{getPageNumbers().map((page, idx) => (
+												<button
+													key={idx}
+													onClick={() => typeof page === 'number' && setCurrentPage(page)}
+													disabled={page === '...'}
+													className={`size-10 rounded-xl font-black text-xs transition-all ${page === currentPage
+														? 'bg-[#1A237E] text-white shadow-lg shadow-blue-500/20'
+														: page === '...'
+															? 'text-slate-400 cursor-default'
+															: 'bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700'
+														}`}
+												>
+													{page}
+												</button>
+											))}
+										</div>
+										<button
+											onClick={() => { setCurrentPage(prev => Math.min(prev + 1, totalPages)); window.scrollTo(0, 0); }}
+											disabled={currentPage === totalPages}
+											className="size-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
+										>
+											<span className="material-symbols-outlined">chevron_right</span>
+										</button>
+									</div>
+								</div>
+							)}
+						</>
+					) : (
+						<div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-xl shadow-blue-900/5 dark:shadow-indigo-900/5 border border-slate-100 dark:border-slate-800 overflow-hidden transition-colors duration-300">
+							<div className="p-6 border-b border-slate-50 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-800/30">
+								<h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">Danh sách phiếu thu gần đây</h3>
+							</div>
+							<div className="overflow-x-auto">
+								{/* Desktop Table */}
+								<table className="w-full text-left hidden md:table">
+									<thead>
+										<tr className="bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
+											<th className="px-8 py-5 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest text-left">Khách hàng</th>
+											<th className="px-8 py-5 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest text-right">Số tiền</th>
+											<th className="px-8 py-5 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest text-center">Phương thức</th>
+											<th className="px-8 py-5 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest text-right">Ngày thu</th>
+											<th className="px-6 py-5 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest text-right">Hành động</th>
+										</tr>
+									</thead>
+									<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+										{[...payments].sort((a, b) => {
+											const da = a.date ? new Date(a.date).getTime() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0);
+											const db = b.date ? new Date(b.date).getTime() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0);
+											return db - da;
+										}).map((pay) => (
+											<tr key={pay.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors group">
+												<td className="px-8 py-5">
+													<div>
+														<p className="text-sm font-black text-slate-900 dark:text-indigo-400 tracking-tight leading-tight uppercase">{pay.customerName}</p>
+														<p className="text-[10px] text-slate-500 dark:text-slate-500 font-bold mt-1 tracking-wider uppercase truncate max-w-[200px]">{pay.note || '---'}</p>
 													</div>
 												</td>
-												<td className="px-8 py-5 border-b border-slate-50 dark:border-slate-800"><div className="w-20 h-4 skeleton ml-auto" /></td>
-												<td className="px-8 py-5 border-b border-slate-50 dark:border-slate-800"><div className="w-20 h-4 skeleton ml-auto" /></td>
-												<td className="px-8 py-5 border-b border-slate-50 dark:border-slate-800"><div className="w-24 h-5 skeleton ml-auto" /></td>
-												<td className="px-6 py-5 border-b border-slate-50 dark:border-slate-800">
-													<div className="flex justify-end gap-2">
-														<div className="size-10 rounded-xl skeleton" />
-														<div className="size-10 rounded-xl skeleton" />
+												<td className="px-8 py-5 text-right">
+													<span className="text-sm font-black text-emerald-600 dark:text-emerald-400">{formatPrice(pay.amount)}</span>
+												</td>
+												<td className="px-8 py-5 text-center">
+													<span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${pay.paymentMethod === 'Tiền mặt' ? 'bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400' : 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'}`}>
+														{pay.paymentMethod}
+													</span>
+												</td>
+												<td className="px-8 py-5 text-right text-xs font-bold text-slate-500 dark:text-slate-400">
+													{formatDate(pay.date || pay.createdAt)}
+												</td>
+												<td className="px-6 py-5 text-right">
+													<div className="flex items-center justify-end gap-2">
+														<button
+															onClick={() => {
+																setEditingPaymentId(pay.id);
+																setPaymentData({
+																	customerId: pay.customerId,
+																	customerName: pay.customerName,
+																	amount: pay.amount,
+																	date: pay.date || (pay.createdAt?.seconds ? new Date(pay.createdAt.seconds * 1000).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]),
+																	note: pay.note || '',
+																	paymentMethod: pay.paymentMethod || 'Tiền mặt',
+																	proofImage: pay.proofImage || ''
+																});
+																setShowPaymentForm(true);
+															}}
+															className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+															title="Sửa"
+														>
+															<Edit2 size={16} />
+														</button>
+														<button
+															onClick={() => handleDeletePayment(pay.id)}
+															className="p-2 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
+															title="Xóa"
+														>
+															<Trash2 size={16} />
+														</button>
 													</div>
 												</td>
 											</tr>
-										))
-									) : paginatedData.length === 0 ? (
-										<tr><td colSpan={5} className="py-20 text-center text-slate-400 dark:text-slate-500 uppercase font-black text-xs tracking-[4px]">Không tìm thấy đối tác nào</td></tr>
-									) : paginatedData.map((row) => (
-										<tr key={row.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer" onClick={() => openStatement(row)}>
-											<td className="px-8 py-5">
-												<div className="flex items-center gap-4">
-													<div className={`size-12 rounded-2xl bg-[#1A237E]/10 dark:bg-indigo-500/10 flex items-center justify-center text-[#1A237E] dark:text-indigo-400 font-black text-sm shrink-0 shadow-sm border border-slate-200 dark:border-slate-800`}>
-														{(row.businessName || row.name || 'KH').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
-													</div>
-													<div>
-														<p className="text-sm font-black text-slate-900 dark:text-indigo-400 uppercase tracking-tight leading-tight">{row.businessName || row.name}</p>
-														<p className="text-[10px] text-slate-500 dark:text-slate-500 font-black mt-1 tracking-wider uppercase">{row.phone || (row.businessName ? row.name : row.id.slice(-6))}</p>
-													</div>
-												</div>
-											</td>
-											<td className="px-8 py-5 text-right">
-												<span className="text-xs font-black text-slate-600 dark:text-slate-400">{formatPrice(row.totalOrdersAmount)}</span>
-											</td>
-											<td className="px-8 py-5 text-right">
-												<span className="text-xs font-black text-green-700 dark:text-green-400">{formatPrice(row.totalPaymentsAmount)}</span>
-											</td>
-											<td className="px-8 py-5 text-right">
-												<span className={`text-sm font-black tracking-tight ${row.currentDebt > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-[#10b981] dark:text-emerald-400'}`}>
-													{formatPrice(row.currentDebt)}
-												</span>
-											</td>
-											<td className="px-6 py-5 text-right">
-												<div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-													<button
-														onClick={() => openStatement(row)}
-														className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-2.5 rounded-xl text-slate-400 dark:text-slate-500 hover:text-[#1A237E] dark:hover:text-indigo-400 hover:border-[#1A237E] dark:hover:border-indigo-400 transition-all shadow-sm"
-														title="Xem chi tiết"
-													>
-														<FileText size={20} />
-													</button>
-													<button
-														onClick={() => {
-															setPaymentData({ ...paymentData, customerId: row.id, customerName: row.name });
-															setShowPaymentForm(true);
-														}}
-														className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-2.5 rounded-xl text-slate-400 dark:text-slate-500 hover:text-[#FF6D00] hover:border-[#FF6D00] transition-all shadow-sm"
-														title="Thu nợ"
-													>
-														<PlusCircle size={20} />
-													</button>
-												</div>
-											</td>
-										</tr>
-									))}
-								</tbody>
-							</table>
-						</div>
-					</div>
+										))}
+									</tbody>
+								</table>
 
-					{/* Pagination Controls - Desktop & Mobile */}
-					{!loading && totalPages > 1 && (
-						<div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 transition-colors">
-							<p className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-2">
-								Hiển thị {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, aggregatedData.length)} của {aggregatedData.length} đối tác
-							</p>
-							<div className="flex items-center gap-2">
-								<button
-									onClick={() => { setCurrentPage(prev => Math.max(prev - 1, 1)); window.scrollTo(0, 0); }}
-									disabled={currentPage === 1}
-									className="size-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
-								>
-									<span className="material-symbols-outlined">chevron_left</span>
-								</button>
-								<div className="flex items-center gap-1">
-									{getPageNumbers().map((page, idx) => (
-										<button
-											key={idx}
-											onClick={() => typeof page === 'number' && setCurrentPage(page)}
-											disabled={page === '...'}
-											className={`size-10 rounded-xl font-black text-xs transition-all ${page === currentPage
-												? 'bg-[#1A237E] text-white shadow-lg shadow-blue-500/20'
-												: page === '...'
-													? 'text-slate-400 cursor-default'
-													: 'bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700'
-												}`}
-										>
-											{page}
-										</button>
+								{/* Mobile Cards */}
+								<div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
+									{[...payments].sort((a, b) => {
+										const da = a.date ? new Date(a.date).getTime() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0);
+										const db = b.date ? new Date(b.date).getTime() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0);
+										return db - da;
+									}).map((pay) => (
+										<div key={pay.id} className="p-4 bg-white dark:bg-slate-900">
+											<div className="flex justify-between items-start mb-3">
+												<div className="flex flex-col gap-1">
+													<p className="text-sm font-black text-slate-900 dark:text-indigo-400 uppercase leading-tight">{pay.customerName}</p>
+													<div className="flex items-center gap-2">
+														<span className="text-[10px] font-bold text-slate-400">{formatDate(pay.date || pay.createdAt)}</span>
+														<span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase ${pay.paymentMethod === 'Tiền mặt' ? 'bg-orange-50 text-orange-600' : 'bg-blue-50 text-blue-600'}`}>
+															{pay.paymentMethod}
+														</span>
+													</div>
+												</div>
+												<div className="text-right">
+													<p className="text-sm font-black text-emerald-600 dark:text-emerald-400">{formatPrice(pay.amount)}</p>
+												</div>
+											</div>
+
+											{pay.note && (
+												<p className="text-[11px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg mb-3 italic">
+													{pay.note}
+												</p>
+											)}
+
+											<div className="flex justify-end gap-3 pt-2">
+												<button
+													onClick={() => {
+														setEditingPaymentId(pay.id);
+														setPaymentData({
+															customerId: pay.customerId,
+															customerName: pay.customerName,
+															amount: pay.amount,
+															date: pay.date || (pay.createdAt?.seconds ? new Date(pay.createdAt.seconds * 1000).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]),
+															note: pay.note || '',
+															paymentMethod: pay.paymentMethod || 'Tiền mặt',
+															proofImage: pay.proofImage || ''
+														});
+														setShowPaymentForm(true);
+													}}
+													className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-500 text-[10px] font-black uppercase transition-colors"
+												>
+													<Edit2 size={12} /> Sửa
+												</button>
+												<button
+													onClick={() => handleDeletePayment(pay.id)}
+													className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-50 dark:border-rose-900/20 text-rose-500 text-[10px] font-black uppercase transition-colors"
+												>
+													<Trash2 size={12} /> Xóa
+												</button>
+											</div>
+										</div>
 									))}
 								</div>
-								<button
-									onClick={() => { setCurrentPage(prev => Math.min(prev + 1, totalPages)); window.scrollTo(0, 0); }}
-									disabled={currentPage === totalPages}
-									className="size-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
-								>
-									<span className="material-symbols-outlined">chevron_right</span>
-								</button>
+
+								{payments.length === 0 && (
+									<div className="py-20 text-center text-slate-400 dark:text-slate-500 uppercase font-black text-xs tracking-widest">
+										Chưa có dữ liệu phiếu thu
+									</div>
+								)}
 							</div>
 						</div>
 					)}

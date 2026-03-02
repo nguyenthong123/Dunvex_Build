@@ -272,6 +272,14 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     *   **Auto-Deletion**: Hệ thống tự động quét và xóa các mã giảm giá đã hết hạn ngay khi Admin truy cập trang Ưu đãi.
     *   **Thông báo Sắp hết hạn (Expiry Alerts)**: Tự động gửi cảnh báo Toast cho các mã còn dưới 3 ngày sử dụng, giúp Admin chủ động gia hạn hoặc thay thế chương trình.
     *   **Cơ chế Throttling**: Thông báo mã hết hạn được giới hạn hiển thị 12 giờ một lần để tránh spam người dùng.
+- [x] **Sửa lỗi tồn kho theo SKU (Stock Sync Fix - Mar 2)**:
+    *   **Cơ chế Cộng dồn Tồn kho**: Khắc phục lỗi không lên được đơn khi sản phẩm có cùng mã SKU nhưng nhập kho ở các mục khác nhau. Hệ thống hiện tự động cộng dồn tồn kho của tất cả sản phẩm cùng SKU để cho phép bán hàng thông suốt.
+    *   **Tối ưu Khấu trừ Kho**: Khi lên đơn, hệ thống thông minh tự tìm sản phẩm có tồn kho lớn nhất trong nhóm cùng SKU để trừ hàng, tránh tình trạng kho bị âm ảo.
+    *   **So khớp SKU Thông minh**: Hỗ trợ so khớp không phân biệt hoa thường và tự động loại bỏ khoảng trắng dư thừa trong mã SKU.
+- [x] **Lịch sử Thu nợ & Quản lý phiếu thu (Payment History - Mar 2)**:
+    *   **Tab Lịch sử mới**: Thêm phân hệ "Lịch sử thu nợ" ngay trong trang Quản lý công nợ, cho phép tra cứu toàn bộ các phiếu thu đã ghi nhận.
+    *   **Chỉnh sửa & Xóa**: Chủ doanh nghiệp có thể sửa thông tin hoặc xóa các phiếu thu bị lên sai, hệ thống sẽ tự động tính toán lại dư nợ khách hàng ngay lập tức.
+    *   **Giao diện Đa nền tảng**: Tối ưu hiển thị dạng thẻ (Cards) trên điện thoại và dạng bảng chuyên nghiệp trên máy tính.
 - [x] **Tối ưu Giao diện Đơn hàng Mobile (Order List UI - Mar 2)**:
     *   **Ưu tiên Tên cơ sở**: Thay đổi hiển thị trong danh sách đơn hàng trên điện thoại, đưa **Tên cơ sở kinh doanh** lên làm tiêu đề chính (chữ đậm) thay vì mã đơn hàng.
     *   **Thứ tự Thông tin**: Mã đơn hàng được chuyển xuống dòng phụ giúp chủ doanh nghiệp và nhân viên nhận diện khách hàng nhanh chóng hơn khi lướt danh sách.

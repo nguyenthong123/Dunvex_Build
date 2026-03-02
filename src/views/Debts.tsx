@@ -1177,40 +1177,7 @@ const Debts: React.FC = () => {
 								</div>
 							</div>
 
-							{/* DATE FILTER BAR FOR STATEMENT */}
-							<div className="flex-none bg-slate-50 dark:bg-slate-800/50 px-4 md:px-8 py-3 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4 z-10 print:hidden transition-colors duration-300">
-								<div className="flex items-center gap-4 w-full md:w-auto">
-									<span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest whitespace-nowrap">Lọc giao dịch:</span>
-									<div className="flex items-center gap-2 w-full">
-										<input
-											type="date"
-											value={statementFromDate}
-											onChange={(e) => setStatementFromDate(e.target.value)}
-											className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200"
-										/>
-										<span className="text-slate-300">-</span>
-										<input
-											type="date"
-											value={statementToDate}
-											onChange={(e) => setStatementToDate(e.target.value)}
-											className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200"
-										/>
-									</div>
-								</div>
-
-								{/* ZOOM CONTROLS */}
-								<div className="flex bg-white dark:bg-slate-900 rounded-lg p-1 border border-slate-200 dark:border-slate-700 shadow-sm">
-									{[0.6, 0.85, 1.0].map((v) => (
-										<button
-											key={v}
-											onClick={() => setStatementZoom(v)}
-											className={`px-3 py-1 rounded-md text-[10px] font-black transition-all ${statementZoom === v ? 'bg-[#1A237E] dark:bg-indigo-600 text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-										>
-											{v * 100}%
-										</button>
-									))}
-								</div>
-							</div>
+							{/* DATE FILTER BAR FOR STATEMENT - REMOVED AS PER USER REQUEST */}
 
 							{/* SCROLLABLE DOCUMENT AREA */}
 							<div className="flex-1 overflow-y-auto bg-slate-100 dark:bg-slate-950/50 py-8 flex items-start justify-center scroll-smooth custom-scrollbar">

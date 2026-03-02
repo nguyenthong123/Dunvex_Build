@@ -1300,42 +1300,68 @@ const Debts: React.FC = () => {
 
 											return (
 												<>
-													{/* 1. Header */}
-													<div className="flex justify-between items-start mb-8 border-b-4 border-[#FFD600] pb-6">
-														<div>
-															<h1 className="text-[#d97706] text-4xl font-black uppercase mb-1 tracking-tighter">PHIẾU BÁO CÔNG NỢ</h1>
-															<p className="text-slate-900 text-sm font-black uppercase tracking-[0.2em]">Hệ thống quản lý Dunvex Digital</p>
+													{/* 1. Paper Header */}
+													<header className="mb-10">
+														<h1 className="text-4xl font-black text-center text-gray-900 uppercase mb-6 tracking-[4px]">
+															PHIẾU BÁO CÔNG NỢ
+														</h1>
+														<div className="flex justify-center gap-12 text-sm font-bold text-gray-700 border-t border-b border-dashed border-gray-300 py-5">
+															<div className="flex items-center">
+																<span className="text-gray-400 mr-2 uppercase text-[10px] tracking-widest">Mã Đối Tác:</span>
+																<span className="text-[#1A237E]">#{selectedCustomer.id?.slice(-6).toUpperCase()}</span>
+															</div>
+															<div className="flex items-center">
+																<span className="text-gray-400 mr-2 uppercase text-[10px] tracking-widest">Ngày lập:</span>
+																<span className="text-slate-900">{new Date().toLocaleDateString('vi-VN')}</span>
+															</div>
+															<div className="flex items-center">
+																<span className="text-gray-400 mr-2 uppercase text-[10px] tracking-widest">Trạng thái:</span>
+																<span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${closingBalance > 0 ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'}`}>
+																	{closingBalance > 0 ? 'Còn dư nợ' : 'Đã tất toán'}
+																</span>
+															</div>
 														</div>
-														<div className="text-right">
-															<p className="text-slate-900 font-black text-sm uppercase tracking-wider">Ngày báo: {new Date().toLocaleDateString('vi-VN')}</p>
-															<p className="text-slate-900 font-black text-sm uppercase tracking-wider mt-1">Mã KH: {selectedCustomer.id?.slice(-6).toUpperCase()}</p>
-														</div>
-													</div>
+													</header>
 
-													<div className="mb-10">
-														<p className="text-slate-900 font-black text-xl leading-none">Kính gửi: <span className="font-black text-[#1A237E] uppercase">{selectedCustomer.businessName || selectedCustomer.name}</span></p>
-														<p className="text-slate-900 text-lg mt-3 font-medium">Chúng tôi xin thông báo tình trạng công nợ tính đến hiện tại như sau:</p>
-													</div>
+													<section className="mb-10 grid grid-cols-2 gap-8">
+														<div className="space-y-4">
+															<div className="flex flex-col">
+																<span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Người nhận thông báo</span>
+																<span className="font-black text-gray-900 text-2xl uppercase leading-tight tracking-tight">
+																	{selectedCustomer.businessName || selectedCustomer.name}
+																</span>
+															</div>
+															<div className="flex flex-col text-slate-500 font-bold italic text-sm">
+																{selectedCustomer.phone && <p>SĐT: {selectedCustomer.phone}</p>}
+																{selectedCustomer.address && <p>Địa chỉ: {selectedCustomer.address}</p>}
+															</div>
+														</div>
+														<div className="space-y-4 text-right flex flex-col items-end justify-center">
+															<p className="text-slate-600 text-lg font-medium leading-relaxed italic max-w-xs">
+																"Chúng tôi xin thông báo tình trạng công nợ tính đến thời điểm hiện tại như sau:"
+															</p>
+														</div>
+													</section>
 
 													{/* 2. List of Orders (Includes Opening Balance) */}
 													<div className="mb-10">
-														<h3 className="flex items-center text-slate-900 font-black text-lg mb-4 pl-4 border-l-[6px] border-[#FFD600] uppercase tracking-tight">
+														<h3 className="flex items-center text-slate-900 font-black text-lg mb-4 pl-4 border-l-[6px] border-[#1A237E] uppercase tracking-tight">
 															1. Danh sách đơn hàng
 														</h3>
-														<div className="rounded-xl border-2 border-slate-300 overflow-hidden shadow-sm">
+														<div className="rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
 															<table className="w-full text-sm border-collapse">
-																<thead className="bg-slate-200 text-slate-900 font-black uppercase tracking-widest text-[10px]">
+																<thead className="bg-[#1c130d] text-white font-black uppercase tracking-widest text-[10px]">
 																	<tr>
-																		<th className="py-4 px-6 text-left w-1/4 border-r border-slate-300">Ngày</th>
-																		<th className="py-4 px-6 text-left w-1/4 border-r border-slate-300">Mã đơn</th>
+																		<th className="py-4 px-6 text-left w-1/4 border-r border-white/10">Ngày</th>
+																		<th className="py-4 px-6 text-left w-1/4 border-r border-white/10">Mã đơn</th>
 																		<th className="py-4 px-6 text-right w-1/2">Giá trị giao dịch</th>
 																	</tr>
 																</thead>
 																<tbody className="text-slate-900 divide-y-2 divide-slate-200">
 																	{/* Opening Balance Row */}
-																	<tr className="bg-[#FFFCE0] font-black text-slate-900">
-																		<td className="py-4 px-6 border-r border-slate-300">{statementFromDate ? formatDate(statementFromDate) : '---'}</td>
-																		<td className="py-4 px-6 uppercase text-[#d97706] tracking-widest text-xs border-r border-slate-300">DƯ NỢ ĐẦU KỲ</td>
+																	<tr className="bg-amber-50/50 font-black text-slate-900">
+																		<td className="py-4 px-6 border-r border-slate-100 italic text-slate-400">---</td>
+																		<td className="py-4 px-6 uppercase text-[#d97706] tracking-widest text-[10px] border-r border-slate-100">DƯ NỢ ĐẦU KỲ</td>
 																		<td className="py-4 px-6 text-right text-lg">{formatPrice(openingBalance)}</td>
 																	</tr>
 																	{/* Order Rows */}
@@ -1352,8 +1378,8 @@ const Debts: React.FC = () => {
 																		</tr>
 																	)}
 																	{/* Total Row */}
-																	<tr className="bg-slate-100 font-black border-t-2 border-slate-800">
-																		<td colSpan={2} className="py-5 px-6 uppercase text-slate-900 text-sm tracking-tight border-r border-slate-300">TỔNG CỘNG (ĐẦU KỲ + PHÁT SINH)</td>
+																	<tr className="bg-slate-50 font-black border-t-2 border-slate-900">
+																		<td colSpan={2} className="py-5 px-6 uppercase text-slate-900 text-sm tracking-tight border-r border-slate-100">TỔNG CỘNG (ĐẦU KỲ + PHÁT SINH)</td>
 																		<td className="py-5 px-6 text-right text-2xl text-rose-700 leading-none">{formatPrice(openingBalance + debitIncrease)}</td>
 																	</tr>
 																</tbody>
@@ -1364,14 +1390,14 @@ const Debts: React.FC = () => {
 													{/* 3. Payment History */}
 													<div className="mb-12">
 														<h3 className="flex items-center text-slate-900 font-black text-lg mb-4 pl-4 border-l-[6px] border-emerald-500 uppercase tracking-tight">
-															2. Lịch sử đã thanh toán
+															2. Lịch sử thanh toán
 														</h3>
-														<div className="rounded-xl border-2 border-slate-300 overflow-hidden shadow-sm">
+														<div className="rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
 															<table className="w-full text-sm border-collapse">
-																<thead className="bg-[#E9F5ED] text-slate-900 font-black uppercase tracking-widest text-[10px]">
+																<thead className="bg-[#1c130d] text-white font-black uppercase tracking-widest text-[10px]">
 																	<tr>
-																		<th className="py-4 px-6 text-left w-1/4 border-r border-slate-300">Ngày</th>
-																		<th className="py-4 px-6 text-left w-1/2 border-r border-slate-300">Nội dung</th>
+																		<th className="py-4 px-6 text-left w-1/4 border-r border-white/10">Ngày</th>
+																		<th className="py-4 px-6 text-left w-1/2 border-r border-white/10">Nội dung</th>
 																		<th className="py-4 px-6 text-right w-1/4">Số tiền thu</th>
 																	</tr>
 																</thead>
@@ -1400,9 +1426,12 @@ const Debts: React.FC = () => {
 													</div>
 
 													{/* 4. Final Summary Box */}
-													<div className="bg-[#FFD600] border-4 border-slate-900 rounded-[2rem] p-8 flex flex-row justify-between items-center mb-20 shadow-2xl">
-														<span className="text-slate-900 font-black uppercase text-2xl tracking-tighter">SỐ DƯ CÔNG NỢ CÒN LẠI</span>
-														<span className="text-slate-900 font-black text-5xl tracking-tighter">{formatPrice(closingBalance)}</span>
+													<div className="bg-[#FF6D00] text-white rounded-3xl p-10 flex flex-row justify-between items-center mb-20 shadow-2xl shadow-orange-500/20 relative overflow-hidden">
+														<div className="absolute right-0 top-1/2 -translate-y-1/2 p-8 opacity-20">
+															<span className="material-symbols-outlined text-[8rem]">payments</span>
+														</div>
+														<span className="relative z-10 font-black uppercase text-2xl tracking-[2px]">SỐ DƯ CÔNG NỢ CÒN LẠI</span>
+														<span className="relative z-10 font-black text-6xl tracking-tighter tabular-nums drop-shadow-lg">{formatPrice(closingBalance)}</span>
 													</div>
 
 													{/* 5. Signatures */}

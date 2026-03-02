@@ -277,7 +277,7 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     *   **Tối ưu Khấu trừ Kho**: Khi lên đơn, hệ thống thông minh tự tìm sản phẩm có tồn kho lớn nhất trong nhóm cùng SKU để trừ hàng, tránh tình trạng kho bị âm ảo.
     *   **So khớp SKU Thông minh**: Hỗ trợ so khớp không phân biệt hoa thường và tự động loại bỏ khoảng trắng dư thừa trong mã SKU.
 - [x] **Lịch sử Thu nợ & Quản lý phiếu thu (Payment History - Mar 2)**:
-    *   **Tab Lịch sử mới**: Thêm phân hệ "Lịch sử thu nợ" ngay trong trang Quản lý công nợ, cho phép tra cứu toàn bộ các phiếu thu đã ghi nhận.
+    *   **Tối ưu Phiếu báo công nợ (Premium Statement UI)**: Nâng cấp giao diện phiếu báo công nợ đồng bộ với phiếu giao hàng. Sử dụng Header hiện đại, bảng biểu có tiêu đề đậm và khung tổng kết nợ rực rỡ, chuyên nghiệp.
     *   **Chỉnh sửa & Xóa**: Chủ doanh nghiệp có thể sửa thông tin hoặc xóa các phiếu thu bị lên sai, hệ thống sẽ tự động tính toán lại dư nợ khách hàng ngay lập tức.
     *   **Giao diện Đa nền tảng**: Tối ưu hiển thị dạng thẻ (Cards) trên điện thoại và dạng bảng chuyên nghiệp trên máy tính.
 - [x] **Cập nhật Nav-Bar Mobile (Mobile UI Enhancement - Mar 2)**:

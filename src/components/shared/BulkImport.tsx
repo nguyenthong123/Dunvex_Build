@@ -310,21 +310,18 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 					let existingItem: any = null;
 
 					if (type === 'products') {
-						// Priority 1: Match by SKU AND Category if provided in spreadsheet
+						// Priority 1: Match by SKU globally (ignore Category for uniqueness)
 						if (item.sku) {
-							const cleanCat = normalize(item.category);
+							const cleanSku = normalize(item.sku);
 							existingItem = existingItems.find((e: any) =>
-								String(e.sku) === String(item.sku) &&
-								normalize(e.category) === cleanCat
+								normalize(e.sku) === cleanSku
 							);
 						}
-						// Priority 2: Match by Name AND Category if SKU didn't match or wasn't provided
+						// Priority 2: Match by Name globally if SKU didn't match or wasn't provided
 						if (!existingItem && item.name) {
 							const cleanName = normalize(item.name);
-							const cleanCat = normalize(item.category);
 							existingItem = existingItems.find((e: any) =>
-								normalize(e.name) === cleanName &&
-								normalize(e.category) === cleanCat
+								normalize(e.name) === cleanName
 							);
 						}
 

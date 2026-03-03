@@ -178,11 +178,10 @@ const QuickOrder = () => {
 			return linked?.stock || 0;
 		}
 		// 2. Fallback to SKU-based link (Sum all products with same SKU that have no linkedProductId)
-		if (prod.sku && String(prod.sku).trim()) {
-			const sku = String(prod.sku).trim().toLowerCase();
+		const cleanSku = normalizeText(prod.sku);
+		if (cleanSku) {
 			const skuMasterProducts = products.filter(p =>
-				p.sku &&
-				String(p.sku).trim().toLowerCase() === sku &&
+				normalizeText(p.sku) === cleanSku &&
 				!p.linkedProductId
 			);
 			const totalStock = skuMasterProducts.reduce((sum, p) => sum + (Number(p.stock) || 0), 0);
@@ -197,12 +196,11 @@ const QuickOrder = () => {
 		if (sourceProduct?.linkedProductId) {
 			return sourceProduct.linkedProductId;
 		}
-		if (sourceProduct?.sku && String(sourceProduct.sku).trim()) {
-			const sku = String(sourceProduct.sku).trim().toLowerCase();
+		const cleanSku = normalizeText(sourceProduct?.sku);
+		if (cleanSku) {
 			// Find all potential masters for this SKU (exclude those explicitly linked elsewhere)
 			const masters = products.filter(p =>
-				p.sku &&
-				String(p.sku).trim().toLowerCase() === sku &&
+				normalizeText(p.sku) === cleanSku &&
 				!p.linkedProductId
 			);
 			// Pick the one with the CURRENT MOST stock as the official source to deduct from

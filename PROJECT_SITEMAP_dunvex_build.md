@@ -82,7 +82,7 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 
 ### ✅ Đã hoàn thành (Done)
 - [x] **Nhập liệu hàng loạt (Bulk Import) Thông minh**: 
-    *   **Smart Update & Anti-Overwrite**: Tự động nhận diện sản phẩm dựa trên bộ đôi **[Mã SKU/Tên + Danh mục]**. Cơ chế này cho phép nhập nhiều bảng giá (Niêm yết, Chủ nhà, Thợ...) cho cùng một loại sản phẩm mà không bị ghi đè dữ liệu cũ.
+    *   **Nhận diện Toàn cục (Global ID)**: Tự động nhận diện sản phẩm dựa trên **[Mã SKU]** hoặc **[Tên]** trên toàn hệ thống (không phân biệt danh mục). Điều này giúp cập nhật giá hoặc thay đổi danh mục mà không tạo ra sản phẩm trùng lặp, đảm bảo một mã SKU chỉ có duy nhất một kho hàng thực tế.
     *   **Bảo toàn dữ liệu (Partial Update)**: Hệ thống chỉ cập nhật những cột có trong file Excel, giữ nguyên các thông tin cũ (như số lượng tồn kho) nếu cột đó bị thiếu trong lần nhập sau.
     *   **Giải mã Tiêu đề linh hoạt**: Tự động nhận diện các tiêu đề cột như "Ngành hàng", "Danh mục", "Nhóm", "SĐT", "Điện thoại"... giúp người dùng không cần chỉnh sửa file Excel trước khi tải lên.
     *   **Xử lý Số liệu chuyên sâu**: Bộ lọc thông minh tự động loại bỏ ký tự tiền tệ (đ, VND), xử lý chính xác dấu chấm hàng nghìn và dấu phẩy thập phân kiểu Việt Nam.
@@ -273,9 +273,9 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     *   **Thông báo Sắp hết hạn (Expiry Alerts)**: Tự động gửi cảnh báo Toast cho các mã còn dưới 3 ngày sử dụng, giúp Admin chủ động gia hạn hoặc thay thế chương trình.
     *   **Cơ chế Throttling**: Thông báo mã hết hạn được giới hạn hiển thị 12 giờ một lần để tránh spam người dùng.
 - [x] **Sửa lỗi tồn kho theo SKU (Stock Sync Fix - Mar 2)**:
-    *   **Cơ chế Cộng dồn Tồn kho**: Khắc phục lỗi không lên được đơn khi sản phẩm có cùng mã SKU nhưng nhập kho ở các mục khác nhau. Hệ thống hiện tự động cộng dồn tồn kho của tất cả sản phẩm cùng SKU để cho phép bán hàng thông suốt.
-    *   **Tối ưu Khấu trừ Kho**: Khi lên đơn, hệ thống thông minh tự tìm sản phẩm có tồn kho lớn nhất trong nhóm cùng SKU để trừ hàng, tránh tình trạng kho bị âm ảo.
-    *   **So khớp SKU Thông minh**: Hỗ trợ so khớp không phân biệt hoa thường và tự động loại bỏ khoảng trắng dư thừa trong mã SKU.
+    *   **Cơ chế Cộng dồn Tồn kho**: Khắc phục lỗi "Hết hàng" ảo khi sản phẩm có cùng mã SKU nhưng nằm ở các danh mục khác nhau. Hệ thống hiện tự động cộng dồn tồn kho của tất cả sản phẩm cùng SKU để cho phép bán hàng thông suốt dù bạn chọn ở danh mục nào.
+    *   **Tối ưu Khấu trừ Kho**: Khi lên đơn, hệ thống thông minh tự tìm bản ghi có tồn kho lớn nhất trong nhóm cùng SKU để trừ hàng, tránh tình trạng kho bị âm.
+    *   **So khớp SKU Toàn diện**: Tự động chuẩn hóa mã SKU (xoá khoảng trắng, NFC, không phân biệt hoa thường) để đảm bảo đồng bộ kho 100% giữa các bảng giá khác nhau.
 - [x] **Lịch sử Thu nợ & Quản lý phiếu thu (Payment History - Mar 2)**:
     *   **Tối ưu Phiếu báo công nợ (Premium Statement UI)**: Nâng cấp giao diện phiếu báo công nợ đồng bộ với phiếu giao hàng. Sử dụng Header hiện đại, bảng biểu có tiêu đề đậm và khung tổng kết nợ rực rỡ, chuyên nghiệp.
     *   **Chỉnh sửa & Xóa**: Chủ doanh nghiệp có thể sửa thông tin hoặc xóa các phiếu thu bị lên sai, hệ thống sẽ tự động tính toán lại dư nợ khách hàng ngay lập tức.

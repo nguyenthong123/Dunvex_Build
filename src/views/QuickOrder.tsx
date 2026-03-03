@@ -858,18 +858,12 @@ const QuickOrder = () => {
 															const normalizedSearch = normalizeText(lineSearchQuery);
 															const currentCategory = normalizeText(item.category);
 
-															// Step 1: Search within the current category if one is selected
-															let matches = products.filter(p => {
+															// Filter products based on selected category (if any) and search query
+															const matches = products.filter(p => {
 																const isCatMatch = !item.category || normalizeText(p.category) === currentCategory;
 																const isProductMatch = isMatch(p.name, lineSearchQuery) || (p.sku && isMatch(p.sku, lineSearchQuery));
 																return isCatMatch && isProductMatch;
 															});
-
-															// Step 2: Fallback to global search ONLY IF there are no matches in the selected category 
-															// AND the user has actually typed something (don't show everything by default)
-															if (matches.length === 0 && lineSearchQuery) {
-																matches = products.filter(p => isMatch(p.name, lineSearchQuery) || (p.sku && isMatch(p.sku, lineSearchQuery)));
-															}
 
 															return matches
 																.sort((a, b) => {

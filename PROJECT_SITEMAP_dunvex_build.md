@@ -296,6 +296,10 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     *   **Tìm kiếm Thông minh (Vietnamese Robust Search)**: Nâng cấp bộ lọc phía Client hỗ trợ **Chuẩn hóa NFC** và **Xoá dấu tiếng Việt (Accent-insensitive)**. Giờ đây bạn có thể tìm "toan phat", "Toàn Phát" hay "toàn phát" đều ra kết quả chính xác 100%.
     *   **Đồng nhất Trải nghiệm**: Áp dụng bộ lọc tìm kiếm cao cấp này đồng bộ trên các module **Khách hàng, Sản phẩm & Kho, và Lên đơn nhanh (Quick Order)**.
     *   **Tối ưu Phân trang (Pagination Refresh)**: Cập nhật lại số bản ghi hiển thị (20 bản ghi/trang) giúp tra cứu nhanh hơn trên màn hình lớn.
+- [x] **Lên đơn theo Danh mục (Category-Strict Search - Mar 3)**:
+    *   **Ràng buộc Danh mục**: Khi chọn danh mục cụ thể tại trình Lên đơn nhanh (Quick Order), hệ thống sẽ lọc **duy nhất** các sản phẩm thuộc danh mục đó.
+    *   **Loại bỏ Fallback**: Không còn tình trạng hiện sản phẩm từ danh mục khác khi tìm không thấy trong danh mục hiện tại, giúp tránh nhầm lẫn giữa các loại hàng có cùng SKU nhưng khác nhóm giá/đối tượng.
+    *   **Tìm kiếm Toàn cục**: Nếu muốn tìm kiếm tất cả sản phẩm, người dùng chỉ cần để trống ô Danh mục hoặc chọn "-- Tất cả danh mục --".
 
 ### 📝 Cần làm tiếp (To-do)
 

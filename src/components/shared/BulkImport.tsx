@@ -310,7 +310,7 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 					let existingItem: any = null;
 
 					if (type === 'products') {
-						// Priority 1: Match by SKU globally (ignore Category for uniqueness)
+						// Priority 1: Match by SKU within this Admin's products (ownerId isolation)
 						if (item.sku) {
 							const cleanSku = normalize(item.sku);
 							existingItem = existingItems.find((e: any) =>

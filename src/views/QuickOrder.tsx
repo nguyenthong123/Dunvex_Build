@@ -177,7 +177,7 @@ const QuickOrder = () => {
 			const linked = products.find(p => p.id === prod.linkedProductId);
 			return linked?.stock || 0;
 		}
-		// 2. Fallback to SKU-based link (Sum all products with same SKU that have no linkedProductId)
+		// 2. Fallback to SKU-based link (Sum all products with same SKU within this Admin's products)
 		const cleanSku = normalizeText(prod.sku);
 		if (cleanSku) {
 			const skuMasterProducts = products.filter(p =>

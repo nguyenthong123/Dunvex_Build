@@ -273,9 +273,10 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     *   **Thông báo Sắp hết hạn (Expiry Alerts)**: Tự động gửi cảnh báo Toast cho các mã còn dưới 3 ngày sử dụng, giúp Admin chủ động gia hạn hoặc thay thế chương trình.
     *   **Cơ chế Throttling**: Thông báo mã hết hạn được giới hạn hiển thị 12 giờ một lần để tránh spam người dùng.
 - [x] **Sửa lỗi tồn kho theo SKU (Stock Sync Fix - Mar 2)**:
-    *   **Cơ chế Cộng dồn Tồn kho**: Khắc phục lỗi "Hết hàng" ảo khi sản phẩm có cùng mã SKU nhưng nằm ở các danh mục khác nhau. Hệ thống hiện tự động cộng dồn tồn kho của tất cả sản phẩm cùng SKU để cho phép bán hàng thông suốt dù bạn chọn ở danh mục nào.
-    *   **Tối ưu Khấu trừ Kho**: Khi lên đơn, hệ thống thông minh tự tìm bản ghi có tồn kho lớn nhất trong nhóm cùng SKU để trừ hàng, tránh tình trạng kho bị âm.
-    *   **So khớp SKU Toàn diện**: Tự động chuẩn hóa mã SKU (xoá khoảng trắng, NFC, không phân biệt hoa thường) để đảm bảo đồng bộ kho 100% giữa các bảng giá khác nhau.
+    *   **Cơ chế Cộng dồn Tồn kho**: Khắc phục lỗi "Hết hàng" ảo khi sản phẩm có cùng mã SKU nhưng nằm ở các danh mục khác nhau. Hệ thống tự động cộng dồn tồn kho của tất cả sản phẩm cùng SKU trong cùng một công ty.
+    *   **Cô lập dữu liệu Admin (Admin Isolation)**: Cam kết 100% SKU được lọc theo `ownerId`. Dù nhiều công ty dùng chung một mã SKU, tồn kho vẫn hoàn toàn tách biệt, không bao giờ bị trừ nhầm sang đơn vị khác.
+    *   **Cảnh báo SKU trùng**: Khi thêm sản phẩm thủ công, hệ thống sẽ cảnh báo nếu SKU đã tồn tại trong danh mục của Admin đó để tránh tạo nhầm dữ liệu.
+    *   **So khớp SKU Toàn diện**: Tự động chuẩn hóa mã SKU (xoá khoảng trắng, NFC, không phân biệt hoa thường) để đồng bộ kho chính xác.
 - [x] **Lịch sử Thu nợ & Quản lý phiếu thu (Payment History - Mar 2)**:
     *   **Tối ưu Phiếu báo công nợ (Premium Statement UI)**: Nâng cấp giao diện phiếu báo công nợ đồng bộ với phiếu giao hàng. Sử dụng Header hiện đại, bảng biểu có tiêu đề đậm và khung tổng kết nợ rực rỡ, chuyên nghiệp.
     *   **Chỉnh sửa & Xóa**: Chủ doanh nghiệp có thể sửa thông tin hoặc xóa các phiếu thu bị lên sai, hệ thống sẽ tự động tính toán lại dư nợ khách hàng ngay lập tức.

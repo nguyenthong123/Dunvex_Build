@@ -233,6 +233,19 @@ const ProductList = () => {
 				return;
 			}
 
+			// NEW: Check if SKU exists for this Admin
+			if (formData.sku) {
+				const normalize = (s: string) => String(s || '').toLowerCase().replace(/\s+/g, '').trim();
+				const cleanSku = normalize(formData.sku);
+				const isDuplicate = products.some(p => normalize(p.sku) === cleanSku);
+
+				if (isDuplicate) {
+					if (!window.confirm(`Mã SKU "${formData.sku}" đã tồn tại cho một sản phẩm khác. Bạn có chắc chắn muốn tạo thêm một bản ghi trùng SKU không? (Số lượng tồn kho sẽ được cộng dồn khi lên đơn)`)) {
+						return;
+					}
+				}
+			}
+
 			// If linked, initialize stock on source or keep 0
 			const finalStock = formData.linkedProductId ? 0 : formData.stock;
 			const targetId = formData.linkedProductId || '';
@@ -293,6 +306,18 @@ const ProductList = () => {
 		e.preventDefault();
 		if (!selectedProduct) return;
 		try {
+			// NEW: Check if SKU exists for this Admin (excluding current product)
+			if (formData.sku) {
+				const normalize = (s: string) => String(s || '').toLowerCase().replace(/\s+/g, '').trim();
+				const cleanSku = normalize(formData.sku);
+				const isDuplicate = products.some(p => p.id !== selectedProduct.id && normalize(p.sku) === cleanSku);
+
+				if (isDuplicate) {
+					if (!window.confirm(`Mã SKU "${formData.sku}" đã bị trùng với sản phẩm khác. Tiếp tục cập nhật?`)) {
+						return;
+					}
+				}
+			}
 			const batch = writeBatch(db);
 			const prodRef = doc(db, 'products', selectedProduct.id);
 

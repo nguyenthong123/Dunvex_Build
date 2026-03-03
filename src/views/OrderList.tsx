@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
-import { collection, query, orderBy, onSnapshot, updateDoc, doc, deleteDoc, serverTimestamp, where, addDoc, getDocs, writeBatch, increment } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, updateDoc, doc, getDoc, deleteDoc, serverTimestamp, where, addDoc, getDocs, writeBatch, increment } from 'firebase/firestore';
 import OrderTicket from '../components/OrderTicket';
 import UpgradeModal from '../components/UpgradeModal';
 
@@ -151,16 +151,20 @@ const OrderList = () => {
 				const logsQ = query(collection(db, 'inventory_logs'), where('orderId', '==', id));
 				const logsSnap = await getDocs(logsQ);
 
-				logsSnap.docs.forEach((logDoc: any) => {
+				for (const logDoc of logsSnap.docs) {
 					const logData = logDoc.data();
 					if (logData.productId && logData.qty) {
 						const prodRef = doc(db, 'products', logData.productId);
-						batch.update(prodRef, {
-							stock: increment(logData.qty)
-						});
+						// Safety check: only update if product still exists
+						const prodSnap = await getDoc(prodRef);
+						if (prodSnap.exists()) {
+							batch.update(prodRef, {
+								stock: increment(logData.qty)
+							});
+						}
 					}
 					batch.delete(logDoc.ref);
-				});
+				}
 
 				// 2. Delete Order
 				batch.delete(doc(db, 'orders', id));

@@ -410,16 +410,19 @@ const QuickOrder = () => {
 				const existingLogsSnap = await getDocs(existingLogsQ);
 
 				// Revert previous stock changes (from all previous logs)
-				existingLogsSnap.docs.forEach(logDoc => {
+				for (const logDoc of existingLogsSnap.docs) {
 					const logData = logDoc.data();
 					if (logData.productId && logData.qty) {
 						const oldProdRef = doc(db, 'products', logData.productId);
-						batch.update(oldProdRef, {
-							stock: increment(logData.qty) // Revert the deduction
-						});
+						const oldProdSnap = await getDoc(oldProdRef);
+						if (oldProdSnap.exists()) {
+							batch.update(oldProdRef, {
+								stock: increment(logData.qty) // Revert the deduction
+							});
+						}
 					}
 					batch.delete(logDoc.ref);
-				});
+				}
 
 				// Apply NEW stock changes ONLY IF status is 'Đơn chốt' or 'Đang giao'
 				if (orderStatus === 'Đơn chốt' || orderStatus === 'Đang giao') {

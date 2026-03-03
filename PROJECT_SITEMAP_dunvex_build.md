@@ -286,6 +286,10 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 - [x] **Tối ưu Giao diện Đơn hàng Mobile (Order List UI - Mar 2)**:
     *   **Ưu tiên Tên cơ sở**: Thay đổi hiển thị trong danh sách đơn hàng trên điện thoại, đưa **Tên cơ sở kinh doanh** lên làm tiêu đề chính (chữ đậm) thay vì mã đơn hàng.
     *   **Thứ tự Thông tin**: Mã đơn hàng được chuyển xuống dòng phụ giúp chủ doanh nghiệp và nhân viên nhận diện khách hàng nhanh chóng hơn khi lướt danh sách.
+- [x] **Sửa lỗi Xoá đơn hàng (Order Deletion Fix - Mar 3)**:
+    *   **Safeguard against Deleted Products**: Khắc phục triệt để lỗi "No document to update" khi xoá đơn hàng chứa sản phẩm đã bị xoá khỏi danh mục. Hệ thống hiện tự động kiểm tra sự tồn tại của sản phẩm trước khi hoàn kho.
+    *   **Atomic Inventory Sync**: Đảm bảo quá trình hoàn kho và xoá đơn hàng diễn ra an toàn, không bị ngắt quãng ngay cả khi dữ liệu sản phẩm gốc không còn.
+    *   **QuickOrder Stability**: Cập nhật logic tương tự cho trình Lên đơn nhanh, ngăn chặn lỗi crash khi chỉnh sửa đơn hàng có sản phẩm cũ đã bị xoá.
 
 ### 📝 Cần làm tiếp (To-do)
 

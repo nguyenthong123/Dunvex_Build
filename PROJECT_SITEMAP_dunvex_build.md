@@ -291,6 +291,11 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     *   **Safeguard against Deleted Products**: Khắc phục triệt để lỗi "No document to update" khi xoá đơn hàng chứa sản phẩm đã bị xoá khỏi danh mục. Hệ thống hiện tự động kiểm tra sự tồn tại của sản phẩm trước khi hoàn kho.
     *   **Atomic Inventory Sync**: Đảm bảo quá trình hoàn kho và xoá đơn hàng diễn ra an toàn, không bị ngắt quãng ngay cả khi dữ liệu sản phẩm gốc không còn.
     *   **QuickOrder Stability**: Cập nhật logic tương tự cho trình Lên đơn nhanh, ngăn chặn lỗi crash khi chỉnh sửa đơn hàng có sản phẩm cũ đã bị xoá.
+- [x] **Tối ưu Tìm kiếm & Giới hạn Truy vấn (Search & Scale Fix - Mar 3)**:
+    *   **Mở rộng Giới hạn Hiển thị (Query Limits)**: Tăng giới hạn hiển thị từ 100 lên **1000 khách hàng/sản phẩm**, giải quyết triệt để lỗi "tìm không thấy" sản phẩm cũ khi kho dữ liệu lớn.
+    *   **Tìm kiếm Thông minh (Vietnamese Robust Search)**: Nâng cấp bộ lọc phía Client hỗ trợ **Chuẩn hóa NFC** và **Xoá dấu tiếng Việt (Accent-insensitive)**. Giờ đây bạn có thể tìm "toan phat", "Toàn Phát" hay "toàn phát" đều ra kết quả chính xác 100%.
+    *   **Đồng nhất Trải nghiệm**: Áp dụng bộ lọc tìm kiếm cao cấp này đồng bộ trên các module **Khách hàng, Sản phẩm & Kho, và Lên đơn nhanh (Quick Order)**.
+    *   **Tối ưu Phân trang (Pagination Refresh)**: Cập nhật lại số bản ghi hiển thị (20 bản ghi/trang) giúp tra cứu nhanh hơn trên màn hình lớn.
 
 ### 📝 Cần làm tiếp (To-do)
 

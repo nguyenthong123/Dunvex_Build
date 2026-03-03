@@ -35,7 +35,22 @@ const CustomerList = () => {
 	const searchInputRef = React.useRef<HTMLInputElement>(null);
 	const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 	const [currentPage, setCurrentPage] = useState(1);
-	const ITEMS_PER_PAGE = 10;
+	const ITEMS_PER_PAGE = 20;
+
+	// Enhanced Search Functions
+	const normalizeText = (text: string) => text ? text.normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase() : '';
+	const removeAccents = (str: string) => {
+		return str.normalize('NFD')
+			.replace(/[\u0300-\u036f]/g, '')
+			.replace(/đ/g, 'd')
+			.replace(/Đ/g, 'D');
+	};
+	const isMatch = (target: string, query: string) => {
+		if (!query) return true;
+		const t = normalizeText(target);
+		const q = normalizeText(query);
+		return t.includes(q) || removeAccents(t).includes(removeAccents(q));
+	};
 
 	// Form state
 	const [formData, setFormData] = useState({
@@ -180,7 +195,7 @@ const CustomerList = () => {
 				collection(db, 'customers'),
 				where('ownerId', '==', owner.ownerId),
 				orderBy('createdAt', 'desc'),
-				limit(100)
+				limit(1000)
 			);
 		} else {
 			q = query(
@@ -188,7 +203,7 @@ const CustomerList = () => {
 				where('ownerId', '==', owner.ownerId),
 				where('createdByEmail', '==', auth.currentUser?.email),
 				orderBy('createdAt', 'desc'),
-				limit(100)
+				limit(1000)
 			);
 		}
 
@@ -392,11 +407,12 @@ const CustomerList = () => {
 	};
 
 	const filteredCustomers = customers.filter(c => {
-		const matchesSearch = String(c.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-			String(c.businessName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-			String(c.phone || '').includes(searchTerm) ||
-			String(c.route || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-			String(c.email || '').toLowerCase().includes(searchTerm.toLowerCase());
+		const matchesSearch =
+			isMatch(c.name || '', searchTerm) ||
+			isMatch(c.businessName || '', searchTerm) ||
+			isMatch(c.phone || '', searchTerm) ||
+			isMatch(c.route || '', searchTerm) ||
+			isMatch(c.email || '', searchTerm);
 
 		const matchesRoute = selectedRoute === 'All' || c.route === selectedRoute;
 

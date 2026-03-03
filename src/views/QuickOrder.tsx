@@ -554,9 +554,9 @@ const QuickOrder = () => {
 	};
 
 	const filteredCustomers = customers.filter(c =>
-		String(c.name || '').toLowerCase().includes(searchCustomerQuery.toLowerCase()) ||
-		String(c.businessName || '').toLowerCase().includes(searchCustomerQuery.toLowerCase()) ||
-		String(c.phone || '').includes(searchCustomerQuery)
+		isMatch(c.name || '', searchCustomerQuery) ||
+		isMatch(c.businessName || '', searchCustomerQuery) ||
+		isMatch(c.phone || '', searchCustomerQuery)
 	);
 
 	const categories = Array.from(new Map([

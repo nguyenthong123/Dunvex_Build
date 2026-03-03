@@ -34,9 +34,24 @@ const ProductList = () => {
 	const [showMobileSearch, setShowMobileSearch] = useState(false);
 	const [showScanner, setShowScanner] = useState(false);
 	const [selectedIds, setSelectedIds] = useState<string[]>([]);
-	const itemsPerPage = 10;
+	const ITEMS_PER_PAGE = 20;
 	const searchRef = useRef<HTMLInputElement>(null);
 	const qrRef = useRef<HTMLCanvasElement>(null);
+
+	// Enhanced Search Functions
+	const normalizeText = (text: string) => text ? text.normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase() : '';
+	const removeAccents = (str: string) => {
+		return str.normalize('NFD')
+			.replace(/[\u0300-\u036f]/g, '')
+			.replace(/đ/g, 'd')
+			.replace(/Đ/g, 'D');
+	};
+	const isMatch = (target: string, query: string) => {
+		if (!query) return true;
+		const t = normalizeText(target);
+		const q = normalizeText(query);
+		return t.includes(q) || removeAccents(t).includes(removeAccents(q));
+	};
 
 	const [formData, setFormData] = useState({
 		name: '',
@@ -92,7 +107,7 @@ const ProductList = () => {
 		const q = query(
 			collection(db, 'products'),
 			where('ownerId', '==', owner.ownerId),
-			limit(200) // Products can be more numerous, but still limited
+			limit(1000)
 		);
 		const unsubscribe = onSnapshot(q, (snapshot: any) => {
 			const docs = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
@@ -485,14 +500,15 @@ const ProductList = () => {
 	};
 
 	const filteredProducts = products.filter(product =>
-		String(product.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-		String(product.sku || '').toLowerCase().includes(searchTerm.toLowerCase())
+		isMatch(product.name || '', searchTerm) ||
+		isMatch(product.sku || '', searchTerm) ||
+		isMatch(product.category || '', searchTerm)
 	);
 
-	const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
+	const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
 	const paginatedProducts = filteredProducts.slice(
-		(currentPage - 1) * itemsPerPage,
-		currentPage * itemsPerPage
+		(currentPage - 1) * ITEMS_PER_PAGE,
+		currentPage * ITEMS_PER_PAGE
 	);
 
 	const formatPrice = (price: number) => {
@@ -976,7 +992,7 @@ const ProductList = () => {
 						{totalPages > 1 && (
 							<div className="mt-8 mb-12 flex flex-col md:flex-row items-center justify-between gap-4">
 								<p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-									Hiển thị {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredProducts.length)} trên tổng {filteredProducts.length} sản phẩm
+									Hiển thị {((currentPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredProducts.length)} trên tổng {filteredProducts.length} sản phẩm
 								</p>
 								<div className="flex items-center gap-1">
 									<button

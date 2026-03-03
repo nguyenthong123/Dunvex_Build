@@ -300,6 +300,9 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     *   **Ràng buộc Danh mục**: Khi chọn danh mục cụ thể tại trình Lên đơn nhanh (Quick Order), hệ thống sẽ lọc **duy nhất** các sản phẩm thuộc danh mục đó.
     *   **Loại bỏ Fallback**: Không còn tình trạng hiện sản phẩm từ danh mục khác khi tìm không thấy trong danh mục hiện tại, giúp tránh nhầm lẫn giữa các loại hàng có cùng SKU nhưng khác nhóm giá/đối tượng.
     *   **Tìm kiếm Toàn cục**: Nếu muốn tìm kiếm tất cả sản phẩm, người dùng chỉ cần để trống ô Danh mục hoặc chọn "-- Tất cả danh mục --".
+- [x] **Vá lỗi Mobile UX (Mobile Focus & Zoom Fix - Mar 3)**:
+    *   **Ngăn ngừa Auto-zoom**: Nâng cấp toàn bộ font-size của các ô nhập liệu lên **16px (text-base)**. Điều này giúp ngăn trình duyệt (đặc biệt là iOS Safari) tự động phóng to và gây hiện tượng "nhảy" layout khi người dùng nhấn vào ô tìm khách hàng hoặc nhập số lượng.
+    *   **Click Outside**: Bổ sung cơ chế tự động đóng danh sách gợi ý khách hàng khi người dùng nhấn ra ngoài, giúp giao diện gọn gàng và ổn định hơn trên thiết bị di động.
 
 ### 📝 Cần làm tiếp (To-do)
 

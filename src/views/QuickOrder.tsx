@@ -70,6 +70,9 @@ const QuickOrder = () => {
 				setActiveRow(null);
 				setActiveField(null);
 			}
+			if (customerSearchRef.current && !customerSearchRef.current.contains(event.target as Node)) {
+				setShowCustomerResults(false);
+			}
 		};
 		document.addEventListener('mousedown', handleClickOutside);
 		return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -636,9 +639,10 @@ const QuickOrder = () => {
 								<Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-600" />
 								<input
 									type="text"
-									autoComplete="one-time-code"
+									inputMode="search"
+									autoComplete="off"
 									placeholder="Nhập tên hoặc tìm khách hàng..."
-									className="w-full pl-12 pr-4 h-14 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#f27121]/10 focus:border-[#f27121] transition-all placeholder:text-slate-300 dark:placeholder:text-slate-600"
+									className="w-full pl-12 pr-4 h-14 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-base font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#f27121]/10 focus:border-[#f27121] transition-all placeholder:text-slate-300 dark:placeholder:text-slate-600"
 									value={searchCustomerQuery}
 									onChange={(e) => {
 										setSearchCustomerQuery(e.target.value);
@@ -689,7 +693,7 @@ const QuickOrder = () => {
 							<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 ml-1">TRẠNG THÁI ĐƠN</label>
 							<div className="relative">
 								<select
-									className="w-full px-5 h-14 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#f27121]/10 appearance-none transition-all"
+									className="w-full px-5 h-14 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-base font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#f27121]/10 appearance-none transition-all"
 									value={orderStatus}
 									onChange={(e) => setOrderStatus(e.target.value)}
 								>
@@ -706,7 +710,7 @@ const QuickOrder = () => {
 							<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 ml-1">NGÀY LÊN ĐƠN</label>
 							<input
 								type="date"
-								className="w-full px-5 h-14 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#f27121]/10 appearance-none transition-all"
+								className="w-full px-5 h-14 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-base font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#f27121]/10 appearance-none transition-all"
 								value={orderDate}
 								onChange={(e) => setOrderDate(e.target.value)}
 							/>
@@ -719,7 +723,7 @@ const QuickOrder = () => {
 								rows={2}
 								autoComplete="off"
 								placeholder="Yêu cầu giao hàng sớm..."
-								className="w-full p-5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#f27121]/10 resize-none min-h-[100px] placeholder:text-slate-300 dark:placeholder:text-slate-600"
+								className="w-full px-5 py-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-base font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#f27121]/10 transition-all placeholder:text-slate-300 dark:placeholder:text-slate-600 outline-none"
 								value={orderNote}
 								onChange={(e) => setOrderNote(e.target.value)}
 							/>
@@ -775,7 +779,7 @@ const QuickOrder = () => {
 															autoFocus
 															type="text"
 															placeholder="Gõ để tìm nhanh..."
-															className="w-full h-11 px-4 bg-slate-50 dark:bg-slate-900 border-none rounded-xl text-xs font-bold focus:ring-0"
+															className="w-full h-11 px-4 bg-slate-50 dark:bg-slate-900 border-none rounded-xl text-base font-bold focus:ring-0"
 															value={lineSearchQuery}
 															onChange={(e) => setLineSearchQuery(e.target.value)}
 														/>
@@ -848,7 +852,7 @@ const QuickOrder = () => {
 															autoFocus
 															type="text"
 															placeholder="Tìm theo tên hoặc SKU..."
-															className="w-full h-11 px-4 bg-slate-50 dark:bg-slate-900 border-none rounded-xl text-xs font-bold focus:ring-0"
+															className="w-full h-11 px-4 bg-slate-50 dark:bg-slate-900 border-none rounded-xl text-base font-bold focus:ring-0"
 															value={lineSearchQuery}
 															onChange={(e) => setLineSearchQuery(e.target.value)}
 														/>
@@ -932,7 +936,7 @@ const QuickOrder = () => {
 												<input
 													type="number"
 													step="any"
-													className="w-full h-12 text-center bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl text-sm font-black text-slate-900 dark:text-white focus:ring-2 focus:ring-[#f27121]/10 focus:border-[#f27121] transition-all"
+													className="w-full h-12 text-center bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl text-base font-black text-slate-900 dark:text-white focus:ring-2 focus:ring-[#f27121]/10 focus:border-[#f27121] transition-all"
 													value={item.qty}
 													onChange={(e) => updateLineItem(index, 'qty', e.target.value)}
 													placeholder="0"
@@ -946,7 +950,7 @@ const QuickOrder = () => {
 											<div className="relative w-full md:w-32">
 												<input
 													type="number"
-													className="w-full h-12 text-center bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl text-[11px] font-black text-slate-500 dark:text-slate-400 focus:ring-2 focus:ring-[#f27121]/10 focus:border-[#f27121] transition-all"
+													className="w-full h-12 text-center bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl text-base font-black text-slate-500 dark:text-slate-400 focus:ring-2 focus:ring-[#f27121]/10 focus:border-[#f27121] transition-all"
 													value={item.price === 0 ? '' : item.price}
 													onChange={(e) => updateLineItem(index, 'price', e.target.value === '' ? 0 : Number(e.target.value))}
 													placeholder="Giá bán"
@@ -1039,7 +1043,7 @@ const QuickOrder = () => {
 												type="text"
 												autoComplete="off"
 												placeholder="Nhập mã..."
-												className="w-full h-14 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl pl-12 pr-4 text-sm font-black text-indigo-600 uppercase focus:ring-indigo-500 transition-all"
+												className="w-full h-14 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl pl-12 pr-4 text-base font-black text-indigo-600 uppercase focus:ring-indigo-500 transition-all"
 												value={couponCode}
 												onChange={(e) => setCouponCode(e.target.value)}
 											/>
@@ -1058,7 +1062,7 @@ const QuickOrder = () => {
 										type="number"
 										autoComplete="off"
 										placeholder="0"
-										className="w-full h-14 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl px-6 text-sm font-bold text-slate-900 dark:text-white focus:ring-[#f27121]"
+										className="w-full h-14 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl px-6 text-base font-bold text-slate-900 dark:text-white focus:ring-[#f27121]"
 										value={shippingFee === 0 ? '' : shippingFee}
 										onChange={(e) => setShippingFee(e.target.value === '' ? 0 : Number(e.target.value))}
 									/>
@@ -1069,7 +1073,7 @@ const QuickOrder = () => {
 										type="number"
 										autoComplete="off"
 										placeholder="0"
-										className="w-full h-14 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl px-6 text-sm font-bold text-slate-900 dark:text-white focus:ring-[#f27121]"
+										className="w-full h-14 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl px-6 text-base font-bold text-slate-900 dark:text-white focus:ring-[#f27121]"
 										value={discountAmt === 0 ? '' : discountAmt}
 										onChange={(e) => setDiscountAmt(e.target.value === '' ? 0 : Number(e.target.value))}
 									/>

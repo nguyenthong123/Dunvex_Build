@@ -12,14 +12,14 @@ const QuickOrder = () => {
 	const { id } = useParams();
 	const owner = useOwner();
 	const { showToast } = useToast();
-	const normalizeText = (text: string) => text ? text.normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase() : '';
+	const normalizeText = (text: any) => text ? String(text).normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase() : '';
 	const vibrate = (pattern: number | number[]) => {
 		if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) {
 			window.navigator.vibrate(pattern);
 		}
 	};
-	const removeAccents = (str: string) => {
-		return str.normalize('NFD')
+	const removeAccents = (str: any) => {
+		return String(str || '').normalize('NFD')
 			.replace(/[\u0300-\u036f]/g, '')
 			.replace(/đ/g, 'd')
 			.replace(/Đ/g, 'D');

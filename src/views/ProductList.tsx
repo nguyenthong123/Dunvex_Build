@@ -39,9 +39,9 @@ const ProductList = () => {
 	const qrRef = useRef<HTMLCanvasElement>(null);
 
 	// Enhanced Search Functions
-	const normalizeText = (text: string) => text ? text.normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase() : '';
-	const removeAccents = (str: string) => {
-		return str.normalize('NFD')
+	const normalizeText = (text: any) => text ? String(text).normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase() : '';
+	const removeAccents = (str: any) => {
+		return String(str || '').normalize('NFD')
 			.replace(/[\u0300-\u036f]/g, '')
 			.replace(/đ/g, 'd')
 			.replace(/Đ/g, 'D');

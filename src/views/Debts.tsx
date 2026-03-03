@@ -52,6 +52,24 @@ const Debts: React.FC = () => {
 
 	// Modals/Editing
 	const [showPaymentForm, setShowPaymentForm] = useState(false);
+	const [showPaymentCustomerResults, setShowPaymentCustomerResults] = useState(false);
+	const [paymentCustomerSearchQuery, setPaymentCustomerSearchQuery] = useState('');
+	const paymentCustomerRef = React.useRef<HTMLDivElement>(null);
+
+	const normalizeText = (text: any) => text ? String(text).normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase() : '';
+	const removeAccents = (str: any) => {
+		return String(str || '').normalize('NFD')
+			.replace(/[\u0300-\u036f]/g, '')
+			.replace(/đ/g, 'd')
+			.replace(/Đ/g, 'D');
+	};
+	const isMatch = (target: string, query: string) => {
+		if (!query) return true;
+		const t = normalizeText(target);
+		const q = normalizeText(query);
+		return t.includes(q) || removeAccents(t).includes(removeAccents(q));
+	};
+
 	const [unreadCount, setUnreadCount] = useState(0);
 	const [currentPage, setCurrentPage] = useState(1);
 	const ITEMS_PER_PAGE = 10;
@@ -111,6 +129,16 @@ const Debts: React.FC = () => {
 	const [statementToDate, setStatementToDate] = useState('');
 	const [statementScale, setStatementScale] = useState(1);
 	const [statementZoom, setStatementZoom] = useState(0.85);
+
+	useEffect(() => {
+		const handleClickOutside = (event: MouseEvent) => {
+			if (paymentCustomerRef.current && !paymentCustomerRef.current.contains(event.target as Node)) {
+				setShowPaymentCustomerResults(false);
+			}
+		};
+		document.addEventListener('mousedown', handleClickOutside);
+		return () => document.removeEventListener('mousedown', handleClickOutside);
+	}, []);
 
 	useEffect(() => {
 		if (showStatement) {
@@ -1040,21 +1068,66 @@ const Debts: React.FC = () => {
 							</button>
 						</div>
 						<form onSubmit={handleRecordPayment} className="p-8 space-y-6">
-							<div>
-								<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">Chọn khách hàng</label>
-								<select
-									className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#FF6D00]/20 appearance-none"
-									value={paymentData.customerId}
-									onChange={(e) => {
-										const cust = customers.find((c: any) => c.id === e.target.value);
-										setPaymentData({ ...paymentData, customerId: e.target.value, customerName: cust?.name || '' });
-									}}
-								>
-									<option value="">-- Chọn khách hàng --</option>
-									{customers.map((c: any) => (
-										<option key={c.id} value={c.id}>{c.name}</option>
-									))}
-								</select>
+							<div ref={paymentCustomerRef} className="relative">
+								<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">Tìm khách hàng / Cơ sở</label>
+								<div className="relative">
+									<History size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
+									<input
+										type="text"
+										placeholder="Nhập tên khách hoặc tên cơ sở..."
+										className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl pl-12 pr-4 py-4 text-base font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#FF6D00]/20"
+										value={paymentData.customerName || paymentCustomerSearchQuery}
+										onFocus={() => {
+											setShowPaymentCustomerResults(true);
+											if (paymentData.customerName) {
+												setPaymentCustomerSearchQuery('');
+												setPaymentData(prev => ({ ...prev, customerId: '', customerName: '' }));
+											}
+										}}
+										onChange={(e) => {
+											setPaymentCustomerSearchQuery(e.target.value);
+											setPaymentData(prev => ({ ...prev, customerId: '', customerName: e.target.value }));
+										}}
+									/>
+									{showPaymentCustomerResults && (
+										<div className="absolute z-[200] top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden max-h-64 overflow-y-auto custom-scrollbar">
+											{aggregatedData
+												.filter(c => (c.totalOrdersAmount > 0 || c.totalPaymentsAmount > 0) && isMatch(c.businessName || c.name || '', paymentCustomerSearchQuery))
+												.slice(0, 50)
+												.map(c => (
+													<div
+														key={c.id}
+														className="px-5 py-4 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors border-b border-slate-50 dark:border-slate-700 last:border-none"
+														onClick={() => {
+															setPaymentData({ ...paymentData, customerId: c.id, customerName: c.businessName || c.name });
+															setPaymentCustomerSearchQuery(c.businessName || c.name);
+															setShowPaymentCustomerResults(false);
+														}}
+													>
+														<div className="flex flex-col">
+															<span className="text-sm font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight">
+																{c.businessName || c.name}
+															</span>
+															{c.businessName && c.name !== c.businessName && (
+																<span className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{c.name}</span>
+															)}
+															<div className="flex items-center gap-3 mt-1">
+																<span className="text-[10px] text-slate-400 font-bold uppercase">{c.phone || '#' + c.id.slice(-6).toUpperCase()}</span>
+																{c.currentDebt > 0 && (
+																	<span className="text-[10px] text-rose-500 font-black uppercase">Nợ: {formatPrice(c.currentDebt)}</span>
+																)}
+															</div>
+														</div>
+													</div>
+												))}
+											{aggregatedData.filter(c => isMatch(c.businessName || c.name || '', paymentCustomerSearchQuery)).length === 0 && (
+												<div className="px-5 py-8 text-center text-slate-400 text-[10px] font-black uppercase tracking-widest">
+													Không tìm thấy khách hàng
+												</div>
+											)}
+										</div>
+									)}
+								</div>
 							</div>
 
 

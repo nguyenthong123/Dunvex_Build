@@ -188,6 +188,9 @@ const ProductList = () => {
 		if (params.get('new') === 'true') {
 			setShowAddForm(true);
 			navigate('/inventory', { replace: true });
+		} else if (params.get('tab') === 'inventory') {
+			setActiveTab('inventory');
+			navigate('/inventory', { replace: true });
 		} else if (params.get('tab') === 'logs') {
 			setActiveTab('logs');
 			navigate('/inventory', { replace: true });

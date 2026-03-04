@@ -184,7 +184,7 @@ export const useNavigationConfig = () => {
 				allItems[0], // Trang chủ
 				{ icon: 'search', label: 'Tìm kiếm', path: '/inventory?search=focus' }, // Thay Sản phẩm bằng Tìm kiếm
 				allItems[2], // Center (Thêm SP)
-				{ icon: 'history', label: 'Lịch sử kho', path: '/inventory?tab=logs' }, // Thay Khách hàng bằng Lịch sử kho
+				{ icon: 'inventory', label: 'Tồn kho gộp', path: '/inventory?tab=inventory' }, // Thay Khách hàng bằng Tồn kho gộp
 				{ icon: 'upload_file', label: 'Nhập Excel', path: '/inventory?import=true' }, // Thay Báo giá bằng Nhập Excel
 			];
 		} else if (path === '/debts') {

@@ -167,7 +167,13 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 - [x] **Phiếu Giao Hàng & Đóng gói (Branding Upgrade - Mar 4)**:
     *   **Tính Kiện tự động**: Tự động tính toán tổng số Kiện dựa trên tỷ lệ đóng gói (`qty / packaging`) và hiển thị trên Phiếu giao hàng (Order Ticket).
     *   **Thương hiệu Chuyên nghiệp**: Tích hợp Thông tin Doanh nghiệp (Tên, Địa chỉ, SĐT, Email) và biểu tượng nhận diện vào đầu Phiếu giao hàng, mang lại diện mạo chuyên nghiệp đồng bộ với Báo giá hệ thống.
-    *   **Logo Doanh Nghiệp**: Tích hợp trình tải lên logo qua Cloudinary, tự động hiển thị trên đầu phiếu giao hàng thay cho biểu tượng mặc định.
+    - [x] **Logo Doanh Nghiệp**: Tích hợp trình tải lên logo qua Cloudinary, tự động hiển thị trên đầu phiếu giao hàng thay cho biểu tượng mặc định.
+- [x] **Tái cấu trúc Danh sách Sản phẩm (Product List Refinement - Mar 4)**:
+    *   **Giao diện Tab thông minh**: Triển khai 3 tab hiển thị chuyên biệt: **DANH SÁCH SP** (Toàn bộ mặt hàng), **TỒN KHO GỘP** (Gộp theo SKU) và **LỊCH SỬ KHO** (Lịch sử giao dịch).
+    *   **Gộp SKU Tồn kho**: Tự động tính toán và hiển thị tồn kho gộp cho các sản phẩm có cùng mã SKU, giúp quản lý hàng hóa đa danh mục chính xác hơn.
+    *   **Logic Trừ Kho Chính Xác**: Khắc phục lỗi trừ kho dựa trên số lượng ban đầu. Giờ đây hệ thống trừ trực tiếp vào số dư hiện tại và chỉ áp dụng cho đơn hàng trạng thái "Đơn chốt" và "Đang giao".
+    *   **Tối ưu Search Bar**: Thanh tìm kiếm được thiết kế ẩn/hiện thông minh theo từng tab (ẩn tại Lịch sử kho) để tối ưu không gian hiển thị trên desktop.
+    *   **Pagination & Syntax Fix**: Khắc phục các lỗi hiển thị phân trang và đảm bảo cấu trúc JSX chuẩn hóa, tránh treo ứng dụng khi duyệt danh mục lớn.
 - [x] **Báo cáo & Phân tích thời gian thực (Dashboard Live)**: 
     - **Doanh thu & Lợi nhuận**: Tự động tính toán Doanh thu và Lợi nhuận gộp (giá bán - giá nhập) theo ngày và theo tháng từ dữ liệu thực tế của Firestore.
     - **Biểu đồ Tăng trưởng**: Chuyển đổi biểu đồ tĩnh sang biểu đồ động, hiển thị doanh thu 7 ngày gần nhất với cơ chế tự động cân bằng tỷ lệ (Auto-scale).

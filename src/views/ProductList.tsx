@@ -1,6 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
-import { List } from 'react-window';
-import { AutoSizer } from 'react-virtualized-auto-sizer';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, where, writeBatch, increment, limit } from 'firebase/firestore';
@@ -28,8 +26,10 @@ const ProductList = () => {
 	const [searchTerm, setSearchTerm] = useState('');
 	const [uploading, setUploading] = useState(false);
 	const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-	const [activeTab, setActiveTab] = useState<'products' | 'logs'>('products');
+	const [activeTab, setActiveTab] = useState<'products' | 'inventory' | 'logs'>('products');
 	const [inventoryLogs, setInventoryLogs] = useState<any[]>([]);
+	const [orders, setOrders] = useState<any[]>([]);
+	const [expandedSkus, setExpandedSkus] = useState<Set<string>>(new Set());
 	const [currentPage, setCurrentPage] = useState(1);
 	const [showMobileSearch, setShowMobileSearch] = useState(false);
 	const [showScanner, setShowScanner] = useState(false);
@@ -166,6 +166,22 @@ const ProductList = () => {
 		return unsubscribe;
 	}, [owner.loading, owner.ownerId, activeTab]);
 
+	// Fetch Orders (To filter inventory logs by status)
+	useEffect(() => {
+		if (owner.loading || !owner.ownerId) return;
+
+		const q = query(
+			collection(db, 'orders'),
+			where('ownerId', '==', owner.ownerId),
+			limit(1000)
+		);
+		const unsubscribe = onSnapshot(q, (snapshot) => {
+			const docs = snapshot.docs.map(doc => ({ id: doc.id, status: doc.data().status }));
+			setOrders(docs);
+		});
+		return unsubscribe;
+	}, [owner.loading, owner.ownerId]);
+
 	const { search } = useLocation();
 	useEffect(() => {
 		const params = new URLSearchParams(search);
@@ -225,20 +241,102 @@ const ProductList = () => {
 		}
 	};
 
-	// Helper to compute stats from logs
-	const getProductInventoryStats = (productId: string) => {
-		const logs = inventoryLogs.filter(l => l.productId === productId);
+
+	// Helper to compute stats from logs (now supports SKU grouping)
+	const getProductInventoryStats = (productId: string, sku?: string) => {
+		let targetIds = [productId];
+		if (sku && sku.trim() !== '') {
+			targetIds = products.filter(p => p.sku === sku).map(p => p.id);
+		}
+
+		// Map orders to their status for filtering
+		const orderStatusMap: Record<string, string> = {};
+		orders.forEach(o => {
+			orderStatusMap[o.id] = o.status;
+		});
+
+		const logs = inventoryLogs.filter(l => targetIds.includes(l.productId));
 
 		const totalImport = logs
 			.filter(l => l.type === 'init' || (l.type === 'audit' && l.diffType === 'increase'))
 			.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
 
 		const totalExport = logs
-			.filter(l => l.type === 'out' || (l.type === 'audit' && l.diffType === 'decrease'))
+			.filter(l => {
+				const isOutType = l.type === 'out' || (l.type === 'audit' && l.diffType === 'decrease');
+				if (!isOutType) return false;
+
+				// If it's an order (type 'out'), verify status
+				if (l.type === 'out' && l.orderId) {
+					const status = orderStatusMap[l.orderId];
+					return status === 'Đơn chốt' || status === 'Đang giao';
+				}
+
+				return true;
+			})
 			.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
 
 		return { import: totalImport, export: totalExport };
 	};
+
+	// Group products by SKU for display and aggregate stats
+	const groupedProducts = useMemo(() => {
+		const groups: Record<string, any> = {};
+
+		// Map orders to their status for filtering
+		const orderStatusMap: Record<string, string> = {};
+		orders.forEach(o => {
+			orderStatusMap[o.id] = o.status;
+		});
+
+		// Map products to their individual stats first
+		const productStats: Record<string, { import: number, export: number }> = {};
+		products.forEach(p => {
+			const logs = inventoryLogs.filter(l => l.productId === p.id);
+			const totalImport = logs
+				.filter(l => l.type === 'init' || (l.type === 'audit' && l.diffType === 'increase'))
+				.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+
+			const totalExport = logs
+				.filter(l => {
+					const isOutType = l.type === 'out' || (l.type === 'audit' && l.diffType === 'decrease');
+					if (!isOutType) return false;
+
+					// If it's an order (type 'out'), verify status
+					if (l.type === 'out' && l.orderId) {
+						const status = orderStatusMap[l.orderId];
+						// Only count 'Đơn chốt' or 'Đang giao'
+						return status === 'Đơn chốt' || status === 'Đang giao';
+					}
+
+					return true; // Keep audit/manual decreases
+				})
+				.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+
+			productStats[p.id] = { import: totalImport, export: totalExport };
+		});
+
+		products.forEach(p => {
+			const key = p.sku && p.sku.trim() !== '' ? p.sku.trim().toLowerCase() : `ID-${p.id}`;
+			if (!groups[key]) {
+				groups[key] = {
+					...p,
+					stock: Number(p.stock) || 0,
+					skuImport: productStats[p.id].import,
+					skuExport: productStats[p.id].export,
+					memberIds: [p.id],
+					groupKey: key
+				};
+			} else {
+				groups[key].stock += (Number(p.stock) || 0);
+				groups[key].skuImport += productStats[p.id].import;
+				groups[key].skuExport += productStats[p.id].export;
+				groups[key].memberIds.push(p.id);
+				groups[key].isGrouped = true;
+			}
+		});
+		return Object.values(groups);
+	}, [products, inventoryLogs, orders]);
 
 	const handleAddProduct = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -499,7 +597,9 @@ const ProductList = () => {
 		setShowDetail(true);
 	};
 
-	const filteredProducts = products.filter(product =>
+	const sourceList = activeTab === 'products' ? products : groupedProducts;
+
+	const filteredProducts = sourceList.filter(product =>
 		isMatch(product.name || '', searchTerm) ||
 		isMatch(product.sku || '', searchTerm) ||
 		isMatch(product.category || '', searchTerm)
@@ -656,7 +756,13 @@ const ProductList = () => {
 							onClick={() => setActiveTab('products')}
 							className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all ${activeTab === 'products' ? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm' : 'text-slate-400'}`}
 						>
-							TỒN KHO CHI TIẾT
+							DANH SÁCH SP
+						</button>
+						<button
+							onClick={() => setActiveTab('inventory')}
+							className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all ${activeTab === 'inventory' ? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm' : 'text-slate-400'}`}
+						>
+							TỒN KHO GỘP
 						</button>
 						<button
 							onClick={() => setActiveTab('logs')}
@@ -666,17 +772,19 @@ const ProductList = () => {
 						</button>
 					</div>
 
-					<div className="hidden md:flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-full px-4 py-2 w-64 border border-slate-200 dark:border-transparent focus-within:border-[#FF6D00] focus-within:bg-white dark:focus-within:bg-slate-900 transition-all">
-						<span className="material-symbols-outlined text-slate-500 text-lg">search</span>
-						<input
-							ref={searchRef}
-							type="text"
-							placeholder="Tìm tên, mã SKU..."
-							className="bg-transparent border-none outline-none w-full text-sm font-black text-slate-900 dark:text-slate-200 placeholder:text-slate-500"
-							value={searchTerm}
-							onChange={(e) => setSearchTerm(e.target.value)}
-						/>
-					</div>
+					{activeTab !== 'logs' && (
+						<div className="hidden md:flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-full px-4 py-2 w-64 border border-slate-200 dark:border-transparent focus-within:border-[#FF6D00] focus-within:bg-white dark:focus-within:bg-slate-900 transition-all">
+							<span className="material-symbols-outlined text-slate-500 text-lg">search</span>
+							<input
+								ref={searchRef}
+								type="text"
+								placeholder="Tìm tên, mã SKU..."
+								className="bg-transparent border-none outline-none w-full text-sm font-black text-slate-900 dark:text-slate-200 placeholder:text-slate-500"
+								value={searchTerm}
+								onChange={(e) => setSearchTerm(e.target.value)}
+							/>
+						</div>
+					)}
 
 					{hasManagePermission && (
 						<div className="flex items-center gap-2">
@@ -731,7 +839,7 @@ const ProductList = () => {
 			<div className="flex-1 p-4 md:p-8 overflow-y-auto custom-scrollbar">
 
 				{/* Mobile Search Bar - Conditional */}
-				{showMobileSearch && activeTab === 'products' && (
+				{showMobileSearch && (activeTab === 'products' || activeTab === 'inventory') && (
 					<div className="md:hidden mb-6 animate-in slide-in-from-top duration-300">
 						<div className="flex items-center gap-3 bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-200 dark:border-slate-800">
 							<span className="material-symbols-outlined text-slate-400">search</span>
@@ -759,289 +867,498 @@ const ProductList = () => {
 				)}
 
 				{/* Main Content Area */}
-				{activeTab === 'products' ? (
+				{activeTab !== 'logs' ? (
 					<>
 						{/* Table - Desktop */}
 						<div className="hidden md:block bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-800 overflow-hidden transition-colors duration-300">
 							<table className="w-full text-left">
-								<thead>
-									<tr className="bg-slate-100/50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
-										<th className="py-4 px-6 w-10">
-											<input
-												type="checkbox"
-												className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-												checked={paginatedProducts.length > 0 && paginatedProducts.every(p => selectedIds.includes(p.id))}
-												onChange={toggleSelectAll}
-											/>
-										</th>
-										<th className="py-4 px-2 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Mã SKU / Code</th>
-										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Tên sản phẩm</th>
-										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Nhập kho</th>
-										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Xuất kho</th>
-										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Còn lại</th>
-										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-right">Hành động</th>
-									</tr>
-								</thead>
-								<tbody className="divide-y divide-gray-100 dark:divide-slate-800">
-									{loading ? (
-										[1, 2, 3, 4, 5].map(i => (
-											<tr key={i} className="animate-pulse">
-												<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800"><div className="size-4 skeleton" /></td>
-												<td className="py-4 px-2 border-b border-slate-50 dark:border-slate-800"><div className="w-24 h-4 skeleton" /></td>
-												<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800">
-													<div className="w-48 h-4 skeleton mb-2" />
-													<div className="w-20 h-3 skeleton opacity-60" />
-												</td>
-												<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800"><div className="w-12 h-4 skeleton mx-auto" /></td>
-												<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800"><div className="w-12 h-4 skeleton mx-auto" /></td>
-												<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800"><div className="w-12 h-6 skeleton mx-auto rounded-full" /></td>
-												<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800"><div className="w-20 h-8 skeleton ml-auto" /></td>
-											</tr>
-										))
-									) : paginatedProducts.length === 0 ? (
-										<tr><td colSpan={7} className="py-8 text-center text-slate-400 dark:text-slate-500">Không tìm thấy sản phẩm nào</td></tr>
-									) : (
-										paginatedProducts.map((product) => (
-											<tr key={product.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer ${selectedIds.includes(product.id) ? 'bg-indigo-50/30' : ''}`} onClick={() => openDetail(product)}>
-												<td className="py-4 px-6" onClick={(e) => e.stopPropagation()}>
+								{activeTab === 'products' ? (
+									<>
+										<thead>
+											<tr className="bg-slate-100/50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
+												<th className="py-4 px-6 w-10">
 													<input
 														type="checkbox"
 														className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-														checked={selectedIds.includes(product.id)}
-														onChange={() => toggleSelect(product.id)}
+														checked={paginatedProducts.length > 0 && paginatedProducts.every(p => selectedIds.includes(p.id))}
+														onChange={toggleSelectAll}
 													/>
-												</td>
-												<td className="py-4 px-2" onClick={(e) => e.stopPropagation()}>
-													<div
-														className="flex items-center gap-1.5 cursor-pointer hover:text-blue-600 dark:hover:text-indigo-400 transition-colors group/sku"
-														onClick={() => copyToClipboard(product.sku || '#' + product.id.slice(-6).toUpperCase(), 'mã SKU')}
-														title="Copy mã SKU"
-													>
-														<span className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-															{product.sku || '#' + product.id.slice(-6).toUpperCase()}
-														</span>
-														<span className="material-symbols-outlined text-[14px] opacity-0 group-hover/sku:opacity-100 transition-opacity">content_copy</span>
-													</div>
-												</td>
-												<td className="py-4 px-6">
-													<div className="font-black text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-indigo-400 transition-colors">
-														{product.name}
-													</div>
-													<div className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest mt-0.5 opacity-60">
-														{product.category}
-													</div>
-												</td>
-												<td className="py-4 px-6 text-center bg-slate-50/50 dark:bg-slate-800/30">
-													<div className="flex flex-col items-center">
-														<span className="text-sm font-black text-slate-600 dark:text-slate-300">
-															{getProductInventoryStats(product.id).import}
-														</span>
-														<span className="text-[9px] text-slate-400 uppercase font-black tracking-widest">{product.unit}</span>
-													</div>
-												</td>
-												<td className="py-4 px-6 text-center">
-													<div className="flex flex-col items-center">
-														<span className="text-sm font-black text-orange-600 dark:text-orange-400">
-															{getProductInventoryStats(product.id).export}
-														</span>
-														<span className="text-[9px] text-slate-400 uppercase font-black tracking-widest">{product.unit}</span>
-													</div>
-												</td>
-												<td className="py-4 px-6 text-center bg-indigo-50/30 dark:bg-indigo-900/10">
-													<div className="flex flex-col items-center">
-														<span className={`text-base font-black ${product.stock <= 5 ? 'text-rose-500' : 'text-[#1A237E] dark:text-indigo-400'}`}>
-															{product.stock}
-														</span>
-														<span className="text-[9px] text-slate-400 uppercase font-black tracking-widest">{product.unit}</span>
-													</div>
-												</td>
-												<td className="py-4 px-6 text-right">
-													{hasManagePermission && (
-														<div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-															{deleteConfirmId === product.id ? (
-																<div className="flex items-center gap-1 bg-rose-50 dark:bg-rose-900/20 p-1 rounded-lg border border-rose-100 dark:border-rose-900/30 animate-in fade-in zoom-in duration-200">
-																	<button
-																		onClick={() => setDeleteConfirmId(null)}
-																		className="px-2 py-1 text-[10px] font-bold text-slate-500 hover:text-slate-700 bg-white dark:bg-slate-800 rounded shadow-sm"
-																	>
-																		Hủy
-																	</button>
-																	<button
-																		onClick={() => {
-																			handleDeleteProduct(product.id, true);
-																			setDeleteConfirmId(null);
-																		}}
-																		className="px-2 py-1 text-[10px] font-bold text-white bg-rose-500 hover:bg-rose-600 rounded shadow-sm"
-																	>
-																		Xác nhận
-																	</button>
+												</th>
+												<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Sản phẩm</th>
+												<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Mã SKU</th>
+												<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-right">Giá Bán</th>
+												<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Tồn kho</th>
+												<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Trạng thái</th>
+												<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-right">Hành động</th>
+											</tr>
+										</thead>
+										<tbody className="divide-y divide-gray-100 dark:divide-slate-800">
+											{loading ? (
+												[1, 2, 3, 4, 5].map(i => (
+													<tr key={i} className="animate-pulse">
+														<td className="py-4 px-6"><div className="size-4 skeleton" /></td>
+														<td className="py-4 px-6"><div className="w-48 h-4 skeleton" /></td>
+														<td className="py-4 px-6"><div className="w-24 h-4 skeleton" /></td>
+														<td className="py-4 px-6"><div className="w-20 h-4 skeleton ml-auto" /></td>
+														<td className="py-4 px-6"><div className="w-12 h-4 skeleton mx-auto" /></td>
+														<td className="py-4 px-6"><div className="w-16 h-4 skeleton mx-auto" /></td>
+														<td className="py-4 px-6"><div className="w-20 h-8 skeleton ml-auto" /></td>
+													</tr>
+												))
+											) : paginatedProducts.length === 0 ? (
+												<tr><td colSpan={7} className="py-8 text-center text-slate-400">Không tìm thấy sản phẩm nào</td></tr>
+											) : (
+												paginatedProducts.map((product) => (
+													<tr key={product.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer ${selectedIds.includes(product.id) ? 'bg-indigo-50/30' : ''}`} onClick={() => openDetail(product)}>
+														<td className="py-4 px-6" onClick={(e) => e.stopPropagation()}>
+															<input
+																type="checkbox"
+																className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+																checked={selectedIds.includes(product.id)}
+																onChange={() => toggleSelect(product.id)}
+															/>
+														</td>
+														<td className="py-4 px-6">
+															<div className="flex items-center gap-3">
+																<div className="size-10 rounded-lg bg-slate-50 dark:bg-slate-800 flex items-center justify-center overflow-hidden border border-slate-100 dark:border-slate-700">
+																	{product.imageUrl ? <img src={getImageUrl(product.imageUrl)} alt="" className="size-full object-cover" /> : <span className="material-symbols-outlined text-slate-300">image</span>}
 																</div>
-															) : (
-																<>
-																	<button onClick={() => openEdit(product)} className="p-2 text-slate-300 dark:text-slate-600 hover:text-[#1A237E] dark:hover:text-indigo-400 transition-colors">
+																<div>
+																	<div className="font-bold text-slate-900 dark:text-white">{product.name}</div>
+																	<div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{product.category}</div>
+																</div>
+															</div>
+														</td>
+														<td className="py-4 px-6">
+															<div className="flex items-center gap-1.5 group/sku" onClick={(e) => { e.stopPropagation(); copyToClipboard(product.sku || product.id, 'mã SKU'); }}>
+																<span className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">{product.sku || 'N/A'}</span>
+																<span className="material-symbols-outlined text-[14px] opacity-0 group-hover/sku:opacity-100">content_copy</span>
+															</div>
+														</td>
+														<td className="py-4 px-6 text-right">
+															<div className="font-black text-[#1A237E] dark:text-indigo-400">{formatPrice(product.priceSell)}</div>
+														</td>
+														<td className="py-4 px-6 text-center">
+															<div className={`text-sm font-black ${product.stock <= 5 ? 'text-rose-500' : 'text-slate-600 dark:text-slate-300'}`}>{product.stock} {product.unit}</div>
+														</td>
+														<td className="py-4 px-6 text-center">
+															<span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${product.status === 'Kinh doanh' ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-500'}`}>
+																{product.status || 'Kinh doanh'}
+															</span>
+														</td>
+														<td className="py-4 px-6 text-right">
+															{hasManagePermission && (
+																<div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+																	<button onClick={() => openEdit(product)} className="p-2 text-slate-300 hover:text-orange-500 transition-colors">
 																		<span className="material-symbols-outlined text-[20px]">edit</span>
 																	</button>
-																	<button onClick={() => setDeleteConfirmId(product.id)} className="p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors">
+																	<button onClick={() => setDeleteConfirmId(product.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
 																		<span className="material-symbols-outlined text-[20px]">delete</span>
 																	</button>
-																</>
+																</div>
 															)}
-														</div>
-													)}
-												</td>
+														</td>
+													</tr>
+												))
+											)}
+										</tbody>
+									</>
+								) : (
+									<>
+										<thead>
+											<tr className="bg-slate-100/50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
+												<th className="py-4 px-6 w-10">
+													<input
+														type="checkbox"
+														className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+														checked={paginatedProducts.length > 0 && paginatedProducts.every(p => selectedIds.includes(p.id))}
+														onChange={toggleSelectAll}
+													/>
+												</th>
+												<th className="py-4 px-2 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Mã SKU / Code</th>
+												<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Tên sản phẩm (Gộp)</th>
+												<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Nhập kho</th>
+												<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Xuất kho</th>
+												<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Còn lại</th>
+												<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-right">Hành động</th>
 											</tr>
-										))
-									)}
-								</tbody>
+										</thead>
+										<tbody className="divide-y divide-gray-100 dark:divide-slate-800">
+											{loading ? (
+												[1, 2, 3, 4, 5].map(i => (
+													<tr key={i} className="animate-pulse">
+														<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800"><div className="size-4 skeleton" /></td>
+														<td className="py-4 px-2 border-b border-slate-50 dark:border-slate-800"><div className="w-24 h-4 skeleton" /></td>
+														<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800">
+															<div className="w-48 h-4 skeleton mb-2" />
+															<div className="w-20 h-3 skeleton opacity-60" />
+														</td>
+														<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800"><div className="w-12 h-4 skeleton mx-auto" /></td>
+														<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800"><div className="w-12 h-4 skeleton mx-auto" /></td>
+														<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800"><div className="w-12 h-6 skeleton mx-auto rounded-full" /></td>
+														<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800"><div className="w-20 h-8 skeleton ml-auto" /></td>
+													</tr>
+												))
+											) : paginatedProducts.length === 0 ? (
+												<tr><td colSpan={7} className="py-8 text-center text-slate-400 dark:text-slate-500">Không tìm thấy sản phẩm nào</td></tr>
+											) : (
+												paginatedProducts.map((product) => (
+													<React.Fragment key={product.groupKey || product.id}>
+														<tr className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer ${selectedIds.includes(product.id) ? 'bg-indigo-50/30' : ''}`} onClick={() => openDetail(product)}>
+															<td className="py-4 px-6" onClick={(e) => e.stopPropagation()}>
+																<input
+																	type="checkbox"
+																	className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+																	checked={selectedIds.includes(product.id)}
+																	onChange={() => toggleSelect(product.id)}
+																/>
+															</td>
+															<td className="py-4 px-2" onClick={(e) => e.stopPropagation()}>
+																<div
+																	className="flex items-center gap-1.5 cursor-pointer hover:text-blue-600 dark:hover:text-indigo-400 transition-colors group/sku"
+																	onClick={() => copyToClipboard(product.sku || '#' + (product.id || '').slice(-6).toUpperCase(), 'mã SKU')}
+																	title="Copy mã SKU"
+																>
+																	<span className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+																		{product.sku || '#' + (product.id || '').slice(-6).toUpperCase()}
+																	</span>
+																	<span className="material-symbols-outlined text-[14px] opacity-0 group-hover/sku:opacity-100 transition-opacity">content_copy</span>
+																</div>
+															</td>
+															<td className="py-4 px-6">
+																<div className="flex items-center gap-2">
+																	<div className="font-black text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-indigo-400 transition-colors">
+																		{product.name}
+																	</div>
+																	{product.isGrouped && (
+																		<button
+																			onClick={(e) => {
+																				e.stopPropagation();
+																				setExpandedSkus(prev => {
+																					const next = new Set(prev);
+																					if (next.has(product.groupKey)) next.delete(product.groupKey);
+																					else next.add(product.groupKey);
+																					return next;
+																				});
+																			}}
+																			className={`flex items-center gap-1 px-2 py-0.5 rounded-full border transition-all ${expandedSkus.has(product.groupKey)
+																				? 'bg-blue-600 text-white border-blue-600'
+																				: 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-800/50'
+																				}`}
+																		>
+																			<span className="text-[8px] font-black uppercase">Nhóm SKU</span>
+																			<span className={`material-symbols-outlined text-[12px] transition-transform duration-300 ${expandedSkus.has(product.groupKey) ? 'rotate-180' : ''}`}>
+																				keyboard_arrow_down
+																			</span>
+																		</button>
+																	)}
+																</div>
+																<div className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest mt-0.5 opacity-60">
+																	{product.category}
+																</div>
+															</td>
+															<td className="py-4 px-6 text-center bg-slate-50/50 dark:bg-slate-800/30">
+																<div className="flex flex-col items-center">
+																	<span className="text-sm font-black text-slate-600 dark:text-slate-300">
+																		{product.skuImport}
+																	</span>
+																	<span className="text-[9px] text-slate-400 uppercase font-black tracking-widest">{product.unit}</span>
+																</div>
+															</td>
+															<td className="py-4 px-6 text-center">
+																<div className="flex flex-col items-center">
+																	<span className="text-sm font-black text-orange-600 dark:text-orange-400">
+																		{product.skuExport}
+																	</span>
+																	<span className="text-[9px] text-slate-400 uppercase font-black tracking-widest">{product.unit}</span>
+																</div>
+															</td>
+															<td className="py-4 px-6 text-center bg-indigo-50/30 dark:bg-indigo-900/10">
+																<div className="flex flex-col items-center">
+																	<span className={`text-base font-black ${product.stock <= 5 ? 'text-rose-500' : 'text-[#1A237E] dark:text-indigo-400'}`}>
+																		{product.stock}
+																	</span>
+																	<span className="text-[9px] text-slate-400 uppercase font-black tracking-widest">{product.unit}</span>
+																</div>
+															</td>
+															<td className="py-4 px-6 text-right">
+																{hasManagePermission && (
+																	<div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+																		<button onClick={() => openEdit(product)} className="p-2 text-slate-300 dark:text-slate-600 hover:text-orange-500 dark:hover:text-orange-400 transition-colors">
+																			<span className="material-symbols-outlined text-[20px]">edit</span>
+																		</button>
+																		{deleteConfirmId === product.id ? (
+																			<div className="flex items-center gap-1 bg-rose-50 dark:bg-rose-900/20 p-1 rounded-lg border border-rose-100 dark:border-rose-900/30 animate-in fade-in zoom-in duration-200">
+																				<button
+																					onClick={() => setDeleteConfirmId(null)}
+																					className="px-2 py-1 text-[10px] font-bold text-slate-500 hover:text-slate-700 bg-white dark:bg-slate-800 rounded shadow-sm"
+																				>
+																					Hủy
+																				</button>
+																				<button
+																					onClick={() => {
+																						handleDeleteProduct(product.id, true);
+																						setDeleteConfirmId(null);
+																					}}
+																					className="px-2 py-1 text-[10px] font-bold text-white bg-rose-500 hover:bg-rose-600 rounded shadow-sm"
+																				>
+																					Xóa
+																				</button>
+																			</div>
+																		) : (
+																			<button onClick={() => setDeleteConfirmId(product.id)} className="p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors">
+																				<span className="material-symbols-outlined text-[20px]">delete</span>
+																			</button>
+																		)}
+																	</div>
+																)}
+															</td>
+														</tr>
+
+														{/* Expanded Child Rows */}
+														{product.isGrouped && expandedSkus.has(product.groupKey) && product.memberIds.map((memberId: string) => {
+															const member = products.find(p => p.id === memberId);
+															if (!member) return null;
+															const mStats = getProductInventoryStats(member.id);
+															return (
+																<tr key={member.id} className="bg-slate-50/40 dark:bg-slate-800/20 border-l-4 border-blue-400/50 hover:bg-slate-100/50 dark:hover:bg-slate-800/40 transition-colors group/child cursor-pointer" onClick={() => openDetail(member)}>
+																	<td className="py-3 px-6"></td>
+																	<td className="py-3 px-2">
+																		<span className="text-[10px] font-bold text-slate-400">{member.sku || member.id.slice(-6).toUpperCase()}</span>
+																	</td>
+																	<td className="py-3 px-6">
+																		<div className="flex items-center gap-2">
+																			<span className="text-xs font-bold text-slate-600 dark:text-slate-300">{member.name}</span>
+																			{member.spec && <span className="text-[9px] bg-slate-100 dark:bg-slate-800 px-1 rounded text-slate-400">{member.spec}</span>}
+																		</div>
+																		<div className="text-[9px] font-black text-blue-500/70 uppercase">Giá: {formatPrice(member.priceSell)}</div>
+																	</td>
+																	<td className="py-3 px-6 text-center opacity-60">
+																		<span className="text-xs font-bold text-slate-500">{mStats.import}</span>
+																	</td>
+																	<td className="py-3 px-6 text-center opacity-60">
+																		<span className="text-xs font-bold text-slate-500">{mStats.export}</span>
+																	</td>
+																	<td className="py-3 px-6 text-center">
+																		<span className={`text-xs font-black ${member.stock <= 5 ? 'text-rose-400' : 'text-slate-500'}`}>{member.stock}</span>
+																	</td>
+																	<td className="py-3 px-6 text-right">
+																		{hasManagePermission && (
+																			<div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+																				<button onClick={() => openEdit(member)} className="p-1 text-slate-300 hover:text-orange-400 transition-colors">
+																					<span className="material-symbols-outlined text-[16px]">edit</span>
+																				</button>
+																				{deleteConfirmId === member.id ? (
+																					<div className="flex items-center gap-1 bg-rose-50 dark:bg-rose-900/20 p-1 rounded-lg border border-rose-100 dark:border-rose-900/30 animate-in fade-in zoom-in duration-200">
+																						<button
+																							onClick={() => setDeleteConfirmId(null)}
+																							className="px-2 py-1 text-[10px] font-bold text-slate-500 hover:text-slate-700 bg-white dark:bg-slate-800 rounded shadow-sm"
+																						>
+																							Hủy
+																						</button>
+																						<button
+																							onClick={() => {
+																								handleDeleteProduct(member.id, true);
+																								setDeleteConfirmId(null);
+																							}}
+																							className="px-2 py-1 text-[10px] font-bold text-white bg-rose-500 hover:bg-rose-600 rounded shadow-sm"
+																						>
+																							Xóa
+																						</button>
+																					</div>
+																				) : (
+																					<button onClick={() => setDeleteConfirmId(member.id)} className="p-1 text-slate-300 hover:text-red-400 transition-colors">
+																						<span className="material-symbols-outlined text-[16px]">delete</span>
+																					</button>
+																				)}
+																			</div>
+																		)}
+																	</td>
+																</tr>
+															);
+														})}
+													</React.Fragment>
+												))
+											)}
+										</tbody>
+									</>
+								)}
 							</table>
 						</div>
 
-						{/* Grid - Mobile Virtualized */}
-						<div className="md:hidden h-[600px] pb-4 relative">
+						{/* Grid - Mobile */}
+						<div className="md:hidden pb-4 relative">
 							{loading ? (
 								<div className="space-y-4">
-									{[1, 2, 3, 4, 5].map(i => (
-										<div key={i} className="bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-slate-800 space-y-4 animate-pulse">
-											<div className="flex justify-between items-start">
-												<div className="flex items-center gap-3">
-													<div className="size-14 rounded-xl skeleton" />
-													<div className="space-y-2">
-														<div className="w-32 h-4 skeleton" />
-														<div className="w-20 h-3 skeleton" />
-													</div>
+									{[1, 2, 3].map(i => (
+										<div key={i} className="bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm border border-gray-200 animate-pulse">
+											<div className="flex gap-3">
+												<div className="size-14 rounded-xl skeleton" />
+												<div className="space-y-2 flex-1">
+													<div className="w-3/4 h-4 skeleton" />
+													<div className="w-1/2 h-3 skeleton" />
 												</div>
-												<div className="w-20 h-6 skeleton rounded-full" />
-											</div>
-											<div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-50 dark:border-slate-800">
-												<div className="space-y-2"><div className="w-12 h-3 skeleton" /><div className="w-20 h-5 skeleton" /></div>
-												<div className="space-y-2 flex flex-col items-end"><div className="w-12 h-3 skeleton" /><div className="w-20 h-5 skeleton" /></div>
 											</div>
 										</div>
 									))}
 								</div>
 							) : (
-								<AutoSizer renderProp={({ height, width }) => (
-									<List
-										style={{ height: height || 600, width: width || '100%' }}
-										rowCount={paginatedProducts.length}
-										rowHeight={220}
-										rowProps={{}}
-										className="no-scrollbar"
-										rowComponent={({ index, style }) => {
-											const product = paginatedProducts[index];
-											if (!product) return null;
-											return (
-												<div style={{ ...style, paddingBottom: '16px' }}>
-													<div className="bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-md border border-gray-200 dark:border-slate-800 h-full flex flex-col justify-between" onClick={() => openDetail(product)}>
-														<div className="flex justify-between items-start mb-4">
-															<div className="flex items-center gap-3">
-																<div className="size-14 rounded-xl bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 flex items-center justify-center overflow-hidden border border-gray-100 dark:border-slate-700 shrink-0">
-																	{product.imageUrl ? (
-																		<img
-																			src={getImageUrl(product.imageUrl)}
-																			alt={product.name}
-																			className="size-full object-cover"
-																			referrerPolicy="no-referrer"
-																		/>
-																	) : (
-																		<span className="material-symbols-outlined text-2xl">package_2</span>
-																	)}
-																</div>
-																<div>
-																	<h3 className="font-bold text-[#1A237E] dark:text-indigo-400 leading-tight uppercase text-xs">{product.name}</h3>
-																	<div className="text-[9px] text-slate-400 dark:text-slate-500 font-black uppercase tracking-widest mt-0.5">
-																		{product.category}
-																	</div>
-																	<div
-																		className="flex items-center gap-1.5 mt-1 cursor-pointer"
-																		onClick={(e) => { e.stopPropagation(); copyToClipboard(product.sku || product.id, 'mã SKU'); }}
-																		title="Copy mã SKU"
-																	>
-																		<p className="text-[10px] text-slate-400 dark:text-slate-500">{product.sku || 'Không có mã'}</p>
-																		{(product.sku || product.id) && <span className="material-symbols-outlined text-[12px] text-slate-300">content_copy</span>}
-																	</div>
-																</div>
-															</div>
-															<div className="flex flex-col items-end gap-2" onClick={(e) => e.stopPropagation()}>
-																<div className="flex gap-1">
-																	<button onClick={() => openEdit(product)} className="p-1 text-[#1A237E] dark:text-indigo-400"><span className="material-symbols-outlined text-sm">edit</span></button>
-																	<button onClick={() => handleDeleteProduct(product.id)} className="p-1 text-red-500 dark:text-red-400"><span className="material-symbols-outlined text-sm">delete</span></button>
-																</div>
-															</div>
+								<div className="grid grid-cols-1 gap-4 pb-12">
+									{activeTab === 'products' ? (
+										paginatedProducts.map((product) => (
+											<div key={product.id} className="bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-slate-800 flex flex-col justify-between" onClick={() => openDetail(product)}>
+												<div className="flex justify-between items-start mb-4">
+													<div className="flex items-center gap-3">
+														<div className="size-14 rounded-xl bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 flex items-center justify-center overflow-hidden border border-gray-100 dark:border-slate-700 shrink-0">
+															{product.imageUrl ? <img src={getImageUrl(product.imageUrl)} alt={product.name} className="size-full object-cover" /> : <span className="material-symbols-outlined text-2xl">package_2</span>}
 														</div>
-														<div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-50 dark:border-slate-800">
-															<div>
-																<p className="text-[10px] uppercase text-gray-400 dark:text-slate-500 font-bold">Giá bán</p>
-																<p className="text-[#1A237E] dark:text-indigo-400 font-black text-sm">{formatPrice(product.priceSell)}</p>
-															</div>
-															<div className="text-right">
-																<p className="text-[10px] uppercase text-gray-400 dark:text-slate-500 font-bold">Tồn kho</p>
-																<p className={`font-black text-sm ${product.stock <= 5 ? 'text-red-500 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>{product.stock} {product.unit}</p>
-															</div>
+														<div>
+															<h3 className="font-bold text-[#1A237E] dark:text-indigo-400 leading-tight uppercase text-xs">{product.name}</h3>
+															<div className="text-[9px] text-slate-400 font-black uppercase tracking-widest mt-0.5">{product.category}</div>
+															<div className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">{product.sku || 'N/A'}</div>
 														</div>
 													</div>
+													<button onClick={(e) => { e.stopPropagation(); openEdit(product); }} className="size-8 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-400 flex items-center justify-center">
+														<span className="material-symbols-outlined text-sm">edit</span>
+													</button>
 												</div>
-											);
-										}}
-									/>
-								)} />
+												<div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-50 dark:border-slate-800">
+													<div>
+														<p className="text-[10px] uppercase text-gray-400 font-bold">Giá bán</p>
+														<p className="text-[#1A237E] dark:text-indigo-400 font-black text-sm">{formatPrice(product.priceSell)}</p>
+													</div>
+													<div className="text-right">
+														<p className="text-[10px] uppercase text-gray-400 font-bold">Tồn kho</p>
+														<p className={`font-black text-sm ${product.stock <= 5 ? 'text-red-500' : 'text-slate-700 dark:text-slate-200'}`}>{product.stock} {product.unit}</p>
+													</div>
+												</div>
+											</div>
+										))
+									) : (
+										paginatedProducts.map((product) => (
+											<React.Fragment key={product.groupKey || product.id}>
+												<div className={`bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-slate-800 flex flex-col justify-between ${expandedSkus.has(product.groupKey) ? 'ring-2 ring-indigo-500/20' : ''}`} onClick={() => openDetail(product)}>
+													<div className="flex justify-between items-start mb-4">
+														<div className="flex items-center gap-3">
+															<div className="size-14 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 text-[#1A237E] dark:text-indigo-400 flex items-center justify-center overflow-hidden border border-gray-100 dark:border-slate-700 shrink-0">
+																{product.imageUrl ? <img src={getImageUrl(product.imageUrl)} alt="" className="size-full object-cover" /> : <span className="material-symbols-outlined text-2xl">inventory_2</span>}
+															</div>
+															<div>
+																<h3 className="font-bold text-slate-900 dark:text-indigo-300 leading-tight uppercase text-xs">{product.name} (Gộp)</h3>
+																<div className="text-[9px] text-slate-400 font-black uppercase tracking-widest mt-0.5">SKU: {product.sku || 'N/A'}</div>
+															</div>
+														</div>
+														{product.isGrouped && (
+															<button
+																onClick={(e) => {
+																	e.stopPropagation();
+																	setExpandedSkus(prev => {
+																		const next = new Set(prev);
+																		if (next.has(product.groupKey)) next.delete(product.groupKey);
+																		else next.add(product.groupKey);
+																		return next;
+																	});
+																}}
+																className={`size-8 rounded-lg flex items-center justify-center transition-all ${expandedSkus.has(product.groupKey) ? 'bg-indigo-500 text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-400'}`}
+															>
+																<span className="material-symbols-outlined text-[18px]">
+																	{expandedSkus.has(product.groupKey) ? 'expand_less' : 'expand_more'}
+																</span>
+															</button>
+														)}
+													</div>
+													<div className="grid grid-cols-3 gap-2 pt-4 border-t border-gray-50 dark:border-slate-800 text-center">
+														<div><p className="text-[9px] text-gray-400 uppercase font-bold">Nhập</p><p className="text-xs font-bold text-slate-600">{product.skuImport}</p></div>
+														<div><p className="text-[9px] text-gray-400 uppercase font-bold">Xuất</p><p className="text-xs font-bold text-orange-500">{product.skuExport}</p></div>
+														<div><p className="text-[9px] text-gray-400 uppercase font-bold">Còn</p><p className="text-xs font-black text-[#1A237E] dark:text-indigo-400">{product.stock}</p></div>
+													</div>
+												</div>
+
+												{expandedSkus.has(product.groupKey) && (
+													<div className="ml-4 space-y-3 border-l-2 border-indigo-100 pl-4 py-2">
+														{product.memberIds.map((memberId: string) => {
+															const member = products.find(p => p.id === memberId);
+															if (!member) return null;
+															return (
+																<div key={member.id} className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 border border-slate-100 flex justify-between items-center" onClick={() => openDetail(member)}>
+																	<div>
+																		<p className="text-[10px] font-bold text-slate-700 dark:text-white leading-tight">{member.name}</p>
+																		<p className="text-[9px] text-blue-500 font-bold mt-0.5">{formatPrice(member.priceSell)}</p>
+																	</div>
+																	<div className="text-right">
+																		<p className="text-[10px] font-black text-slate-900 dark:text-indigo-400">{member.stock} {member.unit}</p>
+																		<button onClick={(e) => { e.stopPropagation(); openEdit(member); }} className="text-slate-400 hover:text-indigo-500"><span className="material-symbols-outlined text-xs">edit</span></button>
+																	</div>
+																</div>
+															);
+														})}
+													</div>
+												)}
+											</React.Fragment>
+										))
+									)}
+								</div>
 							)}
 						</div>
+						<div className="mt-8 mb-4">
 
-						{/* Pagination Controls */}
-						{totalPages > 1 && (
-							<div className="mt-8 mb-12 flex flex-col md:flex-row items-center justify-between gap-4">
-								<p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-									Hiển thị {((currentPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredProducts.length)} trên tổng {filteredProducts.length} sản phẩm
-								</p>
-								<div className="flex items-center gap-1">
-									<button
-										onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-										disabled={currentPage === 1}
-										className="size-10 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:border-blue-500 transition-all"
-									>
-										<span className="material-symbols-outlined">chevron_left</span>
-									</button>
-									<div className="flex items-center gap-1 mx-2">
-										{[...Array(totalPages)].map((_, i) => {
-											const pageNum = i + 1;
-											// Show first, last, and pages around current
-											if (
-												pageNum === 1 ||
-												pageNum === totalPages ||
-												(pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
-											) {
-												return (
-													<button
-														key={pageNum}
-														onClick={() => setCurrentPage(pageNum)}
-														className={`size-10 rounded-xl font-bold text-xs transition-all border ${currentPage === pageNum
-															? 'bg-[#1A237E] text-white border-[#1A237E] shadow-lg shadow-blue-500/20'
-															: 'bg-white dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-slate-800 hover:border-blue-500'
-															}`}
-													>
-														{pageNum}
-													</button>
-												);
-											} else if (
-												pageNum === currentPage - 2 ||
-												pageNum === currentPage + 2
-											) {
-												return <span key={pageNum} className="text-slate-300">...</span>;
-											}
-											return null;
-										})}
+							{/* Pagination Controls */}
+							{
+								totalPages > 1 && (
+									<div className="mt-8 mb-12 flex flex-col md:flex-row items-center justify-between gap-4">
+										<p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+											Hiển thị {((currentPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredProducts.length)} trên tổng {filteredProducts.length} {activeTab === 'products' ? 'sản phẩm' : 'nhóm SKU'}
+										</p>
+										<div className="flex items-center gap-1">
+											<button
+												onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+												disabled={currentPage === 1}
+												className="size-10 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:border-blue-500 transition-all"
+											>
+												<span className="material-symbols-outlined">chevron_left</span>
+											</button>
+											<div className="flex items-center gap-1 mx-2">
+												{[...Array(totalPages)].map((_, i) => {
+													const pageNum = i + 1;
+													// Show first, last, and pages around current
+													if (
+														pageNum === 1 ||
+														pageNum === totalPages ||
+														(pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
+													) {
+														return (
+															<button
+																key={pageNum}
+																onClick={() => setCurrentPage(pageNum)}
+																className={`size-10 rounded-xl font-bold text-xs transition-all border ${currentPage === pageNum
+																	? 'bg-[#1A237E] text-white border-[#1A237E] shadow-lg shadow-blue-500/20'
+																	: 'bg-white dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-slate-800 hover:border-blue-500'
+																	}`}
+															>
+																{pageNum}
+															</button>
+														);
+													} else if (
+														pageNum === currentPage - 2 ||
+														pageNum === currentPage + 2
+													) {
+														return <span key={pageNum} className="text-slate-300">...</span>;
+													}
+													return null;
+												})}
+											</div>
+											<button
+												onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+												disabled={currentPage === totalPages}
+												className="size-10 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:border-blue-500 transition-all"
+											>
+												<span className="material-symbols-outlined">chevron_right</span>
+											</button>
+										</div>
 									</div>
-									<button
-										onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-										disabled={currentPage === totalPages}
-										className="size-10 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:border-blue-500 transition-all"
-									>
-										<span className="material-symbols-outlined">chevron_right</span>
-									</button>
-								</div>
-							</div>
-						)}
+								)
+							}
+						</div>
 					</>
 				) : (
 					/* LOGS VIEW */
@@ -1096,9 +1413,11 @@ const ProductList = () => {
 						</div>
 					</div>
 				)}
+			</div>
 
-				{/* ADD/EDIT MODAL */}
-				{(showAddForm || showEditForm) && (
+			{/* ADD/EDIT MODAL */}
+			{
+				(showAddForm || showEditForm) && (
 					<div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/80 backdrop-blur-md transition-all duration-500" style={{ WebkitBackdropFilter: 'blur(12px)' }}>
 						<div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] md:max-h-[85vh] border border-white/20 dark:border-slate-800 transition-all duration-300">
 							<div className="px-6 py-4 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between sticky top-0 z-10 transition-colors duration-300">
@@ -1331,10 +1650,12 @@ const ProductList = () => {
 							</form>
 						</div>
 					</div>
-				)}
+				)
+			}
 
-				{/* DETAIL MODAL */}
-				{showDetail && selectedProduct && (
+			{/* DETAIL MODAL */}
+			{
+				showDetail && selectedProduct && (
 					<div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-[#1A237E]/80 dark:bg-black/80 backdrop-blur-sm">
 						<div className="bg-white dark:bg-slate-900 w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] md:max-h-[85vh] transition-colors duration-300">
 							<div className="px-6 py-4 bg-[#1A237E] dark:bg-indigo-900 text-white flex items-center justify-between sticky top-0 z-10">
@@ -1381,7 +1702,13 @@ const ProductList = () => {
 									</div>
 									<div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl">
 										<p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase mb-1">Tồn kho hiện tại</p>
-										<p className="text-[#1A237E] dark:text-indigo-400 font-black text-lg">{selectedProduct.stock} <span className="text-xs">{selectedProduct.unit}</span></p>
+										<p className="text-[#1A237E] dark:text-indigo-400 font-black text-lg">
+											{selectedProduct.sku ? products.filter(p => p.sku === selectedProduct.sku).reduce((sum, p) => sum + (Number(p.stock) || 0), 0) : selectedProduct.stock}
+											<span className="text-xs"> {selectedProduct.unit}</span>
+										</p>
+										{selectedProduct.sku && products.filter(p => p.sku === selectedProduct.sku).length > 1 && (
+											<p className="text-[9px] text-slate-400 italic">Tổng gộp từ {products.filter(p => p.sku === selectedProduct.sku).length} bản ghi SKU</p>
+										)}
 									</div>
 								</div>
 
@@ -1455,16 +1782,18 @@ const ProductList = () => {
 							</div>
 						</div>
 					</div>
-				)}
+				)
+			}
 
-				{showScanner && (
+			{
+				showScanner && (
 					<QRScanner
 						onScan={handleQRScan}
 						onClose={() => setShowScanner(false)}
 						title="Tìm nhanh sản phẩm"
 					/>
-				)}
-			</div>
+				)
+			}
 		</div>
 	);
 };

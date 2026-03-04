@@ -164,8 +164,10 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     *   **Giấy phép kinh doanh (GPKD) Đa tệp**: Tích hợp tải lên **nhiều tệp** (ảnh/PDF) giấy phép kinh doanh qua Cloudinary. Hỗ trợ hiển thị dạng lưới và danh sách chuyên nghiệp.
     *   **Hình ảnh Công trình**: Cho phép lưu trữ không giới hạn bộ sưu tập hình ảnh thực tế tại công trình/cửa hàng của khách hàng.
     *   **UX Cải tiến**: Form nhập liệu được tổ chức lại chuyên nghiệp, hỗ trợ xem chi tiết dạng Bottom Sheet trên di động với đầy đủ hình ảnh trực quan.
-- [x] **Phiếu Giao Hàng & Đóng gói**:
+- [x] **Phiếu Giao Hàng & Đóng gói (Branding Upgrade - Mar 4)**:
     *   **Tính Kiện tự động**: Tự động tính toán tổng số Kiện dựa trên tỷ lệ đóng gói (`qty / packaging`) và hiển thị trên Phiếu giao hàng (Order Ticket).
+    *   **Thương hiệu Chuyên nghiệp**: Tích hợp Thông tin Doanh nghiệp (Tên, Địa chỉ, SĐT, Email) và biểu tượng nhận diện vào đầu Phiếu giao hàng, mang lại diện mạo chuyên nghiệp đồng bộ với Báo giá hệ thống.
+    *   **Logo Doanh Nghiệp**: Tích hợp trình tải lên logo qua Cloudinary, tự động hiển thị trên đầu phiếu giao hàng thay cho biểu tượng mặc định.
 - [x] **Báo cáo & Phân tích thời gian thực (Dashboard Live)**: 
     - **Doanh thu & Lợi nhuận**: Tự động tính toán Doanh thu và Lợi nhuận gộp (giá bán - giá nhập) theo ngày và theo tháng từ dữ liệu thực tế của Firestore.
     - **Biểu đồ Tăng trưởng**: Chuyển đổi biểu đồ tĩnh sang biểu đồ động, hiển thị doanh thu 7 ngày gần nhất với cơ chế tự động cân bằng tỷ lệ (Auto-scale).

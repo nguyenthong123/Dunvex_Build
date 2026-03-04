@@ -1,5 +1,8 @@
-import React from 'react';
-import { FileText, Download, Share2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { FileText, Download, Share2, Building2, MapPin, Phone, Mail } from 'lucide-react';
+import { db } from '../services/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { useOwner } from '../hooks/useOwner';
 
 interface OrderTicketProps {
 	order: any;
@@ -7,10 +10,24 @@ interface OrderTicketProps {
 }
 
 const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
-	const [scale, setScale] = React.useState(1);
-	const [zoom, setZoom] = React.useState(0.85); // Default zoom slightly out for desktop
+	const owner = useOwner();
+	const [scale, setScale] = useState(1);
+	const [zoom, setZoom] = useState(0.85); // Default zoom slightly out for desktop
+	const [companyInfo, setCompanyInfo] = useState<any>(null);
 
-	React.useEffect(() => {
+	useEffect(() => {
+		if (!owner.ownerId) return;
+		const fetchSettings = async () => {
+			const settingsRef = doc(db, 'settings', owner.ownerId);
+			const settingsSnap = await getDoc(settingsRef);
+			if (settingsSnap.exists()) {
+				setCompanyInfo(settingsSnap.data());
+			}
+		};
+		fetchSettings();
+	}, [owner.ownerId]);
+
+	useEffect(() => {
 		const handleResize = () => {
 			if (window.innerWidth < 850) {
 				const s = (window.innerWidth - 40) / 800;
@@ -152,8 +169,56 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 					className="bg-white shadow-2xl overflow-hidden relative border border-gray-100"
 				>
 					<main className="bg-white text-gray-900 font-sans antialiased">
-						<header className="p-6 border-b border-gray-100">
-							<h1 className="text-3xl font-black text-center text-gray-900 uppercase mb-4 tracking-[3px]">
+						<header className="p-8 border-b border-gray-100">
+							{/* Company Info Section */}
+							<div className="flex justify-between items-start gap-8 mb-10">
+								<div className="space-y-4">
+									<div className="flex items-center gap-4">
+										{companyInfo?.logoUrl ? (
+											<img src={companyInfo.logoUrl} alt="Logo" className="h-16 object-contain shrink-0" />
+										) : (
+											<div className="size-14 bg-[#f27121] rounded-2xl flex items-center justify-center text-white shadow-lg shadow-orange-500/20 shrink-0">
+												<Building2 size={32} />
+											</div>
+										)}
+										<h2 className="text-3xl font-black text-[#f27121] uppercase tracking-tighter leading-tight">
+											{companyInfo?.name || 'DUNVEX'}
+										</h2>
+									</div>
+
+									<div className="space-y-1.5 pl-1">
+										<div className="flex items-start gap-2.5 text-gray-600">
+											<MapPin size={12} className="text-[#f27121] shrink-0 mt-0.5" />
+											<span className="text-[10px] font-black uppercase tracking-wide leading-tight">
+												{companyInfo?.address || 'XÃ KIẾN ĐỨC , LÂM ĐỒNG'}
+											</span>
+										</div>
+										<div className="flex items-center gap-5">
+											<div className="flex items-center gap-1.5 text-gray-700">
+												<Phone size={12} className="text-[#f27121]" />
+												<span className="text-xs font-black">{companyInfo?.phone || '0988765444'}</span>
+											</div>
+											<div className="flex items-center gap-1.5 text-gray-700">
+												<Mail size={12} className="text-[#f27121]" />
+												<span className="text-xs font-black">{companyInfo?.email || 'dunvex.green@gmail.com'}</span>
+											</div>
+										</div>
+									</div>
+								</div>
+
+								<div className="text-right">
+									<div className="inline-block px-4 py-1.5 bg-orange-50 rounded-lg mb-2">
+										<p className="text-[10px] font-black text-[#f27121] uppercase tracking-[2px]">
+											Hệ Thống Quản Lý Đơn Hàng
+										</p>
+									</div>
+									<p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">
+										Giao hàng & Thu hộ chuyên nghiệp
+									</p>
+								</div>
+							</div>
+
+							<h1 className="text-4xl font-black text-center text-gray-900 uppercase mb-6 tracking-[6px] border-y-2 border-gray-900 py-3">
 								PHIẾU GIAO HÀNG
 							</h1>
 							<div className="flex justify-center gap-10 text-base font-bold text-gray-700 border-t border-b border-dashed border-gray-300 py-4">

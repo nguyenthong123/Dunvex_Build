@@ -311,6 +311,7 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 - [x] **Vá lỗi Mobile UX (Mobile Focus & Zoom Fix - Mar 3)**:
     *   **Ngăn ngừa Auto-zoom**: Nâng cấp toàn bộ font-size của các ô nhập liệu lên **16px (text-base)**. Điều này giúp ngăn trình duyệt (đặc biệt là iOS Safari) tự động phóng to và gây hiện tượng "nhảy" layout khi người dùng nhấn vào ô tìm khách hàng hoặc nhập số lượng.
     *   **Click Outside**: Bổ sung cơ chế tự động đóng danh sách gợi ý khách hàng khi người dùng nhấn ra ngoài, giúp giao diện gọn gàng và ổn định hơn trên thiết bị di động.
+- [x] **Tích hợp Dẫn đường Google Maps (Mar 4)**: Cập nhật nút "Xem vị trí" trong chi tiết khách hàng thành **"Tới vị trí"**. Khi nhấp vào, hệ thống tự động mở Google Maps và kích hoạt chế độ dẫn đường (Directions) đến tọa độ GPS của khách hàng.
 
 ### 📝 Cần làm tiếp (To-do)
 

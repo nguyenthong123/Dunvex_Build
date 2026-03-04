@@ -1140,8 +1140,14 @@ const CustomerList = () => {
 									{/* Actions */}
 									<div className="flex flex-wrap gap-3 pt-4 pb-2">
 										{!!(selectedCustomer.lat && selectedCustomer.lng) && (
-											<button onClick={() => { setShowDetail(false); setShowMap(true); }} className="flex-1 min-w-[140px] bg-green-500 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-green-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 h-14">
-												<span className="material-symbols-outlined text-lg">map</span> Xem vị trí
+											<button
+												onClick={() => {
+													const url = `https://www.google.com/maps/dir/?api=1&destination=${selectedCustomer.lat},${selectedCustomer.lng}`;
+													window.open(url, '_blank');
+												}}
+												className="flex-1 min-w-[140px] bg-green-500 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-green-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 h-14"
+											>
+												<span className="material-symbols-outlined text-lg">directions</span> Tới vị trí
 											</button>
 										)}
 										<button onClick={() => { setShowDetail(false); openEdit(selectedCustomer); }} className="flex-1 min-w-[140px] bg-[#1A237E] dark:bg-indigo-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 h-14">

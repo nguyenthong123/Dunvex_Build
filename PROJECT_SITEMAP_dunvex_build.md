@@ -90,6 +90,10 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 - [x] **Phân trang & Chi tiết Thu nợ (Debt Collection Upgrade - Mar 5)**:
     - **Chi tiết Phiếu thu**: Bổ sung nút "Chi tiết" cho phép xem đầy đủ thông tin phiếu thu kèm ảnh bằng chứng (nếu có) trong Modal phong cách Glassmorphism.
     - **Phân trang Thông minh**: Triển khai hệ thống phân trang (10 dòng/trang) với logic hiển thị 1, 2, 3... giúp quản lý hàng nghìn phiếu thu mượt mà.
+- [x] **Cập nhật Vị trí Khách hàng (Lat/Lng Manual Input - Mar 5)**:
+    - **Nhập tọa độ thủ công**: Bổ sung 2 ô nhập liệu Vĩ độ (Lat) và Kinh độ (Lng) trong form Thêm/Sửa khách hàng.
+    - **Pasting Thông minh**: Tự động nhận diện và phân tách tọa độ nếu người dùng dán chuỗi "lat, lng" vào ô Vĩ độ, giúp tiết kiệm thời gian khi copy từ Google Maps.
+    - **Linh hoạt vận hành**: Cho phép tạo hồ sơ khách hàng có vị trí chính xác ngay cả khi Admin đang ở văn phòng.
 - [x] **Nhập liệu hàng loạt (Bulk Import) Thông minh**: 
     *   **Nhận diện Toàn cục (Global ID)**: Tự động nhận diện sản phẩm dựa trên **[Mã SKU]** hoặc **[Tên]** trên toàn hệ thống (không phân biệt danh mục). Điều này giúp cập nhật giá hoặc thay đổi danh mục mà không tạo ra sản phẩm trùng lặp, đảm bảo một mã SKU chỉ có duy nhất một kho hàng thực tế.
     *   **Bảo toàn dữ liệu (Partial Update)**: Hệ thống chỉ cập nhật những cột có trong file Excel, giữ nguyên các thông tin cũ (như số lượng tồn kho) nếu cột đó bị thiếu trong lần nhập sau.

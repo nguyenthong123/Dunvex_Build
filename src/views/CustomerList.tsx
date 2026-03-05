@@ -992,6 +992,37 @@ const CustomerList = () => {
 											)}
 										</div>
 									</div>
+									<div className="grid grid-cols-2 gap-4">
+										<div>
+											<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Vĩ độ (Lat)</label>
+											<input
+												type="text"
+												className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
+												placeholder="VD: 10.762622"
+												value={formData.lat || ''}
+												onChange={(e) => {
+													const val = e.target.value;
+													if (val.includes(',')) {
+														const [latStr, lngStr] = val.split(',').map(s => s.trim());
+														setFormData({ ...formData, lat: parseFloat(latStr) || null, lng: parseFloat(lngStr) || formData.lng });
+													} else {
+														setFormData({ ...formData, lat: val ? parseFloat(val) : null });
+													}
+												}}
+											/>
+										</div>
+										<div>
+											<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Kinh độ (Lng)</label>
+											<input
+												type="text"
+												className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
+												placeholder="VD: 106.660172"
+												value={formData.lng || ''}
+												onChange={(e) => setFormData({ ...formData, lng: e.target.value ? parseFloat(e.target.value) : null })}
+											/>
+										</div>
+									</div>
+
 									<div>
 										<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Địa chỉ</label>
 										<div className="flex gap-2">

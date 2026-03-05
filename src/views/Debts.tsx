@@ -72,7 +72,11 @@ const Debts: React.FC = () => {
 
 	const [unreadCount, setUnreadCount] = useState(0);
 	const [currentPage, setCurrentPage] = useState(1);
+	const [historyCurrentPage, setHistoryCurrentPage] = useState(1);
 	const ITEMS_PER_PAGE = 10;
+
+	const [showPaymentDetail, setShowPaymentDetail] = useState(false);
+	const [selectedPayment, setSelectedPayment] = useState<any>(null);
 
 
 	useEffect(() => {
@@ -458,6 +462,57 @@ const Debts: React.FC = () => {
 				(i >= currentPage - radius && i <= currentPage + radius) ||
 				i <= 3 ||
 				i >= totalPages - 2
+			) {
+				pages.push(i);
+			}
+		}
+
+		const uniquePages = [...new Set(pages)].sort((a, b) => (a as number) - (b as number));
+		const withEllipsis: (number | string)[] = [];
+
+		for (let i = 0; i < uniquePages.length; i++) {
+			if (i > 0 && (uniquePages[i] as number) - (uniquePages[i - 1] as number) > 1) {
+				withEllipsis.push('...');
+			}
+			withEllipsis.push(uniquePages[i]);
+		}
+		return withEllipsis;
+	};
+
+	const filteredHistory = [...payments].sort((a, b) => {
+		const da = a.date ? new Date(a.date).getTime() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0);
+		const db = b.date ? new Date(b.date).getTime() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0);
+		return db - da;
+	}).filter(p => {
+		const matchesName = !searchTerm ||
+			String(p.customerName || '').toLowerCase().includes(searchTerm.toLowerCase());
+
+		if (fromDate || toDate) {
+			const start = fromDate || '0000-00-00';
+			const end = toDate || '9999-99-99';
+			const pDate = p.date || (p.createdAt?.seconds ? new Date(p.createdAt.seconds * 1000).toISOString().split('T')[0] : '');
+			return matchesName && pDate >= start && pDate <= end;
+		}
+		return matchesName;
+	});
+
+	const historyTotalPages = Math.ceil(filteredHistory.length / ITEMS_PER_PAGE);
+	const paginatedHistory = filteredHistory.slice(
+		(historyCurrentPage - 1) * ITEMS_PER_PAGE,
+		historyCurrentPage * ITEMS_PER_PAGE
+	);
+
+	const getHistoryPageNumbers = () => {
+		const pages: (number | string)[] = [];
+		const radius = 1;
+
+		for (let i = 1; i <= historyTotalPages; i++) {
+			if (
+				i === 1 ||
+				i === historyTotalPages ||
+				(i >= historyCurrentPage - radius && i <= historyCurrentPage + radius) ||
+				i <= 3 ||
+				i >= historyTotalPages - 2
 			) {
 				pages.push(i);
 			}
@@ -926,11 +981,7 @@ const Debts: React.FC = () => {
 										</tr>
 									</thead>
 									<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-										{[...payments].sort((a, b) => {
-											const da = a.date ? new Date(a.date).getTime() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0);
-											const db = b.date ? new Date(b.date).getTime() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0);
-											return db - da;
-										}).map((pay) => (
+										{paginatedHistory.map((pay) => (
 											<tr key={pay.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors group">
 												<td className="px-8 py-5">
 													<div>
@@ -951,6 +1002,16 @@ const Debts: React.FC = () => {
 												</td>
 												<td className="px-6 py-5 text-right">
 													<div className="flex items-center justify-end gap-2">
+														<button
+															onClick={() => {
+																setSelectedPayment(pay);
+																setShowPaymentDetail(true);
+															}}
+															className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+															title="Chi tiết lệnh thu"
+														>
+															<FileText size={16} />
+														</button>
 														<button
 															onClick={() => {
 																setEditingPaymentId(pay.id);
@@ -986,11 +1047,7 @@ const Debts: React.FC = () => {
 
 								{/* Mobile Cards */}
 								<div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
-									{[...payments].sort((a, b) => {
-										const da = a.date ? new Date(a.date).getTime() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0);
-										const db = b.date ? new Date(b.date).getTime() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0);
-										return db - da;
-									}).map((pay) => (
+									{paginatedHistory.map((pay) => (
 										<div key={pay.id} className="p-4 bg-white dark:bg-slate-900">
 											<div className="flex justify-between items-start mb-3">
 												<div className="flex flex-col gap-1">
@@ -1014,6 +1071,15 @@ const Debts: React.FC = () => {
 											)}
 
 											<div className="flex justify-end gap-3 pt-2">
+												<button
+													onClick={() => {
+														setSelectedPayment(pay);
+														setShowPaymentDetail(true);
+													}}
+													className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-500 text-[10px] font-black uppercase transition-colors"
+												>
+													<FileText size={12} /> Chi tiết
+												</button>
 												<button
 													onClick={() => {
 														setEditingPaymentId(pay.id);
@@ -1043,13 +1109,56 @@ const Debts: React.FC = () => {
 									))}
 								</div>
 
-								{payments.length === 0 && (
+								{filteredHistory.length === 0 && (
 									<div className="py-20 text-center text-slate-400 dark:text-slate-500 uppercase font-black text-xs tracking-widest">
 										Chưa có dữ liệu phiếu thu
 									</div>
 								)}
 							</div>
+
+							{/* History Pagination Controls */}
+							{!loading && historyTotalPages > 1 && (
+								<div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-slate-50/50 dark:bg-slate-800/30 p-4 border-t border-slate-100 dark:border-slate-800">
+									<p className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-2">
+										Hiển thị {(historyCurrentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(historyCurrentPage * ITEMS_PER_PAGE, filteredHistory.length)} của {filteredHistory.length} phiếu thu
+									</p>
+									<div className="flex items-center gap-2">
+										<button
+											onClick={() => { setHistoryCurrentPage(prev => Math.max(prev - 1, 1)); window.scrollTo(0, 0); }}
+											disabled={historyCurrentPage === 1}
+											className="size-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all shadow-sm"
+										>
+											<span className="material-symbols-outlined text-sm">chevron_left</span>
+										</button>
+										<div className="flex items-center gap-1">
+											{getHistoryPageNumbers().map((page, idx) => (
+												<button
+													key={idx}
+													onClick={() => typeof page === 'number' && setHistoryCurrentPage(page)}
+													disabled={page === '...'}
+													className={`size-10 rounded-xl font-black text-xs transition-all ${page === historyCurrentPage
+														? 'bg-[#1A237E] text-white shadow-lg shadow-blue-500/20'
+														: page === '...'
+															? 'text-slate-400 cursor-default'
+															: 'bg-white dark:bg-slate-800 text-slate-500 border border-slate-100 dark:border-slate-700 hover:bg-slate-50 shadow-sm'
+														}`}
+												>
+													{page}
+												</button>
+											))}
+										</div>
+										<button
+											onClick={() => { setHistoryCurrentPage(prev => Math.min(prev + 1, historyTotalPages)); window.scrollTo(0, 0); }}
+											disabled={historyCurrentPage === historyTotalPages}
+											className="size-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all shadow-sm"
+										>
+											<span className="material-symbols-outlined text-sm">chevron_right</span>
+										</button>
+									</div>
+								</div>
+							)}
 						</div>
+
 					)}
 				</div>
 			</div>
@@ -1507,6 +1616,74 @@ const Debts: React.FC = () => {
 						featureName="Chi tiết công nợ khách hàng"
 					/>
 				)
+			)}
+			{/* PAYMENT DETAIL MODAL */}
+			{showPaymentDetail && selectedPayment && (
+				<div className="fixed inset-0 z-[170] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4">
+					<div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+						<div className="px-8 py-6 bg-[#1A237E] text-white flex items-center justify-between">
+							<div className="flex items-center gap-3">
+								<div className="size-10 bg-white/10 rounded-xl flex items-center justify-center">
+									<FileText size={20} />
+								</div>
+								<h3 className="text-lg font-black uppercase tracking-tight">Chi tiết lệnh thu</h3>
+							</div>
+							<button onClick={() => { setShowPaymentDetail(false); setSelectedPayment(null); }} className="size-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+								<X size={20} />
+							</button>
+						</div>
+						<div className="p-8 space-y-6">
+							<div className="space-y-4">
+								<div className="flex justify-between items-center pb-4 border-b border-slate-100 dark:border-slate-800">
+									<span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Khách hàng</span>
+									<span className="text-base font-black text-slate-900 dark:text-indigo-400 uppercase">{selectedPayment.customerName}</span>
+								</div>
+								<div className="flex justify-between items-center pb-4 border-b border-slate-100 dark:border-slate-800">
+									<span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ngày thu</span>
+									<span className="text-sm font-bold text-slate-700 dark:text-slate-300">{formatDate(selectedPayment.date || selectedPayment.createdAt)}</span>
+								</div>
+								<div className="flex justify-between items-center pb-4 border-b border-slate-100 dark:border-slate-800">
+									<span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Số tiền</span>
+									<span className="text-xl font-black text-emerald-600 tracking-tight">{formatPrice(selectedPayment.amount)}</span>
+								</div>
+								<div className="flex justify-between items-center pb-4 border-b border-slate-100 dark:border-slate-800">
+									<span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Hình thức</span>
+									<span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-black text-[#1A237E] dark:text-indigo-400 uppercase">{selectedPayment.paymentMethod}</span>
+								</div>
+							</div>
+
+							{selectedPayment.note && (
+								<div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700 italic text-slate-600 dark:text-slate-400 text-sm">
+									"{selectedPayment.note}"
+								</div>
+							)}
+
+							{selectedPayment.proofImage && (
+								<div className="space-y-3">
+									<span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">Bằng chứng thanh toán</span>
+									<div className="rounded-3xl overflow-hidden border-4 border-slate-50 dark:border-slate-800 shadow-xl group relative">
+										<img src={getImageUrl(selectedPayment.proofImage)} alt="Proof" className="w-full aspect-[4/3] object-cover transition-transform duration-500 group-hover:scale-110" />
+										<a
+											href={getImageUrl(selectedPayment.proofImage)}
+											target="_blank"
+											rel="noopener noreferrer"
+											className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-black text-xs uppercase tracking-[2px]"
+										>
+											<Image size={24} className="mr-2" /> Xem ảnh gốc
+										</a>
+									</div>
+								</div>
+							)}
+
+							<button
+								onClick={() => { setShowPaymentDetail(false); setSelectedPayment(null); }}
+								className="w-full py-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-slate-200 dark:hover:bg-slate-700 transition-all border border-slate-200 dark:border-slate-700"
+							>
+								Đóng chi tiết
+							</button>
+						</div>
+					</div>
+				</div>
 			)}
 		</div>
 	);

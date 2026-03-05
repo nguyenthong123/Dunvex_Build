@@ -465,11 +465,14 @@ const AdminSettings = () => {
 						});
 					}
 
-					// Format specific fields for readability in Excel
-					const formattedData = data.map(item => {
-						const newItem: any = { ...item };
-						Object.keys(newItem).forEach(key => {
-							const val = newItem[key];
+					// Format specific fields for readability in Excel and remove technical fields
+					const TECHNICAL_FIELDS = ['ownerId', 'ownerEmail', 'createdBy', 'createdByEmail', 'updatedBy', 'updatedAt'];
+					const formattedData = data.map((item: any) => {
+						const newItem: any = {};
+						Object.keys(item).forEach(key => {
+							if (TECHNICAL_FIELDS.includes(key)) return;
+
+							const val = item[key];
 							if (val && typeof val === 'object') {
 								if (val.seconds) {
 									// Firestore Timestamp
@@ -478,20 +481,34 @@ const AdminSettings = () => {
 									// Other objects/arrays - stringify to avoid [object Object]
 									newItem[key] = JSON.stringify(val);
 								}
+							} else {
+								newItem[key] = val;
 							}
 						});
 						return newItem;
 					});
 
 					const worksheet = XLSX.utils.json_to_sheet(formattedData);
-					XLSX.utils.book_append_sheet(workbook, worksheet, colName);
+
+					// Đổi tên sheet sang tiếng Việt cho thân thiện
+					let sheetName = colName;
+					switch (colName) {
+						case 'products': sheetName = 'san_pham'; break;
+						case 'customers': sheetName = 'khach_hang'; break;
+						case 'orders': sheetName = 'don_hang'; break;
+						case 'debts': sheetName = 'cong_no'; break;
+						case 'finance_transactions': sheetName = 'tai_chinh'; break;
+						case 'checkins': sheetName = 'cham_cong'; break;
+					}
+
+					XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
 				}
 			}
 
 			// Add the specific details sheet if we have order items
 			if (orderDetails.length > 0) {
 				const detailsSheet = XLSX.utils.json_to_sheet(orderDetails);
-				XLSX.utils.book_append_sheet(workbook, detailsSheet, 'order_details');
+				XLSX.utils.book_append_sheet(workbook, detailsSheet, 'chi_tiet_don_hang');
 			}
 
 			// 4. Download File

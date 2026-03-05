@@ -49,6 +49,8 @@ Dưới đây là sơ đồ tóm tắt các trang và luồng dữ liệu chính
 - **Hệ thống Đào tạo (`/khoa-dao-tao`)** 🎓:
     - **Hands-on Practice**: Thực hành trực tiếp trên dữ liệu thật của chính người dùng.
     - **Môi trường Interactive Lab**: Chia đôi màn hình, hướng dẫn chi tiết từng bước.
+    - **Video Hướng dẫn** 🆕: Thư viện video tutorial YouTube dành cho toàn bộ người dùng.
+    - **Quản lý Nội dung**: Tính năng Thêm/Sửa/Xóa video bảo mật bằng mã xác thực gửi qua Email Admin.
     - **Real-time Scoring**: Tự động chấm điểm bằng cách truy vấn dữ liệu thực tế gắn với `ownerId`.
     - **Chứng chỉ Digital**: Cấp chứng chỉ ngay sau khi hoàn thành các nhiệm vụ trong bài Lab.
 ---
@@ -81,6 +83,13 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 ## 4. Các mục đã hoàn thành & Cần làm (To-do)
 
 ### ✅ Đã hoàn thành (Done)
+- [x] **Video Hướng dẫn & Bảo mật Nội dung (Training Upgrade - Mar 5)**:
+    - **Thư viện Video**: Tích hợp danh sách video hướng dẫn từ YouTube với giao diện Card premium, hỗ trợ xem trực tiếp và hiển thị cho toàn bộ người dùng.
+    - **Quản lý Bảo mật (Verification Gate)**: Triển khai cơ chế xác thực 2 lớp để mở khóa form cập nhật video. Mã xác minh (6 chữ số) được gửi tự động về email quản trị `dunvex.green@gmail.com`.
+    - **Trình quản lý Video**: Form thêm/sửa video thông minh, tự động lấy ảnh thu nhỏ (thumbnail) từ link YouTube và lưu trữ an toàn trên Firestore.
+- [x] **Phân trang & Chi tiết Thu nợ (Debt Collection Upgrade - Mar 5)**:
+    - **Chi tiết Phiếu thu**: Bổ sung nút "Chi tiết" cho phép xem đầy đủ thông tin phiếu thu kèm ảnh bằng chứng (nếu có) trong Modal phong cách Glassmorphism.
+    - **Phân trang Thông minh**: Triển khai hệ thống phân trang (10 dòng/trang) với logic hiển thị 1, 2, 3... giúp quản lý hàng nghìn phiếu thu mượt mà.
 - [x] **Nhập liệu hàng loạt (Bulk Import) Thông minh**: 
     *   **Nhận diện Toàn cục (Global ID)**: Tự động nhận diện sản phẩm dựa trên **[Mã SKU]** hoặc **[Tên]** trên toàn hệ thống (không phân biệt danh mục). Điều này giúp cập nhật giá hoặc thay đổi danh mục mà không tạo ra sản phẩm trùng lặp, đảm bảo một mã SKU chỉ có duy nhất một kho hàng thực tế.
     *   **Bảo toàn dữ liệu (Partial Update)**: Hệ thống chỉ cập nhật những cột có trong file Excel, giữ nguyên các thông tin cũ (như số lượng tồn kho) nếu cột đó bị thiếu trong lần nhập sau.

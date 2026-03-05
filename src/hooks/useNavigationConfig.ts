@@ -81,6 +81,13 @@ export const useNavigationConfig = () => {
 		}
 
 		if (path.startsWith('/khoa-dao-tao')) {
+			if (path === '/khoa-dao-tao') {
+				return {
+					icon: 'settings',
+					label: 'Cập nhật Video',
+					path: '/khoa-dao-tao?action=update_video',
+				};
+			}
 			return {
 				icon: 'stop_circle',
 				label: 'Kết thúc Lab',

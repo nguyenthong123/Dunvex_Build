@@ -109,13 +109,18 @@ const TrainingCatalog = () => {
 
 	useEffect(() => {
 		const action = searchParams.get('action');
+		const tab = searchParams.get('tab');
+
 		if (action === 'update_video') {
 			setActiveTab('videos');
 			setIsVerifying(true);
-			// Xóa search param sau khi thực hiện hành động
 			const newParams = new URLSearchParams(searchParams);
 			newParams.delete('action');
 			setSearchParams(newParams, { replace: true });
+		} else if (tab === 'videos') {
+			setActiveTab('videos');
+		} else if (tab === 'labs') {
+			setActiveTab('labs');
 		}
 	}, [searchParams]);
 

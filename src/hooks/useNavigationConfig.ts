@@ -221,7 +221,7 @@ export const useNavigationConfig = () => {
 		} else if (path.startsWith('/khoa-dao-tao')) {
 			items = [
 				allItems[0], // Trang chủ
-				{ icon: 'inventory_2', label: 'Tồn kho chuyên sâu', path: '/khoa-dao-tao?tab=inventory' },
+				{ icon: 'play_circle', label: 'Video hướng dẫn', path: '/khoa-dao-tao?tab=videos' },
 				allItems[2], // Center (Kết thúc Lab)
 				{ icon: 'sync', label: 'Vận hành & đồng bộ', path: '/khoa-dao-tao?tab=operations' },
 				{ icon: 'account_balance', label: 'Đối soát & tài chính', path: '/khoa-dao-tao?tab=finance' },

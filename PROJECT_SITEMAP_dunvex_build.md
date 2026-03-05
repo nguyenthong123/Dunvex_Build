@@ -94,6 +94,10 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Nhập tọa độ thủ công**: Bổ sung 2 ô nhập liệu Vĩ độ (Lat) và Kinh độ (Lng) trong form Thêm/Sửa khách hàng.
     - **Pasting Thông minh**: Tự động nhận diện và phân tách tọa độ nếu người dùng dán chuỗi "lat, lng" vào ô Vĩ độ, giúp tiết kiệm thời gian khi copy từ Google Maps.
     - **Linh hoạt vận hành**: Cho phép tạo hồ sơ khách hàng có vị trí chính xác ngay cả khi Admin đang ở văn phòng.
+- [x] **Cấu hình Thanh toán Hệ thống (Payment Admin Control - Mar 5)**:
+    - **Quản lý Tài khoản nhận tiền**: Cho phép Admin hệ thống thay đổi Ngân hàng, STK và Tên chủ tài khoản nhận thanh toán nâng cấp.
+    - **Bảo mật 2 lớp (OTP Mail)**: Việc thay đổi thông tin thanh toán yêu cầu mã xác minh OTP gửi về email tổng `dunvex.green@gmail.com`.
+    - **QR Code Động**: Tự động cập nhật mã QR VietQR theo thông tin tài khoản mới nhất được cấu hình.
 - [x] **Nhập liệu hàng loạt (Bulk Import) Thông minh**: 
     *   **Nhận diện Toàn cục (Global ID)**: Tự động nhận diện sản phẩm dựa trên **[Mã SKU]** hoặc **[Tên]** trên toàn hệ thống (không phân biệt danh mục). Điều này giúp cập nhật giá hoặc thay đổi danh mục mà không tạo ra sản phẩm trùng lặp, đảm bảo một mã SKU chỉ có duy nhất một kho hàng thực tế.
     *   **Bảo toàn dữ liệu (Partial Update)**: Hệ thống chỉ cập nhật những cột có trong file Excel, giữ nguyên các thông tin cũ (như số lượng tồn kho) nếu cột đó bị thiếu trong lần nhập sau.

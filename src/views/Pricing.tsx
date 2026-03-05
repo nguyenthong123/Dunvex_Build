@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, Zap, Crown, Rocket, ShieldCheck, ArrowLeft, CreditCard, QrCode } from 'lucide-react';
+import { Check, Zap, Crown, Rocket, ShieldCheck, ArrowLeft, CreditCard, QrCode, Lock, Settings, Mail, X, Save } from 'lucide-react';
 import { auth, db } from '../services/firebase';
-import { collection, addDoc, serverTimestamp, query, where, limit, getDocs, doc, updateDoc, increment } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, limit, getDocs, doc, updateDoc, increment, onSnapshot } from 'firebase/firestore';
+import { useEffect } from 'react';
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
 
@@ -22,6 +23,44 @@ const Pricing = () => {
 	const [appliedCode, setAppliedCode] = useState('');
 	const [promoError, setPromoError] = useState('');
 	const [promoProdId, setPromoProdId] = useState('');
+
+	// Payment Config state
+	const [paymentConfig, setPaymentConfig] = useState({
+		bankId: 'ICB',
+		accountNumber: '107882271865',
+		accountName: 'NGUYEN BA THONG'
+	});
+
+	// Verification state
+	const [isVerifying, setIsVerifying] = useState(false);
+	const [showConfigForm, setShowConfigForm] = useState(false);
+	const [inputPasscode, setInputPasscode] = useState('');
+	const [generatedCode, setGeneratedCode] = useState('');
+	const [sendingCode, setSendingCode] = useState(false);
+
+	// New Config Form state
+	const [newBankId, setNewBankId] = useState('');
+	const [newAccountNumber, setNewAccountNumber] = useState('');
+	const [newAccountName, setNewAccountName] = useState('');
+	const [isSaving, setIsSaving] = useState(false);
+
+	useEffect(() => {
+		const unsub = onSnapshot(doc(db, 'system_config', 'payment'), (snapshot) => {
+			if (snapshot.exists()) {
+				const data = snapshot.data();
+				setPaymentConfig(data as any);
+				setNewBankId(data.bankId);
+				setNewAccountNumber(data.accountNumber);
+				setNewAccountName(data.accountName);
+			} else {
+				// Default fallback
+				setNewBankId('ICB');
+				setNewAccountNumber('107882271865');
+				setNewAccountName('NGUYEN BA THONG');
+			}
+		});
+		return () => unsub();
+	}, []);
 
 	const generateTransferCode = (email: string) => {
 		const prefix = email.split('@')[0].toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
@@ -71,6 +110,89 @@ const Pricing = () => {
 		setPromoCode('');
 		setPromoError('');
 		setStep(2);
+	};
+
+	const handleSendCode = async () => {
+		setSendingCode(true);
+		const code = Math.floor(100000 + Math.random() * 900000).toString();
+		setGeneratedCode(code);
+
+		try {
+			await fetch('https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec', {
+				method: 'POST',
+				mode: 'no-cors',
+				headers: {
+					'Content-Type': 'text/plain;charset=utf-8',
+				},
+				body: JSON.stringify({
+					action: 'training_verification', // Using the existing generic verification flow
+					email: auth.currentUser?.email || 'N/A',
+					targetEmail: 'dunvex.green@gmail.com',
+					subject: 'MÃ XÁC MINH CẬP NHẬT TÀI KHOẢN THANH TOÁN',
+					message: `Mã xác minh của bạn là: ${code}. Vui lòng nhập mã này để mở khóa tính năng thay đổi tài khoản nhận tiền.`
+				})
+			});
+			showToast("Đã gửi mã xác minh về email dunvex.green@gmail.com", "success");
+		} catch (err) {
+			console.error("Failed to send verification email:", err);
+			showToast("Lỗi khi gửi mã xác minh.", "error");
+		} finally {
+			setSendingCode(false);
+		}
+	};
+
+	const handleVerifyPasscode = () => {
+		if (inputPasscode === generatedCode && generatedCode !== '') {
+			setIsVerifying(false);
+			setShowConfigForm(true);
+			showToast("Xác thực thành công!", "success");
+		} else {
+			showToast("Mã xác minh không chính xác.", "error");
+		}
+	};
+
+	const handleSaveConfig = async () => {
+		if (!newBankId || !newAccountNumber || !newAccountName) {
+			showToast("Vui lòng điền đầy đủ thông tin", "error");
+			return;
+		}
+
+		setIsSaving(true);
+		try {
+			const configRef = doc(db, 'system_config', 'payment');
+			await updateDoc(configRef, {
+				bankId: newBankId.trim().toUpperCase(),
+				accountNumber: newAccountNumber.trim(),
+				accountName: newAccountName.trim().toUpperCase(),
+				updatedAt: serverTimestamp(),
+				updatedBy: auth.currentUser?.email
+			});
+			showToast("Đã cập nhật tài khoản thanh toán", "success");
+			setShowConfigForm(false);
+			setInputPasscode('');
+			setGeneratedCode('');
+		} catch (error: any) {
+			// If document doesn't exist, create it (shouldn't happen with updateDoc if not existing, but anyway)
+			try {
+				const { setDoc } = await import('firebase/firestore');
+				await setDoc(doc(db, 'system_config', 'payment'), {
+					bankId: newBankId.trim().toUpperCase(),
+					accountNumber: newAccountNumber.trim(),
+					accountName: newAccountName.trim().toUpperCase(),
+					updatedAt: serverTimestamp(),
+					updatedBy: auth.currentUser?.email
+				});
+				showToast("Đã khởi tạo tài khoản thanh toán", "success");
+				setShowConfigForm(false);
+				setInputPasscode('');
+				setGeneratedCode('');
+			} catch (err) {
+				console.error("Error saving config:", err);
+				showToast("Lỗi khi lưu cấu hình", "error");
+			}
+		} finally {
+			setIsSaving(false);
+		}
 	};
 
 	const handleApplyPromo = async () => {
@@ -234,12 +356,138 @@ const Pricing = () => {
 				<h2 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tight flex-1">
 					{step === 1 ? 'Nâng Cấp Tài Khoản' : 'Thanh Toán'}
 				</h2>
-				<div className="bg-[#1A237E] p-1 rounded-xl">
-					<NotificationBell />
+				<div className="flex items-center gap-3">
+					{!isVerifying && !showConfigForm && (
+						<button
+							onClick={() => setIsVerifying(true)}
+							className="p-3 bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-indigo-600 rounded-xl transition-all border border-slate-100 dark:border-slate-800"
+							title="Cấu hình tài khoản thanh toán"
+						>
+							<Settings size={20} />
+						</button>
+					)}
+					<div className="bg-[#1A237E] p-1 rounded-xl">
+						<NotificationBell />
+					</div>
 				</div>
 			</header>
 
 			<div className="max-w-5xl mx-auto p-8">
+				{/* Verification & Config Form Overlay */}
+				{isVerifying ? (
+					<div className="max-w-md mx-auto bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 p-10 shadow-xl mb-12 animate-in zoom-in-95 duration-300">
+						<div className="flex flex-col items-center text-center mb-8">
+							<div className="size-16 bg-amber-50 dark:bg-amber-900/20 rounded-2xl flex items-center justify-center text-amber-500 mb-6">
+								<Lock size={32} />
+							</div>
+							<h4 className="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tight mb-2">Xác thực Admin</h4>
+							<p className="text-xs font-medium text-slate-500 leading-relaxed">
+								Vui lòng nhập mã xác minh được gửi tới email quản trị để thay đổi thông tin thanh toán toàn hệ thống.
+							</p>
+						</div>
+
+						<div className="space-y-6">
+							{!generatedCode ? (
+								<button
+									onClick={handleSendCode}
+									disabled={sendingCode}
+									className="w-full py-4 bg-[#1A237E] text-white rounded-2xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-blue-800 transition-all disabled:opacity-50"
+								>
+									{sendingCode ? 'Đang gửi...' : <><Mail size={16} /> Gửi mã về dunvex.green@gmail.com</>}
+								</button>
+							) : (
+								<>
+									<div className="space-y-2">
+										<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Mã xác minh</label>
+										<input
+											type="text"
+											maxLength={6}
+											value={inputPasscode}
+											onChange={(e) => setInputPasscode(e.target.value.replace(/\D/g, ''))}
+											className="w-full bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-2xl px-6 py-4 text-center text-2xl font-black tracking-[0.8em] text-indigo-600 focus:border-indigo-500 outline-none transition-all placeholder:tracking-normal"
+											placeholder="••••••"
+										/>
+									</div>
+									<div className="flex gap-4">
+										<button
+											onClick={() => { setIsVerifying(false); setInputPasscode(''); setGeneratedCode(''); }}
+											className="flex-1 py-4 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all hover:bg-slate-200"
+										>
+											Hủy
+										</button>
+										<button
+											onClick={handleVerifyPasscode}
+											className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-indigo-500/20 hover:bg-indigo-700 transition-all"
+										>
+											Xác nhận
+										</button>
+									</div>
+								</>
+							)}
+						</div>
+					</div>
+				) : showConfigForm ? (
+					<div className="max-w-xl mx-auto bg-white dark:bg-slate-900 rounded-[2.5rem] border border-indigo-500/30 p-10 shadow-xl mb-12 animate-in zoom-in-95 duration-300">
+						<div className="flex items-center justify-between mb-8">
+							<h4 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tight">Cấu hình thanh toán</h4>
+							<button onClick={() => setShowConfigForm(false)} className="p-2 text-slate-400 hover:text-rose-500 transition-colors">
+								<X size={24} />
+							</button>
+						</div>
+
+						<div className="space-y-6">
+							<div className="space-y-2">
+								<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Mã Ngân hàng (vietqr.io id)</label>
+								<input
+									type="text"
+									value={newBankId}
+									onChange={(e) => setNewBankId(e.target.value)}
+									className="w-full bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-2xl px-6 py-4 text-sm font-bold text-slate-800 dark:text-white focus:border-indigo-500 outline-none transition-all"
+									placeholder="Ví dụ: VCB, ICB, MB, ACB..."
+								/>
+								<p className="text-[9px] text-slate-400 font-medium ml-1">* VietinBank: ICB, Vietcombank: VCB, MBBank: MB</p>
+							</div>
+
+							<div className="space-y-2">
+								<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Số tài khoản</label>
+								<input
+									type="text"
+									value={newAccountNumber}
+									onChange={(e) => setNewAccountNumber(e.target.value)}
+									className="w-full bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-2xl px-6 py-4 text-sm font-bold text-slate-800 dark:text-white focus:border-indigo-500 outline-none transition-all"
+									placeholder="Nhập số tài khoản"
+								/>
+							</div>
+
+							<div className="space-y-2">
+								<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tên chủ tài khoản</label>
+								<input
+									type="text"
+									value={newAccountName}
+									onChange={(e) => setNewAccountName(e.target.value)}
+									className="w-full bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-2xl px-6 py-4 text-sm font-bold text-slate-800 dark:text-white focus:border-indigo-500 outline-none transition-all"
+									placeholder="HỌ VÀ TÊN KHÔNG DẤU"
+								/>
+							</div>
+
+							<div className="flex gap-4 pt-4">
+								<button
+									onClick={() => setShowConfigForm(false)}
+									className="flex-1 py-4 bg-slate-50 dark:bg-slate-800 text-slate-400 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all hover:bg-slate-100"
+								>
+									Hủy bỏ
+								</button>
+								<button
+									onClick={handleSaveConfig}
+									disabled={isSaving}
+									className="flex-1 py-4 bg-[#1A237E] text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-blue-900/20 hover:bg-blue-800 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+								>
+									{isSaving ? 'Đang lưu...' : <><Save size={18} /> Lưu cấu hình</>}
+								</button>
+							</div>
+						</div>
+					</div>
+				) : null}
 				{step === 1 ? (
 					<div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
 						<div className="text-center mb-12">
@@ -395,16 +643,16 @@ const Pricing = () => {
 							{/* QR Image with Transfer Code */}
 							<div className="bg-white p-4 rounded-3xl shadow-inner border border-slate-100 dark:border-slate-800 mx-auto w-fit mb-4">
 								<img
-									src={`https://img.vietqr.io/image/ICB-107882271865-compact2.png?amount=${selectedPlan.price - discountAmt}&addInfo=${encodeURIComponent(transferCode)}`}
+									src={`https://img.vietqr.io/image/${paymentConfig.bankId}-${paymentConfig.accountNumber}-compact2.png?amount=${selectedPlan.price - discountAmt}&addInfo=${encodeURIComponent(transferCode)}`}
 									alt="Payment QR"
 									className="size-64 object-contain rounded-2xl"
 								/>
 							</div>
 
 							<div className="text-center mb-8 space-y-1">
-								<p className="text-sm font-black text-slate-800 dark:text-white uppercase">VietinBank</p>
-								<p className="text-xs font-bold text-slate-500">107882271865</p>
-								<p className="text-[10px] font-black text-indigo-500 uppercase">NGUYEN BA THONG</p>
+								<p className="text-sm font-black text-slate-800 dark:text-white uppercase">{paymentConfig.bankId}</p>
+								<p className="text-xs font-bold text-slate-500">{paymentConfig.accountNumber}</p>
+								<p className="text-[10px] font-black text-indigo-500 uppercase">{paymentConfig.accountName}</p>
 							</div>
 
 							<div className="space-y-4">

@@ -28,6 +28,7 @@ const CustomerList = () => {
 	const [showEditForm, setShowEditForm] = useState(false);
 	const [showDetail, setShowDetail] = useState(false);
 	const [showMap, setShowMap] = useState(false);
+	const [showTaxDetail, setShowTaxDetail] = useState(false);
 	const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
 	const [searchTerm, setSearchTerm] = useState('');
 	const [selectedRoute, setSelectedRoute] = useState('All');
@@ -67,8 +68,13 @@ const CustomerList = () => {
 		lat: null as number | null,
 		lng: null as number | null,
 		licenseUrls: [] as string[],
-		additionalImages: [] as string[]
+		additionalImages: [] as string[],
+		taxName: '',
+		taxCode: '',
+		taxAddress: '',
+		taxPhone: ''
 	});
+	const [showTaxInfo, setShowTaxInfo] = useState(false);
 
 	const [uploadingLicense, setUploadingLicense] = useState(false);
 	const [uploadingImages, setUploadingImages] = useState(false);
@@ -313,11 +319,19 @@ const CustomerList = () => {
 			}
 
 			const validatedData = result.data;
-			await updateDoc(doc(db, 'customers', selectedCustomer.id), {
+
+			// Đảm bảo các trường tax luôn có giá trị (tránh undefined)
+			const updatePayload = {
 				...validatedData,
+				taxName: validatedData.taxName || '',
+				taxCode: validatedData.taxCode || '',
+				taxAddress: validatedData.taxAddress || '',
+				taxPhone: validatedData.taxPhone || '',
 				updatedAt: serverTimestamp(),
 				updatedBy: auth.currentUser?.uid
-			});
+			};
+
+			await updateDoc(doc(db, 'customers', selectedCustomer.id), updatePayload);
 
 			// Log Update Customer
 			await addDoc(collection(db, 'audit_logs'), {
@@ -332,8 +346,9 @@ const CustomerList = () => {
 			setShowEditForm(false);
 			resetForm();
 			showToast("Cập nhật thành công", "success");
-		} catch (error) {
-			showToast("Lỗi khi cập nhật khách hàng", "error");
+		} catch (error: any) {
+			console.error("Update customer error:", error);
+			showToast("Lỗi khi cập nhật: " + (error.message || "Vui lòng kiểm tra lại dữ liệu"), "error");
 		}
 	};
 
@@ -376,8 +391,13 @@ const CustomerList = () => {
 			lat: null,
 			lng: null,
 			licenseUrls: [],
-			additionalImages: []
+			additionalImages: [],
+			taxName: '',
+			taxCode: '',
+			taxAddress: '',
+			taxPhone: ''
 		});
+		setShowTaxInfo(false);
 	};
 
 	const openEdit = (customer: any) => {
@@ -396,13 +416,19 @@ const CustomerList = () => {
 			lat: customer.lat || null,
 			lng: customer.lng || null,
 			licenseUrls: customer.licenseUrls || (customer.licenseUrl ? [customer.licenseUrl] : []),
-			additionalImages: customer.additionalImages || []
+			additionalImages: customer.additionalImages || [],
+			taxName: customer.taxName || '',
+			taxCode: customer.taxCode || '',
+			taxAddress: customer.taxAddress || '',
+			taxPhone: customer.taxPhone || ''
 		});
+		setShowTaxInfo(!!(customer.taxName || customer.taxCode || customer.taxAddress || customer.taxPhone));
 		setShowEditForm(true);
 	};
 
 	const openDetail = (customer: any) => {
 		setSelectedCustomer(customer);
+		setShowTaxDetail(false);
 		setShowDetail(true);
 	};
 
@@ -952,8 +978,69 @@ const CustomerList = () => {
 											)}
 										</div>
 									</div>
+									{/* TOGGLE FORM CHO THÔNG TIN HÓA ĐƠN */}
+									<div className="pt-2">
+										<div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-slate-800">
+											<div>
+												<h4 className="text-xs font-black uppercase text-slate-800 dark:text-indigo-400">Thông tin xuất hóa đơn</h4>
+												<p className="text-[10px] text-slate-500">Tên công ty, MST và địa chỉ tài chính</p>
+											</div>
+											<button
+												type="button"
+												onClick={() => setShowTaxInfo(!showTaxInfo)}
+												className={`w-12 h-6 rounded-full transition-all duration-300 relative ${showTaxInfo ? 'bg-[#FF6D00]' : 'bg-slate-200 dark:bg-slate-700'} shadow-inner`}
+											>
+												<div className={`absolute top-1 size-4 bg-white rounded-full transition-all duration-300 ${showTaxInfo ? 'left-7 shadow-lg translate-x-0' : 'left-1 shadow-sm'}`}></div>
+											</button>
+										</div>
 
-									{/* Additional Images Upload */}
+										{showTaxInfo && (
+											<div className="space-y-4 pt-4 animate-in slide-in-from-top-2 duration-300">
+												<div>
+													<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Tên xuất hóa đơn</label>
+													<input
+														type="text"
+														className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
+														placeholder="VD: CÔNG TY TNHH DUNVEX DIGITAL"
+														value={formData.taxName}
+														onChange={(e) => setFormData({ ...formData, taxName: e.target.value })}
+													/>
+												</div>
+												<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+													<div>
+														<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Mã số thuế</label>
+														<input
+															type="text"
+															className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
+															placeholder="VD: 0312345678"
+															value={formData.taxCode}
+															onChange={(e) => setFormData({ ...formData, taxCode: e.target.value })}
+														/>
+													</div>
+													<div>
+														<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">SĐT hóa đơn (nếu có)</label>
+														<input
+															type="text"
+															className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
+															placeholder="Dùng SĐT chính nếu bỏ trống"
+															value={formData.taxPhone}
+															onChange={(e) => setFormData({ ...formData, taxPhone: e.target.value })}
+														/>
+													</div>
+												</div>
+												<div>
+													<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Địa chỉ xuất hóa đơn</label>
+													<textarea
+														rows={2}
+														className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
+														placeholder="Địa chỉ ghi trên hóa đơn tài chính..."
+														value={formData.taxAddress}
+														onChange={(e) => setFormData({ ...formData, taxAddress: e.target.value })}
+													/>
+												</div>
+											</div>
+										)}
+									</div>
 									<div>
 										<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Hình ảnh khác / Công trình</label>
 										<div className="space-y-3">
@@ -1115,22 +1202,77 @@ const CustomerList = () => {
 									</div>
 								</div>
 								<div className="w-full space-y-4 text-left">
-									<div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 relative group">
-										<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-											<div>
-												<p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest flex items-center gap-1.5">
-													<span className="material-symbols-outlined text-sm">location_on</span>
-													Địa chỉ công trình
-												</p>
-												<p className="text-sm font-bold text-slate-700 dark:text-white leading-relaxed">{selectedCustomer.address || 'Chưa cung cấp'}</p>
+									{/* ADDRESS & TAX INFO */}
+									<div className="space-y-4">
+										<div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-3xl border border-slate-100 dark:border-slate-800">
+											<p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest flex items-center gap-1.5">
+												<span className="material-symbols-outlined text-sm">location_on</span>
+												Địa chỉ công trình
+											</p>
+											<p className="text-sm font-bold text-slate-700 dark:text-white leading-relaxed">{selectedCustomer.address || 'Chưa cung cấp'}</p>
+										</div>
+
+										<div className="bg-indigo-50/50 dark:bg-indigo-900/10 p-5 rounded-3xl border border-indigo-100/50 dark:border-indigo-900/30">
+											<div className="flex items-center justify-between">
+												<div className="flex items-center gap-2">
+													<div className="size-8 rounded-xl bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+														<span className="material-symbols-outlined text-sm">receipt</span>
+													</div>
+													<div>
+														<p className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Thông tin hóa đơn</p>
+														<p className="text-[9px] text-slate-500 dark:text-slate-500">MST, Tên đơn vị, Địa chỉ VAT</p>
+													</div>
+												</div>
+												<button
+													type="button"
+													onClick={(e) => { e.stopPropagation(); setShowTaxDetail(!showTaxDetail); }}
+													className={`w-12 h-6 rounded-full transition-all duration-300 relative ${showTaxDetail ? 'bg-[#FF6D00]' : 'bg-slate-200 dark:bg-slate-700'} shadow-inner`}
+												>
+													<div className={`absolute top-1 size-4 bg-white rounded-full transition-all duration-300 ${showTaxDetail ? 'left-7 shadow-lg' : 'left-1 shadow-sm'}`}></div>
+												</button>
 											</div>
-											{selectedCustomer.email && (
-												<div>
-													<p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest flex items-center gap-1.5">
-														<span className="material-symbols-outlined text-sm">mail</span>
-														Email khách hàng
-													</p>
-													<p className="text-sm font-bold text-slate-700 dark:text-white leading-relaxed truncate">{selectedCustomer.email}</p>
+
+											{showTaxDetail && (
+												<div className="mt-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+													<div className="bg-white dark:bg-slate-800 p-3 rounded-2xl border border-slate-100 dark:border-slate-700">
+														<div className="flex justify-between items-center mb-1">
+															<p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Tên đơn vị</p>
+															<button onClick={() => { navigator.clipboard.writeText(selectedCustomer.taxName || ""); showToast("Đã chép tên", "success"); }} className="p-1 px-2 rounded-lg bg-orange-50 dark:bg-orange-900/20 text-[9px] font-black text-[#FF6D00] uppercase flex items-center gap-1 active:scale-90 transition-transform">
+																<span className="material-symbols-outlined text-xs">content_copy</span> Chép
+															</button>
+														</div>
+														<p className="text-xs font-black text-slate-700 dark:text-indigo-300 uppercase leading-snug">
+															{selectedCustomer.taxName || 'Chưa cập nhật'}
+														</p>
+													</div>
+
+													<div className="grid grid-cols-2 gap-3">
+														<div className="bg-white dark:bg-slate-800 p-3 rounded-2xl border border-slate-100 dark:border-slate-700">
+															<div className="flex justify-between items-center mb-1">
+																<p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">MST</p>
+																<button onClick={() => { navigator.clipboard.writeText(selectedCustomer.taxCode || ""); showToast("Đã chép MST", "success"); }} className="p-1 rounded-lg text-[#FF6D00]">
+																	<span className="material-symbols-outlined text-xs">content_copy</span>
+																</button>
+															</div>
+															<p className="text-xs font-bold text-slate-700 dark:text-white">{selectedCustomer.taxCode || 'N/A'}</p>
+														</div>
+														<div className="bg-white dark:bg-slate-800 p-3 rounded-2xl border border-slate-100 dark:border-slate-700">
+															<p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1 tracking-widest">SĐT HĐ</p>
+															<p className="text-xs font-bold text-slate-700 dark:text-white line-clamp-1">{selectedCustomer.phone || 'N/A'}</p>
+														</div>
+													</div>
+
+													<div className="bg-white dark:bg-slate-800 p-3 rounded-2xl border border-slate-100 dark:border-slate-700">
+														<div className="flex justify-between items-center mb-1">
+															<p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Địa chỉ VAT</p>
+															<button onClick={() => { navigator.clipboard.writeText(selectedCustomer.taxAddress || ""); showToast("Đã chép địa chỉ", "success"); }} className="p-1 rounded-lg text-[#FF6D00]">
+																<span className="material-symbols-outlined text-xs">content_copy</span>
+															</button>
+														</div>
+														<p className="text-xs font-medium text-slate-600 dark:text-slate-300 italic leading-relaxed">
+															{selectedCustomer.taxAddress || 'Chưa cập nhật'}
+														</p>
+													</div>
 												</div>
 											)}
 										</div>
@@ -1195,7 +1337,7 @@ const CustomerList = () => {
 				)
 			}
 			{showMap && <CustomerMap customers={customers} onClose={() => setShowMap(false)} />}
-		</div >
+		</div>
 	);
 };
 

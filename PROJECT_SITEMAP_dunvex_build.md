@@ -83,6 +83,11 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 ## 4. Các mục đã hoàn thành & Cần làm (To-do)
 
 ### ✅ Đã hoàn thành (Done)
+- [x] **Thông tin Hóa đơn & Chi tiết Khách hàng (Customer VAT Upgrade - Mar 9)**:
+    - **Quản lý Thông tin VAT**: Bổ sung bộ 4 trường thông tin (Tên đơn vị, MST, SĐT hóa đơn, Địa chỉ VAT) vào hồ sơ khách hàng.
+    - **Giao diện Modal Nâng cấp**: Phần thông tin hóa đơn trong Modal chi tiết luôn hiển thị tiêu đề, hỗ trợ nút gạt (Toggle) để ẩn/hiện chi tiết cực kỳ gọn gàng.
+    - **Tiện ích Sao chép nhanh**: Tích hợp nút Copy cho từng trường dữ liệu hóa đơn, giúp nhân viên lấy thông tin xuất hóa đơn chỉ với 1 lần chạm.
+    - **Đồng bộ Form & Schema**: Nâng cấp Form Thêm/Sửa với nút gạt bật/tắt mục Hóa đơn và cập nhật `CustomerSchema` để đảm bảo dữ liệu luôn được lưu trữ chính xác vào Firestore.
 - [x] **Video Hướng dẫn & Bảo mật Nội dung (Training Upgrade - Mar 5)**:
     - **Thư viện Video**: Tích hợp danh sách video hướng dẫn từ YouTube với giao diện Card premium, hỗ trợ xem trực tiếp và hiển thị cho toàn bộ người dùng.
     - **Quản lý Bảo mật (Verification Gate)**: Triển khai cơ chế xác thực 2 lớp để mở khóa form cập nhật video. Mã xác minh (6 chữ số) được gửi tự động về email quản trị `dunvex.green@gmail.com`.

@@ -83,6 +83,9 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 ## 4. Các mục đã hoàn thành & Cần làm (To-do)
 
 ### ✅ Đã hoàn thành (Done)
+- [x] **Email & Sao chép nhanh Thông tin (Quick Copy Upgrade - Mar 10)**:
+    - **Email khách hàng**: Bổ sung khối hiển thị Email trong chi tiết khách hàng, hỗ trợ link mailto và nút sao chép nhanh.
+    - **Đồng bộ nút Chép**: Bổ sung nút sao chép cho toàn bộ các trường contact nhạy cảm (Email, SĐT hóa đơn), đảm bảo trải nghiệm người dùng hiện đại và tiện lợi.
 - [x] **Thông tin Hóa đơn & Chi tiết Khách hàng (Customer VAT Upgrade - Mar 9)**:
     - **Quản lý Thông tin VAT**: Bổ sung bộ 4 trường thông tin (Tên đơn vị, MST, SĐT hóa đơn, Địa chỉ VAT) vào hồ sơ khách hàng.
     - **Giao diện Modal Nâng cấp**: Phần thông tin hóa đơn trong Modal chi tiết luôn hiển thị tiêu đề, hỗ trợ nút gạt (Toggle) để ẩn/hiện chi tiết cực kỳ gọn gàng.

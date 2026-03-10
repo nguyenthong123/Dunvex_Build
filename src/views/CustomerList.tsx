@@ -1205,6 +1205,30 @@ const CustomerList = () => {
 									{/* ADDRESS & TAX INFO */}
 									<div className="space-y-4">
 										<div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-3xl border border-slate-100 dark:border-slate-800">
+											<div className="flex justify-between items-center mb-2">
+												<p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+													<span className="material-symbols-outlined text-sm">mail</span>
+													Email khách hàng
+												</p>
+												{selectedCustomer.email && (
+													<button
+														onClick={(e) => {
+															e.stopPropagation();
+															navigator.clipboard.writeText(selectedCustomer.email);
+															showToast("Đã chép email", "success");
+														}}
+														className="p-1 px-2 rounded-lg bg-orange-50 dark:bg-orange-900/20 text-[9px] font-black text-[#FF6D00] uppercase flex items-center gap-1 active:scale-90 transition-transform"
+													>
+														<span className="material-symbols-outlined text-[14px]">content_copy</span> Chép
+													</button>
+												)}
+											</div>
+											<a href={selectedCustomer.email ? `mailto:${selectedCustomer.email}` : '#'} className={`text-sm font-bold ${selectedCustomer.email ? 'text-blue-600 dark:text-blue-400 hover:underline' : 'text-slate-700 dark:text-white'} truncate block`}>
+												{selectedCustomer.email || 'Chưa cung cấp'}
+											</a>
+										</div>
+
+										<div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-3xl border border-slate-100 dark:border-slate-800">
 											<p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest flex items-center gap-1.5">
 												<span className="material-symbols-outlined text-sm">location_on</span>
 												Địa chỉ công trình
@@ -1257,8 +1281,13 @@ const CustomerList = () => {
 															<p className="text-xs font-bold text-slate-700 dark:text-white">{selectedCustomer.taxCode || 'N/A'}</p>
 														</div>
 														<div className="bg-white dark:bg-slate-800 p-3 rounded-2xl border border-slate-100 dark:border-slate-700">
-															<p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1 tracking-widest">SĐT HĐ</p>
-															<p className="text-xs font-bold text-slate-700 dark:text-white line-clamp-1">{selectedCustomer.phone || 'N/A'}</p>
+															<div className="flex justify-between items-center mb-1">
+																<p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">SĐT HĐ</p>
+																<button onClick={() => { navigator.clipboard.writeText(selectedCustomer.taxPhone || selectedCustomer.phone || ""); showToast("Đã chép SĐT", "success"); }} className="p-1 rounded-lg text-[#FF6D00]">
+																	<span className="material-symbols-outlined text-xs">content_copy</span>
+																</button>
+															</div>
+															<p className="text-xs font-bold text-slate-700 dark:text-white line-clamp-1">{selectedCustomer.taxPhone || selectedCustomer.phone || 'N/A'}</p>
 														</div>
 													</div>
 

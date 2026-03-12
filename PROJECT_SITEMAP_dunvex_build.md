@@ -96,6 +96,8 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Nút gạt Nhắc nợ Mobile**: Tích hợp trực tiếp nút gạt (Toggle Switch) bật/tắt nhắc nhở ngay trên từng thẻ khoản vay trên di động, đồng bộ chức năng với bản Desktop.
     - **Tối ưu Thao tác một tay**: Sắp xếp lại các nút Xoá và Nhắc nợ ở vị trí thuận tiện nhất cho ngón tay khi sử dụng điện thoại.
 - [x] **Tinh chỉnh Điều hướng & Sửa lỗi Hệ thống (Navigation & Console Fix - Mar 12)**:
+    - **Căn chỉnh Bảng Desktop**: Khôi phục cột "Ngày" bị thiếu, giúp tiêu đề và dữ liệu khớp nhau 100%, tạo giao diện chuyên nghiệp.
+    - **Popup Chi tiết Nội dung**: Tích hợp tính năng nhấn vào ghi chú để mở cửa sổ phóng to (Popup) xem đầy đủ nội dung, áp dụng cho cả Mobile và Desktop.
     - **Bottom Nav Thông minh**: Cập nhật thanh điều hướng trang Tài chính với phím tắt "Lịch sử" riêng biệt, giúp truy cập nhanh nhật ký thu chi.
     - **Dọn dẹp Console**: Xử lý triệt để các lỗi "Duplicate Key" do trùng lặp địa chỉ các nút bấm, đảm bảo ứng dụng vận hành mượt mà và sạch lỗi.
     - **Bảo toàn Bố cục Chuyên nghiệp**: Khôi phục và chuẩn hóa lại khoảng cách, vị trí các nút bấm theo đúng thiết lập gốc của người dùng sau quá trình tối ưu.

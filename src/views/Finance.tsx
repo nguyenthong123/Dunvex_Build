@@ -74,6 +74,7 @@ const Finance = () => {
 		email: ''
 	});
 	const [isFetchingRate, setIsFetchingRate] = useState(false);
+	const [selectedNote, setSelectedNote] = useState<string | null>(null);
 
 	// Sync tab with URL
 	useEffect(() => {
@@ -715,8 +716,8 @@ const Finance = () => {
 												</div>
 											</div>
 											
-											<div className="space-y-2">
-												<p className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-snug">
+											<div className="space-y-2 cursor-pointer active:opacity-70" onClick={() => setSelectedNote(log.note)}>
+												<p className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-snug line-clamp-3">
 													{log.note}
 												</p>
 												{log.email && (
@@ -786,8 +787,11 @@ const Finance = () => {
 										) : (
 											paginatedLogs.map(log => (
 												<tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-													<td className="px-6 py-4">
-														<span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${log.category === 'Vay ngân hàng' || log.type === 'thu'
+													<td className="px-6 py-4 text-xs font-bold text-slate-500 whitespace-nowrap hidden md:table-cell">
+														{log.date}
+													</td>
+													<td className="px-6 py-4 text-center">
+														<span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase inline-block ${log.category === 'Vay ngân hàng' || log.type === 'thu'
 															? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20'
 															: log.category === 'Vận hành'
 																? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20'
@@ -796,13 +800,9 @@ const Finance = () => {
 															{log.category}
 														</span>
 													</td>
-													<td className="px-6 py-4">
+													<td className="px-6 py-4 cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-700/30 transition-colors" onClick={() => setSelectedNote(log.note)}>
 														<div className="flex flex-col">
-															<span className="font-medium text-slate-700 dark:text-slate-300 text-xs sm:text-sm line-clamp-2">{log.note}</span>
-															<div className="flex items-center gap-2 mt-1 md:hidden">
-																<span className="text-[10px] text-slate-400 font-bold">{log.date}</span>
-																{log.email && <span className="text-[10px] text-indigo-400 italic sm:hidden">{log.email}</span>}
-															</div>
+															<span className="font-medium text-slate-700 dark:text-slate-300 text-xs sm:text-sm line-clamp-1">{log.note}</span>
 															{log.bankName && (
 																<span className="text-[9px] text-slate-400 font-bold uppercase tracking-tight flex items-center gap-1 mt-0.5">
 																	<Sparkles size={10} className="text-indigo-400" /> {log.bankName}
@@ -1675,6 +1675,42 @@ const Finance = () => {
 					</div>
 				)
 			}
+
+			{/* Popup hiển thị chi tiết nội dung */}
+			{selectedNote && (
+				<div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+					<div 
+						className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
+						onClick={(e) => e.stopPropagation()}
+					>
+						<div className="p-6 border-b border-slate-50 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
+							<h3 className="text-sm font-black uppercase tracking-widest text-slate-400">Chi tiết ghi chú</h3>
+							<button 
+								onClick={() => setSelectedNote(null)}
+								className="size-8 flex items-center justify-center rounded-full hover:bg-white dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition-all"
+							>
+								<span className="material-symbols-outlined text-xl">close</span>
+							</button>
+						</div>
+						<div className="p-8">
+							<div className="bg-slate-50 dark:bg-slate-800/30 p-6 rounded-2xl border border-slate-100 dark:border-slate-700/50">
+								<p className="text-slate-700 dark:text-slate-200 leading-relaxed whitespace-pre-wrap font-medium">
+									{selectedNote}
+								</p>
+							</div>
+						</div>
+						<div className="p-6 bg-slate-50/50 dark:bg-slate-800/50 flex justify-end">
+							<button
+								onClick={() => setSelectedNote(null)}
+								className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-500/20 active:scale-95 transition-all"
+							>
+								Đóng lại
+							</button>
+						</div>
+					</div>
+					<div className="absolute inset-0 -z-10" onClick={() => setSelectedNote(null)} />
+				</div>
+			)}
 		</div >
 	);
 };

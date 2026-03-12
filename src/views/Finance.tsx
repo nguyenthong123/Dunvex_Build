@@ -213,19 +213,27 @@ const Finance = () => {
 					messages: [
 						{
 							role: "system",
-							content: "Bạn là chuyên gia cố vấn tài chính doanh nghiệp. Hãy viết một đoạn tóm tắt chuyên nghiệp về khoản vay."
+							content: "Bạn là chuyên gia tư vấn tài chính cao cấp. Hãy trình bày phân tích khoản vay một cách THUẦN VĂN BẢN (Plain Text), KHÔNG SỬ DỤNG định dạng Markdown như dấu sao (**), dấu gạch ngang (---) hay dấu chấm đầu dòng (*). Hãy xuống dòng rõ ràng giữa các đoạn. KHÔNG ĐƯỢC đưa phần 'Cách tính' vào văn bản. Chỉ trả về thông tin tóm tắt cuối cùng."
 						},
 						{
 							role: "user",
-							content: `Hãy viết ghi chú chi tiết cho khoản vay: 
-              Ngân hàng: ${logData.bankName}, 
-              Số tiền: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(logData.amount)}, 
-              Ngày: ${logData.date}, 
-              Lãi suất: ${logData.interestRate}%/năm, 
-              Kỳ hạn: ${logData.loanTerm}. 
-              
-              Yêu cầu định dạng văn bản: "Bạn đã vay [Ngân hàng]... gói vay kinh doanh vào ngày [Ngày]..., với lãi suất [Lãi suất]%. Tính ra, mỗi tháng, tiền lãi ngân hàng bạn trả là [Số tiền lãi]... Sau [Kỳ hạn], số tiền bạn cần đáo hạn là [Gốc] + lãi vay tháng cuối... Tổng vốn vay và tổng lãi suất cho gói vay này là [Tổng cộng]."
-              Hãy thực hiện tính toán tài chính chính xác và trả về đoạn văn bản mạch lạc, chuyên nghiệp.`
+							content: `Hãy viết một bản tóm tắt tài chính SẠCH SẼ và CHUYÊN NGHIỆP cho khoản vay sau (CHỈ TRẢ VỀ VĂN BẢN THUẦN, KHÔNG DẤU SAO):
+              - Ngân hàng: ${logData.bankName}
+              - Số tiền gốc: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(logData.amount)}
+              - Ngày giải ngân: ${logData.date}
+              - Lãi suất: ${logData.interestRate}%/năm
+              - Kỳ hạn: ${logData.loanTerm}
+
+              Yêu cầu trình bày chính xác theo mẫu này (không thêm bớt định dạng khác):
+              🏦 Bạn đã vay [Ngân hàng] gói vay kinh doanh vào ngày [Ngày], với lãi suất là [Lãi suất]%/năm.
+
+              🕒 Mỗi tháng, số tiền lãi bạn cần chi trả là: [Số tiền lãi]
+
+              💰 Sau [Kỳ hạn], số tiền cần chuẩn bị để đáo hạn là: [Gốc] + [Lãi tháng cuối] = [Số tiền đáo hạn]
+
+              📈 Tổng nợ gốc và lãi cho toàn bộ gói vay này là: [Tổng cộng]
+
+              Chúc cơ sở kinh doanh của bạn vận hành hiệu quả!`
 						}
 					]
 				})

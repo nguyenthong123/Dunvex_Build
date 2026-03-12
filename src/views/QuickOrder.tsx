@@ -194,26 +194,6 @@ const QuickOrder = () => {
 	};
 
 	// Helper to find the best source of stock for a given product when deducting
-	const getStockSourceId = (sourceProductId: string) => {
-		const sourceProduct = products.find(p => p.id === sourceProductId);
-		if (sourceProduct?.linkedProductId) {
-			return sourceProduct.linkedProductId;
-		}
-		const cleanSku = normalizeText(sourceProduct?.sku);
-		if (cleanSku) {
-			// Find all potential masters for this SKU (exclude those explicitly linked elsewhere)
-			const masters = products.filter(p =>
-				normalizeText(p.sku) === cleanSku &&
-				!p.linkedProductId
-			);
-			// Pick the one with the CURRENT MOST stock as the official source to deduct from
-			if (masters.length > 0) {
-				const bestMaster = [...masters].sort((a, b) => (Number(b.stock) || 0) - (Number(a.stock) || 0))[0];
-				return bestMaster.id;
-			}
-		}
-		return sourceProductId;
-	};
 
 	const updateLineItem = (index: number, field: string, value: any) => {
 		const newItems = [...lineItems];
@@ -353,31 +333,102 @@ const QuickOrder = () => {
 	};
 
 	const handleConfirmOrder = async () => {
-		const validItems = lineItems.filter(item => item.productId && item.qty > 0);
+		const validItems = lineItems.filter(item => item.productId && Number(item.qty) > 0);
 		if (validItems.length === 0) {
 			showToast("Vui lòng thêm sản phẩm vào đơn hàng", "warning");
 			return;
 		}
 
 		try {
+			// PRE-CALCULATE FIFO DEPLETION & COST
+			const processedItems: any[] = [];
+			const stockDeletions: any[] = [];
+
+			validItems.forEach(item => {
+				let remainingQty = Number(item.qty);
+				let totalBuyCost = 0;
+
+				const sourceProduct = products.find(p => p.id === item.productId);
+				const cleanSku = normalizeText(sourceProduct?.sku);
+
+				let candidates = [];
+				if (cleanSku) {
+					candidates = products.filter(p =>
+						normalizeText(p.sku) === cleanSku && !p.linkedProductId
+					);
+				} else if (sourceProduct?.linkedProductId) {
+					const linked = products.find(p => p.id === sourceProduct.linkedProductId);
+					if (linked) candidates = [linked];
+				}
+
+				// If no candidates found through SKU/Link, use the selected product itself
+				if (candidates.length === 0) {
+					candidates = [sourceProduct].filter(Boolean);
+				}
+
+				// Sort by Creation Date (Oldest first for FIFO)
+				// We use this to decide which cost to apply first
+				candidates.sort((a: any, b: any) => {
+					const dateA = a.createdAt?.seconds || 0;
+					const dateB = b.createdAt?.seconds || 0;
+					return dateA - dateB;
+				});
+
+				for (const cand of candidates) {
+					if (remainingQty <= 0) break;
+					const available = Number(cand.stock) || 0;
+					if (available <= 0) continue;
+
+					const take = Math.min(remainingQty, available);
+					totalBuyCost += take * (Number(cand.priceBuy) || 0);
+					stockDeletions.push({
+						originProductId: item.productId,
+						productId: cand.id,
+						qty: take,
+						productName: cand.name,
+						buyPrice: cand.priceBuy || 0
+					});
+					remainingQty -= take;
+				}
+
+				// If still remaining (not enough stock), take from the first/main one anyway (allow negative)
+				if (remainingQty > 0) {
+					const mainCand = candidates[0] || sourceProduct;
+					if (mainCand) {
+						totalBuyCost += remainingQty * (Number(mainCand.priceBuy) || 0);
+						stockDeletions.push({
+							originProductId: item.productId,
+							productId: mainCand.id,
+							qty: remainingQty,
+							productName: mainCand.name,
+							buyPrice: mainCand.priceBuy || 0
+						});
+					}
+				}
+
+				const avgBuyPrice = totalBuyCost / Number(item.qty);
+
+				processedItems.push({
+					id: item.productId,
+					sku: item.sku || '',
+					name: item.name,
+					price: Number(item.price) || 0,
+					buyPrice: avgBuyPrice, // Accurate weighted average cost for this order line
+					qty: Number(item.qty) || 0,
+					unit: item.unit || '',
+					category: item.category || '',
+					density: item.density || '',
+					packaging: item.packaging || ''
+				});
+			});
+
 			const orderData: any = {
 				customerName: selectedCustomer?.name || searchCustomerQuery || 'Khách vãng lai',
 				customerId: selectedCustomer?.id || null,
 				customerPhone: selectedCustomer?.phone || '',
 				customerBusinessName: selectedCustomer?.businessName || '',
 				orderDate: orderDate,
-				items: validItems.map(item => ({
-					id: item.productId,
-					sku: item.sku || '',
-					name: item.name,
-					price: Number(item.price) || 0,
-					buyPrice: Number(item.buyPrice) || 0,
-					qty: Number(item.qty) || 0,
-					unit: item.unit || '',
-					category: item.category || '',
-					density: item.density || '',
-					packaging: item.packaging || ''
-				})),
+				items: processedItems,
 				subTotal: Number(subTotal) || 0,
 				adjustmentValue: Number(shippingFee) || 0,
 				discountValue: Number(discountAmt) || 0,
@@ -386,7 +437,6 @@ const QuickOrder = () => {
 				note: orderNote,
 				status: orderStatus,
 				couponCode: couponCode || null,
-				// NEW FIELDS FOR OWNER TRACKING
 				ownerId: owner.ownerId,
 				ownerEmail: owner.ownerEmail,
 				createdBy: auth.currentUser?.uid || '',
@@ -403,53 +453,44 @@ const QuickOrder = () => {
 				});
 
 				// 2. Sync Inventory: Revert old logs and apply new ones
-				// Since we can't query inside a batch, we fetch existing logs first
 				const existingLogsQ = query(
 					collection(db, 'inventory_logs'),
 					where('orderId', '==', id)
 				);
 				const existingLogsSnap = await getDocs(existingLogsQ);
 
-				// Revert previous stock changes (from all previous logs)
 				for (const logDoc of existingLogsSnap.docs) {
 					const logData = logDoc.data();
 					if (logData.productId && logData.qty) {
 						const oldProdRef = doc(db, 'products', logData.productId);
-						const oldProdSnap = await getDoc(oldProdRef);
-						if (oldProdSnap.exists()) {
-							batch.update(oldProdRef, {
-								stock: increment(logData.qty) // Revert the deduction
-							});
-						}
+						batch.update(oldProdRef, {
+							stock: increment(logData.qty) // Revert the deduction
+						});
 					}
 					batch.delete(logDoc.ref);
 				}
 
 				// Apply NEW stock changes ONLY IF status is 'Đơn chốt' or 'Đang giao'
 				if (orderStatus === 'Đơn chốt' || orderStatus === 'Đang giao') {
-					validItems.forEach(item => {
-						if (item.productId) {
-							const stockProductId = getStockSourceId(item.productId);
+					stockDeletions.forEach(del => {
+						const prodRef = doc(db, 'products', del.productId);
+						batch.update(prodRef, {
+							stock: increment(-del.qty)
+						});
 
-							const prodRef = doc(db, 'products', stockProductId);
-							batch.update(prodRef, {
-								stock: increment(-item.qty)
-							});
-
-							const invLogRef = doc(collection(db, 'inventory_logs'));
-							batch.set(invLogRef, {
-								productId: stockProductId,
-								orderId: id,
-								customerName: orderData.customerName,
-								productName: item.name,
-								type: 'out',
-								qty: item.qty,
-								note: `Cập nhật đơn hàng cho ${orderData.customerName}`,
-								ownerId: owner.ownerId,
-								user: auth.currentUser?.displayName || auth.currentUser?.email,
-								createdAt: serverTimestamp()
-							});
-						}
+						const invLogRef = doc(collection(db, 'inventory_logs'));
+						batch.set(invLogRef, {
+							productId: del.productId,
+							orderId: id,
+							customerName: orderData.customerName,
+							productName: del.productName,
+							type: 'out',
+							qty: del.qty,
+							note: `Cập nhật đơn hàng (FIFO) cho ${orderData.customerName}`,
+							ownerId: owner.ownerId,
+							user: auth.currentUser?.displayName || auth.currentUser?.email,
+							createdAt: serverTimestamp()
+						});
 					});
 				}
 
@@ -468,8 +509,6 @@ const QuickOrder = () => {
 			}
 			else {
 				orderData.createdAt = serverTimestamp();
-
-				// Batch write: Create Order + Create Notification + Deduct Stock
 				const batch = writeBatch(db);
 
 				// 1. Create Order
@@ -483,39 +522,32 @@ const QuickOrder = () => {
 					message: `Đơn hàng cho ${orderData.customerName} đã được tạo thành công: ${finalTotal.toLocaleString('vi-VN')} đ`,
 					type: 'order',
 					orderId: newOrderRef.id,
-					userId: owner.ownerId, // Notify the Owner
+					userId: owner.ownerId,
 					read: false,
 					createdAt: serverTimestamp()
 				});
 
 				// 3. Deduct Stock & Create Inventory Logs ONLY IF status is 'Đơn chốt' or 'Đang giao'
 				if (orderStatus === 'Đơn chốt' || orderStatus === 'Đang giao') {
-					validItems.forEach(item => {
-						// Only decrement for saved products (have productId from DB)
-						if (item.productId) {
-							// Determine stock source using standardized helper
-							const stockProductId = getStockSourceId(item.productId);
+					stockDeletions.forEach(del => {
+						const prodRef = doc(db, 'products', del.productId);
+						batch.update(prodRef, {
+							stock: increment(-del.qty)
+						});
 
-							const prodRef = doc(db, 'products', stockProductId);
-							batch.update(prodRef, {
-								stock: increment(-item.qty)
-							});
-
-							// Add Inventory Log
-							const invLogRef = doc(collection(db, 'inventory_logs'));
-							batch.set(invLogRef, {
-								productId: stockProductId,
-								orderId: newOrderRef.id,
-								customerName: orderData.customerName,
-								productName: item.name,
-								type: 'out',
-								qty: item.qty,
-								note: `Xuất đơn hàng cho ${orderData.customerName}`,
-								ownerId: owner.ownerId,
-								user: auth.currentUser?.displayName || auth.currentUser?.email,
-								createdAt: serverTimestamp()
-							});
-						}
+						const invLogRef = doc(collection(db, 'inventory_logs'));
+						batch.set(invLogRef, {
+							productId: del.productId,
+							orderId: newOrderRef.id,
+							customerName: orderData.customerName,
+							productName: del.productName,
+							type: 'out',
+							qty: del.qty,
+							note: `Xuất đơn hàng (FIFO) cho ${orderData.customerName}`,
+							ownerId: owner.ownerId,
+							user: auth.currentUser?.displayName || auth.currentUser?.email,
+							createdAt: serverTimestamp()
+						});
 					});
 				}
 
@@ -548,8 +580,7 @@ const QuickOrder = () => {
 
 				await batch.commit();
 			}
-			// 6. Show Success
-			vibrate([100, 50, 100]); // Victory pattern
+			vibrate([100, 50, 100]);
 			setShowSuccessModal(true);
 		} catch (error) {
 			showToast("Lỗi khi lưu đơn hàng: " + error, "error");

@@ -792,7 +792,7 @@ const Finance = () => {
 														const sku = item.sku || products.find(p => p.id === item.id)?.sku || 'N/A';
 														const key = sku !== 'N/A' ? sku : item.name;
 														const pData = products.find(p => (sku && p.sku === sku) || (item.id && p.id === item.id));
-														const buyPrice = Number(item.buyPrice || pData?.buyPrice || 0);
+														const buyPrice = Number(item.buyPrice || pData?.priceBuy || 0);
 														const avgPrice = Number(item.price) || 0;
 														const profit = (avgPrice - buyPrice) * (Number(item.qty) || 0);
 														const rate = plan?.productCommissions?.[key] || 0;
@@ -854,11 +854,13 @@ const Finance = () => {
 															sku: sku || 'N/A',
 															qty: 0,
 															totalRevenue: 0,
-															buyPrice: Number(item.buyPrice || pData?.buyPrice || 0)
+															totalCost: 0
 														};
 													}
+													const itemBuyPrice = Number(item.buyPrice || products.find(p => p.id === item.id)?.priceBuy || 0);
 													productSummary[key].qty += Number(item.qty) || 0;
 													productSummary[key].totalRevenue += (Number(item.price) || 0) * (Number(item.qty) || 0);
+													productSummary[key].totalCost += itemBuyPrice * (Number(item.qty) || 0);
 												});
 											});
 
@@ -879,8 +881,9 @@ const Finance = () => {
 													</tr>
 													{items.map((item: any) => {
 														const avgPrice = item.qty > 0 ? item.totalRevenue / item.qty : 0;
-														const profitPerUnit = avgPrice - item.buyPrice;
-														const totalProfit = profitPerUnit * item.qty;
+														const avgBuyPrice = item.qty > 0 ? item.totalCost / item.qty : 0;
+														const profitPerUnit = avgPrice - avgBuyPrice;
+														const totalProfit = item.totalRevenue - item.totalCost;
 														// Use the same robust key resolution as defined in productSummary
 														const commissionKey = item.sku !== 'N/A' ? item.sku : item.name;
 														const discountRate = plan?.productCommissions?.[commissionKey] || 0;

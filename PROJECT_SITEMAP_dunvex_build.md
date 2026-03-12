@@ -83,6 +83,11 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 ## 4. Các mục đã hoàn thành & Cần làm (To-do)
 
 ### ✅ Đã hoàn thành (Done)
+- [x] **Tính toán Lợi nhuận FIFO & Đồng bộ Kho (FIFO Profit Calculation - Mar 12)**:
+    - **Nguyên tắc FIFO (Nhập trước - Xuất trước)**: Triển khai logic quét lô sản phẩm theo SKU từ cũ đến mới (dựa trên `createdAt`) để trừ kho và tính giá vốn thực tế.
+    - **Giá vốn Bình quân Trọng số theo Đơn**: Tự động tính toán và lưu trữ giá vốn chính xác cho từng dòng sản phẩm trong đơn hàng. Đảm bảo tính minh bạch khi một mặt hàng được lấy từ nhiều lô có giá nhập khác nhau.
+    - **Báo cáo Tài chính Chính xác**: Cập nhật module Tài chính giúp hiển thị đúng lợi nhuận gộp và hoa hồng nhân viên, ngay cả khi giá nhập hàng biến động theo thời gian.
+    - **Dọn dẹp mã nguồn**: Gỡ bỏ các hàm trừ kho cũ (`getStockSourceId`) và thay thế bằng bộ máy FIFO đồng bộ, đồng thời sửa lỗi hiển thị giá nhập cũ trong báo cáo.
 - [x] **Email & Sao chép nhanh Thông tin (Quick Copy Upgrade - Mar 10)**:
     - **Email khách hàng**: Bổ sung khối hiển thị Email trong chi tiết khách hàng, hỗ trợ link mailto và nút sao chép nhanh.
     - **Đồng bộ nút Chép**: Bổ sung nút sao chép cho toàn bộ các trường contact nhạy cảm (Email, SĐT hóa đơn), đảm bảo trải nghiệm người dùng hiện đại và tiện lợi.

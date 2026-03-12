@@ -207,7 +207,7 @@ const Finance = () => {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
-					"Authorization": "Bearer sk-35a45d673ff147dabd1e416af5f088f4"
+					"Authorization": `Bearer ${import.meta.env.VITE_DEEPSEEK_API_KEY || ""}`
 				},
 				body: JSON.stringify({
 					model: "deepseek-chat",
@@ -272,7 +272,7 @@ const Finance = () => {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
-					"Authorization": "Bearer sk-35a45d673ff147dabd1e416af5f088f4"
+					"Authorization": `Bearer ${import.meta.env.VITE_DEEPSEEK_API_KEY || ""}`
 				},
 				body: JSON.stringify({
 					model: "deepseek-chat",

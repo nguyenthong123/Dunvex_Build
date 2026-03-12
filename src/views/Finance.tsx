@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db } from '../services/firebase';
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, Timestamp, doc, writeBatch, limit, orderBy, deleteDoc, setDoc, updateDoc } from 'firebase/firestore';
-import { Wallet, TrendingUp, TrendingDown, Receipt, Clock, BarChart3, Plus, ArrowUpRight, ArrowDownLeft, Filter, Search, Calendar, ChevronRight, Trash2, Settings2, Target, Award, Bot, Sparkles, Bell, BellOff } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, Receipt, Clock, BarChart3, Plus, ArrowUpRight, ArrowDownLeft, Filter, Search, Calendar, ChevronRight, Trash2, Settings2, Target, Award, Bot, Sparkles, Bell, BellOff, RefreshCcw } from 'lucide-react';
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
 
@@ -57,6 +57,7 @@ const Finance = () => {
 		return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
 	});
 	const [toDate, setToDate] = useState(() => new Date().toISOString().split('T')[0]);
+	const [isSendingReminders, setIsSendingReminders] = useState(false);
 
 	// Cashbook Form
 	const [showLogForm, setShowLogForm] = useState(searchParams.get('new') === 'true');
@@ -69,7 +70,8 @@ const Finance = () => {
 		interestRate: 0,
 		bankName: '',
 		loanTerm: '',
-		reminderEnabled: false
+		reminderEnabled: false,
+		email: ''
 	});
 	const [isFetchingRate, setIsFetchingRate] = useState(false);
 
@@ -307,6 +309,48 @@ const Finance = () => {
 		}
 	};
 
+	const handleBatchSendReminders = async () => {
+		const reminders = cashLogs.filter(log => log.reminderEnabled === true && log.type === 'thu');
+		if (reminders.length === 0) {
+			showToast("Không có khoản vay nào đang bật chế độ nhắc hẹn.", "info");
+			return;
+		}
+
+		if (!window.confirm(`Bạn có muốn gửi email nhắc nợ cho ${reminders.length} khoản vay này đến email hệ thống và email khách hàng (nếu có) không?`)) return;
+
+		setIsSendingReminders(true);
+		let successCount = 0;
+
+		try {
+			for (const loan of reminders) {
+				try {
+					await fetch('https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec', {
+						method: 'POST',
+						mode: 'no-cors',
+						headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+						body: JSON.stringify({
+							action: 'loan_reminder',
+							bankName: loan.bankName,
+							amount: loan.amount,
+							interestRate: loan.interestRate,
+							loanTerm: loan.loanTerm,
+							date: loan.date,
+							clientEmail: loan.email
+						})
+					});
+					successCount++;
+				} catch (err) {
+					console.error("Failed to send reminder for:", loan.bankName, err);
+				}
+			}
+			showToast(`Đã gửi ${successCount} thông báo nhắc nợ về email hệ thống thành công!`, "success");
+		} catch (error) {
+			showToast("Lỗi khi kết nối máy chủ gửi mail", "error");
+		} finally {
+			setIsSendingReminders(false);
+		}
+	};
+
 	const handleAddLog = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (logData.amount <= 0) return;
@@ -329,7 +373,8 @@ const Finance = () => {
 				interestRate: 0,
 				bankName: '',
 				loanTerm: '',
-				reminderEnabled: false
+				reminderEnabled: false,
+				email: ''
 			});
 			showToast("Ghi sổ quỹ thành công", "success");
 		} catch (error) {
@@ -423,23 +468,29 @@ const Finance = () => {
 	// --- CALCULATIONS ---
 
 	const handleDeleteLog = async (id: string, log: any) => {
-		if (!window.confirm(`Bạn có chắc muốn xóa ghi chép: "${log.note}" ? `)) return;
+		if (!window.confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn ghi chép này: "${log.note || 'Không có tiêu đề'}"?`)) return;
 
 		try {
 			await deleteDoc(doc(db, 'cash_book', id));
-			// Log action
-			await addDoc(collection(db, 'audit_logs'), {
-				action: 'Xóa ghi chép thu chi',
-				user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
-				userId: auth.currentUser?.uid,
-				ownerId: owner.ownerId,
-				details: `Đã xóa: ${log.type === 'thu' ? '+' : '-'}${formatPrice(log.amount)} - Nội dung: ${log.note} `,
-				createdAt: serverTimestamp()
-			});
-			showToast("Đã xóa ghi chép", "success");
-		} catch (error) {
-			console.error("Finance: Delete Log Error:", error);
-			showToast("Lỗi khi xóa ghi chép", "error");
+			
+			// Lưu nhật ký hành động (Audit Log)
+			try {
+				await addDoc(collection(db, 'audit_logs'), {
+					action: 'Xóa ghi chép thu chi',
+					user: auth.currentUser?.displayName || auth.currentUser?.email || 'Người dùng',
+					userId: auth.currentUser?.uid,
+					ownerId: owner.ownerId,
+					details: `Đã xóa: ${log.type === 'thu' ? '+' : '-'}${formatPrice(log.amount)} - Nội dung: ${log.note || 'Trống'}`,
+					createdAt: serverTimestamp()
+				});
+			} catch (auditErr) {
+				console.warn("Audit Log Error:", auditErr);
+			}
+
+			showToast("Đã xóa bản ghi thành công", "success");
+		} catch (error: any) {
+			console.error("Finance Delete Error:", error);
+			showToast(`Lỗi: ${error.message}`, "error");
 		}
 	};
 
@@ -622,40 +673,121 @@ const Finance = () => {
 
 						{/* Log List */}
 						<div className="bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden text-sm">
-							<div className="p-6 border-b border-slate-50 dark:border-slate-800 flex justify-between items-center">
+							<div className="p-6 border-b border-slate-50 dark:border-slate-800 flex flex-wrap gap-4 justify-between items-center">
 								<h3 className="font-black text-slate-900 dark:text-white uppercase tracking-tight">Nhật ký thu chi nội bộ</h3>
-								<button
-									onClick={() => setShowLogForm(true)}
-									className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-all active:scale-95"
-								>
-									<Plus size={18} /> Ghi chú Thu/Chi
-								</button>
+								<div className="flex items-center gap-3">
+									<button
+										onClick={handleBatchSendReminders}
+										disabled={isSendingReminders}
+										className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-all active:scale-95 text-xs uppercase tracking-tight disabled:opacity-50"
+										title="Gửi nhắc nợ hàng tháng cho các khoản vay đang bật chuông"
+									>
+										{isSendingReminders ? <RefreshCcw size={18} className="animate-spin" /> : <Bell size={18} />}
+										Nhắc nợ tháng này
+									</button>
+									<button
+										onClick={() => setShowLogForm(true)}
+										className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-all active:scale-95 text-xs uppercase tracking-tight"
+									>
+										<Plus size={18} /> Ghi chú Thu/Chi
+									</button>
+								</div>
 							</div>
-							<div className="overflow-x-auto">
+							<div className="md:hidden p-4 space-y-4">
+								{paginatedLogs.length === 0 ? (
+									<div className="text-center py-10 text-slate-400 italic">
+										Chưa có ghi chép thu chi nào cho kỳ này.
+									</div>
+								) : (
+									paginatedLogs.map(log => (
+										<div key={log.id} className="bg-white dark:bg-slate-900 p-4 rounded-[1.5rem] border border-slate-100 dark:border-slate-800 shadow-sm space-y-3 relative overflow-hidden">
+											<div className="flex justify-between items-start">
+												<div className="space-y-1">
+													<span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${log.type === 'thu' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+														{log.category}
+													</span>
+													<p className="text-[10px] text-slate-400 font-bold">{log.date}</p>
+												</div>
+												<div className="text-right">
+													<p className={`text-lg font-black tracking-tighter ${log.type === 'thu' ? 'text-emerald-600' : 'text-rose-600'}`}>
+														{log.type === 'thu' ? '+' : '-'}{formatPrice(log.amount)}
+													</p>
+												</div>
+											</div>
+											
+											<div className="space-y-2">
+												<p className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-snug">
+													{log.note}
+												</p>
+												{log.email && (
+													<p className="text-[10px] text-indigo-500 italic font-medium flex items-center gap-1">
+														<span className="material-symbols-outlined text-[12px]">mail</span> {log.email}
+													</p>
+												)}
+												{log.bankName && (
+													<div className="bg-slate-50 dark:bg-slate-800/50 p-2 rounded-xl border border-slate-100 dark:border-slate-700/50">
+														<p className="text-[9px] text-slate-500 font-black uppercase flex items-center gap-1">
+															<Sparkles size={10} className="text-indigo-400" /> {log.bankName}
+														</p>
+														<p className="text-[8px] text-slate-400 font-medium">Lãi: {log.interestRate}% - {log.loanTerm}</p>
+													</div>
+												)}
+											</div>
+
+											<div className="pt-3 border-t border-slate-50 dark:border-slate-800 flex justify-between items-center">
+												<div className="flex items-center gap-2">
+													{(log.category === 'Vay ngân hàng' || log.category === 'Vay khác') && (
+														<>
+															<button
+																onClick={() => handleToggleReminder(log.id, log.reminderEnabled)}
+																className={`relative inline-flex h-5 w-9 items-center rounded-full transition-all focus:outline-none ${log.reminderEnabled ? 'bg-indigo-600 shadow-sm shadow-indigo-200' : 'bg-slate-200 dark:bg-slate-700'}`}
+															>
+																<span className={`inline-block size-3.5 transform rounded-full bg-white shadow-sm transition-transform ${log.reminderEnabled ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+															</button>
+															<span className={`text-[9px] font-black uppercase tracking-tight ${log.reminderEnabled ? 'text-indigo-600' : 'text-slate-400'}`}>
+																Nhắc nợ {log.reminderEnabled ? 'Bật' : 'Tắt'}
+															</span>
+														</>
+													)}
+												</div>
+												<button
+													type="button"
+													onClick={() => handleDeleteLog(log.id, log)}
+													className="flex items-center gap-1 ps-3 pe-2 py-1.5 bg-rose-50 text-rose-600 rounded-xl text-[10px] font-black uppercase active:scale-95 transition-transform"
+												>
+													Xoá <Trash2 size={12} />
+												</button>
+											</div>
+										</div>
+									))
+								)}
+							</div>
+
+							<div className="hidden md:block overflow-x-auto">
 								<table className="w-full text-left">
 									<thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
 										<tr>
-											<th className="px-6 py-4">Ngày</th>
+											<th className="px-6 py-4 hidden md:table-cell">Ngày</th>
 											<th className="px-6 py-4">Phân loại</th>
 											<th className="px-6 py-4">Nội dung</th>
+											<th className="px-6 py-4 hidden sm:table-cell">Email</th>
 											<th className="px-6 py-4 text-right">Số tiền</th>
-											<th className="px-6 py-4 text-center">Nhắc hẹn</th>
-											<th className="px-6 py-4 text-right">Hành động</th>
+											<th className="px-6 py-4 text-center hidden md:table-cell">Nhắc hẹn</th>
+											<th className="px-6 py-4 text-right">Thao tác</th>
 										</tr>
 									</thead>
 									<tbody className="divide-y divide-slate-50 dark:divide-slate-800">
 										{paginatedLogs.length === 0 ? (
 											<tr>
-												<td colSpan={5} className="px-6 py-10 text-center text-slate-400 italic">
+												<td colSpan={7} className="px-6 py-10 text-center text-slate-400 italic">
 													Chưa có ghi chép thu chi nào cho kỳ này.
 												</td>
 											</tr>
 										) : (
 											paginatedLogs.map(log => (
 												<tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-													<td className="px-6 py-4 font-bold text-slate-500">{log.date}</td>
 													<td className="px-6 py-4">
-														<span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${log.category === 'Vay ngân hàng' || log.type === 'thu'
+														<span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${log.category === 'Vay ngân hàng' || log.type === 'thu'
 															? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20'
 															: log.category === 'Vận hành'
 																? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20'
@@ -666,30 +798,35 @@ const Finance = () => {
 													</td>
 													<td className="px-6 py-4">
 														<div className="flex flex-col">
-															<span className="font-medium text-slate-700 dark:text-slate-300">{log.note}</span>
+															<span className="font-medium text-slate-700 dark:text-slate-300 text-xs sm:text-sm line-clamp-2">{log.note}</span>
+															<div className="flex items-center gap-2 mt-1 md:hidden">
+																<span className="text-[10px] text-slate-400 font-bold">{log.date}</span>
+																{log.email && <span className="text-[10px] text-indigo-400 italic sm:hidden">{log.email}</span>}
+															</div>
 															{log.bankName && (
-																<span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight flex items-center gap-1 mt-0.5">
-																	<Sparkles size={10} className="text-indigo-400" /> {log.bankName} - {log.loanTerm} - Lãi {log.interestRate}%
+																<span className="text-[9px] text-slate-400 font-bold uppercase tracking-tight flex items-center gap-1 mt-0.5">
+																	<Sparkles size={10} className="text-indigo-400" /> {log.bankName}
 																</span>
 															)}
 														</div>
 													</td>
-													<td className={`px-6 py-4 text-right font-black ${log.type === 'thu' ? 'text-emerald-600' : 'text-rose-600'}`}>
+													<td className="px-6 py-4 text-xs text-slate-500 font-medium hidden sm:table-cell">
+														{log.email || '--'}
+													</td>
+													<td className={`px-6 py-4 text-right font-black text-sm ${log.type === 'thu' ? 'text-emerald-600' : 'text-rose-600'}`}>
 														{log.type === 'thu' ? '+' : '-'}{formatPrice(log.amount)}
 													</td>
-													<td className="px-6 py-4 text-center">
+													<td className="px-6 py-4 text-center hidden md:table-cell">
 														{(log.category === 'Vay ngân hàng' || log.category === 'Vay khác') ? (
 															<button
 																onClick={() => handleToggleReminder(log.id, log.reminderEnabled)}
-																className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${log.reminderEnabled ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'
+																className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${log.reminderEnabled ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'
 																	}`}
 															>
 																<span
-																	className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${log.reminderEnabled ? 'translate-x-6' : 'translate-x-1'
+																	className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${log.reminderEnabled ? 'translate-x-5' : 'translate-x-1'
 																		}`}
 																/>
-																{log.reminderEnabled && <Bell size={10} className="absolute left-1.5 text-white/50" />}
-																{!log.reminderEnabled && <BellOff size={10} className="absolute right-1.5 text-slate-400" />}
 															</button>
 														) : (
 															<span className="text-[8px] text-slate-300 font-bold uppercase opacity-30">N/A</span>
@@ -697,9 +834,10 @@ const Finance = () => {
 													</td>
 													<td className="px-6 py-4 text-right">
 														<button
+															type="button"
 															onClick={() => handleDeleteLog(log.id, log)}
-															className="p-2 text-slate-300 hover:text-rose-500 transition-colors"
-															title="Xóa"
+															className="size-9 flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-xl transition-all active:scale-95 cursor-pointer relative z-10"
+															title="Xóa ghi chép"
 														>
 															<Trash2 size={16} />
 														</button>
@@ -1355,6 +1493,17 @@ const Finance = () => {
 										</div>
 									</div>
 								)}
+
+								<div>
+									<label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Email (Nếu có)</label>
+									<input
+										type="email"
+										className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 text-slate-900 dark:text-white"
+										placeholder="example@mail.com"
+										value={logData.email}
+										onChange={(e) => setLogData({ ...logData, email: e.target.value })}
+									/>
+								</div>
 
 								<div>
 									<div className="flex items-center justify-between mb-2 ml-1">

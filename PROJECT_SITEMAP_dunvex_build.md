@@ -91,6 +91,16 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Tự động viết nội dung**: Tích hợp nút "Tạo ghi chú AI" giúp DeepSeek phân tích sâu khoản vay từ Số tiền, Ngân hàng, Lãi suất và Kỳ hạn.
     - **Tính toán tài chính thông minh**: AI tự động tính toán lãi hàng tháng, tổng lãi cả kỳ, số tiền cần đáo hạn và trình bày mạch lạc theo văn phong mong muốn.
     - **Nâng cấp trải nghiệm người dùng**: Giúp chủ doanh nghiệp nắm bắt nhanh nghĩa vụ tài chính chỉ qua một đoạn văn bản tóm tắt, thay vì phải tự tính toán thủ công.
+- [x] **Tối ưu Hiển thị Tài chính trên Di động (Finance Mobile Optimization - Mar 12)**:
+    - **Giao diện Thẻ (Card Layout)**: Thiết kế lại danh sách sổ quỹ cho điện thoại, chuyển từ bảng trượt ngang sang dạng thẻ trắng bo tròn hiện đại, dễ đọc và chuyên nghiệp.
+    - **Nút gạt Nhắc nợ Mobile**: Tích hợp trực tiếp nút gạt (Toggle Switch) bật/tắt nhắc nhở ngay trên từng thẻ khoản vay trên di động, đồng bộ chức năng với bản Desktop.
+    - **Tối ưu Thao tác một tay**: Sắp xếp lại các nút Xoá và Nhắc nợ ở vị trí thuận tiện nhất cho ngón tay khi sử dụng điện thoại.
+- [x] **Tinh chỉnh Điều hướng & Sửa lỗi Hệ thống (Navigation & Console Fix - Mar 12)**:
+    - **Bottom Nav Thông minh**: Cập nhật thanh điều hướng trang Tài chính với phím tắt "Lịch sử" riêng biệt, giúp truy cập nhanh nhật ký thu chi.
+    - **Dọn dẹp Console**: Xử lý triệt để các lỗi "Duplicate Key" do trùng lặp địa chỉ các nút bấm, đảm bảo ứng dụng vận hành mượt mà và sạch lỗi.
+    - **Bảo toàn Bố cục Chuyên nghiệp**: Khôi phục và chuẩn hóa lại khoảng cách, vị trí các nút bấm theo đúng thiết lập gốc của người dùng sau quá trình tối ưu.
+- [x] **Nâng cấp Hệ thống Nhắc nợ Email (Enhanced Backend Reminders - Mar 12)**:
+    - **Gửi Email đa điểm**: Cập nhật Google Apps Script để tự động gửi thông báo nhắc nợ đến cả Admin và Khách hàng (nếu có email), đảm bảo thông tin thông suốt.
 - [x] **Nâng cấp Sổ quỹ & Tích hợp Bot AI Tra cứu Lãi suất (Cashbook AI Upgrade - Mar 12)**:
     - **Danh mục Thu vào mới**: Bổ sung "Vay ngân hàng", "Vay khác", "Tiền dư sẵn" để quản lý dòng tiền vốn đầu vào.
     - **Tích hợp DeepSeek AI**: Tạo con bot tra cứu lãi suất cơ sở của các ngân hàng Việt Nam (Vietcombank, BIDV...) theo kỳ hạn vay. Tự động điền dữ liệu vào sổ quỹ.

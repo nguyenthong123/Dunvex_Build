@@ -374,7 +374,8 @@ function handleTrainingVerification(data) {
 }
 
 function handleLoanReminder(data) {
-  var targetEmail = "dunvex.green@gmail.com"; 
+  var adminEmail = "dunvex.green@gmail.com";
+  var clientEmail = data.clientEmail;
   var bankName = data.bankName || "Ngân hàng";
   var amount = data.amount || 0;
   var interestRate = data.interestRate || 0;
@@ -393,7 +394,7 @@ function handleLoanReminder(data) {
     "<p>Xin chào,</p>" +
     "<p>Đây là thông báo nhắc nhở về khoản vay kinh doanh của bạn. Chỉ còn <b>5 ngày nữa</b> là đến ngày 25 (ngày tất toán định kỳ).</p>" +
     
-    "<div style='background: #f8f9fb; padding: 20px; border-radius: 15px; margin: 25px 0; border: 1px solid #e2e8f0;'>" +
+    "<div style='background: #f8f9fb; padding: 20px; border-radius: 12px; margin: 25px 0; border: 1px solid #e2e8f0;'>" +
     "<p style='margin: 5px 0;'><strong>Ngân hàng:</strong> <span style='color: #1A237E; font-weight: bold;'>" + bankName + "</span></p>" +
     "<p style='margin: 5px 0;'><strong>Ngày vay:</strong> " + date + "</p>" +
     "<p style='margin: 5px 0;'><strong>Số tiền gốc:</strong> <span style='color: #ef4444; font-weight: bold; font-size: 16px;'>" + amount.toLocaleString() + " VND</span></p>" +
@@ -412,74 +413,24 @@ function handleLoanReminder(data) {
     "</div>" +
     "</div>";
 
+  // Send to Admin
   MailApp.sendEmail({
-    to: targetEmail,
+    to: adminEmail,
     subject: subject,
     htmlBody: body
   });
 
+  // Send to Client if email provided
+  if (clientEmail && clientEmail.includes('@')) {
+    MailApp.sendEmail({
+      to: clientEmail,
+      subject: subject,
+      htmlBody: body
+    });
+  }
+
   return ContentService.createTextOutput(JSON.stringify({
     status: "success",
-    message: "Loan reminder email sent to " + targetEmail
+    message: "Reminders sent"
   })).setMimeType(ContentService.MimeType.JSON);
-}
-
-/**
- * Tự động quét tất cả các Google Sheet đã đồng bộ để gửi nhắc nợ
- * Cài đặt Trigger để chạy hàm này định kỳ (ví dụ: ngày 20 hàng tháng)
- */
-function autoSendRemindersFromSheet() {
-  var iterator = DriveApp.getFilesByType(MimeType.GOOGLE_SHEETS);
-  var processedCount = 0;
-  
-  while (iterator.hasNext()) {
-    var file = iterator.next();
-    // Chỉ xử lý các file Hub dữ liệu của Dunvex
-    if (file.getName().indexOf("Dunvex Build Hub") > -1) {
-      processedCount += processReminderForSheet(file.getId());
-    }
-  }
-  Logger.log("Đã quét và gửi nhắc hẹn cho " + processedCount + " tệp dữ liệu.");
-}
-
-function processReminderForSheet(spreadsheetId) {
-  try {
-    var ss = SpreadsheetApp.openById(spreadsheetId);
-    var sheet = ss.getSheetByName("Cash_book"); // Tên sheet mặc định cho thu chi
-    if (!sheet) return 0;
-
-    var data = sheet.getDataRange().getValues();
-    if (data.length < 2) return 0; // Chỉ có header hoặc trống
-    
-    var headers = data[0];
-    var colReminder = headers.indexOf("reminderEnabled");
-    var colBank = headers.indexOf("bankName");
-    var colAmount = headers.indexOf("amount");
-    var colInterest = headers.indexOf("interestRate");
-    var colTerm = headers.indexOf("loanTerm");
-    var colDate = headers.indexOf("date");
-    var colType = headers.indexOf("type"); // Để lọc chỉ lấy các khoản chi/vay
-    
-    if (colReminder === -1) return 0;
-
-    var count = 0;
-    for (var i = 1; i < data.length; i++) {
-      var row = data[i];
-      // Kiểm tra nếu nhắc hẹn bật (true) và đúng các cột thông tin
-      if ((row[colReminder] === true || String(row[colReminder]).toLowerCase() === "true")) {
-        handleLoanReminder({
-          bankName: row[colBank],
-          amount: row[colAmount],
-          interestRate: row[colInterest],
-          loanTerm: row[colTerm],
-          date: row[colDate]
-        });
-        count++;
-      }
-    }
-    return count;
-  } catch (e) {
-    Logger.log("Lỗi khi xử lý file " + spreadsheetId + ": " + e.message);
-    return 0;
-  }
 }

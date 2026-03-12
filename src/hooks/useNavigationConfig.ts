@@ -264,7 +264,7 @@ export const useNavigationConfig = () => {
 				{ icon: 'history_toggle_off', label: 'Tuổi nợ', path: '/finance?tab=aging' },
 				allItems[2], // Center (Thu/Chi)
 				{ icon: 'query_stats', label: 'Lợi nhuận', path: '/finance?tab=profit' },
-				allItems[6], // Khách hàng
+				{ icon: 'history', label: 'Lịch sử', path: '/finance?tab=history' },
 			];
 		} else if (path === '/coupons') {
 			items = [

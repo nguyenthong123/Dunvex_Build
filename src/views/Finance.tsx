@@ -1,11 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db } from '../services/firebase';
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, Timestamp, doc, writeBatch, limit, orderBy, deleteDoc, setDoc } from 'firebase/firestore';
-import { Wallet, TrendingUp, TrendingDown, Receipt, Clock, BarChart3, Plus, ArrowUpRight, ArrowDownLeft, Filter, Search, Calendar, ChevronRight, Trash2, Settings2, Target, Award } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, Receipt, Clock, BarChart3, Plus, ArrowUpRight, ArrowDownLeft, Filter, Search, Calendar, ChevronRight, Trash2, Settings2, Target, Award, Bot, Sparkles } from 'lucide-react';
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
 
 import { useSearchParams } from 'react-router-dom';
+
+const BANKS = [
+	'Vietcombank', 'BIDV', 'Agribank', 'VietinBank', 'Techcombank',
+	'MBBank', 'VPBank', 'ACB', 'Sacombank', 'TPBank', 'HDBank', 'VIB'
+];
+
+const LOAN_TERMS = [
+	'3 tháng', '6 tháng', '12 tháng (1 năm)', '24 tháng (2 năm)', '36 tháng (3 năm)', '60 tháng (5 năm)'
+];
 
 const Finance = () => {
 	const owner = useOwner();
@@ -56,8 +65,12 @@ const Finance = () => {
 		amount: 0,
 		category: 'Vận hành',
 		note: '',
-		date: new Date().toISOString().split('T')[0]
+		date: new Date().toISOString().split('T')[0],
+		interestRate: 0,
+		bankName: '',
+		loanTerm: ''
 	});
+	const [isFetchingRate, setIsFetchingRate] = useState(false);
 
 	// Sync tab with URL
 	useEffect(() => {
@@ -83,6 +96,13 @@ const Finance = () => {
 	useEffect(() => {
 		setCurrentPage(1);
 	}, [activeTab, fromDate, toDate]);
+
+	// Auto-fetch interest rate when bank and term are selected
+	useEffect(() => {
+		if (logData.type === 'thu' && logData.category === 'Vay ngân hàng' && logData.bankName && logData.loanTerm && !isFetchingRate) {
+			handleAIInterestRate();
+		}
+	}, [logData.bankName, logData.loanTerm]);
 
 	useEffect(() => {
 		if (owner.loading || !owner.ownerId) return;
@@ -174,6 +194,53 @@ const Finance = () => {
 		};
 	}, [owner.loading, owner.ownerId]);
 
+	const handleAIInterestRate = async () => {
+		if (!logData.bankName || !logData.loanTerm) {
+			showToast("Vui lòng chọn ngân hàng và kỳ hạn", "info");
+			return;
+		}
+
+		setIsFetchingRate(true);
+		try {
+			const response = await fetch("https://api.deepseek.com/chat/completions", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"Authorization": "Bearer sk-35a45d673ff147dabd1e416af5f088f4"
+				},
+				body: JSON.stringify({
+					model: "deepseek-chat",
+					messages: [
+						{
+							role: "system",
+							content: "Bạn là chuyên gia tư vấn tài chính ngân hàng tại Việt Nam. Trả về lãi suất vay cơ sở (%) hiện tại. Chỉ trả về con số."
+						},
+						{
+							role: "user",
+							content: `Lãi suất vay cơ sở của ngân hàng ${logData.bankName} cho kỳ hạn ${logData.loanTerm} hiện tại là bao nhiêu? Trả về duy nhất 1 con số phần trăm, không kèm chữ hay ký hiệu khác. Ví dụ: 7.5`
+						}
+					]
+				})
+			});
+
+			const data = await response.json();
+			const rateText = data.choices[0].message.content.trim();
+			const rate = parseFloat(rateText.replace(/%/g, ''));
+
+			if (!isNaN(rate)) {
+				setLogData(prev => ({ ...prev, interestRate: rate }));
+				showToast(`DeepSeek: Lãi suất ${logData.bankName} là ${rate}%`, "success");
+			} else {
+				throw new Error("Invalid rate format");
+			}
+		} catch (error) {
+			console.error("DeepSeek Error:", error);
+			showToast("Không thể lấy lãi suất tự động. Vui lòng nhập thủ công.", "error");
+		} finally {
+			setIsFetchingRate(false);
+		}
+	};
+
 	const handleAddLog = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (logData.amount <= 0) return;
@@ -187,7 +254,16 @@ const Finance = () => {
 			});
 			console.log("Cash log added successfully:", logData);
 			setShowLogForm(false);
-			setLogData({ type: 'chi', amount: 0, category: 'Vận hành', note: '', date: new Date().toISOString().split('T')[0] });
+			setLogData({
+				type: 'chi',
+				amount: 0,
+				category: 'Vận hành',
+				note: '',
+				date: new Date().toISOString().split('T')[0],
+				interestRate: 0,
+				bankName: '',
+				loanTerm: ''
+			});
 			showToast("Ghi sổ quỹ thành công", "success");
 		} catch (error) {
 			console.error("Error adding cash log:", error);
@@ -511,11 +587,25 @@ const Finance = () => {
 												<tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
 													<td className="px-6 py-4 font-bold text-slate-500">{log.date}</td>
 													<td className="px-6 py-4">
-														<span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${log.category === 'Vận hành' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'bg-orange-50 text-orange-600 dark:bg-orange-900/20'}`}>
+														<span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${log.category === 'Vay ngân hàng' || log.type === 'thu'
+															? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20'
+															: log.category === 'Vận hành'
+																? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20'
+																: 'bg-orange-50 text-orange-600 dark:bg-orange-900/20'
+															}`}>
 															{log.category}
 														</span>
 													</td>
-													<td className="px-6 py-4 font-medium text-slate-700 dark:text-slate-300">{log.note}</td>
+													<td className="px-6 py-4">
+														<div className="flex flex-col">
+															<span className="font-medium text-slate-700 dark:text-slate-300">{log.note}</span>
+															{log.bankName && (
+																<span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight flex items-center gap-1 mt-0.5">
+																	<Sparkles size={10} className="text-indigo-400" /> {log.bankName} - {log.loanTerm} - Lãi {log.interestRate}%
+																</span>
+															)}
+														</div>
+													</td>
 													<td className={`px-6 py-4 text-right font-black ${log.type === 'thu' ? 'text-emerald-600' : 'text-rose-600'}`}>
 														{log.type === 'thu' ? '+' : '-'}{formatPrice(log.amount)}
 													</td>
@@ -1061,14 +1151,14 @@ const Finance = () => {
 								<div className="flex bg-slate-50 dark:bg-slate-800 p-1 rounded-2xl">
 									<button
 										type="button"
-										onClick={() => setLogData({ ...logData, type: 'thu' })}
+										onClick={() => setLogData({ ...logData, type: 'thu', category: 'Vay ngân hàng' })}
 										className={`flex-1 py-3 rounded-xl text-xs font-black uppercase transition-all ${logData.type === 'thu' ? 'bg-white dark:bg-slate-700 text-emerald-600 shadow-sm' : 'text-slate-400'}`}
 									>
 										Thu vào (+)
 									</button>
 									<button
 										type="button"
-										onClick={() => setLogData({ ...logData, type: 'chi' })}
+										onClick={() => setLogData({ ...logData, type: 'chi', category: 'Vận hành' })}
 										className={`flex-1 py-3 rounded-xl text-xs font-black uppercase transition-all ${logData.type === 'chi' ? 'bg-white dark:bg-slate-700 text-rose-600 shadow-sm' : 'text-slate-400'}`}
 									>
 										Chi ra (-)
@@ -1095,10 +1185,21 @@ const Finance = () => {
 											value={logData.category}
 											onChange={(e) => setLogData({ ...logData, category: e.target.value })}
 										>
-											<option value="Vận hành">Vận hành</option>
-											<option value="Nhập hàng">Nhập hàng</option>
-											<option value="Lương">Lương</option>
-											<option value="Khác">Khác</option>
+											{logData.type === 'thu' ? (
+												<>
+													<option value="Vay ngân hàng">Vay ngân hàng</option>
+													<option value="Vay khác">Vay khác</option>
+													<option value="Tiền dư sẵn">Tiền dư sẵn</option>
+													<option value="Khác">Khác</option>
+												</>
+											) : (
+												<>
+													<option value="Vận hành">Vận hành</option>
+													<option value="Nhập hàng">Nhập hàng</option>
+													<option value="Lương">Lương</option>
+													<option value="Khác">Khác</option>
+												</>
+											)}
 										</select>
 									</div>
 									<div>
@@ -1111,6 +1212,63 @@ const Finance = () => {
 										/>
 									</div>
 								</div>
+								{logData.type === 'thu' && (logData.category === 'Vay ngân hàng' || logData.category === 'Vay khác') && (
+									<div className="space-y-4 animate-in slide-in-from-top-2 duration-200">
+										<div className="grid grid-cols-2 gap-4">
+											{logData.category === 'Vay ngân hàng' && (
+												<div>
+													<label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Ngân hàng</label>
+													<select
+														className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500/20"
+														value={logData.bankName}
+														onChange={(e) => setLogData({ ...logData, bankName: e.target.value })}
+													>
+														<option value="">-- Chọn ngân hàng --</option>
+														{BANKS.map(b => <option key={b} value={b}>{b}</option>)}
+													</select>
+												</div>
+											)}
+											<div className={logData.category !== 'Vay ngân hàng' ? 'col-span-2' : ''}>
+												<label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Kỳ hạn vay</label>
+												<select
+													className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500/20"
+													value={logData.loanTerm}
+													onChange={(e) => setLogData({ ...logData, loanTerm: e.target.value })}
+												>
+													<option value="">-- Chọn kỳ hạn --</option>
+													{LOAN_TERMS.map(t => <option key={t} value={t}>{t}</option>)}
+												</select>
+											</div>
+										</div>
+
+										<div>
+											<label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Lãi suất (% / năm)</label>
+											<div className="flex gap-2">
+												<div className="relative flex-1">
+													<input
+														type="number"
+														step="0.1"
+														className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 font-black text-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
+														placeholder="0.0"
+														value={logData.interestRate === 0 ? '' : logData.interestRate}
+														onChange={(e) => setLogData({ ...logData, interestRate: parseFloat(e.target.value) || 0 })}
+													/>
+												</div>
+												{logData.category === 'Vay ngân hàng' && (
+													<button
+														type="button"
+														onClick={handleAIInterestRate}
+														disabled={isFetchingRate || !logData.bankName || !logData.loanTerm}
+														className="px-6 rounded-2xl bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 transition-all disabled:opacity-50 flex items-center gap-2 font-black text-[10px] uppercase shadow-sm border border-indigo-100 dark:border-indigo-800"
+													>
+														{isFetchingRate ? <Sparkles className="animate-spin text-indigo-400" size={14} /> : <Bot size={16} />}
+														Tra cứu
+													</button>
+												)}
+											</div>
+										</div>
+									</div>
+								)}
 
 								<div>
 									<label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Ghi chú chi tiết</label>

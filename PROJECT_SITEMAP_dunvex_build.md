@@ -83,6 +83,11 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 ## 4. Các mục đã hoàn thành & Cần làm (To-do)
 
 ### ✅ Đã hoàn thành (Done)
+- [x] **Nâng cấp Sổ quỹ & Tích hợp Bot AI Tra cứu Lãi suất (Cashbook AI Upgrade - Mar 12)**:
+    - **Danh mục Thu vào mới**: Bổ sung "Vay ngân hàng", "Vay khác", "Tiền dư sẵn" để quản lý dòng tiền vốn đầu vào.
+    - **Tích hợp DeepSeek AI**: Tạo con bot tra cứu lãi suất cơ sở của các ngân hàng Việt Nam (Vietcombank, BIDV...) theo kỳ hạn vay. Tự động điền dữ liệu vào sổ quỹ.
+    - **Quản lý Vốn vay**: Thêm các trường Ngân hàng, Kỳ hạn, Lãi suất khi ghi chú các khoản vay, giúp bám sát chi phí tài chính của cơ sở kinh doanh.
+    - **Giao diện động**: Form ghi chú tự động thay đổi dựa trên loại thu/chi và hạng mục được chọn.
 - [x] **Tính toán Lợi nhuận FIFO & Đồng bộ Kho (FIFO Profit Calculation - Mar 12)**:
     - **Nguyên tắc FIFO (Nhập trước - Xuất trước)**: Triển khai logic quét lô sản phẩm theo SKU từ cũ đến mới (dựa trên `createdAt`) để trừ kho và tính giá vốn thực tế.
     - **Giá vốn Bình quân Trọng số theo Đơn**: Tự động tính toán và lưu trữ giá vốn chính xác cho từng dòng sản phẩm trong đơn hàng. Đảm bảo tính minh bạch khi một mặt hàng được lấy từ nhiều lô có giá nhập khác nhau.

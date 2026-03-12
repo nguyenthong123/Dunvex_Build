@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db } from '../services/firebase';
-import { collection, query, where, onSnapshot, addDoc, serverTimestamp, Timestamp, doc, writeBatch, limit, orderBy, deleteDoc, setDoc } from 'firebase/firestore';
-import { Wallet, TrendingUp, TrendingDown, Receipt, Clock, BarChart3, Plus, ArrowUpRight, ArrowDownLeft, Filter, Search, Calendar, ChevronRight, Trash2, Settings2, Target, Award, Bot, Sparkles } from 'lucide-react';
+import { collection, query, where, onSnapshot, addDoc, serverTimestamp, Timestamp, doc, writeBatch, limit, orderBy, deleteDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { Wallet, TrendingUp, TrendingDown, Receipt, Clock, BarChart3, Plus, ArrowUpRight, ArrowDownLeft, Filter, Search, Calendar, ChevronRight, Trash2, Settings2, Target, Award, Bot, Sparkles, Bell, BellOff } from 'lucide-react';
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
 
@@ -68,7 +68,8 @@ const Finance = () => {
 		date: new Date().toISOString().split('T')[0],
 		interestRate: 0,
 		bankName: '',
-		loanTerm: ''
+		loanTerm: '',
+		reminderEnabled: false
 	});
 	const [isFetchingRate, setIsFetchingRate] = useState(false);
 
@@ -246,6 +247,19 @@ const Finance = () => {
 		}
 	};
 
+	const handleToggleReminder = async (id: string, currentStatus: boolean) => {
+		try {
+			await updateDoc(doc(db, 'cash_book', id), {
+				reminderEnabled: !currentStatus,
+				updatedAt: serverTimestamp()
+			});
+			showToast(`Đã ${!currentStatus ? 'bật' : 'tắt'} nhắc hẹn tất toán (Ngày 25 hàng tháng)`, "success");
+		} catch (error) {
+			console.error("Finance: Toggle Reminder Error:", error);
+			showToast("Lỗi khi cập nhật nhắc hẹn", "error");
+		}
+	};
+
 	const handleAIInterestRate = async () => {
 		if (!logData.bankName || !logData.loanTerm) {
 			showToast("Vui lòng chọn ngân hàng và kỳ hạn", "info");
@@ -314,7 +328,8 @@ const Finance = () => {
 				date: new Date().toISOString().split('T')[0],
 				interestRate: 0,
 				bankName: '',
-				loanTerm: ''
+				loanTerm: '',
+				reminderEnabled: false
 			});
 			showToast("Ghi sổ quỹ thành công", "success");
 		} catch (error) {
@@ -624,6 +639,7 @@ const Finance = () => {
 											<th className="px-6 py-4">Phân loại</th>
 											<th className="px-6 py-4">Nội dung</th>
 											<th className="px-6 py-4 text-right">Số tiền</th>
+											<th className="px-6 py-4 text-center">Nhắc hẹn</th>
 											<th className="px-6 py-4 text-right">Hành động</th>
 										</tr>
 									</thead>
@@ -660,6 +676,24 @@ const Finance = () => {
 													</td>
 													<td className={`px-6 py-4 text-right font-black ${log.type === 'thu' ? 'text-emerald-600' : 'text-rose-600'}`}>
 														{log.type === 'thu' ? '+' : '-'}{formatPrice(log.amount)}
+													</td>
+													<td className="px-6 py-4 text-center">
+														{(log.category === 'Vay ngân hàng' || log.category === 'Vay khác') ? (
+															<button
+																onClick={() => handleToggleReminder(log.id, log.reminderEnabled)}
+																className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${log.reminderEnabled ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'
+																	}`}
+															>
+																<span
+																	className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${log.reminderEnabled ? 'translate-x-6' : 'translate-x-1'
+																		}`}
+																/>
+																{log.reminderEnabled && <Bell size={10} className="absolute left-1.5 text-white/50" />}
+																{!log.reminderEnabled && <BellOff size={10} className="absolute right-1.5 text-slate-400" />}
+															</button>
+														) : (
+															<span className="text-[8px] text-slate-300 font-bold uppercase opacity-30">N/A</span>
+														)}
 													</td>
 													<td className="px-6 py-4 text-right">
 														<button

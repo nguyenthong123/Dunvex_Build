@@ -83,6 +83,10 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 ## 4. Các mục đã hoàn thành & Cần làm (To-do)
 
 ### ✅ Đã hoàn thành (Done)
+- [x] **Tính năng Nhắc hẹn Tất toán Khoản vay (Loan Repayment Reminder - Mar 12)**:
+    - **Cột Nhắc hẹn mới**: Bổ sung cột "Nhắc hẹn" vào bảng Nhật ký thu chi nội bộ.
+    - **Công tắc Toggle**: Cho phép bật/tắt nhắc nhở cho từng khoản vay ngân hàng/vay khác.
+    - **Cơ chế nhắc nhở**: Thiết lập nhắc hẹn tất toán vào ngày 25 hàng tháng (nhắc trước 5 ngày qua email) để người dùng chủ động nguồn vốn.
 - [x] **AI Phân tích Khoản vay & Tự động viết Ghi chú (AI Loan Advisor - Mar 12)**:
     - **Tự động viết nội dung**: Tích hợp nút "Tạo ghi chú AI" giúp DeepSeek phân tích sâu khoản vay từ Số tiền, Ngân hàng, Lãi suất và Kỳ hạn.
     - **Tính toán tài chính thông minh**: AI tự động tính toán lãi hàng tháng, tổng lãi cả kỳ, số tiền cần đáo hạn và trình bày mạch lạc theo văn phong mong muốn.

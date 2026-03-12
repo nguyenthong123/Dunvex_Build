@@ -213,27 +213,22 @@ const Finance = () => {
 					messages: [
 						{
 							role: "system",
-							content: "Bạn là chuyên gia tư vấn tài chính cao cấp. Hãy trình bày phân tích khoản vay một cách THUẦN VĂN BẢN (Plain Text), KHÔNG SỬ DỤNG định dạng Markdown như dấu sao (**), dấu gạch ngang (---) hay dấu chấm đầu dòng (*). Hãy xuống dòng rõ ràng giữa các đoạn. KHÔNG ĐƯỢC đưa phần 'Cách tính' vào văn bản. Chỉ trả về thông tin tóm tắt cuối cùng."
+							content: "Bạn là chuyên gia tài chính. Hãy trả về bản tóm tắt CỰC KỲ NGẮN GỌN, vắn tắt, thuần văn bản. KHÔNG định dạng markdown, KHÔNG lời chào, KHÔNG giải thích."
 						},
 						{
 							role: "user",
-							content: `Hãy viết một bản tóm tắt tài chính SẠCH SẼ và CHUYÊN NGHIỆP cho khoản vay sau (CHỈ TRẢ VỀ VĂN BẢN THUẦN, KHÔNG DẤU SAO):
+							content: `Tóm tắt khoản vay (Vắn tắt):
               - Ngân hàng: ${logData.bankName}
-              - Số tiền gốc: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(logData.amount)}
-              - Ngày giải ngân: ${logData.date}
-              - Lãi suất: ${logData.interestRate}%/năm
+              - Gốc: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(logData.amount)}
+              - Ngày: ${logData.date}
+              - Lãi: ${logData.interestRate}%/năm
               - Kỳ hạn: ${logData.loanTerm}
 
-              Yêu cầu trình bày chính xác theo mẫu này (không thêm bớt định dạng khác):
-              🏦 Bạn đã vay [Ngân hàng] gói vay kinh doanh vào ngày [Ngày], với lãi suất là [Lãi suất]%/năm.
-
-              🕒 Mỗi tháng, số tiền lãi bạn cần chi trả là: [Số tiền lãi]
-
-              💰 Sau [Kỳ hạn], số tiền cần chuẩn bị để đáo hạn là: [Gốc] + [Lãi tháng cuối] = [Số tiền đáo hạn]
-
-              📈 Tổng nợ gốc và lãi cho toàn bộ gói vay này là: [Tổng cộng]
-
-              Chúc cơ sở kinh doanh của bạn vận hành hiệu quả!`
+              Mẫu:
+              🏦 Vay [Ngân hàng] gói kinh doanh ngày [Ngày], lãi [Lãi suất]%/năm.
+              🕒 Lãi tháng: [Số tiền lãi]
+              💰 Đáo hạn ([Kỳ hạn]): [Gốc] + [Lãi cuối] = [Số tiền đáo hạn]
+              📈 Tổng nợ (Gốc + Lãi): [Tổng cộng]`
 						}
 					]
 				})

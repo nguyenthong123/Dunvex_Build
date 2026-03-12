@@ -83,6 +83,10 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 ## 4. Các mục đã hoàn thành & Cần làm (To-do)
 
 ### ✅ Đã hoàn thành (Done)
+- [x] **AI Phân tích Khoản vay & Tự động viết Ghi chú (AI Loan Advisor - Mar 12)**:
+    - **Tự động viết nội dung**: Tích hợp nút "Tạo ghi chú AI" giúp DeepSeek phân tích sâu khoản vay từ Số tiền, Ngân hàng, Lãi suất và Kỳ hạn.
+    - **Tính toán tài chính thông minh**: AI tự động tính toán lãi hàng tháng, tổng lãi cả kỳ, số tiền cần đáo hạn và trình bày mạch lạc theo văn phong mong muốn.
+    - **Nâng cấp trải nghiệm người dùng**: Giúp chủ doanh nghiệp nắm bắt nhanh nghĩa vụ tài chính chỉ qua một đoạn văn bản tóm tắt, thay vì phải tự tính toán thủ công.
 - [x] **Nâng cấp Sổ quỹ & Tích hợp Bot AI Tra cứu Lãi suất (Cashbook AI Upgrade - Mar 12)**:
     - **Danh mục Thu vào mới**: Bổ sung "Vay ngân hàng", "Vay khác", "Tiền dư sẵn" để quản lý dòng tiền vốn đầu vào.
     - **Tích hợp DeepSeek AI**: Tạo con bot tra cứu lãi suất cơ sở của các ngân hàng Việt Nam (Vietcombank, BIDV...) theo kỳ hạn vay. Tự động điền dữ liệu vào sổ quỹ.

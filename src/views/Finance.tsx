@@ -194,6 +194,55 @@ const Finance = () => {
 		};
 	}, [owner.loading, owner.ownerId]);
 
+	const handleAILoanAnalysis = async () => {
+		if (!logData.amount || !logData.bankName || !logData.loanTerm || !logData.interestRate) {
+			showToast("Vui lòng điền đủ Số tiền, Ngân hàng, Kỳ hạn và Lãi suất để AI phân tích", "info");
+			return;
+		}
+
+		setIsFetchingRate(true);
+		try {
+			const response = await fetch("https://api.deepseek.com/chat/completions", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"Authorization": "Bearer sk-35a45d673ff147dabd1e416af5f088f4"
+				},
+				body: JSON.stringify({
+					model: "deepseek-chat",
+					messages: [
+						{
+							role: "system",
+							content: "Bạn là chuyên gia cố vấn tài chính doanh nghiệp. Hãy viết một đoạn tóm tắt chuyên nghiệp về khoản vay."
+						},
+						{
+							role: "user",
+							content: `Hãy viết ghi chú chi tiết cho khoản vay: 
+              Ngân hàng: ${logData.bankName}, 
+              Số tiền: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(logData.amount)}, 
+              Ngày: ${logData.date}, 
+              Lãi suất: ${logData.interestRate}%/năm, 
+              Kỳ hạn: ${logData.loanTerm}. 
+              
+              Yêu cầu định dạng văn bản: "Bạn đã vay [Ngân hàng]... gói vay kinh doanh vào ngày [Ngày]..., với lãi suất [Lãi suất]%. Tính ra, mỗi tháng, tiền lãi ngân hàng bạn trả là [Số tiền lãi]... Sau [Kỳ hạn], số tiền bạn cần đáo hạn là [Gốc] + lãi vay tháng cuối... Tổng vốn vay và tổng lãi suất cho gói vay này là [Tổng cộng]."
+              Hãy thực hiện tính toán tài chính chính xác và trả về đoạn văn bản mạch lạc, chuyên nghiệp.`
+						}
+					]
+				})
+			});
+
+			const data = await response.json();
+			const analysis = data.choices[0].message.content.trim();
+			setLogData(prev => ({ ...prev, note: analysis }));
+			showToast("DeepSeek đã hoàn tất phân tích khoản vay", "success");
+		} catch (error) {
+			console.error("Project AI Analysis Error:", error);
+			showToast("Không thể tạo phân tích AI. Vui lòng kiểm tra lại.", "error");
+		} finally {
+			setIsFetchingRate(false);
+		}
+	};
+
 	const handleAIInterestRate = async () => {
 		if (!logData.bankName || !logData.loanTerm) {
 			showToast("Vui lòng chọn ngân hàng và kỳ hạn", "info");
@@ -1271,7 +1320,20 @@ const Finance = () => {
 								)}
 
 								<div>
-									<label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Ghi chú chi tiết</label>
+									<div className="flex items-center justify-between mb-2 ml-1">
+										<label className="block text-[10px] font-black text-slate-400 uppercase">Ghi chú chi tiết</label>
+										{logData.type === 'thu' && (logData.category === 'Vay ngân hàng' || logData.category === 'Vay khác') && (
+											<button
+												type="button"
+												onClick={handleAILoanAnalysis}
+												disabled={isFetchingRate}
+												className="flex items-center gap-1.5 text-[9px] font-black text-indigo-600 hover:text-indigo-700 bg-indigo-50 dark:bg-indigo-900/30 px-2.5 py-1 rounded-lg transition-all"
+											>
+												<Sparkles size={10} />
+												TẠO GHI CHÚ AI
+											</button>
+										)}
+									</div>
 									<textarea
 										className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 resize-none h-24"
 										placeholder="VD: Chi tiền điện nước tháng 1..."

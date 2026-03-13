@@ -134,6 +134,9 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Giao diện động**: Form ghi chú tự động thay đổi dựa trên loại thu/chi và hạng mục được chọn.
 - [x] **Nâng cấp Nexus Control Pro & AI Management (Mar 13)**:
     - **UI/UX Optimization**: Giao diện thích ứng hoàn hảo trên mọi kích thước màn hình (Mobile, Tablet, Desktop). Sử dụng Sidebar hiện đại và các tab được tối ưu hóa cho thao tác chạm.
+    - **Nexus AI Smart Import (AI-Driven Matching)**: 
+        - **Phân loại Gói thông minh**: Khắc phục triệt để lỗi ghi đè dữ liệu khi người dùng nhập nhiều mốc giá (ví dụ: gói 4 kiện và gói 6 kiện). 
+        - **Semantic Variant Detection**: AI tự động phân tích Mã SKU kết hợp với Danh mục và Tên sản phẩm. Nếu phát hiện sự khác biệt về "Gói" hoặc "Giá", hệ thống sẽ tự động tạo bản ghi mới thay vì ghi đè, bảo toàn 100% dữ liệu đa tầng của đơn vị.
     - **Autonomous AI Management (Nexus AI)**:
         - **AI Auto-Lock & Auto-Switch**: Tự động hóa việc quản lý gói cước (Dùng thử -> Chính thức) và khóa/mở các tính năng (Đơn hàng, Công nợ, Đồng bộ Sheets...) dựa trên trạng thái thanh toán và thời gian sử dụng.
         - **Cảnh báo Thông minh (Pocket-Touch Prevention)**: AI tự động gửi thông báo "Chuông báo" trực tiếp cho người dùng nếu phát hiện thao tác liên tục bất thường, giúp ngăn chặn việc túi quần bị cấn máy làm sai lệch dữ liệu.

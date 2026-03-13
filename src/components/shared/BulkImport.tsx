@@ -291,7 +291,7 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 			// 1. Fetch existing items to check for duplicates
 			const q = query(collection(db, type), where('ownerId', '==', ownerId));
 			const snapshot = await getDocs(q);
-			const existingItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+			const existingItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
 
 			const batchSize = 500;
 			const totalBatches = Math.ceil(data.length / batchSize);
@@ -310,19 +310,42 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 					let existingItem: any = null;
 
 					if (type === 'products') {
-						// Priority 1: Match by SKU within this Admin's products (ownerId isolation)
-						if (item.sku) {
-							const cleanSku = normalize(item.sku);
+						const cleanSku = item.sku ? normalize(item.sku) : '';
+						const cleanName = item.name ? normalize(item.name) : '';
+						const cleanCat = item.category ? normalize(item.category) : '';
+
+						// NEXUS AI SMART MATCHING: Priority 1 - Match by SKU AND Category
+						if (cleanSku && cleanCat) {
 							existingItem = existingItems.find((e: any) =>
-								normalize(e.sku) === cleanSku
+								normalize(e.sku) === cleanSku && normalize(e.category) === cleanCat
 							);
 						}
-						// Priority 2: Match by Name globally if SKU didn't match or wasn't provided
-						if (!existingItem && item.name) {
-							const cleanName = normalize(item.name);
+
+						// Priority 2: Match by Name AND Category
+						if (!existingItem && cleanName && cleanCat) {
 							existingItem = existingItems.find((e: any) =>
-								normalize(e.name) === cleanName
+								normalize(e.name) === cleanName && normalize(e.category) === cleanCat
 							);
+						}
+
+						// Priority 3: Fuzzy Fallback for updating basic product information 
+						// ONLY if the category is the same or not significant.
+						// If user has SKU X in "Gói 4 kiện" and uploads SKU X in "Gói 6 kiện", 
+						// Priority 1 & 2 will fail, and we WON'T match here to avoid overwriting.
+						if (!existingItem && cleanSku) {
+							const skuMatch = existingItems.find((e: any) => normalize(e.sku) === cleanSku);
+							if (skuMatch) {
+								const existingCat = normalize(skuMatch.category || '');
+								// If categories match or are both generic, allow update.
+								// If they represent different price tiers (contain numbers/keywords), treat as distinct.
+								const isDifferentTier = (cleanCat.includes('giá') || cleanCat.includes('kiện') || 
+														existingCat.includes('giá') || existingCat.includes('kiện')) && 
+														cleanCat !== existingCat;
+								
+								if (!isDifferentTier) {
+									existingItem = skuMatch;
+								}
+							}
 						}
 
 						if (existingItem) existingDocId = existingItem.id;

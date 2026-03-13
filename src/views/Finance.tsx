@@ -1361,8 +1361,8 @@ const Finance = () => {
 			{/* MODAL GHI CHÚ THU CHI */}
 			{
 				showLogForm && (
-					<div className="fixed inset-0 z-50 bg-[#1A237E]/80 backdrop-blur-sm flex items-center justify-center p-4">
-						<div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+					<div className="fixed inset-0 z-[100] bg-[#1A237E]/90 backdrop-blur-md flex items-end sm:items-center justify-center p-2 sm:p-4 overflow-hidden">
+						<div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[92dvh] sm:max-h-[85vh] animate-in slide-in-from-bottom-10 duration-300">
 							<div className="px-8 py-6 bg-indigo-600 text-white flex items-center justify-between">
 								<h3 className="text-xl font-black uppercase tracking-tight">Ghi chú Thu / Chi</h3>
 								<button onClick={() => {
@@ -1373,7 +1373,7 @@ const Finance = () => {
 									});
 								}} className="text-white/60 hover:text-white transition-colors text-3xl font-light">&times;</button>
 							</div>
-							<form onSubmit={handleAddLog} className="p-5 md:p-8 space-y-4 md:space-y-5 overflow-y-auto max-h-[85vh] no-scrollbar">
+							<form onSubmit={handleAddLog} className="flex-1 p-6 md:p-8 space-y-5 overflow-y-auto no-scrollbar pb-12 sm:pb-8">
 								<div className="flex bg-slate-50 dark:bg-slate-800 p-1 rounded-2xl">
 									<button
 										type="button"

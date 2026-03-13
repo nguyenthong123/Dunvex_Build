@@ -111,6 +111,10 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Hạng mục mới**: Thêm mục **"Chiết khấu"** 🎁 vào phần Thu vào theo yêu cầu người dùng.
     - **Visual UX**: Thêm các biểu tượng cảm xúc (emojis) vào danh sách hạng mục giúp người dùng nhận diện nhanh loại giao dịch.
     - **Conditional Layout**: Nhóm các trường liên quan đến khoản vay (Ngân hàng, Lãi suất, Kỳ hạn) vào các khối màu riêng biệt, chỉ hiện thị khi cần thiết.
+- [x] **Xử lý trượt Form & Hiển thị Mobile (Modal Scroll Fix - Mar 13)**:
+    - **Bottom Sheet Layout**: Chuyển đổi modal sang dạng "Bottom Sheet" trên điện thoại để tối ưu không gian và dễ thao tác bằng một tay.
+    - **Xử lý Scroll triệt để**: Sử dụng `92dvh` (dynamic viewport height) và `flex-col` để đảm bảo nút **Xác nhận ghi sổ** luôn hiển thị và có thể trượt tới được, không bị che bởi thanh điều hướng hệ thống.
+    - **Safe Area Padding**: Thêm khoảng đệm `pb-12` ở cuối form trên mobile để nội dung không bị sát mép dưới màn hình.
 - [x] **Nâng cấp Dashboard & Tối ưu Mobile Home (Home Mobile Optimization - Mar 13)**:
     - **Hoạt động mới nhất dạng Thẻ (Activity Card Layout)**: Chuyển đổi danh sách hoạt động trên điện thoại sang dạng thẻ (Card) trắng bo tròn, hiển thị đầy đủ: Người thực hiện, Thời gian, Loại tác vụ và Chi tiết nội dung.
     - **Hiệu ứng Tương tác (Haptic Feel)**: Tích hợp hiệu ứng nhấn (active scale) cho các thẻ hoạt động trên Mobile, mang lại trải nghiệm ứng dụng bản địa (Native app) cao cấp.

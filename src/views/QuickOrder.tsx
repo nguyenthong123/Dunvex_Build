@@ -462,10 +462,14 @@ const QuickOrder = () => {
 				for (const logDoc of existingLogsSnap.docs) {
 					const logData = logDoc.data();
 					if (logData.productId && logData.qty) {
-						const oldProdRef = doc(db, 'products', logData.productId);
-						batch.update(oldProdRef, {
-							stock: increment(logData.qty) // Revert the deduction
-						});
+						// SAFER: Only revert stock if the product still exists in the system
+						const productExists = products.some(p => p.id === logData.productId);
+						if (productExists) {
+							const oldProdRef = doc(db, 'products', logData.productId);
+							batch.update(oldProdRef, {
+								stock: increment(logData.qty) // Revert the deduction
+							});
+						}
 					}
 					batch.delete(logDoc.ref);
 				}
@@ -473,10 +477,14 @@ const QuickOrder = () => {
 				// Apply NEW stock changes ONLY IF status is 'Đơn chốt' or 'Đang giao'
 				if (orderStatus === 'Đơn chốt' || orderStatus === 'Đang giao') {
 					stockDeletions.forEach(del => {
-						const prodRef = doc(db, 'products', del.productId);
-						batch.update(prodRef, {
-							stock: increment(-del.qty)
-						});
+						// SAFER: Only update stock if the product still exists
+						const productExists = products.some(p => p.id === del.productId);
+						if (productExists) {
+							const prodRef = doc(db, 'products', del.productId);
+							batch.update(prodRef, {
+								stock: increment(-del.qty)
+							});
+						}
 
 						const invLogRef = doc(collection(db, 'inventory_logs'));
 						batch.set(invLogRef, {
@@ -530,10 +538,14 @@ const QuickOrder = () => {
 				// 3. Deduct Stock & Create Inventory Logs ONLY IF status is 'Đơn chốt' or 'Đang giao'
 				if (orderStatus === 'Đơn chốt' || orderStatus === 'Đang giao') {
 					stockDeletions.forEach(del => {
-						const prodRef = doc(db, 'products', del.productId);
-						batch.update(prodRef, {
-							stock: increment(-del.qty)
-						});
+						// SAFER: Only update stock if the product still exists
+						const productExists = products.some(p => p.id === del.productId);
+						if (productExists) {
+							const prodRef = doc(db, 'products', del.productId);
+							batch.update(prodRef, {
+								stock: increment(-del.qty)
+							});
+						}
 
 						const invLogRef = doc(collection(db, 'inventory_logs'));
 						batch.set(invLogRef, {

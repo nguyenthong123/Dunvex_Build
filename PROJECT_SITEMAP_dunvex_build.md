@@ -147,6 +147,7 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
         - **Auto-Note Generation**: Tự động kích hoạt AI phân tích khoản vay ngay khi người dùng nhập đủ thông tin (Số tiền, Ngân hàng, Kỳ hạn, Lãi suất).
         - **Smart UI**: Gỡ bỏ nút bấm thủ công, thay thế bằng quy trình xử lý ngầm (Background Processing) mượt mà hơn cho người mới.
         - **Intelligent Fallback**: AI tự động tra cứu lãi suất ngân hàng thời gian thực nếu người dùng bỏ trống.
+    - **Inventory Sync Reliability (Mar 13)**: Sửa lỗi `NOT-FOUND` khi lưu đơn hàng bằng cách xác thực sự tồn tại của sản phẩm trước khi cập nhật kho, ngăn chặn crash khi sản phẩm cũ đã bị xóa hoặc thay thế bởi Nexus AI Smart Import.
     - **Dọn dẹp hệ thống**: Gỡ bỏ các module Flag dư thừa, tập trung vào quản trị dữ liệu và nhật ký hoạt động thời gian thực.
 - [x] **Email & Sao chép nhanh Thông tin (Quick Copy Upgrade - Mar 10)**:
     - **Email khách hàng**: Bổ sung khối hiển thị Email trong chi tiết khách hàng, hỗ trợ link mailto và nút sao chép nhanh.

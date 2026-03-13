@@ -238,13 +238,22 @@ const Finance = () => {
 				})
 			});
 
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({}));
+				throw new Error(errorData.error?.message || `HTTP error! status: ${response.status}`);
+			}
+
 			const data = await response.json();
+			if (!data.choices || data.choices.length === 0) {
+				throw new Error("Không nhận được phản hồi từ AI");
+			}
+
 			const analysis = data.choices[0].message.content.trim();
 			setLogData(prev => ({ ...prev, note: analysis }));
 			showToast("DeepSeek đã hoàn tất phân tích khoản vay", "success");
-		} catch (error) {
+		} catch (error: any) {
 			console.error("Project AI Analysis Error:", error);
-			showToast("Không thể tạo phân tích AI. Vui lòng kiểm tra lại.", "error");
+			showToast(`Không thể tạo phân tích AI: ${error.message || 'Lỗi kết nối'}`, "error");
 		} finally {
 			setIsFetchingRate(false);
 		}
@@ -269,13 +278,18 @@ const Finance = () => {
 			return;
 		}
 
+		if (!import.meta.env.VITE_DEEPSEEK_API_KEY) {
+			showToast("Chưa cấu hình VITE_DEEPSEEK_API_KEY. Vui lòng liên hệ Admin.", "error");
+			return;
+		}
+
 		setIsFetchingRate(true);
 		try {
 			const response = await fetch("https://api.deepseek.com/chat/completions", {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
-					"Authorization": `Bearer ${import.meta.env.VITE_DEEPSEEK_API_KEY || ""}`
+					"Authorization": `Bearer ${import.meta.env.VITE_DEEPSEEK_API_KEY}`
 				},
 				body: JSON.stringify({
 					model: "deepseek-chat",
@@ -292,19 +306,30 @@ const Finance = () => {
 				})
 			});
 
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({}));
+				throw new Error(errorData.error?.message || `HTTP error! status: ${response.status}`);
+			}
+
 			const data = await response.json();
+			if (!data.choices || data.choices.length === 0) {
+				throw new Error("Không nhận được dữ liệu từ DeepSeek");
+			}
+
 			const rateText = data.choices[0].message.content.trim();
-			const rate = parseFloat(rateText.replace(/%/g, ''));
+			// Trích xuất số từ chuỗi trả về (ví dụ "7.5%" hoặc "Lãi suất là 7.5")
+			const match = rateText.match(/(\d+(\.\d+)?)/);
+			const rate = match ? parseFloat(match[0]) : NaN;
 
 			if (!isNaN(rate)) {
 				setLogData(prev => ({ ...prev, interestRate: rate }));
 				showToast(`DeepSeek: Lãi suất ${logData.bankName} là ${rate}%`, "success");
 			} else {
-				throw new Error("Invalid rate format");
+				throw new Error(`Định dạng lãi suất không hợp lệ: ${rateText}`);
 			}
-		} catch (error) {
+		} catch (error: any) {
 			console.error("DeepSeek Error:", error);
-			showToast("Không thể lấy lãi suất tự động. Vui lòng nhập thủ công.", "error");
+			showToast(`Lỗi AI: ${error.message || 'Không thể lấy lãi suất tự động'}`, "error");
 		} finally {
 			setIsFetchingRate(false);
 		}

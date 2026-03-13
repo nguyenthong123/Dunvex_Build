@@ -103,9 +103,10 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Bảo toàn Bố cục Chuyên nghiệp**: Khôi phục và chuẩn hóa lại khoảng cách, vị trí các nút bấm theo đúng thiết lập gốc của người dùng sau quá trình tối ưu.
 - [x] **Nâng cấp Hệ thống Nhắc nợ Email (Enhanced Backend Reminders - Mar 12)**:
     - **Gửi Email đa điểm**: Cập nhật Google Apps Script để tự động gửi thông báo nhắc nợ đến cả Admin và Khách hàng (nếu có email), đảm bảo thông tin thông suốt.
-- [x] **Nâng cấp Sổ quỹ & Tích hợp Bot AI Tra cứu Lãi suất (Cashbook AI Upgrade - Mar 12)**:
+- [x] **Nâng cấp Sổ quỹ & Tích hợp Bot AI Tra cứu Lãi suất (Cashbook AI Upgrade - Mar 12 - Fixed Mar 13)**:
     - **Danh mục Thu vào mới**: Bổ sung "Vay ngân hàng", "Vay khác", "Tiền dư sẵn" để quản lý dòng tiền vốn đầu vào.
     - **Tích hợp DeepSeek AI**: Tạo con bot tra cứu lãi suất cơ sở của các ngân hàng Việt Nam (Vietcombank, BIDV...) theo kỳ hạn vay. Tự động điền dữ liệu vào sổ quỹ.
+    - **Vá lỗi Vercel (Mar 13)**: Khắc phục lỗi CSP chặn kết nối đến API DeepSeek và cải thiện logic xử lý lỗi/parsing lãi suất giúp tính năng hoạt động ổn định trên môi trường production.
     - **Quản lý Vốn vay**: Thêm các trường Ngân hàng, Kỳ hạn, Lãi suất khi ghi chú các khoản vay, giúp bám sát chi phí tài chính của cơ sở kinh doanh.
     - **Giao diện động**: Form ghi chú tự động thay đổi dựa trên loại thu/chi và hạng mục được chọn.
 - [x] **Tính toán Lợi nhuận FIFO & Đồng bộ Kho (FIFO Profit Calculation - Mar 12)**:

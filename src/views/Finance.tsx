@@ -789,7 +789,7 @@ const Finance = () => {
 	const orderProfits = filteredOrders.filter(o => o.status === 'Đơn chốt').map(o => {
 		const revenue = o.totalAmount || 0;
 		const cost = (o.items || []).reduce((sum: number, item: any) => sum + ((Number(item.buyPrice) || 0) * (Number(item.qty) || 0)), 0);
-		const profit = revenue - cost - (o.discountValue || 0);
+		const profit = revenue - cost;
 		return { ...o, revenue, cost, profit };
 	}).sort((a: any, b: any) => {
 		const dateA = new Date(a.orderDate || a.createdAt?.toDate() || a.createdAt).getTime();

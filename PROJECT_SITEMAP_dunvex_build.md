@@ -115,6 +115,9 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Sticky Action Footer**: Chuyển đổi nút "Xác nhận ghi sổ" thành dạng cố định (Fixed Footer) ở đáy modal. Điều này giúp nút luôn luôn hiển thị trên màn hình bất kể bạn cuộn nội dung form tới đâu.
     - **Centered Modal Display**: Chuyển modal về vị trí trung tâm màn hình (Center) thay vì dạng Bottom Sheet để tránh hoàn toàn việc bị che khuất bởi thanh điều hướng (Bottom Navigation) của ứng dụng.
     - **Header/Body Split**: Tách riêng tiêu đề, thân form (cuộn được) và chân nút nhấn (cố định) để tạo cảm giác chuyên nghiệp và mượt mà hơn trên mọi thiết bị.
+- [x] **Sửa lỗi tính Lợi nhuận (Profit Calculation Fix - Mar 13)**:
+    - **Double Discount Fix**: Khắc phục lỗi trừ chiết khấu hai lần trong báo cáo lợi nhuận. Trước đó, hệ thống trừ chiết khấu vào Doanh thu, sau đó lại trừ thêm một lần nữa khi tính Lợi nhuận, dẫn đến số liệu bị âm sai lệch.
+    - **Độ chính xác số liệu**: Đảm bảo lợi nhuận các đơn hàng (như đơn cô Lài) hiển thị đúng số dương thực tế sau khi đã trừ đi Giá vốn và Chiết khấu gốc.
 - [x] **Nâng cấp Dashboard & Tối ưu Mobile Home (Home Mobile Optimization - Mar 13)**:
     - **Hoạt động mới nhất dạng Thẻ (Activity Card Layout)**: Chuyển đổi danh sách hoạt động trên điện thoại sang dạng thẻ (Card) trắng bo tròn, hiển thị đầy đủ: Người thực hiện, Thời gian, Loại tác vụ và Chi tiết nội dung.
     - **Hiệu ứng Tương tác (Haptic Feel)**: Tích hợp hiệu ứng nhấn (active scale) cho các thẻ hoạt động trên Mobile, mang lại trải nghiệm ứng dụng bản địa (Native app) cao cấp.

@@ -112,9 +112,9 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Visual UX**: Thêm các biểu tượng cảm xúc (emojis) vào danh sách hạng mục giúp người dùng nhận diện nhanh loại giao dịch.
     - **Conditional Layout**: Nhóm các trường liên quan đến khoản vay (Ngân hàng, Lãi suất, Kỳ hạn) vào các khối màu riêng biệt, chỉ hiện thị khi cần thiết.
 - [x] **Xử lý trượt Form & Hiển thị Mobile (Modal Scroll Fix - Mar 13)**:
-    - **Bottom Sheet Layout**: Chuyển đổi modal sang dạng "Bottom Sheet" trên điện thoại để tối ưu không gian và dễ thao tác bằng một tay.
-    - **Xử lý Scroll triệt để**: Sử dụng `92dvh` (dynamic viewport height) và `flex-col` để đảm bảo nút **Xác nhận ghi sổ** luôn hiển thị và có thể trượt tới được, không bị che bởi thanh điều hướng hệ thống.
-    - **Safe Area Padding**: Thêm khoảng đệm `pb-12` ở cuối form trên mobile để nội dung không bị sát mép dưới màn hình.
+    - **Sticky Action Footer**: Chuyển đổi nút "Xác nhận ghi sổ" thành dạng cố định (Fixed Footer) ở đáy modal. Điều này giúp nút luôn luôn hiển thị trên màn hình bất kể bạn cuộn nội dung form tới đâu.
+    - **Centered Modal Display**: Chuyển modal về vị trí trung tâm màn hình (Center) thay vì dạng Bottom Sheet để tránh hoàn toàn việc bị che khuất bởi thanh điều hướng (Bottom Navigation) của ứng dụng.
+    - **Header/Body Split**: Tách riêng tiêu đề, thân form (cuộn được) và chân nút nhấn (cố định) để tạo cảm giác chuyên nghiệp và mượt mà hơn trên mọi thiết bị.
 - [x] **Nâng cấp Dashboard & Tối ưu Mobile Home (Home Mobile Optimization - Mar 13)**:
     - **Hoạt động mới nhất dạng Thẻ (Activity Card Layout)**: Chuyển đổi danh sách hoạt động trên điện thoại sang dạng thẻ (Card) trắng bo tròn, hiển thị đầy đủ: Người thực hiện, Thời gian, Loại tác vụ và Chi tiết nội dung.
     - **Hiệu ứng Tương tác (Haptic Feel)**: Tích hợp hiệu ứng nhấn (active scale) cho các thẻ hoạt động trên Mobile, mang lại trải nghiệm ứng dụng bản địa (Native app) cao cấp.

@@ -1361,19 +1361,26 @@ const Finance = () => {
 			{/* MODAL GHI CHÚ THU CHI */}
 			{
 				showLogForm && (
-					<div className="fixed inset-0 z-[100] bg-[#1A237E]/90 backdrop-blur-md flex items-end sm:items-center justify-center p-2 sm:p-4 overflow-hidden">
-						<div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[92dvh] sm:max-h-[85vh] animate-in slide-in-from-bottom-10 duration-300">
-							<div className="px-8 py-6 bg-indigo-600 text-white flex items-center justify-between">
-								<h3 className="text-xl font-black uppercase tracking-tight">Ghi chú Thu / Chi</h3>
+					<div className="fixed inset-0 z-[100] bg-[#1A237E]/90 backdrop-blur-sm flex items-center justify-center p-4 overflow-hidden">
+						<div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[85vh] sm:max-h-[85vh] animate-in slide-in-from-bottom-10 duration-300 relative group">
+							{/* HEADER CỐ ĐỊNH */}
+							<div className="px-8 py-5 bg-indigo-600 text-white flex items-center justify-between shrink-0">
+								<div className="flex flex-col">
+									<h3 className="text-lg font-black uppercase tracking-tight leading-none">Ghi chú Thu / Chi</h3>
+									<span className="text-[9px] font-bold text-white/60 uppercase mt-1 tracking-widest">Sổ quỹ nội bộ</span>
+								</div>
 								<button onClick={() => {
 									setShowLogForm(false);
 									setSearchParams(prev => {
 										prev.delete('new');
 										return prev;
 									});
-								}} className="text-white/60 hover:text-white transition-colors text-3xl font-light">&times;</button>
+								}} className="size-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-all text-2xl font-light">&times;</button>
 							</div>
-							<form onSubmit={handleAddLog} className="flex-1 p-6 md:p-8 space-y-5 overflow-y-auto no-scrollbar pb-12 sm:pb-8">
+
+							<form onSubmit={handleAddLog} className="flex-1 flex flex-col overflow-hidden">
+								{/* NỘI DUNG CUỘN */}
+								<div className="flex-1 overflow-y-auto no-scrollbar p-6 md:p-8 space-y-5">
 								<div className="flex bg-slate-50 dark:bg-slate-800 p-1 rounded-2xl">
 									<button
 										type="button"
@@ -1568,15 +1575,20 @@ const Finance = () => {
 									/>
 								</div>
 
-								<button
-									type="submit"
-									className="w-full bg-indigo-600 text-white py-4 md:py-5 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-indigo-500/20 hover:bg-indigo-700 transition-all active:scale-[0.98] mt-2 group"
-								>
-									<span className="flex items-center justify-center gap-2">
-										Xác nhận ghi sổ
-										<ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
-									</span>
-								</button>
+								</div>
+
+								{/* NÚT XÁC NHẬN CỐ ĐỊNH Ở ĐÁY FORM */}
+								<div className="p-5 md:p-8 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 shrink-0">
+									<button
+										type="submit"
+										className="w-full bg-indigo-600 text-white py-4 md:py-5 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-indigo-500/30 hover:bg-indigo-700 transition-all active:scale-[0.98] group"
+									>
+										<span className="flex items-center justify-center gap-2">
+											Xác nhận ghi sổ
+											<ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
+										</span>
+									</button>
+								</div>
 							</form>
 						</div>
 					</div>

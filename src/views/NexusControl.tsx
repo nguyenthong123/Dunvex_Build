@@ -53,6 +53,7 @@ const NexusControl = () => {
 
 	const [requests, setRequests] = useState<any[]>([]);
 	const [customers, setCustomers] = useState<any[]>([]);
+	const [logs, setLogs] = useState<any[]>([]);
 	const [systemConfig, setSystemConfig] = useState<any>({
 		lock_free_orders: false,
 		lock_free_debts: false,
@@ -124,9 +125,16 @@ const NexusControl = () => {
 		};
 		fetchConfig();
 
+		// 4. Listen to Audit Logs (System-wide)
+		const qLogs = query(collection(db, 'audit_logs'), orderBy('createdAt', 'desc'), limit(100));
+		const unsubLogs = onSnapshot(qLogs, (snap) => {
+			setLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+		});
+
 		return () => {
 			unsubRequests();
 			unsubUsers();
+			unsubLogs();
 		};
 	}, [navigate]);
 
@@ -334,7 +342,7 @@ const NexusControl = () => {
 				<nav className="flex-1 space-y-2">
 					<SidebarItem icon={<Activity size={20} />} label="Hệ thống" active={activeTab === 'requests'} onClick={() => { setActiveTab('requests'); setIsMobileMenuOpen(false); }} badge={stats.pendingPayments} />
 					<SidebarItem icon={<Users size={20} />} label="Khách hàng" active={activeTab === 'customers'} onClick={() => { setActiveTab('customers'); setIsMobileMenuOpen(false); }} />
-					<SidebarItem icon={<Settings size={20} />} label="Cấu hình Flag" active={activeTab === 'config'} onClick={() => { setActiveTab('config'); setIsMobileMenuOpen(false); }} />
+					<SidebarItem icon={<Settings size={20} />} label="Lịch sử Log" active={activeTab === 'config'} onClick={() => { setActiveTab('config'); setIsMobileMenuOpen(false); }} />
 				</nav>
 
 				<div className="mt-auto p-4 bg-slate-800/50 rounded-2xl border border-slate-700/50">
@@ -358,7 +366,7 @@ const NexusControl = () => {
 				<header className="h-16 lg:h-20 border-b border-slate-800 flex items-center justify-between px-6 lg:px-10 bg-slate-950/50 backdrop-blur-xl sticky top-16 lg:top-0 z-40">
 					<div>
 						<h3 className="text-lg lg:text-2xl font-black text-white uppercase tracking-tight">
-							{activeTab === 'requests' ? 'Yêu cầu' : activeTab === 'customers' ? 'Doanh nghiệp' : 'Cấu hình'}
+							{activeTab === 'requests' ? 'Yêu cầu' : activeTab === 'customers' ? 'Doanh nghiệp' : 'Nhật ký Hệ thống'}
 						</h3>
 					</div>
 				</header>
@@ -444,35 +452,68 @@ const NexusControl = () => {
 					)}
 
 					{activeTab === 'config' && (
-						<div className="max-w-4xl space-y-8">
-							<div className="bg-slate-900 rounded-[2rem] border border-slate-800 p-6 lg:p-10">
-								<h4 className="text-xs font-black text-slate-400 uppercase tracking-[4px] mb-8">System Configuration</h4>
-								<div className="grid grid-cols-1 gap-4">
-									<ConfigToggle
-										title="Khóa Đơn chi tiết (FREE)"
-										description="Yêu cầu PRO để xem chi tiết hóa đơn."
-										enabled={systemConfig.lock_free_orders}
-										onToggle={() => toggleSystemFlag('lock_free_orders')}
-									/>
-									<ConfigToggle
-										title="Khóa Công nợ chi tiết (FREE)"
-										description="Yêu cầu PRO để xem bảng kê nợ chi tiết."
-										enabled={systemConfig.lock_free_debts}
-										onToggle={() => toggleSystemFlag('lock_free_debts')}
-									/>
-									<ConfigToggle
-										title="Khóa Đồng bộ Sheets (FREE)"
-										description="Yêu cầu PRO để sử dụng tính năng Sync Google Sheets."
-										enabled={systemConfig.lock_free_sheets}
-										onToggle={() => toggleSystemFlag('lock_free_sheets')}
-									/>
-									<ConfigToggle
-										title="Chế độ bảo trì"
-										description="Chỉ cho phép Admin truy cập hệ thống."
-										enabled={systemConfig.maintenance_mode}
-										onToggle={() => toggleSystemFlag('maintenance_mode')}
-									/>
+						<div className="space-y-6">
+							<div className="bg-slate-900 rounded-3xl lg:rounded-[2rem] border border-slate-800 overflow-x-auto shadow-2xl">
+								<div className="px-8 py-6 border-b border-slate-800 flex justify-between items-center">
+									<div>
+										<h4 className="text-xs font-black text-slate-400 uppercase tracking-[4px] mb-1">System Audit Logs</h4>
+										<p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Theo dõi hoạt động của người dùng toàn hệ thống</p>
+									</div>
+									<div className="size-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400">
+										<Activity size={20} />
+									</div>
 								</div>
+								<table className="w-full text-left min-w-[800px]">
+									<thead>
+										<tr className="bg-slate-800/50 text-[10px] font-black uppercase tracking-widest text-slate-500">
+											<th className="px-8 py-5">Thời gian</th>
+											<th className="px-8 py-5">Người dùng</th>
+											<th className="px-8 py-5">Hành động</th>
+											<th className="px-8 py-5">Chi tiết</th>
+										</tr>
+									</thead>
+									<tbody className="divide-y divide-slate-800">
+										{logs.map((log) => (
+											<tr key={log.id} className="hover:bg-slate-800/30 transition-colors group text-xs">
+												<td className="px-8 py-6 text-slate-400 font-medium whitespace-nowrap">
+													{log.createdAt?.toDate ? log.createdAt.toDate().toLocaleString('vi-VN', {
+														hour: '2-digit',
+														minute: '2-digit',
+														day: '2-digit',
+														month: '2-digit',
+														year: '2-digit'
+													}) : '---'}
+												</td>
+												<td className="px-8 py-6">
+													<div className="flex items-center gap-3">
+														<div className="size-8 rounded-lg bg-slate-800 flex items-center justify-center font-black text-slate-500 text-[10px]">
+															{log.user?.[0].toUpperCase() || 'U'}
+														</div>
+														<div className="max-w-[200px] truncate">
+															<p className="font-bold text-white truncate">{log.user || 'Hệ thống'}</p>
+															<p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">{log.ownerId?.slice(-8) || 'GLOBAL'}</p>
+														</div>
+													</div>
+												</td>
+												<td className="px-8 py-6">
+													<span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase bg-slate-800 text-indigo-400 border border-slate-700/50`}>
+														{log.action}
+													</span>
+												</td>
+												<td className="px-8 py-6 text-slate-300 font-medium leading-relaxed max-w-md">
+													{log.details}
+												</td>
+											</tr>
+										))}
+										{logs.length === 0 && (
+											<tr>
+												<td colSpan={4} className="px-8 py-20 text-center text-slate-500 font-bold uppercase tracking-widest opacity-30">
+													Không có dữ liệu nhật ký
+												</td>
+											</tr>
+										)}
+									</tbody>
+								</table>
 							</div>
 						</div>
 					)}

@@ -132,7 +132,9 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **UI Feedback**: Thêm nhãn thông báo "Đang xem: Tồn kho thấp" kèm nút bỏ lọc tại danh sách sản phẩm giúp người dùng dễ dàng quay lại danh sách đầy đủ.
 - [x] **Quản lý Vốn vay**: Thêm các trường Ngân hàng, Kỳ hạn, Lãi suất khi ghi chú các khoản vay, giúp bám sát chi phí tài chính của cơ sở kinh doanh.
     - **Giao diện động**: Form ghi chú tự động thay đổi dựa trên loại thu/chi và hạng mục được chọn.
-- [x] **Tính toán Lợi nhuận FIFO & Đồng bộ Kho (FIFO Profit Calculation - Mar 12)**:
+- [x] **Nâng cấp Nexus Control (Nexus Admin Updates - Mar 13)**:
+    - **System Audit Logs**: Thay thế bảng cấu hình hệ thống dư thừa bằng bảng Nhật ký hoạt động (Audit Logs) toàn hệ thống. Cho phép Nexus Admin theo dõi mọi thao tác của khách hàng (Thêm đơn, cập nhật kho, login...) theo thời gian thực.
+    - **Tab Refactoring**: Đổi tên tab "Cấu hình Flag" thành "Lịch sử Log" để đúng với thực tế nhu cầu quản trị.
     - **Nguyên tắc FIFO (Nhập trước - Xuất trước)**: Triển khai logic quét lô sản phẩm theo SKU từ cũ đến mới (dựa trên `createdAt`) để trừ kho và tính giá vốn thực tế.
     - **Giá vốn Bình quân Trọng số theo Đơn**: Tự động tính toán và lưu trữ giá vốn chính xác cho từng dòng sản phẩm trong đơn hàng. Đảm bảo tính minh bạch khi một mặt hàng được lấy từ nhiều lô có giá nhập khác nhau.
     - **Báo cáo Tài chính Chính xác**: Cập nhật module Tài chính giúp hiển thị đúng lợi nhuận gộp và hoa hồng nhân viên, ngay cả khi giá nhập hàng biến động theo thời gian.

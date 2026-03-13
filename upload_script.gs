@@ -15,7 +15,6 @@ function doPost(e) {
       result = handleInviteUser(data);
     } else if (data.action === 'ai_chat') {
       result = handleAIChat(data);
-    } else if (data.action === 'invite_user') {
     } else if (data.action === 'payment_request') {
       result = handlePaymentRequest(data);
     } else if (data.action === 'sync_to_sheets') {
@@ -464,12 +463,11 @@ function handleLoanReminder(data) {
 }
 
 /**
- * CORE: Nexus AI Engine (DeepSeek / Gemini Proxy)
- * Cung cấp khả năng xử lý ngôn ngữ tự nhiên cho toàn bộ Script
+ * CORE: Nexus AI Engine (DeepSeek API)
+ * Sử dụng DeepSeek (Gói trả phí) để đảm bảo độ ổn định và chính xác cao nhất
  */
 function callNexusAI(prompt) {
-  // Ưu tiên sử dụng DeepSeek cho logic tài chính và phân tích
-  var apiKey = "sk-7d13b487bb8e4a7795325bcc7e834601"; 
+  var apiKey = "sk-35a45d673ff147dabd1e416af5f088f4"; 
   var url = "https://api.deepseek.com/chat/completions";
   
   var payload = {
@@ -492,12 +490,15 @@ function callNexusAI(prompt) {
   try {
     var response = UrlFetchApp.fetch(url, options);
     var resData = JSON.parse(response.getContentText());
+    
     if (resData.choices && resData.choices.length > 0) {
       return resData.choices[0].message.content;
+    } else if (resData.error) {
+      return "Lỗi API DeepSeek: " + resData.error.message;
     }
-    return "Phân tích tự động đang bận...";
+    return "Phân tích tự động đang bận (DeepSeek Busy)...";
   } catch (e) {
-    return "AI Off-line";
+    return "Lỗi kết nối Nexus AI (DeepSeek): " + e.toString();
   }
 }
 
@@ -507,4 +508,9 @@ function handleAIChat(data) {
     status: "success",
     response: response
   })).setMimeType(ContentService.MimeType.JSON);
+}
+
+function testNexusAI() {
+  var result = callNexusAI("Chào bạn, bạn là ai? Trả lời thật ngắn gọn.");
+  Logger.log("KẾT QUẢ AI: " + result);
 }

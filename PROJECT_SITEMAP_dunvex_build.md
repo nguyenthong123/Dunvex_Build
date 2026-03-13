@@ -130,6 +130,13 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Fix Home Alert Nav**: Sửa lỗi nút "Xem" tại thông báo tồn kho thấp ở Trang chủ không hoạt động. Hiện đã chuyển hướng chính xác về trang Sản phẩm (`/inventory`).
     - **Quick Low Stock Filter**: Tích hợp bộ lọc tự động `?filter=low_stock`. Khi bấm từ Home, hệ thống sẽ tự động lọc ra danh sách các mặt hàng có tồn kho <= 10 để người dùng biết cần nhập thêm hàng gì ngay lập tức.
     - **UI Feedback**: Thêm nhãn thông báo "Đang xem: Tồn kho thấp" kèm nút bỏ lọc tại danh sách sản phẩm giúp người dùng dễ dàng quay lại danh sách đầy đủ.
+### 7. Nexus AI Script Intelligence
+- **AI Engine:** DeepSeek API (Paid Tier) - Highly stable integration within Google Apps Script.
+- **AI Partner Insights:** Automatically analyzes affiliate registration notes, assesses potential, and provides a concise partner profile for admins.
+- **AI Financial Advisor:** Generates personalized financial tips and encouraging statements for loan reminders and interest payment notifications.
+- **AI Chat Action:** Provides a backend endpoint (`ai_chat`) for frontend applications to securely communicate with the AI engine.
+- **Location:** `upload_script.gs` (Google Apps Script).
+- **Status:** 🟢 Active & Verified.
 - [x] **Quản lý Vốn vay**: Thêm các trường Ngân hàng, Kỳ hạn, Lãi suất khi ghi chú các khoản vay, giúp bám sát chi phí tài chính của cơ sở kinh doanh.
     - **Giao diện động**: Form ghi chú tự động thay đổi dựa trên loại thu/chi và hạng mục được chọn.
 - [x] **Nâng cấp Nexus Control Pro & AI Management (Mar 13)**:

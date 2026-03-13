@@ -1373,7 +1373,7 @@ const Finance = () => {
 									});
 								}} className="text-white/60 hover:text-white transition-colors text-3xl font-light">&times;</button>
 							</div>
-							<form onSubmit={handleAddLog} className="p-8 space-y-5">
+							<form onSubmit={handleAddLog} className="p-5 md:p-8 space-y-4 md:space-y-5 overflow-y-auto max-h-[85vh] no-scrollbar">
 								<div className="flex bg-slate-50 dark:bg-slate-800 p-1 rounded-2xl">
 									<button
 										type="button"
@@ -1391,51 +1391,55 @@ const Finance = () => {
 									</button>
 								</div>
 
-								<div>
-									<label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Số tiền (VNĐ)</label>
-									<input
-										type="number"
-										className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 font-black text-indigo-600 text-lg focus:ring-2 focus:ring-indigo-500/20"
-										placeholder="0"
-										value={logData.amount === 0 ? '' : logData.amount}
-										onChange={(e) => setLogData({ ...logData, amount: parseFloat(e.target.value) || 0 })}
-										required
-									/>
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+									<div>
+										<label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5 ml-1">Số tiền (VNĐ)</label>
+										<input
+											type="number"
+											className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-3.5 font-black text-indigo-600 text-lg focus:ring-2 focus:ring-indigo-500/20"
+											placeholder="0"
+											value={logData.amount === 0 ? '' : logData.amount}
+											onChange={(e) => setLogData({ ...logData, amount: parseFloat(e.target.value) || 0 })}
+											required
+										/>
+									</div>
+									<div className="md:hidden lg:block lg:invisible"></div> {/* Placeholder for mobile grouping */}
 								</div>
 
-								<div className="grid grid-cols-2 gap-4">
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 									<div>
-										<label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Hạng mục</label>
+										<label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5 ml-1">Hạng mục</label>
 										<select
-											className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 appearance-none"
+											className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-3.5 text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 appearance-none"
 											value={logData.category}
 											onChange={(e) => setLogData({ ...logData, category: e.target.value })}
 										>
 											{logData.type === 'thu' ? (
 												<>
-													<option value="Vay ngân hàng">Vay ngân hàng</option>
-													<option value="Vay khác">Vay khác</option>
-													<option value="Tiền dư sẵn">Tiền dư sẵn</option>
-													<option value="Khác">Khác</option>
+													<option value="Vay ngân hàng">🏦 Vay ngân hàng</option>
+													<option value="Vay khác">🤝 Vay khác</option>
+													<option value="Chiết khấu">🎁 Chiết khấu</option>
+													<option value="Tiền dư sẵn">💰 Tiền dư sẵn</option>
+													<option value="Khác">✨ Khác</option>
 												</>
 											) : (
 												<>
-													<option value="Vận hành">Vận hành</option>
-													<option value="Nhập hàng">Nhập hàng</option>
-													<option value="Lương">Lương</option>
-													<option value="Lãi suất ngân hàng">Lãi suất ngân hàng</option>
-													<option value="Nợ gốc ngân hàng">Nợ gốc ngân hàng</option>
-													<option value="Đáo hạn ngân hàng">Đáo hạn ngân hàng</option>
-													<option value="Khác">Khác</option>
+													<option value="Vận hành">⚙️ Vận hành</option>
+													<option value="Nhập hàng">📦 Nhập hàng</option>
+													<option value="Lương">👨‍🔧 Lương nhân viên</option>
+													<option value="Lãi suất ngân hàng">📈 Lãi suất ngân hàng</option>
+													<option value="Nợ gốc ngân hàng">🏦 Nợ gốc ngân hàng</option>
+													<option value="Đáo hạn ngân hàng">⏳ Đáo hạn ngân hàng</option>
+													<option value="Khác">✨ Khác</option>
 												</>
 											)}
 										</select>
 									</div>
 									<div>
-										<label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Ngày tháng</label>
+										<label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5 ml-1">Ngày tháng</label>
 										<input
 											type="date"
-											className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 text-slate-900 dark:text-white"
+											className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-3.5 text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 text-slate-900 dark:text-white"
 											value={logData.date}
 											onChange={(e) => setLogData({ ...logData, date: e.target.value })}
 										/>
@@ -1443,12 +1447,12 @@ const Finance = () => {
 								</div>
 								{logData.type === 'thu' && (logData.category === 'Vay ngân hàng' || logData.category === 'Vay khác') && (
 									<div className="space-y-4 animate-in slide-in-from-top-2 duration-200">
-										<div className="grid grid-cols-2 gap-4">
+										<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 											{logData.category === 'Vay ngân hàng' && (
 												<div>
-													<label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Ngân hàng</label>
+													<label className="block text-[10px] font-black text-indigo-400 uppercase mb-1.5 ml-1">Ngân hàng</label>
 													<select
-														className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500/20"
+														className="w-full bg-white dark:bg-slate-800 border-none rounded-2xl px-5 py-3.5 text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 shadow-sm"
 														value={logData.bankName}
 														onChange={(e) => setLogData({ ...logData, bankName: e.target.value })}
 													>
@@ -1457,10 +1461,10 @@ const Finance = () => {
 													</select>
 												</div>
 											)}
-											<div className={logData.category !== 'Vay ngân hàng' ? 'col-span-2' : ''}>
-												<label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Kỳ hạn vay</label>
+											<div className={logData.category !== 'Vay ngân hàng' ? 'col-span-1 md:col-span-2' : ''}>
+												<label className="block text-[10px] font-black text-indigo-400 uppercase mb-1.5 ml-1">Kỳ hạn vay</label>
 												<select
-													className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500/20"
+													className="w-full bg-white dark:bg-slate-800 border-none rounded-2xl px-5 py-3.5 text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 shadow-sm"
 													value={logData.loanTerm}
 													onChange={(e) => setLogData({ ...logData, loanTerm: e.target.value })}
 												>
@@ -1500,10 +1504,10 @@ const Finance = () => {
 								)}
 
 								<div>
-									<label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Email (Nếu có)</label>
+									<label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5 ml-1">Email (Nếu có)</label>
 									<input
 										type="email"
-										className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 text-slate-900 dark:text-white"
+										className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-3.5 text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 text-slate-900 dark:text-white"
 										placeholder="example@mail.com"
 										value={logData.email}
 										onChange={(e) => setLogData({ ...logData, email: e.target.value })}
@@ -1511,10 +1515,10 @@ const Finance = () => {
 								</div>
 
 								{logData.type === 'chi' && ['Lãi suất ngân hàng', 'Nợ gốc ngân hàng', 'Đáo hạn ngân hàng'].includes(logData.category) && (
-									<div className="animate-in slide-in-from-top-2 duration-200">
-										<label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Chọn khoản vay liên quan</label>
+									<div className="bg-rose-50/50 dark:bg-rose-900/10 p-4 rounded-2xl border border-rose-100 dark:border-rose-800/50 space-y-2 animate-in slide-in-from-top-2 duration-200">
+										<label className="block text-[10px] font-black text-rose-400 uppercase mb-1.5 ml-1">Chọn khoản vay liên quan</label>
 										<select
-											className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 text-indigo-600"
+											className="w-full bg-white dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-rose-500/20 text-rose-600 shadow-sm"
 											value={logData.parentId}
 											onChange={(e) => {
 												const selectedLoan = cashLogs.find(l => l.id === e.target.value);
@@ -1537,19 +1541,19 @@ const Finance = () => {
 												);
 											})}
 										</select>
-										<p className="mt-2 text-[9px] text-slate-400 font-bold uppercase ml-1 opacity-70">* Phải chọn đúng khoản vay để Bot tính lãi chính xác</p>
+										<p className="text-[8px] text-rose-400 font-bold uppercase ml-1 opacity-70">* Phải chọn đúng khoản vay để Bot tính lãi chính xác</p>
 									</div>
 								)}
 
-								<div>
-									<div className="flex items-center justify-between mb-2 ml-1">
-										<label className="block text-[10px] font-black text-slate-400 uppercase">Ghi chú chi tiết</label>
+								<div className="space-y-3">
+									<div className="flex items-center justify-between px-1">
+										<label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Ghi chú chi tiết</label>
 										{logData.type === 'thu' && (logData.category === 'Vay ngân hàng' || logData.category === 'Vay khác') && (
 											<button
 												type="button"
 												onClick={handleAILoanAnalysis}
 												disabled={isFetchingRate}
-												className="flex items-center gap-1.5 text-[9px] font-black text-indigo-600 hover:text-indigo-700 bg-indigo-50 dark:bg-indigo-900/30 px-2.5 py-1 rounded-lg transition-all"
+												className="flex items-center gap-1.5 text-[9px] font-black text-indigo-600 hover:text-indigo-700 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-xl transition-all hover:shadow-sm"
 											>
 												<Sparkles size={10} />
 												TẠO GHI CHÚ AI
@@ -1557,7 +1561,7 @@ const Finance = () => {
 										)}
 									</div>
 									<textarea
-										className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 resize-none h-24"
+										className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-3.5 text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 resize-none h-24"
 										placeholder="VD: Chi tiền điện nước tháng 1..."
 										value={logData.note}
 										onChange={(e) => setLogData({ ...logData, note: e.target.value })}
@@ -1566,9 +1570,12 @@ const Finance = () => {
 
 								<button
 									type="submit"
-									className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-indigo-500/20 hover:bg-indigo-700 transition-all active:scale-95"
+									className="w-full bg-indigo-600 text-white py-4 md:py-5 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-indigo-500/20 hover:bg-indigo-700 transition-all active:scale-[0.98] mt-2 group"
 								>
-									Xác nhận ghi sổ
+									<span className="flex items-center justify-center gap-2">
+										Xác nhận ghi sổ
+										<ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
+									</span>
 								</button>
 							</form>
 						</div>

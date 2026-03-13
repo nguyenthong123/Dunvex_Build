@@ -106,6 +106,11 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Tối giản hóa Tài chính**: Loại bỏ hoàn toàn tính năng lập kế hoạch KPI, theo dõi hiệu suất đội ngũ và bảng tính thưởng phạt để tinh gọn hệ thống theo yêu cầu thực tế.
     - **Dọn dẹp Giao diện**: Gỡ bỏ tab "Performance", các state biến liên quan, logic fetching dữ liệu KPI và các modal lập kế hoạch cũ.
     - **Phân quyền truy cập Tài chính**: Thiết lập thông báo "Truy cập bị hạn chế" chuyên nghiệp cho tài khoản nhân viên khi cố gắng truy cập module Tài chính, đảm bảo bảo mật số liệu doanh nghiệp.
+- [x] **Tối ưu Form Sổ quỹ (Cashbook Form Optimization - Mar 13)**:
+    - **Giao diện Compact**: Thu gọn bố cục form ghi sổ, sử dụng Grid linh hoạt (1 cột trên Mobile, 2 cột trên Desktop) để giảm chiều dài trang.
+    - **Hạng mục mới**: Thêm mục **"Chiết khấu"** 🎁 vào phần Thu vào theo yêu cầu người dùng.
+    - **Visual UX**: Thêm các biểu tượng cảm xúc (emojis) vào danh sách hạng mục giúp người dùng nhận diện nhanh loại giao dịch.
+    - **Conditional Layout**: Nhóm các trường liên quan đến khoản vay (Ngân hàng, Lãi suất, Kỳ hạn) vào các khối màu riêng biệt, chỉ hiện thị khi cần thiết.
 - [x] **Nâng cấp Dashboard & Tối ưu Mobile Home (Home Mobile Optimization - Mar 13)**:
     - **Hoạt động mới nhất dạng Thẻ (Activity Card Layout)**: Chuyển đổi danh sách hoạt động trên điện thoại sang dạng thẻ (Card) trắng bo tròn, hiển thị đầy đủ: Người thực hiện, Thời gian, Loại tác vụ và Chi tiết nội dung.
     - **Hiệu ứng Tương tác (Haptic Feel)**: Tích hợp hiệu ứng nhấn (active scale) cho các thẻ hoạt động trên Mobile, mang lại trải nghiệm ứng dụng bản địa (Native app) cao cấp.

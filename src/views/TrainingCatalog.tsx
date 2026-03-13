@@ -291,6 +291,18 @@ const TrainingCatalog = () => {
 		}
 	};
 
+	const handleDeleteLab = async (id: string, e: React.MouseEvent) => {
+		e.stopPropagation();
+		if (!window.confirm("Bạn có chắc chắn muốn xóa bài học này?")) return;
+		try {
+			await deleteDoc(doc(db, 'training_labs', id));
+			showToast("Đã xóa bài học", "success");
+		} catch (error) {
+			console.error("Error deleting lab:", error);
+			showToast("Lỗi khi xóa bài học", "error");
+		}
+	};
+
 	return (
 		<div className="flex flex-col h-full bg-[#f8f9fb] dark:bg-slate-950 transition-colors duration-300">
 			<header className="h-20 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between px-8 shrink-0">
@@ -446,8 +458,19 @@ const TrainingCatalog = () => {
 												))}
 												<div className="size-8 rounded-full border-2 border-white dark:border-slate-900 bg-indigo-600 text-[9px] font-black text-white flex items-center justify-center shadow-sm z-10">+12</div>
 											</div>
-											<div className="flex items-center gap-2 text-indigo-600 font-black text-xs uppercase tracking-widest group-hover:translate-x-2 transition-transform">
-												Bắt đầu Lab <Play size={14} fill="currentColor" />
+											<div className="flex items-center gap-3">
+												{lab.isAI && (
+													<button 
+														onClick={(e) => handleDeleteLab(lab.id, e)}
+														className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-all"
+														title="Xóa bài học"
+													>
+														<Trash2 size={16} />
+													</button>
+												)}
+												<div className="flex items-center gap-2 text-indigo-600 font-black text-xs uppercase tracking-widest group-hover:translate-x-2 transition-transform">
+													Bắt đầu Lab <Play size={14} fill="currentColor" />
+												</div>
 											</div>
 										</div>
 									</div>

@@ -143,6 +143,7 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Automatic Grading & Skill Points**: Hệ thống tự động chấm điểm bài làm và tích lũy điểm kỹ năng vào hồ sơ nhân sự.
     - **Automated Ranking (Skill Progression)**: Tự động cập nhật danh hiệu (Nhập môn -> Bậc thầy) dựa trên tổng điểm tích lũy, hiển thị dưới dạng huy hiệu Premium.
     - **Real-time Level Updates**: Đồng bộ tức thì cấp độ và điểm số của nhân viên vào bộ sưu tập `users` trong Firestore.
+    - **Lab Management**: Hỗ trợ xóa các bài học AI đã soạn cũ để quản lý danh sách đào tạo gọn gàng hơn.
 - [x] **Quản lý Vốn vay**: Thêm các trường Ngân hàng, Kỳ hạn, Lãi suất khi ghi chú các khoản vay, giúp bám sát chi phí tài chính của cơ sở kinh doanh.
     - **Giao diện động**: Form ghi chú tự động thay đổi dựa trên loại thu/chi và hạng mục được chọn.
 - [x] **Nâng cấp Nexus Control Pro & AI Management (Mar 13)**:

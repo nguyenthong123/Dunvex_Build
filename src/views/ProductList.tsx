@@ -280,7 +280,7 @@ const ProductList = () => {
 				// If it's an order (type 'out'), verify status
 				if (l.type === 'out' && l.orderId) {
 					const status = orderStatusMap[l.orderId];
-					return status === 'Đơn chốt' || status === 'Đang giao';
+					return status === 'Đơn chốt';
 				}
 
 				return true;
@@ -316,8 +316,8 @@ const ProductList = () => {
 					// If it's an order (type 'out'), verify status
 					if (l.type === 'out' && l.orderId) {
 						const status = orderStatusMap[l.orderId];
-						// Only count 'Đơn chốt' or 'Đang giao'
-						return status === 'Đơn chốt' || status === 'Đang giao';
+						// Only count 'Đơn chốt'
+						return status === 'Đơn chốt';
 					}
 
 					return true; // Keep audit/manual decreases

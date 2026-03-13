@@ -378,8 +378,8 @@ const Debts: React.FC = () => {
 			return p.customerId === customer.id;
 		});
 
-		// Inclusion of 'Đơn chốt' and 'Đang giao' as current debt
-		const confirmedStatuses = ['Đơn chốt', 'Đang giao'];
+		// Inclusion of 'Đơn chốt' as current debt
+		const confirmedStatuses = ['Đơn chốt'];
 		const debtOrders = customerOrders.filter(o => confirmedStatuses.includes(o.status));
 		const totalWaited = debtOrders.reduce((sum: any, o: any) => sum + (o.totalAmount || 0), 0);
 		const totalPaid = customerPayments.reduce((sum: any, p: any) => sum + (p.amount || 0), 0);
@@ -1504,7 +1504,7 @@ const Debts: React.FC = () => {
 														return (!o.customerId || !registeredMap.has(o.customerId)) && (o.customerName === selectedCustomer.name || (!o.customerName && selectedCustomer.name === 'Khách vãng lai'));
 													}
 													return o.customerId === selectedCustomer.id;
-												}).filter(o => ['Đơn chốt', 'Đang giao'].includes(o.status)).map(o => ({ ...o, txType: 'order' })),
+												}).filter(o => o.status === 'Đơn chốt').map(o => ({ ...o, txType: 'order' })),
 												...payments.filter(p => {
 													if (selectedCustomer.isGuest) {
 														return (!p.customerId || !registeredMap.has(p.customerId)) && (p.customerName === selectedCustomer.name || (!p.customerName && selectedCustomer.name === 'Khách vãng lai'));

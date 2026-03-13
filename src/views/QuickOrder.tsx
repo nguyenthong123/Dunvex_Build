@@ -474,8 +474,8 @@ const QuickOrder = () => {
 					batch.delete(logDoc.ref);
 				}
 
-				// Apply NEW stock changes ONLY IF status is 'Đơn chốt' or 'Đang giao'
-				if (orderStatus === 'Đơn chốt' || orderStatus === 'Đang giao') {
+				// Apply NEW stock changes ONLY IF status is 'Đơn chốt'
+				if (orderStatus === 'Đơn chốt') {
 					stockDeletions.forEach(del => {
 						// SAFER: Only update stock if the product still exists
 						const productExists = products.some(p => p.id === del.productId);
@@ -535,8 +535,8 @@ const QuickOrder = () => {
 					createdAt: serverTimestamp()
 				});
 
-				// 3. Deduct Stock & Create Inventory Logs ONLY IF status is 'Đơn chốt' or 'Đang giao'
-				if (orderStatus === 'Đơn chốt' || orderStatus === 'Đang giao') {
+				// 3. Deduct Stock & Create Inventory Logs ONLY IF status is 'Đơn chốt'
+				if (orderStatus === 'Đơn chốt') {
 					stockDeletions.forEach(del => {
 						// SAFER: Only update stock if the product still exists
 						const productExists = products.some(p => p.id === del.productId);
@@ -742,7 +742,6 @@ const QuickOrder = () => {
 								>
 									<option value="Đơn chốt">Đơn chốt</option>
 									<option value="Đơn nháp">Đơn nháp</option>
-									<option value="Đang giao">Đang giao</option>
 								</select>
 								<ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
 							</div>

@@ -229,15 +229,15 @@ const Home = () => {
 		return sum + (itemsProfit - (o.discountValue || 0));
 	}, 0);
 
-	// 1.2 Chart Data (Last 7 Days)
-	const getChartData = () => {
+	// 1.2 Chart Data (Daily Sales Trend for the last 7 days - Global/Admin or Local/Sale)
+	const getDailyChartData = (targetOrders: any[]) => {
 		const data = [];
 		for (let i = 6; i >= 0; i--) {
 			const d = new Date();
 			d.setDate(d.getDate() - i);
 			const dateStr = d.toISOString().split('T')[0];
 
-			const dayRevenue = orders.filter(o => {
+			const dayRevenue = targetOrders.filter(o => {
 				const od = o.createdAt?.seconds ? new Date(o.createdAt.seconds * 1000).toISOString().split('T')[0] : o.orderDate;
 				return od === dateStr && o.status === 'Đơn chốt';
 			}).reduce((s, o) => s + (o.totalAmount || 0), 0);
@@ -251,8 +251,75 @@ const Home = () => {
 		return data;
 	};
 
-	const chartData = getChartData();
+	const chartData = getDailyChartData(orders);
 	const maxRevenue = Math.max(...chartData.map(d => d.value), 1000000);
+
+	// 1.3 Personal Performance (for the current login user)
+	const personalOrders = orders.filter(o => o.createdByEmail === auth.currentUser?.email && o.status === 'Đơn chốt');
+	const personalChartData = getDailyChartData(personalOrders);
+	const personalTotalRevenue = personalOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+
+	// Calculate Today's Growth (comparison with yesterday)
+	const yesterday = new Date();
+	yesterday.setDate(yesterday.getDate() - 1);
+	const yesterdayStr = yesterday.toISOString().split('T')[0];
+	const revenueYesterday = orders.filter(o => {
+		const od = o.createdAt?.seconds ? new Date(o.createdAt.seconds * 1000).toISOString().split('T')[0] : o.orderDate;
+		return od === yesterdayStr && o.status === 'Đơn chốt';
+	}).reduce((s, o) => s + (o.totalAmount || 0), 0);
+
+	const growthPct = revenueYesterday === 0 ? 100 : Math.round(((revenueToday - revenueYesterday) / revenueYesterday) * 100);
+
+	// 1.4 Recent Customer Sales Data (Display 6 customers with most recent 'Đơn chốt' orders)
+	const getOrderTime = (o: any) => {
+		if (o.createdAt?.seconds) return o.createdAt.seconds;
+		// Fallback for very new orders (optimistic UI) where serverTimestamp is still null
+		if (!o.createdAt && o.orderDate === new Date().toISOString().split('T')[0]) return Date.now() / 1000;
+		if (o.createdAt instanceof Date) return Math.floor(o.createdAt.getTime() / 1000);
+		if (o.orderDate) return new Date(o.orderDate).getTime() / 1000;
+		return 0;
+	};
+
+	const recentClosedOrders = [...orders]
+		.filter(o => o.status === 'Đơn chốt')
+		.sort((a, b) => getOrderTime(b) - getOrderTime(a));
+
+	// Group by customer to find the 6 most recent unique customers
+	const uniqueRecentCustomers: { id: string | null, name: string, time: number }[] = [];
+	const seenCustomers = new Set<string>();
+
+	for (const o of recentClosedOrders) {
+		const customerId = o.customerId || null;
+		const customerName = o.customerBusinessName || o.customerName || 'Khách lẻ';
+		// We group by ID if available, otherwise by name
+		const groupKey = customerId ? `id:${customerId}` : `name:${customerName}`;
+
+		if (!seenCustomers.has(groupKey)) {
+			seenCustomers.add(groupKey);
+			uniqueRecentCustomers.push({
+				id: customerId,
+				name: customerName,
+				time: getOrderTime(o)
+			});
+		}
+		if (uniqueRecentCustomers.length >= 6) break;
+	}
+
+	const customerSalesData = uniqueRecentCustomers.map(cust => {
+		const totalSales = orders
+			.filter(o => o.status === 'Đơn chốt' && (
+				(cust.id && o.customerId === cust.id) ||
+				(!cust.id && (o.customerBusinessName || o.customerName || 'Khách lẻ') === cust.name)
+			))
+			.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+
+		return {
+			label: cust.name,
+			value: totalSales
+		};
+	});
+
+	const maxCustRevenue = Math.max(...customerSalesData.map(d => d.value), 1);
 
 	// 2. Debt Warnings
 	// Calculate debt for each customer
@@ -425,26 +492,52 @@ const Home = () => {
 					</div>
 				</div>
 
-				{/* PROMO BANNER */}
+				{/* PERSONAL PERFORMANCE BANNER (Replacing static promo) */}
 				<div
 					onClick={() => navigate('/coupons')}
-					className="mb-8 relative overflow-hidden bg-gradient-to-r from-[#1A237E] via-[#283593] to-[#1A237E] rounded-[2.5rem] p-6 md:p-10 shadow-xl shadow-indigo-500/10 cursor-pointer group active:scale-[0.99] transition-all"
+					className="mb-8 relative overflow-hidden bg-gradient-to-br from-[#1A237E] via-[#283593] to-[#4527A0] rounded-[2.5rem] p-6 md:p-10 shadow-xl shadow-indigo-500/20 cursor-pointer group active:scale-[0.99] transition-all flex flex-col lg:flex-row items-center justify-between gap-8"
 				>
-					<div className="absolute top-0 right-0 bottom-0 w-1/3 bg-gradient-to-l from-[#FF6D00]/20 to-transparent skew-x-12 translate-x-10 group-hover:translate-x-0 transition-transform duration-700"></div>
-					<div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
-						<div className="flex items-center gap-6">
-							<div className="size-16 md:size-20 bg-white/10 backdrop-blur-xl rounded-3xl flex items-center justify-center text-[#ffcc00] shadow-inner">
-								<Gift size={36} strokeWidth={2.5} className="group-hover:rotate-12 transition-transform" />
-							</div>
-							<div>
-								<h2 className="text-xl md:text-3xl font-black text-white uppercase tracking-tight leading-none mb-2">Ưu đãi độc quyền</h2>
-								<p className="text-white/60 text-xs md:text-sm font-medium max-w-md leading-relaxed">Khám phá danh sách mã giảm giá và khuyến mãi mới nhất dành riêng cho doanh nghiệp của bạn.</p>
+					<div className="absolute top-0 right-0 bottom-0 w-1/2 bg-white/5 skew-x-12 translate-x-20 group-hover:translate-x-10 transition-transform duration-1000"></div>
+					<div className="relative z-10 flex flex-col md:flex-row items-center gap-6">
+						<div className="size-16 md:size-24 bg-white/10 backdrop-blur-xl rounded-[2rem] flex items-center justify-center text-[#ffcc00] shadow-2xl border border-white/10">
+							<TrendingUp size={40} strokeWidth={2.5} className="group-hover:scale-110 transition-transform" />
+						</div>
+						<div className="text-center md:text-left">
+							<h2 className="text-xl md:text-3xl font-black text-white uppercase tracking-tight leading-none mb-3">Hiệu suất cá nhân của bạn</h2>
+							<div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
+								<div className="bg-black/20 px-3 py-1 rounded-lg border border-white/5">
+									<p className="text-[10px] text-white/50 font-bold uppercase">Tổng doanh số</p>
+									<p className="text-lg font-black text-[#ffcc00]">{formatPrice(personalTotalRevenue)}</p>
+								</div>
+								<div className="bg-black/20 px-3 py-1 rounded-lg border border-white/5">
+									<p className="text-[10px] text-white/50 font-bold uppercase">Đơn đã chốt</p>
+									<p className="text-lg font-black text-white">{personalOrders.length} Đơn</p>
+								</div>
 							</div>
 						</div>
-						<button className="h-12 md:h-14 px-8 bg-[#ffcc00] text-slate-900 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-white transition-all shadow-lg shadow-yellow-500/20">
-							Xem Ưu Đãi
-						</button>
 					</div>
+
+					<div className="relative z-10 hidden sm:flex items-end gap-1.5 h-20 md:h-24 px-4 bg-white/5 rounded-3xl backdrop-blur-sm border border-white/5">
+						{personalChartData.map((d, idx) => {
+							const h = Math.max((d.value / (Math.max(...personalChartData.map(p => p.value), 1000000))) * 100, 10);
+							return (
+								<div key={idx} className="flex flex-col items-center gap-1">
+									<div 
+										className={`w-3 md:w-5 rounded-t-lg transition-all duration-700 ${d.isToday ? 'bg-[#ffcc00] shadow-[0_-4px_10px_rgba(255,204,0,0.3)]' : 'bg-white/30'}`} 
+										style={{ height: `${h}%` }}
+									></div>
+									<span className="text-[7px] text-white/40 font-bold uppercase">{d.label}</span>
+								</div>
+							);
+						})}
+						<div className="ml-4 flex flex-col justify-center gap-1">
+							<p className="text-[8px] text-white/40 font-bold uppercase tracking-widest whitespace-nowrap">Theo thời gian</p>
+							<p className="text-[10px] text-green-400 font-black flex items-center gap-1">
+								LIVE <span className="size-1.5 bg-green-400 rounded-full animate-pulse"></span>
+							</p>
+						</div>
+					</div>
+
 				</div>
 
 				{/* Alerts Section */}
@@ -508,8 +601,9 @@ const Home = () => {
 								</div>
 								<div className="bg-white/10 backdrop-blur-md px-3 py-2 rounded-xl flex-1 border border-white/5">
 									<p className="text-[10px] text-white/50 uppercase font-bold">Tăng trưởng</p>
-									<p className="text-lg font-bold text-green-400 flex items-center gap-1">
-										<TrendingUp size={14} /> 12%
+									<p className={`text-lg font-bold flex items-center gap-1 ${growthPct >= 0 ? 'text-green-400' : 'text-rose-400'}`}>
+										{growthPct >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+										{growthPct}%
 									</p>
 								</div>
 							</div>
@@ -546,26 +640,37 @@ const Home = () => {
 						<div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-200 flex-1">
 							<div className="flex justify-between items-center mb-8">
 								<div>
-									<h3 className="font-black text-lg text-slate-900 dark:text-white uppercase tracking-tight">Biểu đồ tăng trưởng</h3>
-									<p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Doanh thu 7 ngày gần nhất</p>
+									<h3 className="font-black text-lg text-slate-900 dark:text-white uppercase tracking-tight">Doanh số khách hàng gần nhất</h3>
+									<p className="text-xs text-slate-500 font-bold uppercase tracking-widest">6 khách hàng lên đơn gần nhất (Đơn chốt)</p>
 								</div>
 								<div className="flex items-center gap-2">
-									<div className="size-3 rounded-full bg-[#FF6D00]"></div>
-									<span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Hôm nay</span>
+									<div className="size-3 rounded-full bg-[#1A237E]"></div>
+									<span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tổng doanh số</span>
 								</div>
 							</div>
-							<div className="h-48 w-full flex items-end justify-between gap-2 lg:gap-4 px-2">
-								{chartData.map((day, i) => (
-									<div key={i} className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-t-xl relative group" style={{ height: `${Math.max((day.value / maxRevenue) * 100, 5)}%` }}>
-										<div className={`absolute bottom-0 w-full rounded-t-xl transition-all ${day.isToday ? 'bg-[#FF6D00] shadow-lg shadow-orange-500/20' : 'bg-[#1A237E] opacity-20 group-hover:opacity-40'}`} style={{ height: '100%' }}></div>
-										<div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] py-1.5 px-2 rounded-lg opacity-0 group-hover:opacity-100 transition-all whitespace-nowrap z-10 pointer-events-none">
-											{day.label}: {formatPrice(day.value)}
+							<div className="h-64 w-full flex items-end justify-between gap-3 lg:gap-4 px-2 mb-4">
+								{customerSalesData.length > 0 ? customerSalesData.map((cust, i) => (
+									<div key={i} className="flex-1 bg-slate-50 dark:bg-slate-800/50 rounded-t-2xl relative group" style={{ height: `${Math.max((cust.value / maxCustRevenue) * 100, 10)}%` }}>
+										<div className="absolute bottom-0 w-full rounded-t-2xl transition-all bg-[#1A237E]/60 group-hover:bg-[#1A237E] dark:bg-indigo-500/40 dark:group-hover:bg-indigo-500" style={{ height: '100%' }}></div>
+										
+										{/* Label inside the bar area at the top */}
+										<div className="absolute -top-14 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 z-20 pointer-events-none">
+											<span className="bg-slate-900 text-white text-[9px] font-black px-2 py-1 rounded-md shadow-xl opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+												{formatPrice(cust.value)}
+											</span>
 										</div>
-										<div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[9px] font-black text-slate-400 uppercase truncate w-full text-center">
-											{day.label}
+
+										<div className="absolute inset-0 flex flex-col items-center justify-start p-2 pointer-events-none overflow-hidden">
+											<span className="text-[10px] font-black text-white/90 drop-shadow-md uppercase tracking-tighter [writing-mode:vertical-lr] rotate-180">
+												{cust.label.length > 15 ? cust.label.substring(0, 13) + '..' : cust.label}
+											</span>
 										</div>
 									</div>
-								))}
+								)) : (
+									<div className="w-full h-full flex items-center justify-center text-slate-400 text-xs font-bold uppercase tracking-widest">
+										Chưa có dữ liệu đơn chốt
+									</div>
+								)}
 							</div>
 						</div>
 
@@ -575,14 +680,29 @@ const Home = () => {
 								<h3 className="font-bold text-slate-900 dark:text-white">Hoạt động mới nhất</h3>
 								<button onClick={() => navigate('/admin?tab=audit')} className="text-xs font-bold text-[#1A237E] dark:text-indigo-400 flex items-center gap-1">Xem tất cả <span className="material-symbols-outlined text-xs">arrow_forward</span></button>
 							</div>
-							<div className="overflow-x-auto">
+							<div className="md:hidden space-y-3 p-4">
+								{auditLogs.length === 0 ? (
+									<div className="py-12 text-center text-slate-400 text-xs font-medium bg-slate-50 dark:bg-slate-800/50 rounded-2xl">Chưa có hoạt động nào</div>
+								) : auditLogs.slice(0, 5).map((log) => (
+									<ActivityCard
+										key={log.id}
+										icon={log.user?.[0] || 'NV'}
+										name={log.user}
+										task={maskSensitiveData(log.action, isAdmin)}
+										value={maskSensitiveData(log.details, isAdmin)}
+										time={log.createdAt ? new Date(log.createdAt.seconds * 1000).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '...'}
+									/>
+								))}
+							</div>
+
+							<div className="hidden md:block overflow-x-auto">
 								<table className="w-full text-left font-['Inter']">
 									<thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] uppercase font-black text-slate-500 dark:text-slate-500 tracking-widest">
 										<tr>
-											<th className="px-6 py-4">Nhân viên / Khách</th>
-											<th className="px-6 py-4 hidden md:table-cell">Nội dung</th>
-											<th className="px-6 py-4">Giá trị</th>
-											<th className="px-6 py-4 text-right">Thời gian</th>
+											<th className="px-5 py-3">Nhân viên / Khách</th>
+											<th className="px-5 py-3 hidden md:table-cell">Nội dung</th>
+											<th className="px-5 py-3">Giá trị</th>
+											<th className="px-5 py-3 text-right">Thời gian</th>
 										</tr>
 									</thead>
 									<tbody className="divide-y divide-slate-50 dark:divide-slate-800">
@@ -650,22 +770,46 @@ const Home = () => {
 
 const ActivityRow = ({ icon, color, name, task, value, time }: any) => (
 	<tr className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-		<td className="px-6 py-4">
+		<td className="px-5 py-2.5">
 			<div className="flex items-center gap-3">
-				<div className={`w-8 h-8 rounded-full ${color} flex items-center justify-center font-black text-[10px] shadow-sm`}>{icon}</div>
-				<span className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase tracking-tight">{name}</span>
+				<div className={`shrink-0 w-7 h-7 rounded-full ${color} flex items-center justify-center font-black text-[9px] shadow-sm`}>{icon}</div>
+				<span className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-tight line-clamp-1">{name}</span>
 			</div>
 		</td>
-		<td className="px-6 py-4 hidden md:table-cell">
-			<span className="text-sm text-slate-600 dark:text-slate-400 font-bold">{task}</span>
+		<td className="px-5 py-2.5 hidden md:table-cell max-w-xs">
+			<span className="text-[11px] text-slate-600 dark:text-slate-400 font-bold line-clamp-1">{task}</span>
 		</td>
-		<td className="px-6 py-4">
-			<span className="text-sm font-black text-slate-900 dark:text-white tracking-tight">{value}</span>
+		<td className="px-5 py-2.5">
+			<span className="text-xs font-black text-slate-900 dark:text-white tracking-tight">{value}</span>
 		</td>
-		<td className="px-6 py-4 text-right">
-			<span className="text-[10px] text-slate-500 dark:text-slate-500 font-black uppercase tracking-tighter">{time}</span>
+		<td className="px-5 py-2.5 text-right">
+			<span className="text-[9px] text-slate-500 dark:text-slate-500 font-black uppercase tracking-tighter">{time}</span>
 		</td>
 	</tr>
+);
+
+const ActivityCard = ({ icon, name, task, value, time }: any) => (
+	<div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 transition-all active:scale-[0.98]">
+		<div className="flex justify-between items-start mb-2">
+			<div className="flex items-center gap-2">
+				<div className="w-8 h-8 rounded-full bg-[#1A237E]/10 dark:bg-indigo-500/10 flex items-center justify-center font-black text-[10px] text-[#1A237E] dark:text-indigo-400 border border-[#1A237E]/10">
+					{icon}
+				</div>
+				<div>
+					<p className="text-[11px] font-black text-slate-900 dark:text-white uppercase tracking-tight">{name}</p>
+					<p className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">{time}</p>
+				</div>
+			</div>
+			<div className="px-2 py-0.5 bg-[#FF6D00]/5 rounded text-[#FF6D00] text-[9px] font-black uppercase tracking-widest border border-[#FF6D00]/10">
+				{task.length > 20 ? task.substring(0, 18) + '..' : task}
+			</div>
+		</div>
+		<div className="mt-3 pt-3 border-t border-slate-200/50 dark:border-slate-700/50">
+			<p className="text-[11px] font-bold text-slate-600 dark:text-slate-300 leading-relaxed italic line-clamp-2">
+				"{value}"
+			</p>
+		</div>
+	</div>
 );
 
 

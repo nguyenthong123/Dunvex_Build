@@ -103,12 +103,15 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Bảo toàn Bố cục Chuyên nghiệp**: Khôi phục và chuẩn hóa lại khoảng cách, vị trí các nút bấm theo đúng thiết lập gốc của người dùng sau quá trình tối ưu.
 - [x] **Nâng cấp Hệ thống Nhắc nợ Email (Enhanced Backend Reminders - Mar 12)**:
     - **Gửi Email đa điểm**: Cập nhật Google Apps Script để tự động gửi thông báo nhắc nợ đến cả Admin và Khách hàng (nếu có email), đảm bảo thông tin thông suốt.
-- [x] **Nâng cấp Sổ quỹ & Tích hợp Bot AI Tra cứu Lãi suất (Cashbook AI Upgrade - Mar 12 - Fixed Mar 13)**:
-    - **Danh mục Thu vào mới**: Bổ sung "Vay ngân hàng", "Vay khác", "Tiền dư sẵn" để quản lý dòng tiền vốn đầu vào.
-    - **Tích hợp DeepSeek AI**: Tạo con bot tra cứu lãi suất cơ sở của các ngân hàng Việt Nam (Vietcombank, BIDV...) theo kỳ hạn vay. Tự động điền dữ liệu vào sổ quỹ.
-    - **Vá lỗi Vercel (Mar 13)**: Khắc phục lỗi CSP chặn kết nối đến API DeepSeek và cải thiện logic xử lý lỗi/parsing lãi suất giúp tính năng hoạt động ổn định trên môi trường production.
-    - **Chế độ Chạy Thử (Test Bot Mode - Mar 13)**: Bổ sung cơ chế tự động chạy bot mỗi 30 giây và giả lập 1 phút = 1 tháng để người dùng kiểm chứng nhanh logic tự động tạo lãi/gốc ngân hàng.
-    - **Quản lý Vốn vay**: Thêm các trường Ngân hàng, Kỳ hạn, Lãi suất khi ghi chú các khoản vay, giúp bám sát chi phí tài chính của cơ sở kinh doanh.
+- [x] **Nâng cấp Dashboard & Tối ưu Mobile Home (Home Mobile Optimization - Mar 13)**:
+    - **Hoạt động mới nhất dạng Thẻ (Activity Card Layout)**: Chuyển đổi danh sách hoạt động trên điện thoại sang dạng thẻ (Card) trắng bo tròn, hiển thị đầy đủ: Người thực hiện, Thời gian, Loại tác vụ và Chi tiết nội dung.
+    - **Hiệu ứng Tương tác (Haptic Feel)**: Tích hợp hiệu ứng nhấn (active scale) cho các thẻ hoạt động trên Mobile, mang lại trải nghiệm ứng dụng bản địa (Native app) cao cấp.
+    - **Đồng bộ hóa Hiển thị (Cross-Platform UI)**: Tự động chuyển đổi thông minh giữa dạng Bảng (Desktop) và dạng Thẻ (Mobile) dựa trên kích thước màn hình mà không làm mất thông tin.
+    - **Tính toán Doanh số Khách hàng gần nhất**: Nâng cấp biểu đồ "Doanh số khách hàng" để hiển thị chính xác 6 khách hàng có đơn hàng chốt gần đây nhất thay vì chỉ lọc theo tổng doanh số.
+    - **Logic Sắp xếp Thời gian (Order Sorting Fix)**: Cải thiện hàm `getOrderTime` hỗ trợ xử lý chính xác các đơn hàng mới tạo (chưa có server timestamp) bằng cách lấy mốc thời gian hiện tại, đảm bảo đơn hàng mới luôn xuất hiện trên đầu danh sách.
+    - **Đồng bộ Định danh (Loan ID Sync)**: Đồng bộ việc hiển thị mã ID khoản vay thay cho nhắc nợ trên cả Desktop và Mobile để thống nhất quy trình đối soát tài chính.
+    - **Tinh chỉnh Hiệu suất Cá nhân**: Gỡ bỏ các nút dư thừa trong bảng hiệu suất để tối ưu không gian hiển thị trên màn hình nhỏ.
+- [x] **Quản lý Vốn vay**: Thêm các trường Ngân hàng, Kỳ hạn, Lãi suất khi ghi chú các khoản vay, giúp bám sát chi phí tài chính của cơ sở kinh doanh.
     - **Giao diện động**: Form ghi chú tự động thay đổi dựa trên loại thu/chi và hạng mục được chọn.
 - [x] **Tính toán Lợi nhuận FIFO & Đồng bộ Kho (FIFO Profit Calculation - Mar 12)**:
     - **Nguyên tắc FIFO (Nhập trước - Xuất trước)**: Triển khai logic quét lô sản phẩm theo SKU từ cũ đến mới (dựa trên `createdAt`) để trừ kho và tính giá vốn thực tế.

@@ -107,6 +107,7 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Danh mục Thu vào mới**: Bổ sung "Vay ngân hàng", "Vay khác", "Tiền dư sẵn" để quản lý dòng tiền vốn đầu vào.
     - **Tích hợp DeepSeek AI**: Tạo con bot tra cứu lãi suất cơ sở của các ngân hàng Việt Nam (Vietcombank, BIDV...) theo kỳ hạn vay. Tự động điền dữ liệu vào sổ quỹ.
     - **Vá lỗi Vercel (Mar 13)**: Khắc phục lỗi CSP chặn kết nối đến API DeepSeek và cải thiện logic xử lý lỗi/parsing lãi suất giúp tính năng hoạt động ổn định trên môi trường production.
+    - **Chế độ Chạy Thử (Test Bot Mode - Mar 13)**: Bổ sung cơ chế tự động chạy bot mỗi 30 giây và giả lập 1 phút = 1 tháng để người dùng kiểm chứng nhanh logic tự động tạo lãi/gốc ngân hàng.
     - **Quản lý Vốn vay**: Thêm các trường Ngân hàng, Kỳ hạn, Lãi suất khi ghi chú các khoản vay, giúp bám sát chi phí tài chính của cơ sở kinh doanh.
     - **Giao diện động**: Form ghi chú tự động thay đổi dựa trên loại thu/chi và hạng mục được chọn.
 - [x] **Tính toán Lợi nhuận FIFO & Đồng bộ Kho (FIFO Profit Calculation - Mar 12)**:

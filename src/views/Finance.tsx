@@ -198,6 +198,18 @@ const Finance = () => {
 		};
 	}, [owner.loading, owner.ownerId]);
 
+	// [TEST BOT] Tự động chạy bot mỗi 60 giây để kiểm tra
+	useEffect(() => {
+		if (loading || isFetchingRate) return;
+		
+		const testInterval = setInterval(() => {
+			console.log("Finance Bot: Auto-checking for new bank records (Test Mode)...");
+			handleAutoGenerateBankTransactions(false); // False để không hiện popup xác nhận
+		}, 30000); // 30 giây để test cho nhanh
+
+		return () => clearInterval(testInterval);
+	}, [cashLogs, loading, isFetchingRate]);
+
 	const handleAILoanAnalysis = async () => {
 		if (!logData.amount || !logData.bankName || !logData.loanTerm || !logData.interestRate) {
 			showToast("Vui lòng điền đủ Số tiền, Ngân hàng, Kỳ hạn và Lãi suất để AI phân tích", "info");
@@ -377,7 +389,7 @@ const Finance = () => {
 		}
 	};
 
-	const handleAutoGenerateBankTransactions = async () => {
+	const handleAutoGenerateBankTransactions = async (isManual = true) => {
 		const loans = cashLogs.filter(l =>
 			l.type === 'thu' &&
 			(l.category === 'Vay ngân hàng' || l.category === 'Vay khác') &&
@@ -387,11 +399,11 @@ const Finance = () => {
 		);
 
 		if (loans.length === 0) {
-			showToast("Không tìm thấy khoản vay nào có đủ thông tin (Lãi suất, Kỳ hạn) để tự động hóa", "info");
+			if (isManual) showToast("Không tìm thấy khoản vay nào có đủ thông tin (Lãi suất, Kỳ hạn) để tự động hóa", "info");
 			return;
 		}
 
-		if (!window.confirm(`Hệ thống sẽ dựa vào ${loans.length} khoản vay hiện có để tự động tạo các chứng từ chi lãi hàng tháng và nợ gốc khi đáo hạn. Bạn có chắc chắn?`)) return;
+		if (isManual && !window.confirm(`Hệ thống sẽ dựa vào ${loans.length} khoản vay hiện có để tự động tạo các chứng từ chi lãi hàng tháng và nợ gốc khi đáo hạn (Chế độ TEST: 1 PHÚT = 1 THÁNG). Bạn có chắc chắn?`)) return;
 
 		const batch = writeBatch(db);
 		let count = 0;
@@ -406,15 +418,15 @@ const Finance = () => {
 			// Lãi tháng = Gốc * (Lãi suất / 100) / 12
 			const monthlyInterest = (loan.amount * (loan.interestRate / 100)) / 12;
 
-			// Lặp qua từng tháng kể từ lúc vay đến nay
+			// Lặp qua từng tháng (trong test này dùng 1 PHÚT = 1 THÁNG)
 			for (let i = 1; i <= termMonths; i++) {
 				const transactionDate = new Date(startDate);
-				transactionDate.setMonth(transactionDate.getMonth() + i);
+				transactionDate.setMinutes(transactionDate.getMinutes() + i); // ĐỔI SANG PHÚT ĐỂ TEST
 
-				// Nếu ngày thanh toán dư kiến vượt quá hôm nay thì dừng
+				// Nếu thời điểm mô phỏng vượt quá hiện tại thì dừng
 				if (transactionDate > today) break;
 
-				const dateStr = transactionDate.toISOString().split('T')[0];
+				const dateStr = transactionDate.toLocaleTimeString('vi-VN') + " " + transactionDate.toLocaleDateString('vi-VN');
 
 				// Kiểm tra trùng lặp dựa trên note và date hoặc parentId
 				const isDuplicateInterest = cashLogs.some(l =>
@@ -820,7 +832,7 @@ const Finance = () => {
 										Nhắc nợ
 									</button>
 									<button
-										onClick={handleAutoGenerateBankTransactions}
+										onClick={() => handleAutoGenerateBankTransactions(true)}
 										className="bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-all active:scale-95 text-xs uppercase tracking-tight border border-indigo-100 dark:border-indigo-800"
 										title="Tự động tạo chứng từ lãi và gốc dựa trên các khoản vay hiện có"
 									>

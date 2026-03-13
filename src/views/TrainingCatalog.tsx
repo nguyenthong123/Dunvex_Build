@@ -407,14 +407,16 @@ const TrainingCatalog = () => {
 
 							<div className="flex items-center justify-between mb-8">
 								<h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-[4px]">Danh sách bài thi</h3>
-								<button
-									onClick={handleGenerateAITraining}
-									disabled={generatingAI}
-									className="flex items-center gap-2 bg-slate-900 dark:bg-indigo-600 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-indigo-500/20 disabled:opacity-50"
-								>
-									{generatingAI ? <RefreshCcw className="animate-spin" size={16} /> : <BrainCircuit size={16} />} 
-									Tạo bài thi AI mới
-								</button>
+								{auth.currentUser?.email === 'dunvex.green@gmail.com' && (
+									<button
+										onClick={handleGenerateAITraining}
+										disabled={generatingAI}
+										className="flex items-center gap-2 bg-slate-900 dark:bg-indigo-600 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-indigo-500/20 disabled:opacity-50"
+									>
+										{generatingAI ? <RefreshCcw className="animate-spin" size={16} /> : <BrainCircuit size={16} />} 
+										Tạo bài thi AI mới
+									</button>
+								)}
 							</div>
 
 							{/* Labs List */}
@@ -459,7 +461,7 @@ const TrainingCatalog = () => {
 												<div className="size-8 rounded-full border-2 border-white dark:border-slate-900 bg-indigo-600 text-[9px] font-black text-white flex items-center justify-center shadow-sm z-10">+12</div>
 											</div>
 											<div className="flex items-center gap-3">
-												{lab.isAI && (
+												{lab.isAI && auth.currentUser?.email === 'dunvex.green@gmail.com' && (
 													<button 
 														onClick={(e) => handleDeleteLab(lab.id, e)}
 														className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-all"

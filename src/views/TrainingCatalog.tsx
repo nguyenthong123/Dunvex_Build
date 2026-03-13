@@ -266,33 +266,31 @@ const TrainingCatalog = () => {
 		showToast("Nexus AI đang biên soạn giáo án...", "info");
 
 		try {
-			const response = await fetch('https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec', {
+			const gasUrl = 'https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec';
+			
+			const response = await fetch(gasUrl, {
 				method: 'POST',
-				mode: 'no-cors',
-				headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+				mode: 'cors',
+				headers: {
+					'Content-Type': 'text/plain;charset=utf-8',
+				},
 				body: JSON.stringify({ action: 'ai_generate_training', topic })
 			});
 
-			// Since no-cors, we can't read response directly easily in current setup without proxy or proper CORS
-			// But the user's GAS script handles it. For now, I'll use a polling or the standard ai_chat if needed.
-			// Re-evaluating: standard fetch for GAS results in opaque response with no-cors.
-			// I'll assume standard fetch with JSON response if the user has correct CORS.
-			// If not, I'll use the existing handleAIChat style.
-
-			const res = await (await fetch('https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec', {
-				method: 'POST',
-				body: JSON.stringify({ action: 'ai_generate_training', topic })
-			})).json();
+			const res = await response.json();
 
 			if (res.status === 'success') {
-				const labData = JSON.parse(res.data);
+				const labData = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
 				await addDoc(collection(db, 'training_labs'), {
 					...labData,
+					isAI: true,
 					ownerId: owner.ownerId,
 					createdAt: serverTimestamp(),
 					createdBy: auth.currentUser?.email
 				});
 				showToast("Đã tạo bài học AI mới thành công!", "success");
+			} else {
+				showToast(res.message || "Lỗi khi tạo bài học AI.", "error");
 			}
 		} catch (err) {
 			console.error(err);

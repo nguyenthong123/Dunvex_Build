@@ -302,7 +302,16 @@ function handlePaymentRequest(data) {
 }
 
 function doGet(e) {
-  return ContentService.createTextOutput("Service is running");
+  var action = e.parameter.action;
+  if (!action) return ContentService.createTextOutput("Service is running");
+  
+  var result;
+  if (action === 'ai_generate_training') {
+    result = handleGenerateTraining(e.parameter);
+  } else {
+    return ContentService.createTextOutput("Action not supported in GET");
+  }
+  return result;
 }
 
 function handleSyncToSheet(data) {
@@ -534,15 +543,24 @@ function handleGenerateTraining(data) {
     "}. " +
     "Lưu ý: Chỉ trả về chuỗi JSON thô, không kèm markdown hay text giải thích. Hãy tạo ít nhất 3 nhiệm vụ trắc nghiệm.";
 
-  var response = callNexusAI(prompt);
-  
-  // Clean response if AI adds markdown backticks
-  var jsonString = response.replace(/```json/g, "").replace(/```/g, "").trim();
+  try {
+    var response = callNexusAI(prompt);
+    // Clean response if AI adds markdown backticks
+    var jsonString = response.replace(/```json/g, "").replace(/```/g, "").trim();
+    
+    // Validate JSON
+    JSON.parse(jsonString);
 
-  return ContentService.createTextOutput(JSON.stringify({
-    status: "success",
-    data: jsonString
-  })).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "success",
+      data: jsonString
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "error",
+      message: "AI không tạo được cấu trúc JSON hợp lệ: " + err.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
 }
 
 function handleAIChat(data) {

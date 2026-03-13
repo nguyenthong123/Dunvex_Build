@@ -108,15 +108,14 @@ const TrainingCatalog = () => {
 	}, []);
 
 	useEffect(() => {
-		if (!auth.currentUser?.uid) return;
-		const q = query(collection(db, 'hidden_labs'), where('userId', '==', auth.currentUser?.uid));
+		const q = query(collection(db, 'hidden_labs'));
 		const unsubscribe = onSnapshot(q, (snapshot) => {
 			const hidden: string[] = [];
 			snapshot.forEach(doc => hidden.push(doc.data().labId));
 			setHiddenLabs(hidden);
 		});
 		return () => unsubscribe();
-	}, [auth.currentUser?.uid]);
+	}, []);
 
 	useEffect(() => {
 		const q = query(collection(db, 'tutorial_videos'), orderBy('createdAt', 'desc'));
@@ -266,15 +265,11 @@ const TrainingCatalog = () => {
 		showToast("Nexus AI đang biên soạn giáo án...", "info");
 
 		try {
-			const gasUrl = 'https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec';
+			const gasUrl = `https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec?action=ai_generate_training&topic=${encodeURIComponent(topic)}`;
 			
 			const response = await fetch(gasUrl, {
-				method: 'POST',
-				mode: 'cors',
-				headers: {
-					'Content-Type': 'text/plain;charset=utf-8',
-				},
-				body: JSON.stringify({ action: 'ai_generate_training', topic })
+				method: 'GET',
+				mode: 'cors'
 			});
 
 			const res = await response.json();
@@ -302,19 +297,34 @@ const TrainingCatalog = () => {
 
 	const handleDeleteLab = async (id: string, e: React.MouseEvent, isAI: boolean) => {
 		e.stopPropagation();
-		if (!window.confirm("Bạn có chắc chắn muốn xóa/ẩn bài học này?")) return;
+		const isHidden = hiddenLabs.includes(id);
+		const confirmMsg = isAI 
+			? "Bạn có chắc chắn muốn xóa vĩnh viễn bài học này?" 
+			: (isHidden ? "Bạn muốn hiện lại bài học này?" : "Bạn muốn ẩn bài học này với tất cả người dùng?");
+		
+		if (!window.confirm(confirmMsg)) return;
+		
 		try {
 			if (isAI) {
 				await deleteDoc(doc(db, 'training_labs', id));
 				showToast("Đã xóa bài học AI", "success");
 			} else {
-				// For system labs, we mark them as hidden for this user
-				await addDoc(collection(db, 'hidden_labs'), {
-					labId: id,
-					userId: auth.currentUser?.uid,
-					createdAt: serverTimestamp()
-				});
-				showToast("Đã ẩn bài học hệ thống", "success");
+				if (isHidden) {
+					// Unhide: find and delete the doc in hidden_labs
+					const q = query(collection(db, 'hidden_labs'), where('labId', '==', id));
+					const unsubscribe = onSnapshot(q, (snapshot) => {
+						snapshot.forEach(d => deleteDoc(d.ref));
+						unsubscribe();
+					});
+					showToast("Đã hiện lại bài học", "success");
+				} else {
+					// Hide
+					await addDoc(collection(db, 'hidden_labs'), {
+						labId: id,
+						createdAt: serverTimestamp()
+					});
+					showToast("Đã ẩn bài học", "success");
+				}
 			}
 		} catch (error) {
 			console.error("Error deleting/hiding lab:", error);
@@ -443,11 +453,13 @@ const TrainingCatalog = () => {
 							{/* Labs List */}
 							<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
 								{[...labs, ...customLabs]
-									.filter(lab => !hiddenLabs.includes(lab.id))
-									.map((lab) => (
+									.filter(lab => isAdmin || !hiddenLabs.includes(lab.id))
+									.map((lab) => {
+										const isHidden = hiddenLabs.includes(lab.id);
+										return (
 									<div
 										key={lab.id}
-										className="group relative bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 p-8 hover:shadow-2xl hover:border-indigo-500/30 transition-all duration-500 cursor-pointer flex flex-col"
+										className={`group relative bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 p-8 hover:shadow-2xl hover:border-indigo-500/30 transition-all duration-500 cursor-pointer flex flex-col ${isHidden ? 'opacity-50 grayscale' : ''}`}
 										onClick={() => navigate(`/khoa-dao-tao/${lab.id}`)}
 									>
 										{/* Admin Action: Delete/Hide */}
@@ -501,7 +513,7 @@ const TrainingCatalog = () => {
 											</div>
 										</div>
 									</div>
-								))}
+								); })}
 							</div>
 						</>
 					) : (

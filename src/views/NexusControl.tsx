@@ -19,7 +19,11 @@ import {
 	Lock,
 	Unlock,
 	Crown,
-	Calendar
+	Calendar,
+	Bot,
+	Zap,
+	AlertTriangle,
+	Eye
 } from 'lucide-react';
 import { useToast } from '../components/shared/Toast';
 import { auth, db } from '../services/firebase';
@@ -54,11 +58,14 @@ const NexusControl = () => {
 	const [requests, setRequests] = useState<any[]>([]);
 	const [customers, setCustomers] = useState<any[]>([]);
 	const [logs, setLogs] = useState<any[]>([]);
+	const [aiAnomalies, setAiAnomalies] = useState<any[]>([]);
+	const [isAiActive, setIsAiActive] = useState(true);
 	const [systemConfig, setSystemConfig] = useState<any>({
 		lock_free_orders: false,
 		lock_free_debts: false,
 		lock_free_sheets: false,
-		maintenance_mode: false
+		maintenance_mode: false,
+		ai_auto_lock: true
 	});
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -128,7 +135,46 @@ const NexusControl = () => {
 		// 4. Listen to Audit Logs (System-wide)
 		const qLogs = query(collection(db, 'audit_logs'), orderBy('createdAt', 'desc'), limit(100));
 		const unsubLogs = onSnapshot(qLogs, (snap) => {
-			setLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+			const newLogs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+			setLogs(newLogs);
+
+			// AI ANOMALY DETECTION (Pocket Click Logic)
+			if (isAiActive) {
+				const userActionCounts: Record<string, any[]> = {};
+				const now = Date.now();
+
+				newLogs.forEach((log: any) => {
+					const time = log.createdAt?.toMillis ? log.createdAt.toMillis() : 0;
+					if (now - time < 60000) { // Only check last 60 seconds
+						if (!userActionCounts[log.ownerId]) userActionCounts[log.ownerId] = [];
+						userActionCounts[log.ownerId].push(log);
+					}
+				});
+
+				const anomalies: any[] = [];
+				Object.entries(userActionCounts).forEach(([ownerId, actions]) => {
+					if (actions.length >= 5) { // Threshold: 5 actions in 1 minute
+						// Check frequency
+						const times = actions.map(a => a.createdAt?.toMillis ? a.createdAt.toMillis() : 0).sort();
+						const span = times[times.length - 1] - times[0];
+						if (span < 15000) { // 5 actions in 15 seconds = Suspicious
+							anomalies.push({
+								ownerId,
+								email: actions[0].user,
+								severity: 'high',
+								reason: 'POCKET_CLICK_DETECTED',
+								details: `Phát hiện ${actions.length} thao tác trong ${Math.round(span / 1000)}s - Có thể do cấn máy.`
+							});
+
+							// AUTO LOCK if enabled
+							if (systemConfig.ai_auto_lock) {
+								executeAiAutoLock(ownerId, actions[0].user);
+							}
+						}
+					}
+				});
+				setAiAnomalies(anomalies);
+			}
 		});
 
 		return () => {
@@ -136,7 +182,144 @@ const NexusControl = () => {
 			unsubUsers();
 			unsubLogs();
 		};
-	}, [navigate]);
+	}, [navigate, isAiActive, systemConfig.ai_auto_lock]);
+
+	const executeAiAutoLock = async (ownerId: string, email: string) => {
+		try {
+			// Only lock if not already locked
+			const settingsRef = doc(db, 'settings', ownerId);
+			const snap = await getDoc(settingsRef);
+			const data = snap.data() || {};
+
+			if (!data.manualLockOrders || !data.manualLockDebts) {
+				await updateDoc(settingsRef, {
+					manualLockOrders: true,
+					manualLockDebts: true,
+					aiLockedAt: serverTimestamp(),
+					aiLockReason: 'POCKET_CLICK_PREVENTION'
+				});
+
+				// Notify User via Bell
+				await addDoc(collection(db, 'notifications'), {
+					userId: ownerId,
+					title: '⚠️ CẢNH BÁO BẢO MẬT (NEXUS AI)',
+					body: 'Hệ thống phát hiện thao tác nhanh bất thường (có thể do cấn phím). Chúng tôi đã tạm thời khóa các chức năng chính để bảo vệ dữ liệu. Vui lòng liên hệ Admin để mở lại.',
+					type: 'alert',
+					priority: 'high',
+					read: false,
+					createdAt: serverTimestamp()
+				});
+
+				// Log AI Action
+				await addDoc(collection(db, 'ai_actions'), {
+					type: 'security_lock',
+					targetEmail: email,
+					targetId: ownerId,
+					details: 'Tự động khóa do phát hiện Pocket Click (thao tác nhanh bất thường)',
+					timestamp: serverTimestamp()
+				});
+
+				showToast(`AI đã tự động khóa tài khoản ${email} do nghi ngờ cấn máy!`, "warning");
+			}
+		} catch (e) {
+			console.error("AI Auto Lock Error:", e);
+		}
+	};
+
+	// --- AUTONOMOUS AI MANAGER LOGIC ---
+	const [aiActions, setAiActions] = useState<any[]>([]);
+
+	useEffect(() => {
+		const qActions = query(collection(db, 'ai_actions'), orderBy('timestamp', 'desc'), limit(20));
+		return onSnapshot(qActions, (snap) => {
+			setAiActions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+		});
+	}, []);
+
+	const runAutonomousCycle = async () => {
+		if (!isAiActive || customers.length === 0) return;
+
+		console.log("Nexus AI: Starting autonomous management cycle...");
+		
+		for (const customer of customers) {
+			// CRITICAL: NEVER process the Super Admin account
+			if (customer.email === NEXUS_ADMIN_EMAIL) continue;
+
+			const status = getEffectiveStatus(customer);
+			
+			// 1. AUTO-PROVISIONING FOR NEW USERS (ADMINS/OWNERS)
+			// A user is an "Admin/Owner" if uid matches ownerId (it's how we filtered them in useEffect)
+			// Staff/Employees are NOT in this list, so they are never processed individually.
+			const isNewOwner = !customer.planId && (!customer.paymentConfirmedAt || (customer.createdAt?.toDate && (Date.now() - customer.createdAt.toDate().getTime()) < 86400000));
+			
+			if (isNewOwner && !customer.isAiProcessed) {
+				try {
+					const expireDate = new Date();
+					expireDate.setDate(expireDate.getDate() + 60); // 60 days trial
+
+					await setDoc(doc(db, 'settings', customer.uid), {
+						planId: 'free',
+						isPro: false,
+						subscriptionStatus: 'trial',
+						paymentConfirmedAt: serverTimestamp(),
+						subscriptionExpiresAt: expireDate,
+						isAiProcessed: true // Mark so we don't repeat
+					}, { merge: true });
+
+					await addDoc(collection(db, 'ai_actions'), {
+						type: 'provisioning',
+						targetEmail: customer.email,
+						targetId: customer.uid,
+						details: 'Tự động kích hoạt gói dùng thử (FREE 60 ngày) cho người dùng mới.',
+						timestamp: serverTimestamp()
+					});
+					console.log(`Nexus AI: Auto-provisioned trial for ${customer.email}`);
+				} catch (e) { console.error("Auto Provision Error:", e); }
+			}
+
+			// 2. AUTO-ENFORCEMENT FOR EXPIRED USERS
+			// If expired and features are NOT already manually locked
+			if (status.isExpired && (!customer.manualLockOrders || !customer.manualLockDebts || !customer.manualLockSheets)) {
+				// Search if they have a pending payment request
+				const hasPendingRequest = requests.some(r => r.ownerId === customer.uid && r.status === 'pending');
+				
+				if (!hasPendingRequest) {
+					try {
+						await setDoc(doc(db, 'settings', customer.uid), {
+							manualLockOrders: true,
+							manualLockDebts: true,
+							manualLockSheets: true
+						}, { merge: true });
+
+						await addDoc(collection(db, 'ai_actions'), {
+							type: 'enforcement',
+							targetEmail: customer.email,
+							targetId: customer.uid,
+							details: 'Tự động ngắt tất cả tính năng do hết hạn khuyến mãi và không phát hiện giao dịch mới.',
+							timestamp: serverTimestamp()
+						});
+
+						await addDoc(collection(db, 'notifications'), {
+							userId: customer.uid,
+							title: '🔒 TỰ ĐỘNG KHÓA TÍNH NĂNG (HẾT HẠN)',
+							body: 'Gói dịch vụ của bạn đã hết hạn. Hệ thống AI đã tự động khóa các tính năng Đơn hàng, Công nợ và Sheet để bảo vệ dữ liệu. Vui lòng thanh toán để tiếp tục sử dụng.',
+							type: 'lock',
+							priority: 'high',
+							read: false,
+							createdAt: serverTimestamp()
+						});
+						console.log(`Nexus AI: Auto-locked expired account ${customer.email}`);
+					} catch (e) { console.error("Auto Enforcement Error:", e); }
+				}
+			}
+		}
+	};
+
+	// Run cycle when customers change or AI is toggled
+	useEffect(() => {
+		const timeout = setTimeout(runAutonomousCycle, 5000); // Wait 5s for data to settle
+		return () => clearTimeout(timeout);
+	}, [customers.length, isAiActive]);
 
 	const handleUpdatePlan = async (ownerId: string, newPlan: string) => {
 		if (!window.confirm(`Xác nhận đổi gói sang ${newPlan === 'free' ? 'FREE' : newPlan === 'premium_monthly' ? '1 tháng' : '1 năm'}? Ngày hiệu lực sẽ được đặt về hôm nay.`)) return;
@@ -219,8 +402,23 @@ const NexusControl = () => {
 				isPro: true,
 				planId: request.planId,
 				paymentConfirmedAt: serverTimestamp(),
-				subscriptionExpiresAt: expireDate
+				subscriptionExpiresAt: expireDate,
+				// Auto-unlock features upon approval
+				manualLockOrders: false,
+				manualLockDebts: false,
+				manualLockSheets: false
 			}, { merge: true });
+
+			// Notify User via AI
+			await addDoc(collection(db, 'notifications'), {
+				userId: request.ownerId,
+				title: '✨ GIA HẠN THÀNH CÔNG',
+				body: `Nexus AI đã nhận được xác nhận thanh toán. Gói ${request.planName || request.planId} đã được kích hoạt. Tất cả tính năng đã được mở khóa.`,
+				type: 'success',
+				priority: 'high',
+				read: false,
+				createdAt: serverTimestamp()
+			});
 
 			showToast("Đã duyệt thanh toán và kích hoạt tài khoản!", "success");
 		} catch (error) {
@@ -245,8 +443,23 @@ const NexusControl = () => {
 				subscriptionStatus: 'expired',
 				isPro: false,
 				revokedAt: serverTimestamp(),
-				revokeReason: reason
+				revokeReason: reason,
+				// Re-lock features
+				manualLockOrders: true,
+				manualLockDebts: true,
+				manualLockSheets: true
 			}, { merge: true });
+
+			// Notify User
+			await addDoc(collection(db, 'notifications'), {
+				userId: request.ownerId,
+				title: '❌ GIAO DỊCH BỊ TỪ CHỐI',
+				body: `Yêu cầu gia hạn của bạn đã bị từ chối. Lý do: ${reason}. Hệ thống sẽ duy trì trạng thái khóa nếu tài khoản đã hết hạn.`,
+				type: 'error',
+				priority: 'high',
+				read: false,
+				createdAt: serverTimestamp()
+			});
 
 			showToast("Đã từ chối/thu hồi yêu cầu.", "info");
 		} catch (error) {
@@ -343,6 +556,7 @@ const NexusControl = () => {
 					<SidebarItem icon={<Activity size={20} />} label="Hệ thống" active={activeTab === 'requests'} onClick={() => { setActiveTab('requests'); setIsMobileMenuOpen(false); }} badge={stats.pendingPayments} />
 					<SidebarItem icon={<Users size={20} />} label="Khách hàng" active={activeTab === 'customers'} onClick={() => { setActiveTab('customers'); setIsMobileMenuOpen(false); }} />
 					<SidebarItem icon={<Settings size={20} />} label="Lịch sử Log" active={activeTab === 'config'} onClick={() => { setActiveTab('config'); setIsMobileMenuOpen(false); }} />
+					<SidebarItem icon={<Bot size={20} />} label="Nexus AI Manager" active={activeTab === 'ai'} onClick={() => { setActiveTab('ai'); setIsMobileMenuOpen(false); }} />
 				</nav>
 
 				<div className="mt-auto p-4 bg-slate-800/50 rounded-2xl border border-slate-700/50">
@@ -366,7 +580,7 @@ const NexusControl = () => {
 				<header className="h-16 lg:h-20 border-b border-slate-800 flex items-center justify-between px-6 lg:px-10 bg-slate-950/50 backdrop-blur-xl sticky top-16 lg:top-0 z-40">
 					<div>
 						<h3 className="text-lg lg:text-2xl font-black text-white uppercase tracking-tight">
-							{activeTab === 'requests' ? 'Yêu cầu' : activeTab === 'customers' ? 'Doanh nghiệp' : 'Nhật ký Hệ thống'}
+							{activeTab === 'requests' ? 'Yêu cầu' : activeTab === 'customers' ? 'Doanh nghiệp' : activeTab === 'config' ? 'Nhật ký Hệ thống' : 'Nexus AI Intelligence'}
 						</h3>
 					</div>
 				</header>
@@ -382,221 +596,588 @@ const NexusControl = () => {
 
 					{activeTab === 'requests' && (
 						<div className="space-y-6">
-							<div className="bg-slate-900 rounded-3xl lg:rounded-[2rem] border border-slate-800 overflow-x-auto shadow-2xl">
-								<table className="w-full text-left min-w-[800px]">
-									<thead>
-										<tr className="bg-slate-800/50 text-[10px] font-black uppercase tracking-widest text-slate-500">
-											<th className="px-8 py-5">Khách hàng</th>
-											<th className="px-8 py-5">Gói đăng ký</th>
-											<th className="px-8 py-5">Ngày gửi</th>
-											<th className="px-8 py-5">Coupon</th>
-											<th className="px-8 py-5">Nội dung chuyển</th>
-											<th className="px-8 py-5">Số tiền</th>
-											<th className="px-8 py-5 text-right">Hành động</th>
-										</tr>
-									</thead>
-									<tbody className="divide-y divide-slate-800">
-										{requests.map((req) => (
-											<tr key={req.id} className="hover:bg-slate-800/30 transition-colors group text-xs">
-												<td className="px-8 py-6">
-													<div className="flex items-center gap-3">
-														<div className="size-10 rounded-xl bg-slate-800 flex items-center justify-center font-black text-slate-400">
-															{req.userEmail?.[0].toUpperCase()}
-														</div>
-														<div className="max-w-[150px] truncate">
-															<p className="font-bold text-white truncate">{req.userEmail}</p>
-															<p className="text-[10px] text-slate-500 font-black uppercase tracking-widest leading-tight">{req.ownerId?.slice(-8)}</p>
-														</div>
-													</div>
-												</td>
-												<td className="px-8 py-6">
-													<span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase ${req.planId === 'premium_yearly' ? 'bg-amber-500/10 text-amber-500' : 'bg-indigo-500/10 text-indigo-500'}`}>
-														{req.planName}
-													</span>
-												</td>
-												<td className="px-8 py-6 text-slate-400 font-medium">
-													{req.createdAt?.toDate ? req.createdAt.toDate().toLocaleString('vi-VN', {
-														hour: '2-digit',
-														minute: '2-digit',
-														day: '2-digit',
-														month: '2-digit'
-													}) : '---'}
-												</td>
-												<td className="px-8 py-6 font-black text-rose-500 uppercase tracking-widest">
-													{req.appliedCode || '---'}
-												</td>
-												<td className="px-8 py-6 text-indigo-400 font-black tracking-widest">{req.transferCode || '---'}</td>
-												<td className="px-8 py-6 font-black text-white">{req.amount.toLocaleString()}đ</td>
-												<td className="px-8 py-6 text-right">
-													<div className="flex justify-end gap-2">
-														<button
-															onClick={() => handleApprovePayment(req)}
-															className={`size-10 rounded-xl flex items-center justify-center transition-all ${req.status === 'approved' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white'}`}
-														>
-															<CheckCircle2 size={18} />
-														</button>
-														<button
-															onClick={() => handleRejectPayment(req)}
-															className={`size-10 rounded-xl flex items-center justify-center transition-all ${req.status === 'rejected' ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white'}`}
-														>
-															<XCircle size={18} />
-														</button>
-													</div>
-												</td>
+							<div className="bg-slate-900 rounded-3xl lg:rounded-[2rem] border border-slate-800 overflow-hidden shadow-2xl">
+								{/* Desktop Table */}
+								<div className="hidden md:block overflow-x-auto">
+									<table className="w-full text-left min-w-[800px]">
+										<thead>
+											<tr className="bg-slate-800/50 text-[10px] font-black uppercase tracking-widest text-slate-500">
+												<th className="px-8 py-5">Khách hàng</th>
+												<th className="px-8 py-5">Gói đăng ký</th>
+												<th className="px-8 py-5">Ngày gửi</th>
+												<th className="px-8 py-5">Coupon</th>
+												<th className="px-8 py-5">Nội dung chuyển</th>
+												<th className="px-8 py-5">Số tiền</th>
+												<th className="px-8 py-5 text-right">Hành động</th>
 											</tr>
-										))}
-									</tbody>
-								</table>
+										</thead>
+										<tbody className="divide-y divide-slate-800">
+											{requests.map((req) => (
+												<tr key={req.id} className="hover:bg-slate-800/30 transition-colors group text-xs">
+													<td className="px-8 py-6">
+														<div className="flex items-center gap-3">
+															<div className="size-10 rounded-xl bg-slate-800 flex items-center justify-center font-black text-slate-400">
+																{req.userEmail?.[0].toUpperCase()}
+															</div>
+															<div className="max-w-[150px] truncate">
+																<p className="font-bold text-white truncate">{req.userEmail}</p>
+																<p className="text-[10px] text-slate-500 font-black uppercase tracking-widest leading-tight">{req.ownerId?.slice(-8)}</p>
+															</div>
+														</div>
+													</td>
+													<td className="px-8 py-6">
+														<span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase ${req.planId === 'premium_yearly' ? 'bg-amber-500/10 text-amber-500' : 'bg-indigo-500/10 text-indigo-500'}`}>
+															{req.planName}
+														</span>
+													</td>
+													<td className="px-8 py-6 text-slate-400 font-medium">
+														{req.createdAt?.toDate ? req.createdAt.toDate().toLocaleString('vi-VN', {
+															hour: '2-digit',
+															minute: '2-digit',
+															day: '2-digit',
+															month: '2-digit'
+														}) : '---'}
+													</td>
+													<td className="px-8 py-6 font-black text-rose-500 uppercase tracking-widest">
+														{req.appliedCode || '---'}
+													</td>
+													<td className="px-8 py-6 text-indigo-400 font-black tracking-widest">{req.transferCode || '---'}</td>
+													<td className="px-8 py-6 font-black text-white">{req.amount.toLocaleString()}đ</td>
+													<td className="px-8 py-6 text-right">
+														<div className="flex justify-end gap-2">
+															<button
+																onClick={() => handleApprovePayment(req)}
+																className={`size-10 rounded-xl flex items-center justify-center transition-all ${req.status === 'approved' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white'}`}
+															>
+																<CheckCircle2 size={18} />
+															</button>
+															<button
+																onClick={() => handleRejectPayment(req)}
+																className={`size-10 rounded-xl flex items-center justify-center transition-all ${req.status === 'rejected' ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white'}`}
+															>
+																<XCircle size={18} />
+															</button>
+														</div>
+													</td>
+												</tr>
+											))}
+										</tbody>
+									</table>
+								</div>
+
+								{/* Mobile Cards */}
+								<div className="md:hidden divide-y divide-slate-800">
+									{requests.map((req) => (
+										<div key={req.id} className="p-6 space-y-4">
+											<div className="flex items-center justify-between">
+												<div className="flex items-center gap-3">
+													<div className="size-10 rounded-xl bg-slate-800 flex items-center justify-center font-black text-slate-400">
+														{req.userEmail?.[0].toUpperCase()}
+													</div>
+													<div>
+														<p className="font-bold text-white text-sm">{req.userEmail}</p>
+														<p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">{req.ownerId?.slice(-8)}</p>
+													</div>
+												</div>
+												<span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase ${req.planId === 'premium_yearly' ? 'bg-amber-500/10 text-amber-500' : 'bg-indigo-500/10 text-indigo-500'}`}>
+													{req.planName}
+												</span>
+											</div>
+											<div className="grid grid-cols-2 gap-4 text-[10px] items-center">
+												<div>
+													<p className="text-slate-500 font-black uppercase tracking-widest mb-1">Số tiền</p>
+													<p className="text-white font-black text-base">{req.amount.toLocaleString()}đ</p>
+												</div>
+												<div>
+													<p className="text-slate-500 font-black uppercase tracking-widest mb-1">Mã CK</p>
+													<p className="text-indigo-400 font-black tracking-widest uppercase">{req.transferCode || '---'}</p>
+												</div>
+											</div>
+											<div className="flex items-center justify-between pt-2">
+												<div className="text-[9px] text-slate-500 font-medium">
+													{req.createdAt?.toDate ? req.createdAt.toDate().toLocaleString('vi-VN') : '---'}
+												</div>
+												<div className="flex gap-2">
+													<button
+														onClick={() => handleApprovePayment(req)}
+														className="bg-emerald-500/10 text-emerald-500 px-4 py-2 rounded-lg font-black text-[9px] uppercase tracking-widest flex items-center gap-2"
+													>
+														<CheckCircle2 size={14} /> Duyệt
+													</button>
+													<button
+														onClick={() => handleRejectPayment(req)}
+														className="bg-rose-500/10 text-rose-500 px-4 py-2 rounded-lg font-black text-[9px] uppercase tracking-widest flex items-center gap-2"
+													>
+														<XCircle size={14} /> Loại
+													</button>
+												</div>
+											</div>
+										</div>
+									))}
+									{requests.length === 0 && (
+										<div className="py-20 text-center text-slate-600 font-black uppercase tracking-widest text-xs opacity-40">
+											Không có yêu cầu nào
+										</div>
+									)}
+								</div>
 							</div>
 						</div>
 					)}
 
 					{activeTab === 'config' && (
 						<div className="space-y-6">
-							<div className="bg-slate-900 rounded-3xl lg:rounded-[2rem] border border-slate-800 overflow-x-auto shadow-2xl">
-								<div className="px-8 py-6 border-b border-slate-800 flex justify-between items-center">
+							<div className="bg-slate-900 rounded-3xl lg:rounded-[2rem] border border-slate-800 overflow-hidden shadow-2xl">
+								<div className="px-6 lg:px-8 py-6 border-b border-slate-800 flex justify-between items-center bg-slate-800/20">
 									<div>
-										<h4 className="text-xs font-black text-slate-400 uppercase tracking-[4px] mb-1">System Audit Logs</h4>
-										<p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Theo dõi hoạt động của người dùng toàn hệ thống</p>
+										<h4 className="text-[10px] lg:text-xs font-black text-indigo-400 uppercase tracking-[4px] mb-1">System Audit Logs</h4>
+										<p className="text-[9px] lg:text-[10px] text-slate-500 font-bold uppercase tracking-wider">Theo dõi hoạt động toàn hệ thống</p>
 									</div>
 									<div className="size-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400">
 										<Activity size={20} />
 									</div>
 								</div>
-								<table className="w-full text-left min-w-[800px]">
-									<thead>
-										<tr className="bg-slate-800/50 text-[10px] font-black uppercase tracking-widest text-slate-500">
-											<th className="px-8 py-5">Thời gian</th>
-											<th className="px-8 py-5">Người dùng</th>
-											<th className="px-8 py-5">Hành động</th>
-											<th className="px-8 py-5">Chi tiết</th>
-										</tr>
-									</thead>
-									<tbody className="divide-y divide-slate-800">
-										{logs.map((log) => (
-											<tr key={log.id} className="hover:bg-slate-800/30 transition-colors group text-xs">
-												<td className="px-8 py-6 text-slate-400 font-medium whitespace-nowrap">
-													{log.createdAt?.toDate ? log.createdAt.toDate().toLocaleString('vi-VN', {
-														hour: '2-digit',
-														minute: '2-digit',
-														day: '2-digit',
-														month: '2-digit',
-														year: '2-digit'
-													}) : '---'}
-												</td>
-												<td className="px-8 py-6">
-													<div className="flex items-center gap-3">
-														<div className="size-8 rounded-lg bg-slate-800 flex items-center justify-center font-black text-slate-500 text-[10px]">
-															{log.user?.[0].toUpperCase() || 'U'}
-														</div>
-														<div className="max-w-[200px] truncate">
-															<p className="font-bold text-white truncate">{log.user || 'Hệ thống'}</p>
-															<p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">{log.ownerId?.slice(-8) || 'GLOBAL'}</p>
-														</div>
-													</div>
-												</td>
-												<td className="px-8 py-6">
-													<span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase bg-slate-800 text-indigo-400 border border-slate-700/50`}>
-														{log.action}
-													</span>
-												</td>
-												<td className="px-8 py-6 text-slate-300 font-medium leading-relaxed max-w-md">
-													{log.details}
-												</td>
+
+								{/* Desktop Table */}
+								<div className="hidden md:block overflow-x-auto">
+									<table className="w-full text-left min-w-[800px]" data-chatbot="audit-logs-table">
+										<thead>
+											<tr className="bg-slate-800/50 text-[10px] font-black uppercase tracking-widest text-slate-500">
+												<th className="px-8 py-5">Thời gian</th>
+												<th className="px-8 py-5">Người dùng</th>
+												<th className="px-8 py-5">Trang</th>
+												<th className="px-8 py-5">Hành động</th>
+												<th className="px-8 py-5">Chi tiết</th>
 											</tr>
-										))}
-										{logs.length === 0 && (
-											<tr>
-												<td colSpan={4} className="px-8 py-20 text-center text-slate-500 font-bold uppercase tracking-widest opacity-30">
-													Không có dữ liệu nhật ký
-												</td>
-											</tr>
-										)}
-									</tbody>
-								</table>
+										</thead>
+										<tbody className="divide-y divide-slate-800">
+											{logs.map((log) => (
+												<tr key={log.id} className="hover:bg-slate-800/30 transition-colors group text-xs" data-chatbot-row={log.id}>
+													<td className="px-8 py-6 text-slate-400 font-medium whitespace-nowrap" data-chatbot-cell="time">
+														{log.createdAt?.toDate ? log.createdAt.toDate().toLocaleString('vi-VN', {
+															hour: '2-digit',
+															minute: '2-digit',
+															day: '2-digit',
+															month: '2-digit',
+															year: '2-digit'
+														}) : '---'}
+													</td>
+													<td className="px-8 py-6" data-chatbot-cell="user">
+														<div className="flex items-center gap-3">
+															<div className="size-8 rounded-lg bg-slate-800 flex items-center justify-center font-black text-slate-500 text-[10px]">
+																{log.user?.[0].toUpperCase() || 'U'}
+															</div>
+															<div className="max-w-[200px] truncate">
+																<p className="font-bold text-white truncate">{log.user || 'Hệ thống'}</p>
+																<p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">{log.ownerId?.slice(-8) || 'GLOBAL'}</p>
+															</div>
+														</div>
+													</td>
+													<td className="px-8 py-6">
+														<span className="text-slate-500 font-bold uppercase text-[9px] tracking-wider">{log.path || '/home'}</span>
+													</td>
+													<td className="px-8 py-6" data-chatbot-cell="action">
+														<span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase bg-slate-800 text-indigo-400 border border-slate-700/50`}>
+															{log.action}
+														</span>
+													</td>
+													<td className="px-8 py-6 text-slate-300 font-medium leading-relaxed max-w-md" data-chatbot-cell="details">
+														{log.details}
+													</td>
+												</tr>
+											))}
+										</tbody>
+									</table>
+								</div>
+
+								{/* Mobile Cards */}
+								<div className="md:hidden divide-y divide-slate-800">
+									{logs.map((log) => (
+										<div key={log.id} className="p-6 space-y-3">
+											<div className="flex items-center justify-between">
+												<div className="flex items-center gap-2">
+													<p className="text-xs font-black text-white uppercase tracking-tight">{log.user || 'Hệ thống'}</p>
+													<span className="text-[9px] text-slate-500 font-bold px-1.5 py-0.5 bg-slate-800 rounded">{log.ownerId?.slice(-8) || 'GLOBAL'}</span>
+												</div>
+												<span className="text-[10px] text-indigo-400 font-black uppercase tracking-widest">{log.action}</span>
+											</div>
+											<p className="text-xs text-slate-400 font-medium leading-relaxed">{log.details}</p>
+											<div className="flex items-center justify-between pt-2">
+												<span className="text-[9px] text-slate-600 font-black uppercase tracking-tighter">{log.path || '/home'}</span>
+												<span className="text-[9px] text-slate-600 font-medium">
+													{log.createdAt?.toDate ? log.createdAt.toDate().toLocaleString('vi-VN') : '---'}
+												</span>
+											</div>
+										</div>
+									))}
+									{logs.length === 0 && (
+										<div className="py-20 text-center text-slate-600 font-black uppercase tracking-widest text-xs opacity-40">
+											Chưa có dữ liệu nhật ký
+										</div>
+									)}
+								</div>
 							</div>
 						</div>
 					)}
 
 					{activeTab === 'customers' && (
-						<div className="bg-slate-900 rounded-3xl lg:rounded-[2rem] border border-slate-800 overflow-x-auto shadow-2xl">
-							<table className="w-full text-left min-w-[900px]">
-								<thead>
-									<tr className="bg-slate-800/50 text-[10px] font-black uppercase tracking-widest text-slate-500">
-										<th className="px-6 py-5">Doanh nghiệp</th>
-										<th className="px-6 py-5">Email Owner</th>
-										<th className="px-6 py-5">Gói</th>
-										<th className="px-6 py-5">Ngày vào trang</th>
-										<th className="px-3 py-5 text-center">Đơn</th>
-										<th className="px-3 py-5 text-center">Nợ</th>
-										<th className="px-3 py-5 text-center">Sheet</th>
-										<th className="px-6 py-5 text-right">Chi tiết</th>
-									</tr>
-								</thead>
-								<tbody className="divide-y divide-slate-800">
-									{customers.map((c) => {
-										const eff = getEffectiveStatus(c);
-										return (
-											<tr key={c.id} className="hover:bg-slate-800/30 transition-colors text-xs">
-												<td className="px-6 py-6 font-bold text-white uppercase truncate max-w-[150px]">
-													{c.displayName || 'No Name'}
-												</td>
-												<td className="px-6 py-6 text-slate-400">{c.email}</td>
-												<td className="px-6 py-6">
+						<div className="bg-slate-900 rounded-3xl lg:rounded-[2rem] border border-slate-800 overflow-hidden shadow-2xl">
+							{/* Desktop Table */}
+							<div className="hidden lg:block overflow-x-auto">
+								<table className="w-full text-left min-w-[900px]">
+									<thead>
+										<tr className="bg-slate-800/50 text-[10px] font-black uppercase tracking-widest text-slate-500">
+											<th className="px-6 py-5">Doanh nghiệp</th>
+											<th className="px-6 py-5">Email Owner</th>
+											<th className="px-6 py-5">Gói</th>
+											<th className="px-6 py-5">Ngày vào trang</th>
+											<th className="px-3 py-5 text-center">Đơn</th>
+											<th className="px-3 py-5 text-center">Nợ</th>
+											<th className="px-3 py-5 text-center">Sheet</th>
+											<th className="px-6 py-5 text-right">Chi tiết</th>
+										</tr>
+									</thead>
+									<tbody className="divide-y divide-slate-800">
+										{customers.map((c) => {
+											const eff = getEffectiveStatus(c);
+											return (
+												<tr key={c.id} className="hover:bg-slate-800/30 transition-colors text-xs">
+													<td className="px-6 py-6 font-bold text-white uppercase truncate max-w-[150px]">
+														{c.displayName || 'No Name'}
+													</td>
+													<td className="px-6 py-6 text-slate-400">{c.email}</td>
+													<td className="px-6 py-6">
+														<select
+															className="bg-slate-800 text-white text-[10px] font-black rounded-lg px-2 py-1 outline-none border border-slate-700 hover:border-indigo-500 transition-colors cursor-pointer"
+															value={c.planId || (c.isPro ? 'premium_monthly' : 'free')}
+															onChange={(e) => handleUpdatePlan(c.uid, e.target.value)}
+														>
+															<option value="free">FREE (60d)</option>
+															<option value="premium_monthly">1 THÁNG (30d)</option>
+															<option value="premium_yearly">1 NĂM (365d)</option>
+														</select>
+													</td>
+													<td className="px-6 py-6 text-slate-500 whitespace-nowrap">
+														<div className={`font-bold text-[10px] ${eff.isExpired ? 'text-rose-500' : 'text-slate-300'}`}>
+															{eff.isExpired ? 'ĐÃ HẾT HẠN' : 'ĐANG HIỆU LỰC'}
+														</div>
+														<div className="text-[10px] uppercase font-black tracking-tighter">
+															{c.paymentConfirmedAt?.toDate ? c.paymentConfirmedAt.toDate().toLocaleDateString('vi-VN') : '---'}
+															<span className="ml-1 opacity-50">({eff.daysUsed}d)</span>
+														</div>
+													</td>
+													<td className="px-3 py-6 text-center">
+														<button
+															onClick={() => !eff.isExpired && toggleUserLock(c.uid, 'manualLockOrders', c.manualLockOrders)}
+															className={`size-8 rounded-lg flex items-center justify-center mx-auto transition-all ${eff.locks.orders ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'bg-slate-800 text-slate-500 hover:text-white'} ${eff.isExpired ? 'cursor-not-allowed opacity-80' : ''}`}
+															title={eff.isExpired ? "Tự động khóa do hết hạn" : "Khóa thủ công"}
+														>
+															{eff.locks.orders ? <Lock size={12} /> : <Unlock size={12} />}
+														</button>
+													</td>
+													<td className="px-3 py-6 text-center">
+														<button
+															onClick={() => !eff.isExpired && toggleUserLock(c.uid, 'manualLockDebts', c.manualLockDebts)}
+															className={`size-8 rounded-lg flex items-center justify-center mx-auto transition-all ${eff.locks.debts ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'bg-slate-800 text-slate-500 hover:text-white'} ${eff.isExpired ? 'cursor-not-allowed opacity-80' : ''}`}
+															title={eff.isExpired ? "Tự động khóa do hết hạn" : "Khóa thủ công"}
+														>
+															{eff.locks.debts ? <Lock size={12} /> : <Unlock size={12} />}
+														</button>
+													</td>
+													<td className="px-3 py-6 text-center">
+														<button
+															onClick={() => !eff.isExpired && toggleUserLock(c.uid, 'manualLockSheets', c.manualLockSheets)}
+															className={`size-8 rounded-lg flex items-center justify-center mx-auto transition-all ${eff.locks.sheets ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'bg-slate-800 text-slate-500 hover:text-white'} ${eff.isExpired ? 'cursor-not-allowed opacity-80' : ''}`}
+															title={eff.isExpired ? "Tự động khóa do hết hạn" : "Khóa thủ công"}
+														>
+															{eff.locks.sheets ? <Lock size={12} /> : <Unlock size={12} />}
+														</button>
+													</td>
+													<td className="px-6 py-6 text-right">
+														<ExternalLink size={16} className="text-slate-600 cursor-not-allowed mx-auto" />
+													</td>
+												</tr>
+											);
+										})}
+									</tbody>
+								</table>
+							</div>
+
+							{/* Mobile/Tablet Card Layout */}
+							<div className="lg:hidden divide-y divide-slate-800">
+								{customers.map((c) => {
+									const eff = getEffectiveStatus(c);
+									return (
+										<div key={c.id} className="p-6 space-y-5">
+											<div className="flex items-center justify-between">
+												<div>
+													<p className="font-black text-white text-sm uppercase tracking-tight mb-1">{c.displayName || 'No Name'}</p>
+													<p className="text-[10px] text-slate-500 font-medium">{c.email}</p>
+												</div>
+												<div className={`px-2 py-1 rounded text-[8px] font-black uppercase tracking-widest ${eff.isExpired ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}`}>
+													{eff.isExpired ? 'Hết hạn' : 'Active'}
+												</div>
+											</div>
+
+											<div className="grid grid-cols-2 gap-4">
+												<div className="bg-slate-800/40 p-4 rounded-2xl border border-slate-700/50">
+													<p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-2">Gói dịch vụ</p>
 													<select
-														className="bg-slate-800 text-white text-[10px] font-black rounded-lg px-2 py-1 outline-none border border-slate-700 hover:border-indigo-500 transition-colors cursor-pointer"
+														className="w-full bg-slate-900 text-white text-[10px] font-black rounded-lg px-2 py-1.5 outline-none border border-slate-700"
 														value={c.planId || (c.isPro ? 'premium_monthly' : 'free')}
 														onChange={(e) => handleUpdatePlan(c.uid, e.target.value)}
 													>
-														<option value="free">FREE (60d)</option>
-														<option value="premium_monthly">1 THÁNG (30d)</option>
-														<option value="premium_yearly">1 NĂM (365d)</option>
+														<option value="free">FREE</option>
+														<option value="premium_monthly">M-PRO</option>
+														<option value="premium_yearly">Y-PRO</option>
 													</select>
-												</td>
-												<td className="px-6 py-6 text-slate-500 whitespace-nowrap">
-													<div className={`font-bold text-[10px] ${eff.isExpired ? 'text-rose-500' : 'text-slate-300'}`}>
-														{eff.isExpired ? 'ĐÃ HẾT HẠN' : 'ĐANG HIỆU LỰC'}
-													</div>
-													<div className="text-[10px] uppercase font-black tracking-tighter">
-														{c.paymentConfirmedAt?.toDate ? c.paymentConfirmedAt.toDate().toLocaleDateString('vi-VN') : '---'}
-														<span className="ml-1 opacity-50">({eff.daysUsed}d)</span>
-													</div>
-												</td>
-												<td className="px-3 py-6 text-center">
+												</div>
+												<div className="bg-slate-800/40 p-4 rounded-2xl border border-slate-700/50 flex flex-col justify-center">
+													<p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Thời gian đã dùng</p>
+													<p className="text-white font-black text-sm uppercase">{eff.daysUsed} ngày</p>
+												</div>
+											</div>
+
+											<div className="flex items-center justify-between bg-slate-800/30 p-4 rounded-2xl border border-slate-700/30">
+												<div className="flex flex-col items-center gap-1.5">
+													<p className="text-[8px] font-black text-slate-600 uppercase tracking-widest">Đơn hàng</p>
 													<button
 														onClick={() => !eff.isExpired && toggleUserLock(c.uid, 'manualLockOrders', c.manualLockOrders)}
-														className={`size-8 rounded-lg flex items-center justify-center mx-auto transition-all ${eff.locks.orders ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'bg-slate-800 text-slate-500 hover:text-white'} ${eff.isExpired ? 'cursor-not-allowed opacity-80' : ''}`}
-														title={eff.isExpired ? "Tự động khóa do hết hạn" : "Khóa thủ công"}
+														className={`size-10 rounded-xl flex items-center justify-center transition-all ${eff.locks.orders ? 'bg-rose-500 text-white' : 'bg-slate-800 text-slate-500'}`}
 													>
-														{eff.locks.orders ? <Lock size={12} /> : <Unlock size={12} />}
+														{eff.locks.orders ? <Lock size={16} /> : <Unlock size={16} />}
 													</button>
-												</td>
-												<td className="px-3 py-6 text-center">
+												</div>
+												<div className="flex flex-col items-center gap-1.5">
+													<p className="text-[8px] font-black text-slate-600 uppercase tracking-widest">Công nợ</p>
 													<button
 														onClick={() => !eff.isExpired && toggleUserLock(c.uid, 'manualLockDebts', c.manualLockDebts)}
-														className={`size-8 rounded-lg flex items-center justify-center mx-auto transition-all ${eff.locks.debts ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'bg-slate-800 text-slate-500 hover:text-white'} ${eff.isExpired ? 'cursor-not-allowed opacity-80' : ''}`}
-														title={eff.isExpired ? "Tự động khóa do hết hạn" : "Khóa thủ công"}
+														className={`size-10 rounded-xl flex items-center justify-center transition-all ${eff.locks.debts ? 'bg-rose-500 text-white' : 'bg-slate-800 text-slate-500'}`}
 													>
-														{eff.locks.debts ? <Lock size={12} /> : <Unlock size={12} />}
+														{eff.locks.debts ? <Lock size={16} /> : <Unlock size={16} />}
 													</button>
-												</td>
-												<td className="px-3 py-6 text-center">
+												</div>
+												<div className="flex flex-col items-center gap-1.5">
+													<p className="text-[8px] font-black text-slate-600 uppercase tracking-widest">Sheets</p>
 													<button
 														onClick={() => !eff.isExpired && toggleUserLock(c.uid, 'manualLockSheets', c.manualLockSheets)}
-														className={`size-8 rounded-lg flex items-center justify-center mx-auto transition-all ${eff.locks.sheets ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'bg-slate-800 text-slate-500 hover:text-white'} ${eff.isExpired ? 'cursor-not-allowed opacity-80' : ''}`}
-														title={eff.isExpired ? "Tự động khóa do hết hạn" : "Khóa thủ công"}
+														className={`size-10 rounded-xl flex items-center justify-center transition-all ${eff.locks.sheets ? 'bg-rose-500 text-white' : 'bg-slate-800 text-slate-500'}`}
 													>
-														{eff.locks.sheets ? <Lock size={12} /> : <Unlock size={12} />}
+														{eff.locks.sheets ? <Lock size={16} /> : <Unlock size={16} />}
 													</button>
-												</td>
-												<td className="px-6 py-6 text-right">
-													<ExternalLink size={16} className="text-slate-600 cursor-not-allowed mx-auto" />
-												</td>
+												</div>
+											</div>
+										</div>
+									);
+								})}
+								{customers.length === 0 && (
+									<div className="py-20 text-center text-slate-600 font-black uppercase tracking-widest text-xs opacity-40">
+										Chưa có doanh nghiệp nào
+									</div>
+								)}
+							</div>
+						</div>
+					)}
+
+					{activeTab === 'ai' && (
+						<div className="space-y-6 lg:space-y-8 max-w-5xl">
+							{/* AI Control Panel */}
+							<div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
+								<div className="lg:col-span-2 bg-slate-900 rounded-[2rem] border border-slate-800 p-6 lg:p-8 shadow-2xl relative overflow-hidden group">
+									<div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity hidden sm:block">
+										<Bot size={120} className="text-indigo-500 rotate-12" />
+									</div>
+									<div className="relative z-10">
+										<div className="flex items-center gap-4 mb-6">
+											<div className={`size-12 rounded-2xl flex items-center justify-center ${isAiActive ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/40 animate-pulse' : 'bg-slate-800 text-slate-500'}`}>
+												<Zap size={24} />
+											</div>
+											<div>
+												<h4 className="text-lg lg:text-xl font-black text-white uppercase tracking-tight">Nexus AI Core</h4>
+												<p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest leading-none">Autonomous System Monitoring</p>
+											</div>
+										</div>
+
+										<div className="grid grid-cols-2 gap-3 lg:gap-4 mb-8">
+											<div className="bg-slate-800/40 p-4 lg:p-5 rounded-2xl border border-slate-700/50">
+												<p className="text-[8px] lg:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Status</p>
+												<p className={`text-xs lg:text-sm font-black uppercase ${isAiActive ? 'text-emerald-400' : 'text-rose-400'}`}>
+													{isAiActive ? 'Active' : 'Offline'}
+												</p>
+											</div>
+											<div className="bg-slate-800/40 p-4 lg:p-5 rounded-2xl border border-slate-700/50">
+												<p className="text-[8px] lg:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Threats</p>
+												<p className={`text-xs lg:text-sm font-black uppercase ${aiAnomalies.length > 0 ? 'text-rose-500 animate-pulse' : 'text-emerald-400'}`}>
+													{aiAnomalies.length > 0 ? 'Urgent' : 'Safe'}
+												</p>
+											</div>
+										</div>
+
+										<div className="flex flex-col sm:flex-row gap-3">
+											<button
+												onClick={() => setIsAiActive(!isAiActive)}
+												className={`w-full sm:w-auto px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all ${isAiActive ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20 hover:bg-rose-500 hover:text-white' : 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'}`}
+											>
+												{isAiActive ? 'Stop AI Monitor' : 'Start Nexus AI'}
+											</button>
+											<button
+												onClick={() => toggleSystemFlag('ai_auto_lock')}
+												className={`w-full sm:w-auto px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all ${systemConfig.ai_auto_lock ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-slate-800 text-slate-500 border border-slate-700'}`}
+											>
+												Auto-Lock: {systemConfig.ai_auto_lock ? 'ON' : 'OFF'}
+											</button>
+											<button
+												onClick={runAutonomousCycle}
+												className="w-full sm:w-auto px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] bg-slate-800 text-slate-400 border border-slate-700 hover:text-white hover:bg-slate-700 transition-all flex items-center justify-center gap-2"
+											>
+												<Activity size={14} />
+												Force Run
+											</button>
+										</div>
+									</div>
+								</div>
+
+								<div className="bg-slate-900 rounded-[2rem] border border-slate-800 p-6 lg:p-8 shadow-2xl flex flex-col items-center justify-center text-center">
+									<div className="size-16 lg:size-20 rounded-3xl bg-amber-500/10 flex items-center justify-center text-amber-500 mb-6">
+										<Eye size={32} />
+									</div>
+									<h5 className="font-black text-white uppercase tracking-tight mb-2 text-sm lg:text-base">Bot Intelligence</h5>
+									<p className="text-[10px] lg:text-xs text-slate-500 font-medium mb-6">
+										Bot đang quét và phân tích thao tác cấn máy trên toàn bộ ứng dụng.
+									</p>
+									<div className="w-full bg-slate-800 h-1.5 lg:h-2 rounded-full overflow-hidden">
+										<div className="bg-indigo-500 h-full w-[85%] animate-[progress_2s_ease-in-out_infinite]" />
+									</div>
+								</div>
+							</div>
+
+							{/* Anomalies section */}
+							<div className="bg-slate-900 rounded-[2rem] border border-slate-800 overflow-hidden shadow-2xl">
+								<div className="px-6 lg:px-8 py-5 lg:py-6 border-b border-slate-800 bg-slate-800/30 flex items-center justify-between">
+									<div className="flex items-center gap-3">
+										<AlertTriangle className="text-amber-500" size={20} />
+										<h4 className="text-[10px] lg:text-xs font-black text-white uppercase tracking-[2px] lg:tracking-[4px]">Cảnh báo bất thường</h4>
+									</div>
+									<span className="text-[10px] text-slate-500 font-black uppercase whitespace-nowrap">{aiAnomalies.length} Phát hiện</span>
+								</div>
+
+								{/* Desktop Table */}
+								<div className="hidden md:block overflow-x-auto">
+									<table className="w-full text-left">
+										<thead>
+											<tr className="bg-slate-800/50 text-[10px] font-black uppercase tracking-widest text-slate-500">
+												<th className="px-8 py-5">Tài khoản</th>
+												<th className="px-8 py-5">Phân loại</th>
+												<th className="px-8 py-5">Chi tiết phân tích AI</th>
+												<th className="px-8 py-5 text-right">Thao tác</th>
 											</tr>
-										);
-									})}
-								</tbody>
-							</table>
+										</thead>
+										<tbody className="divide-y divide-slate-800">
+											{aiAnomalies.map((anom, idx) => (
+												<tr key={idx} className="bg-rose-500/5 hover:bg-rose-500/10 transition-colors">
+													<td className="px-8 py-6">
+														<p className="font-bold text-white text-xs">{anom.email}</p>
+														<p className="text-[10px] text-slate-500 font-black tracking-widest">{anom.ownerId?.slice(-8)}</p>
+													</td>
+													<td className="px-8 py-6">
+														<span className="px-1.5 py-0.5 bg-rose-500 text-white rounded font-black text-[8px] uppercase tracking-wider">
+															Suspicious
+														</span>
+													</td>
+													<td className="px-8 py-6 text-slate-300 text-xs font-medium italic">
+														"{anom.details}"
+													</td>
+													<td className="px-8 py-6 text-right">
+														<button
+															onClick={() => toggleUserLock(anom.ownerId, 'manualLockOrders', false)}
+															className="bg-white text-slate-950 px-3 py-1.5 rounded-lg font-black text-[9px] uppercase hover:bg-indigo-500 hover:text-white transition-all shadow-sm"
+														>
+															Mở khóa
+														</button>
+													</td>
+												</tr>
+											))}
+										</tbody>
+									</table>
+								</div>
+
+								{/* Mobile Cards */}
+								<div className="md:hidden divide-y divide-slate-800">
+									{aiAnomalies.map((anom, idx) => (
+										<div key={idx} className="p-6 space-y-4 bg-rose-500/5">
+											<div className="flex items-center justify-between">
+												<div className="min-w-0">
+													<p className="text-xs font-black text-white uppercase truncate pr-2">{anom.email}</p>
+													<p className="text-[9px] text-slate-500 font-black tracking-widest uppercase">{anom.ownerId?.slice(-8)}</p>
+												</div>
+												<span className="shrink-0 px-2 py-1 bg-rose-500 text-white rounded-lg font-black text-[8px] uppercase tracking-wider">Mối đe dọa</span>
+											</div>
+											<div className="bg-slate-900/50 p-4 rounded-xl border border-rose-500/10">
+												<p className="text-[11px] text-slate-300 font-medium italic leading-relaxed">"{anom.details}"</p>
+											</div>
+											<button
+												onClick={() => toggleUserLock(anom.ownerId, 'manualLockOrders', false)}
+												className="w-full bg-white text-slate-950 py-3 rounded-xl font-black text-[10px] uppercase shadow-lg shadow-white/5 active:scale-95 transition-transform"
+											>
+												Can thiệp ngay
+											</button>
+										</div>
+									))}
+								</div>
+								{aiAnomalies.length === 0 && (
+									<div className="py-20 text-center text-slate-600 font-black uppercase tracking-widest text-[10px] opacity-40">
+										✨ Hệ thống chưa phát hiện hành vi bất thường
+									</div>
+								)}
+							</div>
+
+							{/* Autonomous Actions Log */}
+							<div className="bg-slate-900 rounded-[2rem] border border-slate-800 overflow-hidden shadow-2xl">
+								<div className="px-6 lg:px-8 py-5 lg:py-6 border-b border-slate-800 bg-indigo-500/5 flex items-center justify-between">
+									<div className="flex items-center gap-3">
+										<ShieldAlert className="text-indigo-400" size={20} />
+										<h4 className="text-[10px] lg:text-xs font-black text-white uppercase tracking-[2px] lg:tracking-[4px]">Tác vụ tự động</h4>
+									</div>
+									<div className="hidden sm:flex items-center gap-2">
+										<div className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+										<span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">Bot Live Monitoring</span>
+									</div>
+								</div>
+
+								{/* Actions List (Unified for better mobile display) */}
+								<div className="divide-y divide-slate-800/50">
+									{aiActions.map((action) => (
+										<div key={action.id} className="p-5 lg:px-8 lg:py-6 hover:bg-slate-800/10 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+											<div className="flex items-center gap-4">
+												<div className={`size-10 rounded-xl shrink-0 flex items-center justify-center ${
+													action.type === 'provisioning' ? 'bg-emerald-500/10 text-emerald-500' :
+													action.type === 'enforcement' ? 'bg-amber-500/10 text-amber-500' :
+													'bg-rose-500/10 text-rose-500'
+												}`}>
+													{action.type === 'provisioning' ? <Crown size={18} /> : <Zap size={18} />}
+												</div>
+												<div className="min-w-0">
+													<p className="font-bold text-white text-xs sm:text-sm truncate sm:max-w-[200px]">{action.targetEmail}</p>
+													<p className="text-[10px] text-slate-500 mt-0.5">
+														{action.timestamp?.toDate ? action.timestamp.toDate().toLocaleString('vi-VN', {
+															hour: '2-digit', minute: '2-digit', second: '2-digit', day: '2-digit', month: '2-digit'
+														}) : '---'}
+													</p>
+												</div>
+											</div>
+											<div className="flex flex-col sm:items-end gap-1 px-14 sm:px-0">
+												<span className="text-[10px] text-slate-400 font-medium bg-slate-800/50 px-2 py-1 rounded-md">
+													{action.details}
+												</span>
+											</div>
+										</div>
+									))}
+								</div>
+								{aiActions.length === 0 && (
+									<div className="py-20 text-center text-slate-600 font-black uppercase tracking-widest text-[10px] opacity-40">
+										Đang chờ tác vụ tiếp theo...
+									</div>
+								)}
+							</div>
 						</div>
 					)}
 				</div>
@@ -624,11 +1205,11 @@ const StatBox = ({ label, value, icon, color }: any) => {
 		emerald: 'text-emerald-500 bg-emerald-500/10'
 	};
 	return (
-		<div className="bg-slate-900 rounded-3xl p-6 border border-slate-800 shadow-xl flex flex-col gap-4 relative overflow-hidden group">
-			<div className={`size-12 rounded-2xl ${colorMap[color]} flex items-center justify-center`}>{icon}</div>
+		<div className="bg-slate-900 rounded-2xl lg:rounded-3xl p-4 lg:p-6 border border-slate-800 shadow-xl flex flex-col gap-3 lg:gap-4 relative overflow-hidden group">
+			<div className={`size-10 lg:size-12 rounded-xl lg:rounded-2xl ${colorMap[color]} flex items-center justify-center scale-90 lg:scale-100`}>{icon}</div>
 			<div>
-				<p className="text-[10px] font-black text-slate-500 uppercase tracking-[2px] mb-1">{label}</p>
-				<p className="text-2xl font-black text-white tracking-tighter">{value}</p>
+				<p className="text-[8px] lg:text-[10px] font-black text-slate-500 uppercase tracking-[2px] mb-1">{label}</p>
+				<p className="text-lg lg:text-2xl font-black text-white tracking-tighter truncate">{value}</p>
 			</div>
 		</div>
 	);

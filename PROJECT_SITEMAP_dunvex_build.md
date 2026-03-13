@@ -132,13 +132,15 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **UI Feedback**: Thêm nhãn thông báo "Đang xem: Tồn kho thấp" kèm nút bỏ lọc tại danh sách sản phẩm giúp người dùng dễ dàng quay lại danh sách đầy đủ.
 - [x] **Quản lý Vốn vay**: Thêm các trường Ngân hàng, Kỳ hạn, Lãi suất khi ghi chú các khoản vay, giúp bám sát chi phí tài chính của cơ sở kinh doanh.
     - **Giao diện động**: Form ghi chú tự động thay đổi dựa trên loại thu/chi và hạng mục được chọn.
-- [x] **Nâng cấp Nexus Control (Nexus Admin Updates - Mar 13)**:
-    - **System Audit Logs**: Thay thế bảng cấu hình hệ thống dư thừa bằng bảng Nhật ký hoạt động (Audit Logs) toàn hệ thống. Cho phép Nexus Admin theo dõi mọi thao tác của khách hàng (Thêm đơn, cập nhật kho, login...) theo thời gian thực.
-    - **Tab Refactoring**: Đổi tên tab "Cấu hình Flag" thành "Lịch sử Log" để đúng với thực tế nhu cầu quản trị.
-    - **Nguyên tắc FIFO (Nhập trước - Xuất trước)**: Triển khai logic quét lô sản phẩm theo SKU từ cũ đến mới (dựa trên `createdAt`) để trừ kho và tính giá vốn thực tế.
-    - **Giá vốn Bình quân Trọng số theo Đơn**: Tự động tính toán và lưu trữ giá vốn chính xác cho từng dòng sản phẩm trong đơn hàng. Đảm bảo tính minh bạch khi một mặt hàng được lấy từ nhiều lô có giá nhập khác nhau.
-    - **Báo cáo Tài chính Chính xác**: Cập nhật module Tài chính giúp hiển thị đúng lợi nhuận gộp và hoa hồng nhân viên, ngay cả khi giá nhập hàng biến động theo thời gian.
-    - **Dọn dẹp mã nguồn**: Gỡ bỏ các hàm trừ kho cũ (`getStockSourceId`) và thay thế bằng bộ máy FIFO đồng bộ, đồng thời sửa lỗi hiển thị giá nhập cũ trong báo cáo.
+- [x] **Nâng cấp Nexus Control Pro & AI Management (Mar 13)**:
+    - **UI/UX Optimization**: Giao diện thích ứng hoàn hảo trên mọi kích thước màn hình (Mobile, Tablet, Desktop). Sử dụng Sidebar hiện đại và các tab được tối ưu hóa cho thao tác chạm.
+    - **Autonomous AI Management (Nexus AI)**:
+        - **AI Auto-Lock & Auto-Switch**: Tự động hóa việc quản lý gói cước (Dùng thử -> Chính thức) và khóa/mở các tính năng (Đơn hàng, Công nợ, Đồng bộ Sheets...) dựa trên trạng thái thanh toán và thời gian sử dụng.
+        - **Cảnh báo Thông minh (Pocket-Touch Prevention)**: AI tự động gửi thông báo "Chuông báo" trực tiếp cho người dùng nếu phát hiện thao tác liên tục bất thường, giúp ngăn chặn việc túi quần bị cấn máy làm sai lệch dữ liệu.
+        - **Phân cấp Tài khoản (Role-based AI)**: Tự động phân biệt Super Admin (`dunvex.green@gmail.com`) và các tài khoản nhân viên để hiển thị cấu hình tương ứng.
+    - **AI-Friendly Audit Logs**: Bảng nhật ký được thiết kế chuẩn cấu hình cho Bot, giúp AI dễ dàng kiểm tra lịch sử thao tác, xác định vị trí nhấp chuột và chu trình sử dụng để hỗ trợ khách hàng tốt nhất.
+    - **FIFO Inventory Logic**: Thực thi nghiêm ngặt cơ chế Nhập trước - Xuất trước cho toàn bộ sản phẩm theo SKU, đảm bảo tính toán giá vốn và lợi nhuận chính xác 100%.
+    - **Dọn dẹp hệ thống**: Gỡ bỏ các module Flag dư thừa, tập trung vào quản trị dữ liệu và nhật ký hoạt động thời gian thực.
 - [x] **Email & Sao chép nhanh Thông tin (Quick Copy Upgrade - Mar 10)**:
     - **Email khách hàng**: Bổ sung khối hiển thị Email trong chi tiết khách hàng, hỗ trợ link mailto và nút sao chép nhanh.
     - **Đồng bộ nút Chép**: Bổ sung nút sao chép cho toàn bộ các trường contact nhạy cảm (Email, SĐT hóa đơn), đảm bảo trải nghiệm người dùng hiện đại và tiện lợi.

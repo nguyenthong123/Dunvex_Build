@@ -151,6 +151,9 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
         - **Smart Grouping**: Ghép nhóm SKU thông minh (không phân biệt hoa thường/ký tự đặc biệt).
         - **Nexus AI Phân Tích**: Tích hợp DeepSeek phân tích tốc độ bán hàng, cảnh báo tồn đọng và gợi ý nhập hàng.
         - **Health Indicators**: Tự động gắn nhãn trạng thái (Bán chạy, Sắp hết, Đọng vốn) dựa trên phân tích FIFO.
+    - [x] **Nexus AI Debt Intelligence (Mar 13)**:
+        - **AI Risk Assessment**: Tự động gắn nhãn mức độ rủi ro công nợ (Rủi ro cao, Chậm trả, An toàn) dựa trên tuổi nợ và lịch sử thanh toán.
+        - **Nexus AI Phân Tích**: Phân tích danh sách đối tác nợ và đề xuất chiến lược thu hồi nợ (nhắc nợ, giãn nợ, pháp lý).
     - [x] **Inventory Sync Reliability (Mar 13)**: 
         - **Existence Guard**: Sửa lỗi `NOT-FOUND` khi lưu đơn hàng bằng cách xác thực sự tồn tại của sản phẩm trước khi cập nhật kho.
         - **Safe Sync Logic**: Tối ưu hóa việc trừ kho FIFO khi ID sản phẩm bị thay đổi do Smart Import.

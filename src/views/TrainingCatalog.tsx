@@ -272,7 +272,15 @@ const TrainingCatalog = () => {
 				mode: 'cors'
 			});
 
-			const res = await response.json();
+			const text = await response.text();
+			let res;
+			try {
+				res = JSON.parse(text);
+			} catch (e) {
+				console.error("Non-JSON response:", text);
+				showToast("Lỗi: Script Google chưa được cập nhật. Vui lòng Triển khai phiên bản mới của upload_script.gs", "error");
+				return;
+			}
 
 			if (res.status === 'success') {
 				const labData = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;

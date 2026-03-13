@@ -461,16 +461,16 @@ const TrainingCatalog = () => {
 												<div className="size-8 rounded-full border-2 border-white dark:border-slate-900 bg-indigo-600 text-[9px] font-black text-white flex items-center justify-center shadow-sm z-10">+12</div>
 											</div>
 											<div className="flex items-center gap-3">
-												{lab.isAI && auth.currentUser?.email === 'dunvex.green@gmail.com' && (
+												{lab.isAI && auth.currentUser?.email?.toLowerCase() === 'dunvex.green@gmail.com' && (
 													<button 
 														onClick={(e) => handleDeleteLab(lab.id, e)}
-														className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-all"
+														className="p-2.5 text-slate-400 hover:text-white hover:bg-rose-500 rounded-xl transition-all duration-300 shadow-sm hover:shadow-rose-500/30 group/trash"
 														title="Xóa bài học"
 													>
-														<Trash2 size={16} />
+														<Trash2 size={18} className="group-hover/trash:scale-110 transition-transform" />
 													</button>
 												)}
-												<div className="flex items-center gap-2 text-indigo-600 font-black text-xs uppercase tracking-widest group-hover:translate-x-2 transition-transform">
+												<div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-black text-xs uppercase tracking-widest group-hover:translate-x-2 transition-transform">
 													Bắt đầu Lab <Play size={14} fill="currentColor" />
 												</div>
 											</div>

@@ -22,8 +22,8 @@ const Finance = () => {
 	const isAdmin = owner.role === 'admin' || owner.accessRights?.finance_view === true;
 	const currentUserId = auth.currentUser?.uid;
 	const [searchParams, setSearchParams] = useSearchParams();
-	const tabParam = searchParams.get('tab') as 'cashbook' | 'aging' | 'profit' | 'performance' | null;
-	const [activeTab, setActiveTab] = useState<'cashbook' | 'aging' | 'profit' | 'performance'>(tabParam || 'cashbook');
+	const tabParam = searchParams.get('tab') as 'cashbook' | 'aging' | 'profit' | null;
+	const [activeTab, setActiveTab] = useState<'cashbook' | 'aging' | 'profit'>(tabParam || 'cashbook');
 	const [cashLogs, setCashLogs] = useState<any[]>([]);
 	const [orders, setOrders] = useState<any[]>([]);
 	const [payments, setPayments] = useState<any[]>([]);
@@ -33,26 +33,13 @@ const Finance = () => {
 	const [products, setProducts] = useState<any[]>([]);
 	const [inventoryLogs, setInventoryLogs] = useState<any[]>([]);
 	const [attendanceLogs, setAttendanceLogs] = useState<any[]>([]);
-	const [kpiPlans, setKpiPlans] = useState<any[]>([]);
 	const cashLogsRef = useRef<any[]>([]);
 	const [commissionRate, setCommissionRate] = useState(5); // Default 5%
 	const [loading, setLoading] = useState(true);
 	const [currentPage, setCurrentPage] = useState(1);
 	const ITEMS_PER_PAGE = 10;
 
-	// KPI Plan Management
-	const [showPlanForm, setShowPlanForm] = useState(false);
-	const [selectedStaffForPlan, setSelectedStaffForPlan] = useState<any>(null);
-	const [planData, setPlanData] = useState({
-		baseSalary: 10000000,
-		checkinTarget: 20,
-		attendanceTarget: 22,
-		newCustomerTarget: 5,
-		productTargets: [] as { sku: string, name: string, targetQty: number }[],
-		productCommissions: {} as Record<string, number> // { sku: %rate }
-	});
 
-	// Filters
 	const [fromDate, setFromDate] = useState(() => {
 		const now = new Date();
 		return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
@@ -62,6 +49,8 @@ const Finance = () => {
 		return new Date(now.getFullYear(), now.getMonth() + 12, 0).toISOString().split('T')[0];
 	});
 	const [isSendingReminders, setIsSendingReminders] = useState(false);
+	const [agingAiInsight, setAgingAiInsight] = useState<string | null>(null);
+	const [agingData, setAgingData] = useState<any>({ under30: [], between30_60: [], between60_90: [], over90: [] });
 
 	// Cashbook Form
 	const [showLogForm, setShowLogForm] = useState(searchParams.get('new') === 'true');
@@ -88,12 +77,6 @@ const Finance = () => {
 		}
 	}, [tabParam]);
 
-	// Redirect non-admins to performance tab
-	useEffect(() => {
-		if (!owner.loading && !isAdmin && activeTab !== 'performance') {
-			setActiveTab('performance');
-		}
-	}, [owner.loading, isAdmin, activeTab]);
 
 	// Sync modal with URL
 	useEffect(() => {
@@ -102,6 +85,62 @@ const Finance = () => {
 			setShowLogForm(isNew);
 		}
 	}, [searchParams]);
+
+	// 2. Debt Aging
+	const getAgingData = () => {
+		const today = new Date();
+		// Nếu toDate là tương lai, dùng ngày hiện tại. Nếu toDate là quá khứ, dùng toDate để xem lịch sử nợ lúc đó.
+		const referenceDate = (toDate && new Date(toDate) < today) ? new Date(toDate) : today;
+		const agingGroups = {
+			under30: [] as any[],
+			between30_60: [] as any[],
+			between60_90: [] as any[],
+			over90: [] as any[]
+		};
+
+		customers.forEach(cust => {
+			const custOrders = orders.filter(o => o.customerId === cust.id && o.status === 'Đơn chốt');
+			const custPayments = payments.filter(p => p.customerId === cust.id);
+
+			const totalBought = custOrders.reduce((s, o) => s + (o.totalAmount || 0), 0);
+			const totalPaid = custPayments.reduce((s, p) => s + (p.amount || 0), 0);
+			let debt = totalBought - totalPaid;
+
+			if (debt > 0) {
+				const sortedOrders = [...custOrders].sort((a, b) => new Date(a.orderDate).getTime() - new Date(b.orderDate).getTime());
+				let runningTotal = 0;
+				let oldestUnpaidOrder = null;
+
+				for (const o of sortedOrders) {
+					runningTotal += (o.totalAmount || 0);
+					if (runningTotal > totalPaid) {
+						oldestUnpaidOrder = o;
+						break;
+					}
+				}
+
+				if (oldestUnpaidOrder) {
+					const orderDate = new Date(oldestUnpaidOrder.orderDate || oldestUnpaidOrder.createdAt?.toDate() || oldestUnpaidOrder.createdAt);
+					const diffDays = Math.floor((referenceDate.getTime() - orderDate.getTime()) / (1000 * 3600 * 24));
+
+					if (diffDays >= 0) {
+						const entry = { ...cust, debt, days: diffDays };
+						if (diffDays < 30) agingGroups.under30.push(entry);
+						else if (diffDays < 60) agingGroups.between30_60.push(entry);
+						else if (diffDays < 90) agingGroups.between60_90.push(entry);
+						else agingGroups.over90.push(entry);
+					}
+				}
+			}
+		});
+
+		return agingGroups;
+	};
+
+	useEffect(() => {
+		const data = getAgingData();
+		setAgingData(data);
+	}, [customers, orders, payments, toDate, staffs, inventoryLogs]);
 	useEffect(() => {
 		setCurrentPage(1);
 	}, [activeTab, fromDate, toDate]);
@@ -431,11 +470,6 @@ const Finance = () => {
 			setInventoryLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
 		});
 
-		const qPlans = query(collection(db, 'kpi_plans'), where('ownerId', '==', owner.ownerId));
-		const unsubPlans = onSnapshot(qPlans, (snap) => {
-			setKpiPlans(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-		});
-
 		return () => {
 			unsubLogs();
 			unsubOrders();
@@ -446,7 +480,6 @@ const Finance = () => {
 			unsubAttendance();
 			unsubProducts();
 			unsubInvLogs();
-			unsubPlans();
 		};
 	}, [owner.loading, owner.ownerId]);
 
@@ -586,6 +619,57 @@ const Finance = () => {
 	};
 
 
+	const handleAIAgingAnalysis = async () => {
+		const totalDebt = Object.values(agingData).reduce((sum: number, list: any) => sum + list.reduce((s: number, c: any) => s + (Number(c.debt) || 0), 0), 0);
+		if (totalDebt === 0) {
+			showToast("Không có nợ quá hạn để phân tích", "info");
+			return;
+		}
+
+		setIsFetchingRate(true);
+		try {
+			const prompt = `Phân tích tình hình công nợ hiện tại:
+      - Tổng dư nợ: ${formatPrice(totalDebt)}
+      - Nhóm < 30 ngày: ${agingData.under30.length} khách, Nợ: ${formatPrice(agingData.under30.reduce((s: any, c: any) => s + c.debt, 0))}
+      - Nhóm 30-60 ngày: ${agingData.between30_60.length} khách, Nợ: ${formatPrice(agingData.between30_60.reduce((s: any, c: any) => s + c.debt, 0))}
+      - Nhóm 60-90 ngày: ${agingData.between60_90.length} khách, Nợ: ${formatPrice(agingData.between60_90.reduce((s: any, c: any) => s + c.debt, 0))}
+      - Nhóm > 90 ngày: ${agingData.over90.length} khách, Nợ: ${formatPrice(agingData.over90.reduce((s: any, c: any) => s + c.debt, 0))}
+
+      Yêu cầu: Đưa ra nhận xét ngắn gọn (3-4 dòng) về mức độ rủi ro dòng tiền và gợi ý hành động thu hồi nợ hiệu quả nhất cho từng nhóm.`;
+
+			const response = await fetch("https://api.deepseek.com/chat/completions", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"Authorization": `Bearer ${import.meta.env.VITE_DEEPSEEK_API_KEY || ""}`
+				},
+				body: JSON.stringify({
+					model: "deepseek-chat",
+					messages: [
+						{
+							role: "system",
+							content: "Bạn là chuyên gia quản trị tài chính doanh nghiệp. Hãy cung cấp phân tích rủi ro công nợ sắc bén, ngắn gọn, đi thẳng vào vấn đề."
+						},
+						{
+							role: "user",
+							content: prompt
+						}
+					]
+				})
+			});
+
+			const data = await response.json();
+			const insight = data.choices?.[0]?.message?.content || "Không thể lấy thông tin từ AI";
+			setAgingAiInsight(insight);
+			showToast("AI đã hoàn tất phân tích công nợ", "success");
+		} catch (error) {
+			console.error("AI Aging Error:", error);
+			showToast("Lỗi khi gọi AI phân tích", "error");
+		} finally {
+			setIsFetchingRate(false);
+		}
+	};
+
 	const handleAddLog = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (logData.amount <= 0) return;
@@ -657,55 +741,6 @@ const Finance = () => {
 		return withEllipsis;
 	};
 
-
-
-	const openKPIDialog = (staff: any) => {
-		setSelectedStaffForPlan(staff);
-		const existingPlan = kpiPlans.find(p => p.userId === staff.id && p.month === fromDate.slice(0, 7));
-		if (existingPlan) {
-			setPlanData({
-				baseSalary: existingPlan.baseSalary || 10000000,
-				checkinTarget: existingPlan.checkinTarget || 20,
-				attendanceTarget: existingPlan.attendanceTarget || 22,
-				newCustomerTarget: existingPlan.newCustomerTarget || 5,
-				productTargets: existingPlan.productTargets || [],
-				productCommissions: existingPlan.productCommissions || {}
-			});
-		} else {
-			setPlanData({
-				baseSalary: 10000000,
-				checkinTarget: 20,
-				attendanceTarget: 22,
-				newCustomerTarget: 5,
-				productTargets: [],
-				productCommissions: {}
-			});
-		}
-		setShowPlanForm(true);
-	};
-
-	const handleSaveKPIPlan = async () => {
-		if (!selectedStaffForPlan) return;
-		try {
-			const planId = `${selectedStaffForPlan.id}_${fromDate.slice(0, 7)}`;
-			await setDoc(doc(db, 'kpi_plans', planId), {
-				...planData,
-				userId: selectedStaffForPlan.id,
-				userEmail: selectedStaffForPlan.email,
-				month: fromDate.slice(0, 7),
-				ownerId: owner.ownerId,
-				updatedAt: serverTimestamp()
-			});
-			showToast("Đã lưu kế hoạch KPI", "success");
-			setShowPlanForm(false);
-		} catch (error) {
-			console.error("Error saving KPI plan:", error);
-			showToast("Lỗi khi lưu kế hoạch", "error");
-		}
-	};
-
-	if (owner.loading) return null;
-
 	// No longer returning restricted access here, will handle tab-level permissions
 	// --- CALCULATIONS ---
 
@@ -749,56 +784,6 @@ const Finance = () => {
 	const paginatedLogs = filteredLogs.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 	const totalLogsPages = Math.ceil(filteredLogs.length / ITEMS_PER_PAGE);
 
-	// 2. Debt Aging
-	const getAgingData = () => {
-		const now = toDate ? new Date(toDate) : new Date();
-		const agingGroups = {
-			under30: [] as any[],
-			between30_60: [] as any[],
-			between60_90: [] as any[],
-			over90: [] as any[]
-		};
-
-		customers.forEach(cust => {
-			const custOrders = orders.filter(o => o.customerId === cust.id && o.status === 'Đơn chốt');
-			const custPayments = payments.filter(p => p.customerId === cust.id);
-
-			const totalBought = custOrders.reduce((s, o) => s + (o.totalAmount || 0), 0);
-			const totalPaid = custPayments.reduce((s, p) => s + (p.amount || 0), 0);
-			let debt = totalBought - totalPaid;
-
-			if (debt > 0) {
-				const sortedOrders = [...custOrders].sort((a, b) => new Date(a.orderDate).getTime() - new Date(b.orderDate).getTime());
-				let runningTotal = 0;
-				let oldestUnpaidOrder = null;
-
-				for (const o of sortedOrders) {
-					runningTotal += (o.totalAmount || 0);
-					if (runningTotal > totalPaid) {
-						oldestUnpaidOrder = o;
-						break;
-					}
-				}
-
-				if (oldestUnpaidOrder) {
-					const orderDate = new Date(oldestUnpaidOrder.orderDate);
-					const diffDays = Math.floor((now.getTime() - orderDate.getTime()) / (1000 * 3600 * 24));
-
-					if (diffDays >= 0) {
-						const entry = { ...cust, debt, days: diffDays };
-						if (diffDays < 30) agingGroups.under30.push(entry);
-						else if (diffDays < 60) agingGroups.between30_60.push(entry);
-						else if (diffDays < 90) agingGroups.between60_90.push(entry);
-						else agingGroups.over90.push(entry);
-					}
-				}
-			}
-		});
-
-		return agingGroups;
-	};
-
-	const agingData = getAgingData();
 
 	// 3. Profit breakdown
 	const orderProfits = filteredOrders.filter(o => o.status === 'Đơn chốt').map(o => {
@@ -806,7 +791,11 @@ const Finance = () => {
 		const cost = (o.items || []).reduce((sum: number, item: any) => sum + ((Number(item.buyPrice) || 0) * (Number(item.qty) || 0)), 0);
 		const profit = revenue - cost - (o.discountValue || 0);
 		return { ...o, revenue, cost, profit };
-	}).sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
+	}).sort((a: any, b: any) => {
+		const dateA = new Date(a.orderDate || a.createdAt?.toDate() || a.createdAt).getTime();
+		const dateB = new Date(b.orderDate || b.createdAt?.toDate() || b.createdAt).getTime();
+		return dateB - dateA;
+	});
 
 	// 3. Profitability Totals (Calculated after orderProfits is defined)
 	const totalGrossProfit = orderProfits.reduce((sum, o) => sum + (o.profit || 0), 0);
@@ -817,6 +806,14 @@ const Finance = () => {
 
 	const paginatedProfits = orderProfits.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 	const totalProfitsPages = Math.ceil(orderProfits.length / ITEMS_PER_PAGE);
+
+	if (owner && owner.loading) {
+		return (
+			<div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-950">
+				<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+			</div>
+		);
+	}
 
 	return (
 		<div className="min-h-screen bg-[#f8f9fb] dark:bg-slate-950 transition-colors duration-300">
@@ -850,11 +847,6 @@ const Finance = () => {
 								</button>
 							</>
 						)}
-						<button
-							onClick={() => setActiveTab('performance')}
-							className={`px-4 md:px-6 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'performance' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-							{isAdmin ? 'KPI Đội Ngũ' : 'KPI Cá Nhân'}
-						</button>
 					</div>
 				</div>
 
@@ -1136,29 +1128,62 @@ const Finance = () => {
 
 				{activeTab === 'aging' && (
 					<div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+						<div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+							<div>
+								<h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tight">Tổng hợp tuổi nợ khách hàng</h3>
+								<p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Phân tích dòng tiền và rủi ro công nợ thực tế</p>
+							</div>
+							<button 
+								onClick={handleAIAgingAnalysis}
+								disabled={isFetchingRate}
+								className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-200 dark:shadow-none hover:scale-[1.02] transition-all active:scale-95 disabled:opacity-50"
+							>
+								{isFetchingRate ? <RefreshCcw size={14} className="animate-spin" /> : <Bot size={14} />}
+								AI Phân tích nợ & Thu hồi
+							</button>
+						</div>
+
 						<div className="grid grid-cols-1 md:grid-cols-4 gap-4">
 							{[
-								{ label: '< 30 Ngày', data: agingData.under30, color: 'emerald' },
-								{ label: '30 - 60 Ngày', data: agingData.between30_60, color: 'blue' },
-								{ label: '60 - 90 Ngày', data: agingData.between60_90, color: 'orange' },
-								{ label: '> 90 Ngày', data: agingData.over90, color: 'rose' }
+								{ label: '< 30 Ngày', data: agingData.under30, color: 'emerald', desc: 'Nợ mới trong vòng 1 tháng' },
+								{ label: '30 - 60 Ngày', data: agingData.between30_60, color: 'blue', desc: 'Cần bắt đầu theo dõi thanh toán' },
+								{ label: '60 - 90 Ngày', data: agingData.between60_90, color: 'orange', desc: 'Nợ khó đòi, cần nhắc nhở mạnh' },
+								{ label: '> 90 Ngày', data: agingData.over90, color: 'rose', desc: 'Rủi ro mất vốn cao, cần xử lý ngay' }
 							].map((group, i) => (
-								<div key={i} className={`bg-white dark:bg-slate-900 p-6 rounded-[2rem] border-l-4 border-${group.color}-500 shadow-sm`}>
+								<div key={i} className={`bg-white dark:bg-slate-900 p-6 rounded-[2rem] border-l-4 border-${group.color}-500 shadow-sm relative overflow-hidden group`}>
+									<div className={`absolute top-0 right-0 p-3 opacity-5 group-hover:opacity-10 transition-opacity`}>
+										<Clock size={48} className={`text-${group.color}-500`} />
+									</div>
 									<p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{group.label}</p>
 									<h4 className="text-2xl font-black text-slate-800 dark:text-white">{group.data.length} <span className="text-xs text-slate-400">Khách hàng</span></h4>
-									<p className={`text-xs font-bold text-${group.color}-600 mt-2`}>
-										Nợ: {formatPrice(group.data.reduce((s, c) => s + c.debt, 0))}
+									<p className={`text-[10px] font-bold text-slate-400 italic mb-2 capitalize line-clamp-1`}>{group.desc}</p>
+									<p className={`text-xs font-bold text-${group.color}-600 mt-2 bg-${group.color}-50 dark:bg-${group.color}-900/20 px-3 py-1.5 rounded-xl inline-block`}>
+										Dư nợ: {formatPrice(group.data.reduce((s: number, c: any) => s + (Number(c.debt) || 0), 0))}
 									</p>
 								</div>
 							))}
 						</div>
+
+						{agingAiInsight && (
+							<div className="bg-indigo-50 dark:bg-indigo-900/10 p-6 rounded-[2rem] border border-indigo-100 dark:border-indigo-800/50 animate-in fade-in zoom-in duration-500">
+								<div className="flex items-center gap-3 mb-3">
+									<div className="size-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-lg">
+										<Bot size={16} />
+									</div>
+									<h4 className="text-xs font-black text-indigo-800 dark:text-indigo-300 uppercase tracking-widest">AI Advisor: Chiến lược thu hồi nợ</h4>
+								</div>
+								<div className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
+									{agingAiInsight}
+								</div>
+							</div>
+						)}
 
 						<div className="bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">
 							<div className="p-6 border-b border-slate-50 dark:border-slate-800">
 								<h3 className="font-black text-slate-900 dark:text-white uppercase tracking-tight">Chi tiết nợ quá hạn</h3>
 							</div>
 							<div className="divide-y divide-slate-50 dark:divide-slate-800">
-								{Object.entries(agingData).flatMap(([key, list]) => list).sort((a, b) => b.days - a.days).map((item, i) => (
+								{(Object.entries(agingData).flatMap(([, list]) => list as any[])).sort((a: any, b: any) => b.days - a.days).map((item, i) => (
 									<div key={i} className="p-6 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
 										<div className="flex items-center gap-4">
 											<div className={`size-12 rounded-2xl flex items-center justify-center font-black text-white shadow-lg ${item.days > 90 ? 'bg-rose-500' : item.days > 60 ? 'bg-orange-500' : 'bg-indigo-500'}`}>
@@ -1189,18 +1214,18 @@ const Finance = () => {
 							<div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative z-10">
 								<div>
 									<p className="text-white/60 text-[10px] font-black uppercase tracking-widest mb-2">Tổng doanh thu chốt</p>
-									<p className="text-3xl font-black tracking-tighter">{formatPrice(orderProfits.reduce((s, o) => s + o.revenue, 0))}</p>
+									<p className="text-3xl font-black tracking-tighter">{formatPrice(orderProfits.reduce((s: number, o: any) => s + (o.revenue || 0), 0))}</p>
 								</div>
 								<div>
 									<p className="text-white/60 text-[10px] font-black uppercase tracking-widest mb-2">Tổng giá vốn nhập</p>
-									<p className="text-3xl font-black tracking-tighter text-white/40">{formatPrice(orderProfits.reduce((s, o) => s + o.cost, 0))}</p>
+									<p className="text-3xl font-black tracking-tighter text-white/40">{formatPrice(orderProfits.reduce((s: number, o: any) => s + (o.cost || 0), 0))}</p>
 								</div>
 								<div>
 									<p className="text-orange-400 text-[10px] font-black uppercase tracking-widest mb-2">Lợi nhuận gộp</p>
 									<div className="flex items-center gap-3">
-										<p className="text-3xl font-black text-white tracking-tighter">{formatPrice(orderProfits.reduce((s, o) => s + o.profit, 0))}</p>
+										<p className="text-3xl font-black text-white tracking-tighter">{formatPrice(orderProfits.reduce((s: number, o: any) => s + o.profit, 0))}</p>
 										<div className="bg-white/10 px-2 py-1 rounded text-[10px] font-black">
-											{((orderProfits.reduce((s, o) => s + o.profit, 0) / (orderProfits.reduce((s, o) => s + o.revenue, 0) || 1)) * 100).toFixed(1)}%
+											{((orderProfits.reduce((s: number, o: any) => s + o.profit, 0) / (orderProfits.reduce((s: number, o: any) => s + o.revenue, 0) || 1)) * 100).toFixed(1)}%
 										</div>
 									</div>
 								</div>
@@ -1214,7 +1239,8 @@ const Finance = () => {
 									<BarChart3 size={16} /> Xếp hạng lợi nhuận
 								</div>
 							</div>
-							<div className="overflow-x-auto">
+							{/* Lớp hiển thị Desktop - Table */}
+							<div className="hidden md:block overflow-x-auto">
 								<table className="w-full text-left text-sm">
 									<thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
 										<tr>
@@ -1241,6 +1267,39 @@ const Finance = () => {
 										))}
 									</tbody>
 								</table>
+							</div>
+
+							{/* Lớp hiển thị Mobile - Cards */}
+							<div className="md:hidden divide-y divide-slate-50 dark:divide-slate-800">
+								{paginatedProfits.map((order, i) => (
+									<div key={i} className="p-5 space-y-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+										<div className="flex justify-between items-start">
+											<div className="space-y-1">
+												<div className="flex items-center gap-2">
+													<span className="size-2 rounded-full bg-indigo-500"></span>
+													<p className="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-tight">#{order.invoiceId || order.id.slice(-6).toUpperCase()}</p>
+												</div>
+												<h4 className="text-sm font-black text-slate-800 dark:text-white uppercase leading-tight">{order.customerName}</h4>
+											</div>
+											<div className="text-right">
+												<p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Doanh thu</p>
+												<p className="text-sm font-black text-slate-900 dark:text-white">{formatPrice(order.revenue)}</p>
+											</div>
+										</div>
+										<div className="grid grid-cols-2 gap-3 pt-2">
+											<div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100/50 dark:border-slate-700/30">
+												<p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Giá vốn</p>
+												<p className="text-xs font-bold text-slate-500 dark:text-slate-400 italic">{formatPrice(order.cost)}</p>
+											</div>
+											<div className={`p-3 rounded-2xl border shadow-sm ${order.profit > 0 ? 'bg-emerald-50 border-emerald-100 dark:bg-emerald-900/10 dark:border-emerald-800/30' : 'bg-rose-50 border-rose-100 dark:bg-rose-900/10 dark:border-rose-800/30'}`}>
+												<p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Lợi nhuận</p>
+												<p className={`text-xs font-black ${order.profit > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+													{formatPrice(order.profit)}
+												</p>
+											</div>
+										</div>
+									</div>
+								))}
 							</div>
 						</div>
 
@@ -1288,310 +1347,13 @@ const Finance = () => {
 					</div>
 				)}
 
-				{activeTab === 'performance' && (
-					<div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-						{/* Enhanced Header Cards */}
-						<div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden p-8 mb-8">
-							<div className="flex items-center gap-6 mb-8">
-								<div className="size-12 md:size-16 bg-indigo-50 dark:bg-indigo-900/40 rounded-[1.2rem] md:rounded-[1.5rem] flex items-center justify-center text-indigo-600 shadow-inner">
-									<TrendingUp size={24} className="md:w-8 md:h-8" />
-								</div>
-								<div>
-									<h3 className="text-lg md:text-2xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight">
-										{isAdmin ? 'Thống kê hiệu suất đội ngũ' : 'Hiệu suất cá nhân của bạn'}
-									</h3>
-									<p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-[2px] mt-1">Sơ đồ hoa hồng & Hoạt động thực tế</p>
-								</div>
-							</div>
-
-							<div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-								<div className="bg-[#f8f9ff] dark:bg-slate-800/40 p-6 rounded-[2rem] border border-indigo-50/50 dark:border-slate-700/30">
-									<p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-3">
-										{isAdmin ? 'Top Sales' : 'Cấp bậc'}
-									</p>
-									<p className="text-lg font-black text-slate-900 dark:text-white uppercase leading-none">
-										{isAdmin ? (
-											staffs.map(s => {
-												const userOrders = filteredOrders.filter(o => o.createdBy === s.id && o.status === 'Đơn chốt');
-												return { name: s.displayName || s.email, total: userOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0) };
-											}).sort((a, b) => b.total - a.total)[0]?.name || '--'
-										) : 'Nhân viên kinh doanh'}
-									</p>
-								</div>
-								<div className="bg-[#f8f9ff] dark:bg-slate-800/40 p-6 rounded-[2rem] border border-indigo-50/50 dark:border-slate-700/30">
-									<p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Tổng hoạt động</p>
-									<p className="text-lg font-black text-slate-900 dark:text-white uppercase leading-none">
-										{isAdmin ? checkins.filter(c => filterByDate(c.createdAt)).length : checkins.filter(c => c.userId === currentUserId && filterByDate(c.createdAt)).length}
-										<span className="text-[10px] text-slate-400 font-bold ml-1">Lượt</span>
-									</p>
-								</div>
-								<div className="bg-[#f8f9ff] dark:bg-slate-800/40 p-6 rounded-[2rem] border border-indigo-50/50 dark:border-slate-700/30">
-									<p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Đơn chốt</p>
-									<p className="text-lg font-black text-slate-900 dark:text-white uppercase leading-none">
-										{isAdmin ? filteredOrders.filter(o => o.status === 'Đơn chốt').length : filteredOrders.filter(o => o.createdBy === currentUserId && o.status === 'Đơn chốt').length}
-										<span className="text-[10px] text-slate-400 font-bold ml-1">Đơn</span>
-									</p>
-								</div>
-								<div className="bg-amber-50 dark:bg-amber-900/10 p-6 rounded-[2rem] border border-amber-100/50 dark:border-amber-900/20">
-									<p className="text-[9px] font-black text-amber-500 uppercase tracking-widest mb-3">Hoa hồng dự kiến</p>
-									<p className="text-lg font-black text-amber-600 leading-none">
-										{(() => {
-											let totalCom = 0;
-											const targetStaffs = staffs.filter(s => isAdmin || s.id === currentUserId);
-											targetStaffs.forEach(s => {
-												const staffOrders = filteredOrders.filter(o => o.createdBy === s.id && o.status === 'Đơn chốt');
-												const plan = kpiPlans.find(p => p.userId === s.id && p.month === fromDate.slice(0, 7));
-												staffOrders.forEach(o => {
-													(o.items || []).forEach((item: any) => {
-														const sku = item.sku || products.find(p => p.id === item.id)?.sku || 'N/A';
-														const key = sku !== 'N/A' ? sku : item.name;
-														const pData = products.find(p => (sku && p.sku === sku) || (item.id && p.id === item.id));
-														const buyPrice = Number(item.buyPrice || pData?.priceBuy || 0);
-														const avgPrice = Number(item.price) || 0;
-														const profit = (avgPrice - buyPrice) * (Number(item.qty) || 0);
-														const rate = plan?.productCommissions?.[key] || 0;
-														totalCom += profit * (rate / 100);
-													});
-												});
-											});
-											return formatPrice(totalCom);
-										})()}
-									</p>
-								</div>
-							</div>
+				{!isAdmin && (
+					<div className="flex flex-col items-center justify-center py-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
+						<div className="size-24 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 mb-6">
+							<Bot size={48} />
 						</div>
-
-						{/* Table 1: Bảng tính hoa hồng theo sản phẩm */}
-						<div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden mb-8">
-							<div className="p-8 border-b border-slate-50 dark:border-slate-800 flex justify-between items-center">
-								<div>
-									<h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">Chi tiết hoa hồng theo sản phẩm</h3>
-									<p className="text-[9px] text-slate-400 font-bold mt-1 uppercase tracking-widest opacity-60">* Dựa trên lợi nhuận gộp danh sách đơn hàng đã chốt</p>
-								</div>
-							</div>
-							<div className="overflow-x-auto">
-								<table className="w-full text-left text-sm">
-									<thead className="bg-[#FFFCEB] dark:bg-slate-800/80 text-[9px] font-black text-slate-500 uppercase tracking-[2px] text-center">
-										<thead className="bg-[#FFFCEB] dark:bg-slate-800/80 text-[9px] font-black text-slate-500 uppercase tracking-[2px] text-center">
-											<tr>
-												<th className="px-8 py-5 text-left w-[25%] font-black uppercase">Nhân viên & Sản phẩm</th>
-												<th className="px-6 py-5 font-black uppercase">Thực bán</th>
-												<th className="px-6 py-5 font-black uppercase">Giá Bán TB</th>
-												{isAdmin && (
-													<>
-														<th className="px-6 py-5 font-black uppercase">LN Gộp / SP</th>
-														<th className="px-6 py-5 font-black uppercase">Tổng LN</th>
-													</>
-												)}
-												<th className="px-6 py-5 font-black uppercase">Chiết khấu</th>
-												<th className="px-8 py-5 text-right font-black uppercase">Hoa hồng</th>
-											</tr>
-										</thead>
-									</thead>
-									<tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-										{staffs.filter(s => isAdmin || s.id === currentUserId).map(s => {
-											const staffOrders = filteredOrders.filter(o => o.createdBy === s.id && o.status === 'Đơn chốt');
-											const plan = kpiPlans.find(p => p.userId === s.id && p.month === fromDate.slice(0, 7));
-
-											const productSummary: any = {};
-											staffOrders.forEach(o => {
-												(o.items || []).forEach((item: any) => {
-													// Robust SKU/Key resolution for historical data
-													const sku = item.sku || products.find(p => p.id === item.id)?.sku;
-													const key = sku || item.id || item.name || 'OTHER';
-
-													if (!productSummary[key]) {
-														const pData = products.find(p => (sku && p.sku === sku) || (item.id && p.id === item.id));
-														productSummary[key] = {
-															key: key,
-															name: item.name || pData?.name || 'Sản phẩm khác',
-															sku: sku || 'N/A',
-															qty: 0,
-															totalRevenue: 0,
-															totalCost: 0
-														};
-													}
-													const itemBuyPrice = Number(item.buyPrice || products.find(p => p.id === item.id)?.priceBuy || 0);
-													productSummary[key].qty += Number(item.qty) || 0;
-													productSummary[key].totalRevenue += (Number(item.price) || 0) * (Number(item.qty) || 0);
-													productSummary[key].totalCost += itemBuyPrice * (Number(item.qty) || 0);
-												});
-											});
-
-											const items = Object.values(productSummary);
-											if (items.length === 0) return null;
-
-											return (
-												<React.Fragment key={s.id}>
-													<tr className="bg-slate-50/40 dark:bg-slate-800/20">
-														<td colSpan={7} className="px-8 py-4">
-															<div className="flex items-center gap-3">
-																<div className="size-8 rounded-2xl bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 flex items-center justify-center font-black text-xs shadow-sm">
-																	{s.displayName?.[0].toUpperCase()}
-																</div>
-																<span className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">{s.displayName}</span>
-															</div>
-														</td>
-													</tr>
-													{items.map((item: any) => {
-														const avgPrice = item.qty > 0 ? item.totalRevenue / item.qty : 0;
-														const avgBuyPrice = item.qty > 0 ? item.totalCost / item.qty : 0;
-														const profitPerUnit = avgPrice - avgBuyPrice;
-														const totalProfit = item.totalRevenue - item.totalCost;
-														// Use the same robust key resolution as defined in productSummary
-														const commissionKey = item.sku !== 'N/A' ? item.sku : item.name;
-														const discountRate = plan?.productCommissions?.[commissionKey] || 0;
-														const commissionAmount = totalProfit * (discountRate / 100);
-
-														return (
-															<tr key={item.key} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-all group">
-																<td className="px-10 py-4">
-																	<p className="text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase leading-snug group-hover:text-indigo-600 transition-colors">{item.name}</p>
-																	<p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">{item.sku}</p>
-																</td>
-																<td className="px-6 py-4 text-center">
-																	<span className="text-xs font-black text-indigo-600 bg-indigo-50/50 dark:bg-indigo-900/20 px-2.5 py-1 rounded-lg">
-																		{item.qty}
-																	</span>
-																</td>
-																<td className="px-6 py-4 text-center font-bold text-slate-600 dark:text-slate-400">{formatPrice(avgPrice)}</td>
-																{isAdmin && (
-																	<>
-																		<td className={`px-6 py-4 text-center font-bold ${profitPerUnit > 0 ? 'text-emerald-500' : 'text-rose-400'}`}>
-																			{formatPrice(profitPerUnit)}
-																		</td>
-																		<td className="px-6 py-4 text-center font-black text-slate-900 dark:text-white">{formatPrice(totalProfit)}</td>
-																	</>
-																)}
-																<td className="px-6 py-4 text-center">
-																	<span className="px-3 py-1 bg-amber-50 dark:bg-amber-900/20 text-amber-600 rounded-full text-[10px] font-black border border-amber-100/50 dark:border-amber-900/20">
-																		{discountRate}%
-																	</span>
-																</td>
-																<td className="px-8 py-4 text-right font-black text-orange-500 text-sm">{formatPrice(commissionAmount)}</td>
-															</tr>
-														);
-													})}
-												</React.Fragment>
-											);
-										})}
-									</tbody>
-								</table>
-							</div>
-						</div>
-
-						{/* Table 2: Bảng theo dõi KPI nhân sự */}
-						<div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden mt-8">
-							<div className="p-8 border-b border-slate-50 dark:border-slate-800 flex justify-between items-center bg-slate-50/20">
-								<div>
-									<h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">Theo dõi chỉ tiêu (KPI)</h3>
-									<p className="text-[9px] text-slate-400 font-bold mt-1 uppercase tracking-widest opacity-60">* Tự động đánh giá hiệu quả dựa trên hoạt động trực tế</p>
-								</div>
-								<div className="flex items-center gap-2 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm">
-									<Calendar size={12} className="text-slate-400" />
-									<span className="text-[10px] font-black text-slate-500 uppercase">{fromDate} - {toDate}</span>
-								</div>
-							</div>
-							<div className="overflow-x-auto">
-								<table className="w-full text-left text-sm">
-									<thead className="bg-[#EEF1FF] dark:bg-slate-800/80 text-[9px] font-black text-indigo-500 uppercase tracking-[2px] text-center">
-										<tr>
-											<th className="px-8 py-5 text-left font-black">Nhân viên</th>
-											<th className="px-6 py-5 font-black">Check-in</th>
-											<th className="px-6 py-5 font-black">Chấm công</th>
-											<th className="px-6 py-5 font-black">Khách mới</th>
-											<th className="px-6 py-5 font-black whitespace-nowrap">Tổng thực hiện</th>
-											<th className="px-6 py-5 font-black">% Hoàn thành</th>
-											<th className="px-8 py-5 font-black uppercase">Hành động</th>
-										</tr>
-									</thead>
-									<tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-										{staffs.filter(s => isAdmin || s.id === currentUserId).map(s => {
-											const plan = kpiPlans.find(p => p.userId === s.id && p.month === fromDate.slice(0, 7));
-
-											const actualCheckins = checkins.filter(c => c.userId === s.id && filterByDate(c.createdAt)).length;
-											const actualAttendance = attendanceLogs.filter(a => a.userId === s.id && a.date >= fromDate && a.date <= toDate && a.checkInAt).length;
-											const actualNewCustomers = customers.filter(c => c.createdBy === s.id && c.createdAt && filterByDate(c.createdAt)).length;
-
-											const targets = {
-												checkin: plan?.checkinTarget || 1,
-												attendance: plan?.attendanceTarget || 1,
-												newCustomer: plan?.newCustomerTarget || 1
-											};
-
-											const rates = {
-												checkin: (actualCheckins / targets.checkin) * 100,
-												attendance: (actualAttendance / targets.attendance) * 100,
-												newCustomer: (actualNewCustomers / targets.newCustomer) * 100
-											};
-
-											const avgCompletion = (Math.min(100, rates.checkin) + Math.min(100, rates.attendance) + Math.min(100, rates.newCustomer)) / 3;
-
-											return (
-												<tr key={s.id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-300">
-													<td className="px-8 py-5">
-														<p className="text-xs font-black text-slate-900 dark:text-white uppercase leading-snug tracking-tight">{s.displayName}</p>
-														<p className="text-[9px] font-bold text-slate-400 opacity-60">{s.email}</p>
-													</td>
-													<td className="px-6 py-5 text-center">
-														<div className="flex flex-col items-center gap-1.5">
-															<p className="text-xs font-black text-indigo-600">{actualCheckins} / {targets.checkin}</p>
-															<div className="w-24 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden shadow-inner">
-																<div className="h-full bg-indigo-500 rounded-full transition-all duration-1000" style={{ width: `${Math.min(100, rates.checkin)}%` }}></div>
-															</div>
-														</div>
-													</td>
-													<td className="px-6 py-5 text-center">
-														<div className="flex flex-col items-center gap-1.5">
-															<p className="text-xs font-black text-emerald-600">{actualAttendance} / {targets.attendance}</p>
-															<div className="w-24 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden shadow-inner">
-																<div className="h-full bg-emerald-500 rounded-full transition-all duration-1000" style={{ width: `${Math.min(100, rates.attendance)}%` }}></div>
-															</div>
-														</div>
-													</td>
-													<td className="px-6 py-5 text-center">
-														<div className="flex flex-col items-center gap-1.5">
-															<p className="text-xs font-black text-orange-600">{actualNewCustomers} / {targets.newCustomer}</p>
-															<div className="w-24 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden shadow-inner">
-																<div className="h-full bg-orange-500 rounded-full transition-all duration-1000" style={{ width: `${Math.min(100, rates.newCustomer)}%` }}></div>
-															</div>
-														</div>
-													</td>
-													<td className="px-6 py-5 text-center">
-														<span className="inline-flex size-8 items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-800 text-xs font-black text-slate-700 dark:text-slate-300 shadow-sm border border-slate-100 dark:border-slate-700">
-															{(actualCheckins + actualAttendance + actualNewCustomers)}
-														</span>
-													</td>
-													<td className="px-6 py-5 text-center">
-														<div className="flex flex-col items-center gap-2">
-															<div className="relative size-12 flex items-center justify-center">
-																<svg className="size-full -rotate-90" viewBox="0 0 36 36">
-																	<circle cx="18" cy="18" r="16" fill="none" className="stroke-slate-100 dark:stroke-slate-800" strokeWidth="3"></circle>
-																	<circle cx="18" cy="18" r="16" fill="none" className={`transition-all duration-1000 ${avgCompletion >= 100 ? 'stroke-emerald-500' : 'stroke-indigo-500'}`} strokeWidth="3" strokeDasharray="100" strokeDashoffset={100 - Math.min(100, avgCompletion)} strokeLinecap="round"></circle>
-																</svg>
-																<span className={`absolute text-[9px] font-black ${avgCompletion >= 100 ? 'text-emerald-600' : 'text-indigo-600'}`}>{avgCompletion.toFixed(0)}%</span>
-															</div>
-														</div>
-													</td>
-													<td className="px-8 py-5 text-center">
-														{isAdmin ? (
-															<button
-																onClick={() => openKPIDialog(s)}
-																className="size-9 bg-white dark:bg-slate-800 text-slate-400 hover:text-indigo-600 hover:border-indigo-100 rounded-xl transition-all border border-slate-50 dark:border-slate-700 shadow-sm flex items-center justify-center"
-															>
-																<Settings2 size={16} />
-															</button>
-														) : (
-															<span className="text-[10px] font-black text-slate-300 uppercase tracking-widest italic">Cá nhân</span>
-														)}
-													</td>
-												</tr>
-											);
-										})}
-									</tbody>
-								</table>
-							</div>
-						</div>
+						<h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tight mb-2">Truy cập bị hạn chế</h3>
+						<p className="text-sm font-bold text-slate-400 uppercase tracking-widest text-center max-w-xs">Bạn cần quyền Admin để xem các báo cáo tài chính này.</p>
 					</div>
 				)}
 			</main>
@@ -1813,142 +1575,7 @@ const Finance = () => {
 					</div>
 				)
 			}
-			{/* MODAL LẬP KẾ HOẠCH KPI */}
-			{
-				showPlanForm && selectedStaffForPlan && (
-					<div className="fixed inset-0 z-[60] bg-[#1A237E]/80 backdrop-blur-sm flex items-center justify-center p-4">
-						<div className="bg-white dark:bg-slate-900 w-full max-w-xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-							<div className="px-8 py-6 bg-indigo-600 text-white flex items-center justify-between">
-								<div className="flex items-center gap-3">
-									<Target size={24} />
-									<div>
-										<h3 className="text-xl font-black uppercase tracking-tight">Kế hoạch KPI Tháng {fromDate.slice(0, 7)}</h3>
-										<p className="text-xs font-bold opacity-60 uppercase">{selectedStaffForPlan.displayName}</p>
-									</div>
-								</div>
-								<button onClick={() => setShowPlanForm(false)} className="text-white/60 hover:text-white transition-colors text-3xl font-light">&times;</button>
-							</div>
-							<div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
-								<div className="grid grid-cols-2 gap-4">
-									<div>
-										<label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Lương cứng cơ bản (VNĐ)</label>
-										<input
-											type="number"
-											className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 font-black text-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
-											value={planData.baseSalary}
-											onChange={(e) => setPlanData({ ...planData, baseSalary: parseFloat(e.target.value) || 0 })}
-										/>
-									</div>
-									<div>
-										<label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Chỉ tiêu Check-in (Lượt)</label>
-										<input
-											type="number"
-											className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 font-black text-purple-600 focus:ring-2 focus:ring-indigo-500/20"
-											value={planData.checkinTarget}
-											onChange={(e) => setPlanData({ ...planData, checkinTarget: parseInt(e.target.value) || 0 })}
-										/>
-									</div>
-								</div>
 
-								<div className="grid grid-cols-2 gap-4">
-									<div>
-										<label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Chỉ tiêu Chấm công (Ngày)</label>
-										<input
-											type="number"
-											className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 font-black text-emerald-600 focus:ring-2 focus:ring-indigo-500/20"
-											value={planData.attendanceTarget}
-											onChange={(e) => setPlanData({ ...planData, attendanceTarget: parseInt(e.target.value) || 0 })}
-										/>
-									</div>
-									<div>
-										<label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Chỉ tiêu Khách mới</label>
-										<input
-											type="number"
-											className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 font-black text-orange-600 focus:ring-2 focus:ring-indigo-500/20"
-											value={planData.newCustomerTarget}
-											onChange={(e) => setPlanData({ ...planData, newCustomerTarget: parseInt(e.target.value) || 0 })}
-										/>
-									</div>
-								</div>
-
-								<div className="space-y-4">
-									<div className="flex items-center justify-between">
-										<label className="block text-[10px] font-black text-slate-400 uppercase ml-1">Chiết khấu theo Sản phẩm (%)</label>
-										<p className="text-[9px] font-bold text-slate-400 italic">* % Hoa hồng tính trên Lợi nhuận gộp</p>
-									</div>
-
-									<div className="space-y-3 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-[2rem]">
-										{(() => {
-											const staffOrders = orders.filter(o => o.createdBy === selectedStaffForPlan.id && o.status === 'Đơn chốt');
-
-											// Generate a unique list of sold products with their best available key (SKU or Name)
-											const soldProductMap: Record<string, { name: string, sku: string }> = {};
-											staffOrders.forEach(o => {
-												(o.items || []).forEach((item: any) => {
-													const sku = item.sku || products.find(p => p.id === item.id)?.sku || 'N/A';
-													const key = sku !== 'N/A' ? sku : item.name;
-													if (!soldProductMap[key]) {
-														soldProductMap[key] = { name: item.name, sku: sku };
-													}
-												});
-											});
-
-											const soldProductList = Object.entries(soldProductMap);
-
-											if (soldProductList.length === 0) return <p className="text-[10px] text-slate-400 italic text-center py-4">Nhân viên chưa bán sản phẩm nào trong kỳ.</p>;
-
-											return soldProductList.map(([key, data]) => {
-												return (
-													<div key={key} className="flex items-center justify-between gap-4 p-3 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-50 dark:border-slate-700">
-														<div className="flex-1 overflow-hidden">
-															<p className="text-[10px] font-black text-slate-800 dark:text-white truncate uppercase leading-tight">{data.name}</p>
-															<p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{data.sku}</p>
-														</div>
-														<div className="w-24">
-															<div className="relative">
-																<input
-																	type="number"
-																	step="0.1"
-																	className="w-full bg-slate-50 dark:bg-slate-700 border-none rounded-lg px-3 py-2 text-xs font-black text-indigo-600 focus:ring-2 focus:ring-indigo-500/20 pr-6"
-																	placeholder="0"
-																	value={planData.productCommissions[key] ?? ''}
-																	onChange={(e) => {
-																		const val = e.target.value;
-																		const rate = val === '' ? 0 : parseFloat(val);
-																		setPlanData({
-																			...planData,
-																			productCommissions: { ...planData.productCommissions, [key]: rate }
-																		});
-																	}}
-																/>
-																<span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400">%</span>
-															</div>
-														</div>
-													</div>
-												);
-											});
-										})()}
-									</div>
-								</div>
-							</div>
-							<div className="p-8 bg-slate-50 dark:bg-slate-800/50 flex gap-4">
-								<button
-									onClick={() => setShowPlanForm(false)}
-									className="flex-1 py-4 rounded-2xl font-black text-xs uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-all"
-								>
-									Hủy bỏ
-								</button>
-								<button
-									onClick={handleSaveKPIPlan}
-									className="flex-[2] bg-indigo-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-500/20 hover:bg-indigo-700 transition-all"
-								>
-									Lưu kế hoạch tháng
-								</button>
-							</div>
-						</div>
-					</div>
-				)
-			}
 
 			{/* Popup hiển thị chi tiết nội dung */}
 			{selectedNote && (

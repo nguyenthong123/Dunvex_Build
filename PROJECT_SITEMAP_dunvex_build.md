@@ -45,7 +45,6 @@ Dưới đây là sơ đồ tóm tắt các trang và luồng dữ liệu chính
     - **Sổ quỹ nội bộ**: Theo dõi thu chi vận hành, lương, nhập hàng và số dư thực tế.
     - **Báo cáo Tuổi nợ (Debt Aging)**: Phân loại nợ quá hạn theo các mốc 30-60-90 ngày để đánh giá rủi ro tài chính.
     - **Lợi nhuận chi tiết**: Thống kê doanh thu, giá vốn và lợi nhuận gộp trên từng đơn hàng đã chốt.
-    - **Lập kế hoạch & Đánh giá KPI** 🆕: Hệ thống thiết lập chỉ tiêu tháng (lương cứng, số lượt check-in, chỉ tiêu sản phẩm SKU) và tự động tính toán hiệu suất, thưởng/phạt lương thực tế cho nhân viên.
 - **Hệ thống Đào tạo (`/khoa-dao-tao`)** 🎓:
     - **Hands-on Practice**: Thực hành trực tiếp trên dữ liệu thật của chính người dùng.
     - **Môi trường Interactive Lab**: Chia đôi màn hình, hướng dẫn chi tiết từng bước.
@@ -103,6 +102,10 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Bảo toàn Bố cục Chuyên nghiệp**: Khôi phục và chuẩn hóa lại khoảng cách, vị trí các nút bấm theo đúng thiết lập gốc của người dùng sau quá trình tối ưu.
 - [x] **Nâng cấp Hệ thống Nhắc nợ Email (Enhanced Backend Reminders - Mar 12)**:
     - **Gửi Email đa điểm**: Cập nhật Google Apps Script để tự động gửi thông báo nhắc nợ đến cả Admin và Khách hàng (nếu có email), đảm bảo thông tin thông suốt.
+- [x] **Gỡ bỏ module KPI & Đội ngũ (KPI Module Cleanup - Mar 13)**:
+    - **Tối giản hóa Tài chính**: Loại bỏ hoàn toàn tính năng lập kế hoạch KPI, theo dõi hiệu suất đội ngũ và bảng tính thưởng phạt để tinh gọn hệ thống theo yêu cầu thực tế.
+    - **Dọn dẹp Giao diện**: Gỡ bỏ tab "Performance", các state biến liên quan, logic fetching dữ liệu KPI và các modal lập kế hoạch cũ.
+    - **Phân quyền truy cập Tài chính**: Thiết lập thông báo "Truy cập bị hạn chế" chuyên nghiệp cho tài khoản nhân viên khi cố gắng truy cập module Tài chính, đảm bảo bảo mật số liệu doanh nghiệp.
 - [x] **Nâng cấp Dashboard & Tối ưu Mobile Home (Home Mobile Optimization - Mar 13)**:
     - **Hoạt động mới nhất dạng Thẻ (Activity Card Layout)**: Chuyển đổi danh sách hoạt động trên điện thoại sang dạng thẻ (Card) trắng bo tròn, hiển thị đầy đủ: Người thực hiện, Thời gian, Loại tác vụ và Chi tiết nội dung.
     - **Hiệu ứng Tương tác (Haptic Feel)**: Tích hợp hiệu ứng nhấn (active scale) cho các thẻ hoạt động trên Mobile, mang lại trải nghiệm ứng dụng bản địa (Native app) cao cấp.

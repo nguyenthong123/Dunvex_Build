@@ -59,6 +59,7 @@ const TrainingCatalog = () => {
 	const [activeTab, setActiveTab] = useState<'labs' | 'videos'>('labs');
 	const [customLabs, setCustomLabs] = useState<any[]>([]);
 	const [generatingAI, setGeneratingAI] = useState(false);
+	const [hiddenLabs, setHiddenLabs] = useState<string[]>([]);
 
 	// Video state
 	const [videos, setVideos] = useState<any[]>([]);
@@ -94,7 +95,6 @@ const TrainingCatalog = () => {
 
 		return () => unsubscribe();
 	}, [owner.loading, owner.ownerId]);
-
 	useEffect(() => {
 		const q = query(collection(db, 'training_labs'), orderBy('createdAt', 'desc'));
 		const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -106,6 +106,17 @@ const TrainingCatalog = () => {
 		});
 		return () => unsubscribe();
 	}, []);
+
+	useEffect(() => {
+		if (!auth.currentUser?.uid) return;
+		const q = query(collection(db, 'hidden_labs'), where('userId', '==', auth.currentUser?.uid));
+		const unsubscribe = onSnapshot(q, (snapshot) => {
+			const hidden: string[] = [];
+			snapshot.forEach(doc => hidden.push(doc.data().labId));
+			setHiddenLabs(hidden);
+		});
+		return () => unsubscribe();
+	}, [auth.currentUser?.uid]);
 
 	useEffect(() => {
 		const q = query(collection(db, 'tutorial_videos'), orderBy('createdAt', 'desc'));
@@ -291,17 +302,29 @@ const TrainingCatalog = () => {
 		}
 	};
 
-	const handleDeleteLab = async (id: string, e: React.MouseEvent) => {
+	const handleDeleteLab = async (id: string, e: React.MouseEvent, isAI: boolean) => {
 		e.stopPropagation();
-		if (!window.confirm("Bạn có chắc chắn muốn xóa bài học này?")) return;
+		if (!window.confirm("Bạn có chắc chắn muốn xóa/ẩn bài học này?")) return;
 		try {
-			await deleteDoc(doc(db, 'training_labs', id));
-			showToast("Đã xóa bài học", "success");
+			if (isAI) {
+				await deleteDoc(doc(db, 'training_labs', id));
+				showToast("Đã xóa bài học AI", "success");
+			} else {
+				// For system labs, we mark them as hidden for this user
+				await addDoc(collection(db, 'hidden_labs'), {
+					labId: id,
+					userId: auth.currentUser?.uid,
+					createdAt: serverTimestamp()
+				});
+				showToast("Đã ẩn bài học hệ thống", "success");
+			}
 		} catch (error) {
-			console.error("Error deleting lab:", error);
-			showToast("Lỗi khi xóa bài học", "error");
+			console.error("Error deleting/hiding lab:", error);
+			showToast("Lỗi khi xử lý bài học", "error");
 		}
 	};
+
+	const isAdmin = auth.currentUser?.email?.toLowerCase() === 'dunvex.green@gmail.com';
 
 	return (
 		<div className="flex flex-col h-full bg-[#f8f9fb] dark:bg-slate-950 transition-colors duration-300">
@@ -421,12 +444,25 @@ const TrainingCatalog = () => {
 
 							{/* Labs List */}
 							<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-								{[...labs, ...customLabs].map((lab) => (
+								{[...labs, ...customLabs]
+									.filter(lab => !hiddenLabs.includes(lab.id))
+									.map((lab) => (
 									<div
 										key={lab.id}
-										className="group bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 p-8 hover:shadow-2xl hover:border-indigo-500/30 transition-all duration-500 cursor-pointer flex flex-col"
+										className="group relative bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 p-8 hover:shadow-2xl hover:border-indigo-500/30 transition-all duration-500 cursor-pointer flex flex-col"
 										onClick={() => navigate(`/khoa-dao-tao/${lab.id}`)}
 									>
+										{/* Admin Action: Delete/Hide */}
+										{isAdmin && (
+											<button 
+												onClick={(e) => handleDeleteLab(lab.id, e, !!lab.isAI)}
+												className="absolute top-6 right-6 p-2.5 text-slate-300 hover:text-white hover:bg-rose-500 rounded-xl transition-all duration-300 shadow-sm z-20 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm"
+												title={lab.isAI ? "Xóa vĩnh viễn" : "Ẩn bài hệ thống"}
+											>
+												<Trash2 size={16} />
+											</button>
+										)}
+
 										<div className="size-16 bg-slate-50 dark:bg-slate-800/50 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-500 shadow-inner">
 											{lab.isAI ? <BrainCircuit className="text-indigo-600" size={32} /> : (lab.icon || <CheckCircle size={32} />)}
 										</div>
@@ -461,15 +497,6 @@ const TrainingCatalog = () => {
 												<div className="size-8 rounded-full border-2 border-white dark:border-slate-900 bg-indigo-600 text-[9px] font-black text-white flex items-center justify-center shadow-sm z-10">+12</div>
 											</div>
 											<div className="flex items-center gap-3">
-												{lab.isAI && auth.currentUser?.email?.toLowerCase() === 'dunvex.green@gmail.com' && (
-													<button 
-														onClick={(e) => handleDeleteLab(lab.id, e)}
-														className="p-2.5 text-slate-400 hover:text-white hover:bg-rose-500 rounded-xl transition-all duration-300 shadow-sm hover:shadow-rose-500/30 group/trash"
-														title="Xóa bài học"
-													>
-														<Trash2 size={18} className="group-hover/trash:scale-110 transition-transform" />
-													</button>
-												)}
 												<div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-black text-xs uppercase tracking-widest group-hover:translate-x-2 transition-transform">
 													Bắt đầu Lab <Play size={14} fill="currentColor" />
 												</div>

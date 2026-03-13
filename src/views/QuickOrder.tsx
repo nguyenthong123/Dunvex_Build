@@ -33,7 +33,7 @@ const QuickOrder = () => {
 	const [customers, setCustomers] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [fetchingOrder, setFetchingOrder] = useState(false);
-	const [sendEmail, setSendEmail] = useState(false);
+
 	const [showSuccessModal, setShowSuccessModal] = useState(false);
 	const [showScanner, setShowScanner] = useState(false);
 
@@ -648,18 +648,7 @@ const QuickOrder = () => {
 						<p className="text-slate-500 dark:text-slate-400 text-[10px] md:text-sm font-medium mt-1">Hoàn tất thông tin đơn hàng mới</p>
 					</div>
 				</div>
-
 				<div className="flex items-center justify-between md:justify-end gap-6 border-t md:border-none pt-4 md:pt-0 border-slate-100 dark:border-slate-800">
-					<div className="flex items-center gap-3">
-						<span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest leading-none">GỬI EMAIL:</span>
-						<button
-							onClick={() => setSendEmail(!sendEmail)}
-							className={`w-10 h-5 md:w-12 md:h-6 rounded-full transition-colors relative ${sendEmail ? 'bg-[#ffcc00]' : 'bg-slate-200 dark:bg-slate-700'}`}
-						>
-							<div className={`absolute top-0.5 md:top-1 size-4 bg-white rounded-full transition-all ${sendEmail ? 'left-5 md:left-7' : 'left-0.5 md:left-1'}`}></div>
-						</button>
-					</div>
-
 					<button
 						onClick={() => navigate('/orders')}
 						className="flex items-center gap-2 text-slate-500 dark:text-slate-400 hover:text-[#1c130d] dark:hover:text-white font-bold text-[11px] md:text-sm transition-colors group"

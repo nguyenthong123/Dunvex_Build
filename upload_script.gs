@@ -515,13 +515,30 @@ function callNexusAI(prompt) {
 
 function handleGenerateTraining(data) {
   var topic = data.topic || "Sử dụng ứng dụng Dunvex Build";
-  var systemRole = "Bạn là chuyên gia đào tạo hệ thống Dunvex Build. Hãy tạo một giáo án thực hành (Lab) dưới dạng JSON.";
+  
+  // Thông tin ngữ cảnh từ PROJECT_SITEMAP_dunvex_build.md
+  var contextInfo = `
+    Dưới đây là thông tin về hệ thống Dunvex Build để bạn dựa vào đó soạn bài học:
+    - Module Admin: Quản lý doanh nghiệp, vị trí GPS, giờ làm, nhân sự, bảng công tổng hợp.
+    - Module Chấm công: GPS Geofencing (bán kính 50m), Fingerprint ID, đăng ký nghỉ/đi muộn.
+    - Module Công nợ: KPI phải thu/trả, nhắc nợ, ghi nhận thu nợ, Báo cáo Tuổi nợ (30-60-90 ngày).
+    - Module Kho & Đơn hàng: SKU duy nhất, kho FIFO, lên đơn, check-in viếng thăm khách hàng (kèm ảnh).
+    - Module Báo giá: In ấn Premium, thu phóng 60-100%, đồng bộ Firestore.
+    - Module Tài chính: Sổ quỹ nội bộ, lợi nhuận chi tiết, nhắc nợ vay ngân hàng ngày 25 hàng tháng.
+    - Module Đào tạo: Hands-on Practice trên dữ liệu thật, Interactive Lab, video Youtube, tích lũy điểm kỹ năng (Nhập môn -> Bậc thầy).
+    - Nexus Control: Hệ thống quản trị tập trung, tự động khóa/mở gói cước, đồng bộ Sheets.
+  `;
+
+  var systemRole = "Bạn là chuyên gia đào tạo hệ thống Dunvex Build. Hãy tạo bài học thực hành giúp người dùng làm quen và sử dụng thành thạo các tính năng thực tế của app.";
+  
   var prompt = 
-    "Hãy tạo 1 bài học thực hành về chủ đề: '" + topic + "'. " +
+    "Dựa trên thông tin hệ thống sau:\n" + contextInfo + "\n\n" +
+    "Hãy tạo 1 bài học thực hành (Lab) về chủ đề: '" + topic + "'. " +
+    "Yêu cầu nội dung: Các câu hỏi và nhiệm vụ phải bám sát cách sử dụng app Dunvex Build thực tế (ví dụ: cách check-in, cách xem báo cáo tuổi nợ, cách lên đơn kho FIFO...). " +
     "Cấu trúc JSON yêu cầu chính xác như sau: " +
     "{" +
     "  \"title\": \"Tiêu đề bài học\"," +
-    "  \"description\": \"Mô tả ngắn gọn\"," +
+    "  \"description\": \"Mô tả ngắn gọn mục tiêu sử dụng app\"," +
     "  \"duration\": \"Thời gian ước tính (ví dụ: 15 phút)\"," +
     "  \"seconds\": 900," +
     "  \"points\": 100," +
@@ -531,17 +548,17 @@ function handleGenerateTraining(data) {
     "      \"id\": 1," +
     "      \"type\": \"quiz\"," +
     "      \"title\": \"Tiêu đề nhiệm vụ\"," +
-    "      \"description\": \"Câu hỏi trắc nghiệm\"," +
+    "      \"description\": \"Giải thích tính năng hỗ trợ gì cho người dùng\"," +
     "      \"points\": 50," +
     "      \"quiz\": {" +
-    "        \"question\": \"Câu hỏi?\"," +
-    "        \"options\": [\"A\", \"B\", \"C\", \"D\"]," +
-    "        \"answer\": \"Đáp án chính xác\"" +
+    "        \"question\": \"Câu hỏi về thao tác cụ thể trên app?\"," +
+    "        \"options\": [\"Đáp án 1\", \"Đáp án 2\", \"Đáp án 3\", \"Đáp án 4\"]," +
+    "        \"answer\": \"Đáp án chính xác sát với luồng app\"" +
     "      }" +
     "    }" +
     "  ]" +
     "}. " +
-    "Lưu ý: Chỉ trả về chuỗi JSON thô, không kèm markdown hay text giải thích. Hãy tạo ít nhất 3 nhiệm vụ trắc nghiệm.";
+    "Lưu ý: Chỉ trả về chuỗi JSON thô, không kèm markdown hay text giải thích. Hãy tạo 3-4 nhiệm vụ trắc nghiệm.";
 
   try {
     var response = callNexusAI(prompt);

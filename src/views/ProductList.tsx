@@ -28,6 +28,9 @@ const ProductList = () => {
 	const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 	const [activeTab, setActiveTab] = useState<'products' | 'inventory' | 'logs'>('products');
 	const [inventoryLogs, setInventoryLogs] = useState<any[]>([]);
+	const [aiReport, setAiReport] = useState<string | null>(null);
+	const [analyzing, setAnalyzing] = useState(false);
+	const [showAiReport, setShowAiReport] = useState(false);
 	const [orders, setOrders] = useState<any[]>([]);
 	const [expandedSkus, setExpandedSkus] = useState<Set<string>>(new Set());
 	const [currentPage, setCurrentPage] = useState(1);
@@ -324,8 +327,11 @@ const ProductList = () => {
 			productStats[p.id] = { import: totalImport, export: totalExport };
 		});
 
+		// Helper for smart SKU grouping (insensitive to cases and special characters)
+		const normalizeSku = (s: string) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').trim();
+
 		products.forEach(p => {
-			const key = p.sku && p.sku.trim() !== '' ? p.sku.trim().toLowerCase() : `ID-${p.id}`;
+			const key = p.sku && p.sku.trim() !== '' ? normalizeSku(p.sku) : `ID-${p.id}`;
 			if (!groups[key]) {
 				groups[key] = {
 					...p,
@@ -343,7 +349,18 @@ const ProductList = () => {
 				groups[key].isGrouped = true;
 			}
 		});
-		return Object.values(groups);
+
+		// Final pass to calculate AI Health Scores
+		return Object.values(groups).map((g: any) => {
+			const turnoverRate = g.skuExport / (g.skuImport || 1);
+			let aiHealth: 'hot' | 'stable' | 'stale' | 'urgent' = 'stable';
+
+			if (g.stock <= 5 && turnoverRate > 0.2) aiHealth = 'urgent';
+			else if (turnoverRate > 0.7) aiHealth = 'hot';
+			else if (turnoverRate < 0.1 && g.stock > 100) aiHealth = 'stale';
+
+			return { ...g, aiHealth };
+		});
 	}, [products, inventoryLogs, orders]);
 
 	const handleAddProduct = async (e: React.FormEvent) => {
@@ -600,6 +617,72 @@ const ProductList = () => {
 		setShowEditForm(true);
 	};
 
+	const handleAIInventoryAnalysis = async () => {
+		const apiKey = import.meta.env.VITE_DEEPSEEK_API_KEY;
+		if (!apiKey) {
+			showToast("Chưa cấu hình Nexus AI Key trong hệ thống.", "error");
+			return;
+		}
+
+		if (groupedProducts.length === 0) {
+			showToast("Không có dữ liệu tồn kho để phân tích.", "warning");
+			return;
+		}
+
+		setAnalyzing(true);
+		setShowAiReport(true);
+		setAiReport(null);
+
+		try {
+			// Limit to top 40 items to avoid token limits and keep focus
+			const relevantData = [...groupedProducts]
+				.sort((a, b) => (b.stock || 0) - (a.stock || 0))
+				.slice(0, 40)
+				.map(p => ({
+					name: p.name,
+					sku: p.sku || 'N/A',
+					stock: p.stock,
+					in: p.skuImport || 0,
+					out: p.skuExport || 0,
+					unit: p.unit
+				}));
+
+			const response = await fetch("https://api.deepseek.com/chat/completions", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"Authorization": `Bearer ${apiKey}`
+				},
+				body: JSON.stringify({
+					model: "deepseek-chat",
+					messages: [
+						{
+							role: "system",
+							content: "Bạn là Nexus AI chuyên gia quản lý kho thông minh của Dunvex Build. Hãy phân tích tồn kho gộp, chỉ ra các mặt hàng 'đọng vốn' (tồn quá nhiều so với xuất), các mặt hàng 'sắp cháy hàng', và gợi ý tối ưu. Trình bày bằng Markdown súc tích, dùng emoji."
+						},
+						{
+							role: "user",
+							content: `Dữ liệu tồn kho gộp: ${JSON.stringify(relevantData)}`
+						}
+					],
+					stream: false
+				})
+			});
+
+			const data = await response.json();
+			if (data.choices?.[0]?.message?.content) {
+				setAiReport(data.choices[0].message.content);
+			} else {
+				throw new Error("Không nhận được phản hồi từ Nexus AI");
+			}
+		} catch (error: any) {
+			showToast("Lỗi phân tích Nexus AI: " + error.message, "error");
+			setShowAiReport(false);
+		} finally {
+			setAnalyzing(false);
+		}
+	};
+
 	const openDetail = (product: any) => {
 		setSelectedProduct(product);
 		setShowDetail(true);
@@ -816,6 +899,24 @@ const ProductList = () => {
 
 					{hasManagePermission && (
 						<div className="flex items-center gap-2">
+							{activeTab === 'inventory' && (
+								<button
+									onClick={handleAIInventoryAnalysis}
+									disabled={analyzing}
+									className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all border ${
+										analyzing 
+										? 'bg-slate-50 dark:bg-slate-800 text-slate-400 border-slate-200 cursor-not-allowed' 
+										: 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-800 hover:bg-indigo-100'
+									}`}
+								>
+									{analyzing ? (
+										<div className="size-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+									) : (
+										<span className="material-symbols-outlined text-[20px]">psychology</span>
+									)}
+									<span>{analyzing ? 'Đang phân tích...' : 'Nexus AI Phân Tích'}</span>
+								</button>
+							)}
 							{selectedIds.length > 0 && (
 								<button
 									onClick={handleBulkDelete}
@@ -865,6 +966,58 @@ const ProductList = () => {
 
 			{/* CONTENT */}
 			<div className="flex-1 p-4 md:p-8 overflow-y-auto custom-scrollbar">
+
+				{/* Nexus AI Analysis Report Modal */}
+				{showAiReport && (
+					<div 
+						className="mb-8 bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-slate-900 dark:to-indigo-950/30 rounded-3xl border border-indigo-100 dark:border-indigo-900/50 p-6 shadow-sm overflow-hidden relative group animate-in slide-in-from-top duration-500"
+					>
+						<div className="absolute top-0 right-0 p-4">
+							<button 
+								onClick={() => setShowAiReport(false)}
+								className="size-8 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-rose-500 transition-colors shadow-sm"
+							>
+								<span className="material-symbols-outlined text-sm">close</span>
+							</button>
+						</div>
+
+						<div className="flex items-center gap-3 mb-6">
+							<div className="size-12 rounded-2xl bg-white dark:bg-slate-800 flex items-center justify-center text-indigo-500 shadow-sm">
+								<span className="material-symbols-outlined text-2xl">psychology</span>
+							</div>
+							<div>
+								<h3 className="text-lg font-black text-indigo-900 dark:text-indigo-300 uppercase tracking-tight">Nexus AI Smart Analysis</h3>
+								<p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest">Báo cáo tình hình tồn kho thực tế</p>
+							</div>
+						</div>
+
+						<div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm rounded-2xl p-6 border border-white dark:border-slate-800 min-h-[100px] flex flex-col justify-center">
+							{analyzing ? (
+								<div className="flex flex-col items-center gap-4 py-8">
+									<div className="size-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+									<div className="text-center">
+										<p className="text-sm font-black text-slate-600 dark:text-slate-300">Đang khởi chạy bộ não siêu việt của Nexus...</p>
+										<p className="text-[10px] text-slate-400 uppercase font-black tracking-widest mt-1 italic">Vui lòng chờ trong giây lát</p>
+									</div>
+								</div>
+							) : aiReport ? (
+								<div className="prose prose-sm dark:prose-invert max-w-none text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
+									{aiReport.split('\n').map((line, i) => (
+										<p key={i} className="mb-2 last:mb-0">{line}</p>
+									))}
+								</div>
+							) : (
+								<p className="text-center text-slate-400 italic">Không có dữ liệu phân tích.</p>
+							)}
+						</div>
+						
+						{!analyzing && aiReport && (
+							<div className="mt-4 flex justify-end">
+								<p className="text-[9px] text-indigo-400/60 font-black uppercase italic tracking-tighter">Báo cáo được tạo tự động bởi Nexus AI Engine v2.0</p>
+							</div>
+						)}
+					</div>
+				)}
 
 				{/* Mobile Search Bar - Conditional */}
 				{showMobileSearch && (activeTab === 'products' || activeTab === 'inventory') && (
@@ -1058,6 +1211,18 @@ const ProductList = () => {
 																	<div className="font-black text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-indigo-400 transition-colors">
 																		{product.name}
 																	</div>
+																	{product.aiHealth && (
+																		<span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-tighter shadow-sm animate-pulse ${
+																			product.aiHealth === 'hot' ? 'bg-orange-100 text-orange-600 border border-orange-200' :
+																			product.aiHealth === 'urgent' ? 'bg-rose-100 text-rose-600 border border-rose-200' :
+																			product.aiHealth === 'stale' ? 'bg-slate-100 text-slate-500 border border-slate-200' :
+																			'hidden'
+																		}`}>
+																			{product.aiHealth === 'hot' ? '🔥 Bán chạy' : 
+																			 product.aiHealth === 'urgent' ? '⚠️ Sắp hết' : 
+																			 '💤 Đọng vốn'}
+																		</span>
+																	)}
 																	{product.isGrouped && (
 																		<button
 																			onClick={(e) => {

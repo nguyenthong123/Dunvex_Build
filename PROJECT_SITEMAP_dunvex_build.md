@@ -126,6 +126,10 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Logic Sắp xếp Thời gian (Order Sorting Fix)**: Cải thiện hàm `getOrderTime` hỗ trợ xử lý chính xác các đơn hàng mới tạo (chưa có server timestamp) bằng cách lấy mốc thời gian hiện tại, đảm bảo đơn hàng mới luôn xuất hiện trên đầu danh sách.
     - **Đồng bộ Định danh (Loan ID Sync)**: Đồng bộ việc hiển thị mã ID khoản vay thay cho nhắc nợ trên cả Desktop và Mobile để thống nhất quy trình đối soát tài chính.
     - **Tinh chỉnh Hiệu suất Cá nhân**: Gỡ bỏ các nút dư thừa trong bảng hiệu suất để tối ưu không gian hiển thị trên màn hình nhỏ.
+- [x] **Sửa lỗi Điều hướng Tồn kho & Bộ lọc nhanh (Inventory Navigation Fix - Mar 13)**:
+    - **Fix Home Alert Nav**: Sửa lỗi nút "Xem" tại thông báo tồn kho thấp ở Trang chủ không hoạt động. Hiện đã chuyển hướng chính xác về trang Sản phẩm (`/inventory`).
+    - **Quick Low Stock Filter**: Tích hợp bộ lọc tự động `?filter=low_stock`. Khi bấm từ Home, hệ thống sẽ tự động lọc ra danh sách các mặt hàng có tồn kho <= 10 để người dùng biết cần nhập thêm hàng gì ngay lập tức.
+    - **UI Feedback**: Thêm nhãn thông báo "Đang xem: Tồn kho thấp" kèm nút bỏ lọc tại danh sách sản phẩm giúp người dùng dễ dàng quay lại danh sách đầy đủ.
 - [x] **Quản lý Vốn vay**: Thêm các trường Ngân hàng, Kỳ hạn, Lãi suất khi ghi chú các khoản vay, giúp bám sát chi phí tài chính của cơ sở kinh doanh.
     - **Giao diện động**: Form ghi chú tự động thay đổi dựa trên loại thu/chi và hạng mục được chọn.
 - [x] **Tính toán Lợi nhuận FIFO & Đồng bộ Kho (FIFO Profit Calculation - Mar 12)**:

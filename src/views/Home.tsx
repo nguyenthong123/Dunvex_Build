@@ -553,7 +553,7 @@ const Home = () => {
 									<p className="text-[11px] text-slate-500 font-bold">{lowStockProducts.length} mặt hàng</p>
 								</div>
 							</div>
-							<button onClick={() => navigate('/products')} className="text-xs font-bold text-[#FF6D00] px-3 py-1 bg-orange-50 dark:bg-orange-900/20 rounded-lg">Xem</button>
+							<button onClick={() => navigate('/inventory?filter=low_stock')} className="text-xs font-bold text-[#FF6D00] px-3 py-1 bg-orange-50 dark:bg-orange-900/20 rounded-lg">Xem</button>
 						</div>
 					)}
 				</div>

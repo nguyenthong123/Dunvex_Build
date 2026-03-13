@@ -34,6 +34,7 @@ const ProductList = () => {
 	const [showMobileSearch, setShowMobileSearch] = useState(false);
 	const [showScanner, setShowScanner] = useState(false);
 	const [selectedIds, setSelectedIds] = useState<string[]>([]);
+	const [currentFilter, setCurrentFilter] = useState<string | null>(null);
 	const ITEMS_PER_PAGE = 20;
 	const searchRef = useRef<HTMLInputElement>(null);
 	const qrRef = useRef<HTMLCanvasElement>(null);
@@ -201,6 +202,10 @@ const ProductList = () => {
 			setShowMobileSearch(true);
 			setActiveTab('products');
 			setTimeout(() => searchRef.current?.focus(), 200);
+			navigate('/inventory', { replace: true });
+		} else if (params.get('filter') === 'low_stock') {
+			setCurrentFilter('low_stock');
+			setActiveTab('products');
 			navigate('/inventory', { replace: true });
 		}
 	}, [search, navigate]);
@@ -602,11 +607,17 @@ const ProductList = () => {
 
 	const sourceList = activeTab === 'products' ? products : groupedProducts;
 
-	const filteredProducts = sourceList.filter(product =>
-		isMatch(product.name || '', searchTerm) ||
-		isMatch(product.sku || '', searchTerm) ||
-		isMatch(product.category || '', searchTerm)
-	);
+	const filteredProducts = sourceList.filter(product => {
+		const matchesSearch = isMatch(product.name || '', searchTerm) ||
+			isMatch(product.sku || '', searchTerm) ||
+			isMatch(product.category || '', searchTerm);
+
+		if (currentFilter === 'low_stock') {
+			return matchesSearch && (Number(product.stock) || 0) <= 10;
+		}
+
+		return matchesSearch;
+	});
 
 	const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
 	const paginatedProducts = filteredProducts.slice(
@@ -756,19 +767,19 @@ const ProductList = () => {
 				<div className="flex items-center gap-4">
 					<div className="hidden md:flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 border border-slate-200 dark:border-slate-800">
 						<button
-							onClick={() => setActiveTab('products')}
+							onClick={() => { setActiveTab('products'); setCurrentFilter(null); }}
 							className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all ${activeTab === 'products' ? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm' : 'text-slate-400'}`}
 						>
 							DANH SÁCH SP
 						</button>
 						<button
-							onClick={() => setActiveTab('inventory')}
+							onClick={() => { setActiveTab('inventory'); setCurrentFilter(null); }}
 							className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all ${activeTab === 'inventory' ? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm' : 'text-slate-400'}`}
 						>
 							TỒN KHO GỘP
 						</button>
 						<button
-							onClick={() => setActiveTab('logs')}
+							onClick={() => { setActiveTab('logs'); setCurrentFilter(null); }}
 							className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all ${activeTab === 'logs' ? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm' : 'text-slate-400'}`}
 						>
 							LỊCH SỬ KHO
@@ -786,6 +797,20 @@ const ProductList = () => {
 								value={searchTerm}
 								onChange={(e) => setSearchTerm(e.target.value)}
 							/>
+						</div>
+					)}
+
+					{currentFilter === 'low_stock' && (
+						<div className="flex bg-orange-50 dark:bg-orange-900/20 text-[#FF6D00] px-4 py-2 rounded-xl border border-orange-100 dark:border-orange-900/50 items-center gap-3 shadow-sm animate-in fade-in slide-in-from-right-4 duration-300">
+							<div className="size-2 bg-[#FF6D00] rounded-full animate-pulse shadow-[0_0_8px_rgba(255,109,0,0.6)]"></div>
+							<span className="text-[11px] font-black uppercase tracking-wider">Đang xem: Tồn kho thấp</span>
+							<button 
+								onClick={() => setCurrentFilter(null)}
+								className="size-6 bg-white dark:bg-slate-800 rounded-lg flex items-center justify-center text-slate-400 hover:text-rose-500 transition-colors shadow-sm"
+								title="Bỏ lọc"
+							>
+								<span className="material-symbols-outlined text-sm font-bold">close</span>
+							</button>
 						</div>
 					)}
 

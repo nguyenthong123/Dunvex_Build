@@ -637,37 +637,39 @@ const Home = () => {
 					{/* Chart and Recent Activity */}
 					<div className="col-span-12 lg:col-span-8 flex flex-col gap-6">
 						{/* Simplified Chart (Visual Only) */}
-						<div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-200 flex-1">
-							<div className="flex justify-between items-center mb-8">
+						<div className="bg-white dark:bg-slate-900 rounded-[2rem] p-5 lg:p-8 shadow-sm border border-slate-200 dark:border-slate-800 flex-1">
+							<div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 lg:mb-8 gap-4">
 								<div>
-									<h3 className="font-black text-lg text-slate-900 dark:text-white uppercase tracking-tight">Doanh số khách hàng gần nhất</h3>
-									<p className="text-xs text-slate-500 font-bold uppercase tracking-widest">6 khách hàng lên đơn gần nhất (Đơn chốt)</p>
+									<h3 className="font-black text-base lg:text-lg text-slate-900 dark:text-white uppercase tracking-tight leading-tight">Doanh số khách hàng gần nhất</h3>
+									<p className="text-[10px] lg:text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">6 đối tác lên đơn chốt gần đây</p>
 								</div>
-								<div className="flex items-center gap-2">
-									<div className="size-3 rounded-full bg-[#1A237E]"></div>
-									<span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tổng doanh số</span>
+								<div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-full border border-slate-100 dark:border-slate-700">
+									<div className="size-2.5 rounded-full bg-[#1A237E] shadow-[0_0_8px_rgba(26,35,126,0.3)]"></div>
+									<span className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Tổng doanh số</span>
 								</div>
 							</div>
-							<div className="h-64 w-full flex items-end justify-between gap-3 lg:gap-4 px-2 mb-4">
+
+							{/* Universal Horizontal Bars View - Better for readability on all devices */}
+							<div className="flex flex-col gap-4 lg:gap-6 py-2">
 								{customerSalesData.length > 0 ? customerSalesData.map((cust, i) => (
-									<div key={i} className="flex-1 bg-slate-50 dark:bg-slate-800/50 rounded-t-2xl relative group" style={{ height: `${Math.max((cust.value / maxCustRevenue) * 100, 10)}%` }}>
-										<div className="absolute bottom-0 w-full rounded-t-2xl transition-all bg-[#1A237E]/60 group-hover:bg-[#1A237E] dark:bg-indigo-500/40 dark:group-hover:bg-indigo-500" style={{ height: '100%' }}></div>
-										
-										{/* Label inside the bar area at the top */}
-										<div className="absolute -top-14 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 z-20 pointer-events-none">
-											<span className="bg-slate-900 text-white text-[9px] font-black px-2 py-1 rounded-md shadow-xl opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+									<div key={i} className="flex flex-col gap-2 group">
+										<div className="flex justify-between items-end px-1">
+											<span className="text-[10px] lg:text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-tight truncate max-w-[70%] lg:max-w-[80%]">
+												{cust.label}
+											</span>
+											<span className="text-[10px] lg:text-xs font-black text-[#1A237E] dark:text-indigo-400">
 												{formatPrice(cust.value)}
 											</span>
 										</div>
-
-										<div className="absolute inset-0 flex flex-col items-center justify-start p-2 pointer-events-none overflow-hidden">
-											<span className="text-[10px] font-black text-white/90 drop-shadow-md uppercase tracking-tighter [writing-mode:vertical-lr] rotate-180">
-												{cust.label.length > 15 ? cust.label.substring(0, 13) + '..' : cust.label}
-											</span>
+										<div className="h-4 lg:h-5 w-full bg-slate-50 dark:bg-slate-800/50 rounded-full overflow-hidden p-0.5 border border-slate-100 dark:border-slate-800">
+											<div 
+												className="h-full rounded-full bg-gradient-to-r from-[#1A237E]/40 to-[#1A237E] dark:from-indigo-600/40 dark:to-indigo-500 shadow-sm transition-all duration-1000 ease-out group-hover:shadow-[0_0_15px_rgba(26,35,126,0.3)]"
+												style={{ width: `${Math.max((cust.value / maxCustRevenue) * 100, 5)}%` }}
+											></div>
 										</div>
 									</div>
 								)) : (
-									<div className="w-full h-full flex items-center justify-center text-slate-400 text-xs font-bold uppercase tracking-widest">
+									<div className="w-full h-32 flex items-center justify-center text-slate-400 text-[10px] lg:text-xs font-bold uppercase tracking-widest">
 										Chưa có dữ liệu đơn chốt
 									</div>
 								)}

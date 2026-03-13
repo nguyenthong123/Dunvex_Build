@@ -27,6 +27,8 @@ function doPost(e) {
       result = handleAffiliatePayoutNotify(data);
     } else if (data.action === 'training_verification') {
       result = handleTrainingVerification(data);
+    } else if (data.action === 'ai_generate_training') {
+      result = handleGenerateTraining(data);
     } else if (data.action === 'loan_reminder') {
       result = handleLoanReminder(data);
     } else {
@@ -500,6 +502,47 @@ function callNexusAI(prompt) {
   } catch (e) {
     return "Lỗi kết nối Nexus AI (DeepSeek): " + e.toString();
   }
+}
+
+function handleGenerateTraining(data) {
+  var topic = data.topic || "Sử dụng ứng dụng Dunvex Build";
+  var systemRole = "Bạn là chuyên gia đào tạo hệ thống Dunvex Build. Hãy tạo một giáo án thực hành (Lab) dưới dạng JSON.";
+  var prompt = 
+    "Hãy tạo 1 bài học thực hành về chủ đề: '" + topic + "'. " +
+    "Cấu trúc JSON yêu cầu chính xác như sau: " +
+    "{" +
+    "  \"title\": \"Tiêu đề bài học\"," +
+    "  \"description\": \"Mô tả ngắn gọn\"," +
+    "  \"duration\": \"Thời gian ước tính (ví dụ: 15 phút)\"," +
+    "  \"seconds\": 900," +
+    "  \"points\": 100," +
+    "  \"difficulty\": \"Cơ bản/Nâng cao/Chuyên gia\"," +
+    "  \"tasks\": [" +
+    "    {" +
+    "      \"id\": 1," +
+    "      \"type\": \"quiz\"," +
+    "      \"title\": \"Tiêu đề nhiệm vụ\"," +
+    "      \"description\": \"Câu hỏi trắc nghiệm\"," +
+    "      \"points\": 50," +
+    "      \"quiz\": {" +
+    "        \"question\": \"Câu hỏi?\"," +
+    "        \"options\": [\"A\", \"B\", \"C\", \"D\"]," +
+    "        \"answer\": \"Đáp án chính xác\"" +
+    "      }" +
+    "    }" +
+    "  ]" +
+    "}. " +
+    "Lưu ý: Chỉ trả về chuỗi JSON thô, không kèm markdown hay text giải thích. Hãy tạo ít nhất 3 nhiệm vụ trắc nghiệm.";
+
+  var response = callNexusAI(prompt);
+  
+  // Clean response if AI adds markdown backticks
+  var jsonString = response.replace(/```json/g, "").replace(/```/g, "").trim();
+
+  return ContentService.createTextOutput(JSON.stringify({
+    status: "success",
+    data: jsonString
+  })).setMimeType(ContentService.MimeType.JSON);
 }
 
 function handleAIChat(data) {

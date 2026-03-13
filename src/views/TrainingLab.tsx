@@ -6,7 +6,7 @@ import {
 	ArrowLeft, RefreshCcw, Star
 } from 'lucide-react';
 import { db } from '../services/firebase';
-import { collection, query, where, getDocs, doc, getDoc, limit, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, limit, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
 
@@ -207,14 +207,47 @@ const TrainingLab = () => {
 	const navigate = useNavigate();
 	const owner = useOwner();
 	const { showToast } = useToast();
-	const lab = labData[id || 'lab-01'] || labData['lab-01'];
+	const [lab, setLab] = useState<any>(null);
+	const [loadingLab, setLoadingLab] = useState(true);
 
-	const [timeLeft, setTimeLeft] = useState(lab.duration);
+	const [timeLeft, setTimeLeft] = useState(0);
 	const [taskStatus, setTaskStatus] = useState<Record<number, { completed: boolean, count: number, points: number, selectedAnswer?: string }>>({});
 	const [checking, setChecking] = useState<number | null>(null);
 	const [totalPoints, setTotalPoints] = useState(0);
 	const [labCompleted, setLabCompleted] = useState(false);
 	const [quizOptions, setQuizOptions] = useState<Record<number, string[]>>({});
+
+	useEffect(() => {
+		const fetchLab = async () => {
+			if (!id) return;
+			
+			// 1. Try static data
+			if (labData[id]) {
+				setLab(labData[id]);
+				setTimeLeft(labData[id].duration);
+				setLoadingLab(false);
+				return;
+			}
+
+			// 2. Try Firestore
+			try {
+				const labSnap = await getDoc(doc(db, 'training_labs', id));
+				if (labSnap.exists()) {
+					const data = labSnap.data();
+					setLab(data);
+					setTimeLeft(data.seconds || 900);
+				} else {
+					showToast("Không tìm thấy bài học này", "error");
+					navigate('/khoa-dao-tao');
+				}
+			} catch (err) {
+				console.error(err);
+			} finally {
+				setLoadingLab(false);
+			}
+		};
+		fetchLab();
+	}, [id]);
 
 	// Auto-save progress to Firestore
 	useEffect(() => {
@@ -231,18 +264,37 @@ const TrainingLab = () => {
 					completed: labCompleted,
 					updatedAt: serverTimestamp()
 				}, { merge: true });
+
+				// Update User Level / Total Points in Profile
+				const userRef = doc(db, 'users', owner.ownerId);
+				const userSnap = await getDoc(userRef);
+				if (userSnap.exists()) {
+					// We need to fetch all progress to get accurate total
+					const q = query(collection(db, 'training_progress'), where('ownerId', '==', owner.ownerId));
+					const snap = await getDocs(q);
+					let totalAll = 0;
+					snap.forEach(d => totalAll += (d.data().points || 0));
+
+					const currentLevel = totalAll >= 500 ? 'Bậc thầy' : totalAll >= 400 ? 'Chuyên gia' : totalAll >= 250 ? 'Thành thạo' : 'Nhập môn';
+					
+					await updateDoc(userRef, {
+						skillPoints: totalAll,
+						rank: currentLevel,
+						updatedAt: serverTimestamp()
+					});
+				}
 			} catch (err) {
 				console.error("Auto-save failed:", err);
 			}
 		};
 
-		const timeoutId = setTimeout(saveProgress, 1000); // 1s Debounce to avoid excessive writes
+		const timeoutId = setTimeout(saveProgress, 1000); 
 		return () => clearTimeout(timeoutId);
-	}, [totalPoints, labCompleted, owner.ownerId, id]);
+	}, [totalPoints, labCompleted, owner.ownerId, id, lab]);
 
 	useEffect(() => {
 		const loadDynamicQuizzes = async () => {
-			if (!owner.ownerId || !lab.tasks) return;
+			if (!owner.ownerId || !lab || !lab.tasks) return;
 
 			const newOptions: Record<number, string[]> = {};
 			for (const task of lab.tasks) {
@@ -394,6 +446,17 @@ const TrainingLab = () => {
 			setChecking(null);
 		}
 	};
+
+	if (loadingLab) {
+		return (
+			<div className="h-screen flex items-center justify-center bg-white dark:bg-slate-950">
+				<div className="flex flex-col items-center gap-4">
+					<RefreshCcw className="animate-spin text-indigo-600" size={40} />
+					<p className="text-xs font-black text-slate-400 uppercase tracking-widest">Đang tải giáo án...</p>
+				</div>
+			</div>
+		);
+	}
 
 	return (
 		<div className="flex flex-col md:flex-row h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300 overflow-hidden font-['Manrope']">

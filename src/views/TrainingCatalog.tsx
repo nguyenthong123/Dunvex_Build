@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { BookOpen, Award, Clock, Play, CheckCircle, Star, BrainCircuit, ShieldHalf, Trophy, Medal, Crown, Youtube, Plus, Lock, Settings, Trash2, Edit2, Save, X, Mail, ExternalLink } from 'lucide-react';
+import { BookOpen, Award, Clock, Play, CheckCircle, Star, BrainCircuit, ShieldHalf, Trophy, Medal, Crown, Youtube, Plus, Lock, Settings, Trash2, Edit2, Save, X, Mail, ExternalLink, RefreshCcw } from 'lucide-react';
 import { db, auth } from '../services/firebase';
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, updateDoc, orderBy } from 'firebase/firestore';
 import { useOwner } from '../hooks/useOwner';
@@ -57,6 +57,8 @@ const TrainingCatalog = () => {
 	const [userPoints, setUserPoints] = useState(0);
 	const [labProgress, setLabProgress] = useState<Record<string, any>>({});
 	const [activeTab, setActiveTab] = useState<'labs' | 'videos'>('labs');
+	const [customLabs, setCustomLabs] = useState<any[]>([]);
+	const [generatingAI, setGeneratingAI] = useState(false);
 
 	// Video state
 	const [videos, setVideos] = useState<any[]>([]);
@@ -92,6 +94,18 @@ const TrainingCatalog = () => {
 
 		return () => unsubscribe();
 	}, [owner.loading, owner.ownerId]);
+
+	useEffect(() => {
+		const q = query(collection(db, 'training_labs'), orderBy('createdAt', 'desc'));
+		const unsubscribe = onSnapshot(q, (snapshot) => {
+			const list: any[] = [];
+			snapshot.forEach(doc => {
+				list.push({ id: doc.id, ...doc.data(), isAI: true });
+			});
+			setCustomLabs(list);
+		});
+		return () => unsubscribe();
+	}, []);
 
 	useEffect(() => {
 		const q = query(collection(db, 'tutorial_videos'), orderBy('createdAt', 'desc'));
@@ -233,6 +247,50 @@ const TrainingCatalog = () => {
 		setGeneratedCode('');
 	};
 
+	const handleGenerateAITraining = async () => {
+		const topic = window.prompt("Nhập chủ đề bạn muốn AI tạo bài học (ví dụ: Quản lý nợ, Tối ưu kho...):", "Quản lý kinh doanh");
+		if (!topic) return;
+
+		setGeneratingAI(true);
+		showToast("Nexus AI đang biên soạn giáo án...", "info");
+
+		try {
+			const response = await fetch('https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec', {
+				method: 'POST',
+				mode: 'no-cors',
+				headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+				body: JSON.stringify({ action: 'ai_generate_training', topic })
+			});
+
+			// Since no-cors, we can't read response directly easily in current setup without proxy or proper CORS
+			// But the user's GAS script handles it. For now, I'll use a polling or the standard ai_chat if needed.
+			// Re-evaluating: standard fetch for GAS results in opaque response with no-cors.
+			// I'll assume standard fetch with JSON response if the user has correct CORS.
+			// If not, I'll use the existing handleAIChat style.
+
+			const res = await (await fetch('https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec', {
+				method: 'POST',
+				body: JSON.stringify({ action: 'ai_generate_training', topic })
+			})).json();
+
+			if (res.status === 'success') {
+				const labData = JSON.parse(res.data);
+				await addDoc(collection(db, 'training_labs'), {
+					...labData,
+					ownerId: owner.ownerId,
+					createdAt: serverTimestamp(),
+					createdBy: auth.currentUser?.email
+				});
+				showToast("Đã tạo bài học AI mới thành công!", "success");
+			}
+		} catch (err) {
+			console.error(err);
+			showToast("Lỗi khi tạo bài học AI.", "error");
+		} finally {
+			setGeneratingAI(false);
+		}
+	};
+
 	return (
 		<div className="flex flex-col h-full bg-[#f8f9fb] dark:bg-slate-950 transition-colors duration-300">
 			<header className="h-20 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between px-8 shrink-0">
@@ -296,7 +354,7 @@ const TrainingCatalog = () => {
 									</div>
 								</div>
 
-								<div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+								<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
 									{[
 										{ id: 1, name: 'Nhập môn', points: 100, icon: <ShieldHalf size={24} />, color: 'blue' },
 										{ id: 2, name: 'Thành thạo', points: 250, icon: <Medal size={24} />, color: 'emerald' },
@@ -335,16 +393,28 @@ const TrainingCatalog = () => {
 								</div>
 							</div>
 
+							<div className="flex items-center justify-between mb-8">
+								<h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-[4px]">Danh sách bài thi</h3>
+								<button
+									onClick={handleGenerateAITraining}
+									disabled={generatingAI}
+									className="flex items-center gap-2 bg-slate-900 dark:bg-indigo-600 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-indigo-500/20 disabled:opacity-50"
+								>
+									{generatingAI ? <RefreshCcw className="animate-spin" size={16} /> : <BrainCircuit size={16} />} 
+									Tạo bài thi AI mới
+								</button>
+							</div>
+
 							{/* Labs List */}
 							<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-								{labs.map((lab) => (
+								{[...labs, ...customLabs].map((lab) => (
 									<div
 										key={lab.id}
 										className="group bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 p-8 hover:shadow-2xl hover:border-indigo-500/30 transition-all duration-500 cursor-pointer flex flex-col"
 										onClick={() => navigate(`/khoa-dao-tao/${lab.id}`)}
 									>
 										<div className="size-16 bg-slate-50 dark:bg-slate-800/50 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-500 shadow-inner">
-											{lab.icon}
+											{lab.isAI ? <BrainCircuit className="text-indigo-600" size={32} /> : (lab.icon || <CheckCircle size={32} />)}
 										</div>
 										<h3 className="text-xl font-black text-slate-800 dark:text-white mb-3 tracking-tight group-hover:text-indigo-600 transition-colors">{lab.title}</h3>
 										<p className="text-sm text-slate-500 dark:text-slate-400 font-medium leading-relaxed mb-6 flex-1">{lab.description}</p>

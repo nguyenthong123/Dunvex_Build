@@ -137,6 +137,12 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 - **AI Chat Action:** Provides a backend endpoint (`ai_chat`) for frontend applications to securely communicate with the AI engine.
 - **Location:** `upload_script.gs` (Google Apps Script).
 - **Status:** 🟢 Active & Verified.
+- [x] **AI-Powered Training Module (Nexus AI - Mar 13)**:
+    - **Nexus AI Training Generation**: Tự động soạn bài học và câu hỏi trắc nghiệm từ chủ đề bất kỳ (Quản lý nợ, Vận hành kho...) bằng DeepSeek.
+    - **Dynamic Quiz Engine**: Tích hợp trình làm bài thi trắc nghiệm động, tự động xáo trộn đáp án và hiển thị kết quả ngay lập tức.
+    - **Automatic Grading & Skill Points**: Hệ thống tự động chấm điểm bài làm và tích lũy điểm kỹ năng vào hồ sơ nhân sự.
+    - **Automated Ranking (Skill Progression)**: Tự động cập nhật danh hiệu (Nhập môn -> Bậc thầy) dựa trên tổng điểm tích lũy, hiển thị dưới dạng huy hiệu Premium.
+    - **Real-time Level Updates**: Đồng bộ tức thì cấp độ và điểm số của nhân viên vào bộ sưu tập `users` trong Firestore.
 - [x] **Quản lý Vốn vay**: Thêm các trường Ngân hàng, Kỳ hạn, Lãi suất khi ghi chú các khoản vay, giúp bám sát chi phí tài chính của cơ sở kinh doanh.
     - **Giao diện động**: Form ghi chú tự động thay đổi dựa trên loại thu/chi và hạng mục được chọn.
 - [x] **Nâng cấp Nexus Control Pro & AI Management (Mar 13)**:

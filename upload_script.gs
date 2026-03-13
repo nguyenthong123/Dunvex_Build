@@ -13,6 +13,9 @@ function doPost(e) {
     // Check for specific actions
     if (data.action === 'invite_user') {
       result = handleInviteUser(data);
+    } else if (data.action === 'ai_chat') {
+      result = handleAIChat(data);
+    } else if (data.action === 'invite_user') {
     } else if (data.action === 'payment_request') {
       result = handlePaymentRequest(data);
     } else if (data.action === 'sync_to_sheets') {
@@ -56,13 +59,24 @@ function handleAffiliateRegistration(data) {
   var rejectUrl = baseUrl + "?action=REJECT&uid=" + userId;
 
   var subject = "AFFILIATE: Đăng ký đối tác mới - " + partnerName;
+  
+  // Nexus AI Smart Check
+  var aiInsight = "";
+  try {
+    var prompt = "Hãy phân tích đơn đăng ký này: " + partnerName + ", Lời nhắn: " + partnerNote + ". Hãy đánh giá mức độ tiềm năng (Thấp/Trung bình/Cao) và viết 1 câu tóm tắt tính cách đối tác này để Admin dễ duyệt.";
+    aiInsight = callNexusAI(prompt);
+  } catch(e) { aiInsight = "Chưa có phân tích AI"; }
+  
   var body = 
     "<div style='font-family: Arial, sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px; max-width: 600px; margin: 0 auto;'>" +
     "<div style='background: #1A237E; color: white; padding: 20px; border-radius: 8px 8px 0 0; text-align: center;'>" +
     "<h2 style='margin: 0;'>DUNVEX AFFILIATE</h2>" +
-    "<p style='margin: 0; font-size: 12px; opacity: 0.8;'>Yêu cầu đăng ký đối tác mới</p>" +
+    "<p style='margin: 0; font-size: 12px; opacity: 0.8;'>AI Phân tích hồ sơ thông minh</p>" +
     "</div>" +
     "<div style='padding: 30px; border: 1px solid #1A237E; border-top: none; border-radius: 0 0 8px 8px;'>" +
+    "<div style='background: #f0f4ff; padding: 15px; border-radius: 8px; border-left: 4px solid #1A237E; margin-bottom: 20px; font-size: 13px; color: #1A237E;'>" +
+    "<b>🧠 Nexus AI Phân tích:</b> " + aiInsight + 
+    "</div>" +
     "<p>Bạn vừa nhận được một đơn đăng ký tham gia mạng lưới Affiliate:</p>" +
     "<div style='background: #f8f9fb; padding: 20px; border-radius: 12px; margin-bottom: 30px; border: 1px solid #e0e0e0;'>" +
     "<p style='margin: 8px 0;'><strong>Tên đối tác:</strong> " + partnerName + "</p>" +
@@ -395,8 +409,17 @@ function handleLoanReminder(data) {
     "<p style='margin: 5px 0 0; font-size: 13px; opacity: 0.8;'>Hệ thống quản trị Dunvex Build</p>" +
     "</div>" +
     "<div style='padding: 30px; border: 1px solid #1A237E; border-top: none; border-radius: 0 0 12px 12px;'>" +
-    "<p>Xin chào,</p>" +
     "<p>Hệ thống ghi nhận thông tin về nghiệp vụ ngân hàng sau đây:</p>" +
+    
+    // Nexus AI Advisor logic for Loan
+    (function() {
+      try {
+        var aiPrompt = "Hãy phân tích khoản vay này: " + amount + "đ tại " + bankName + " với lãi suất " + interestRate + "%. Hãy viết 1 câu lời khuyên tài chính ngắn gọn (tối đa 20 chữ) cho khách hàng để họ cảm thấy được quan tâm.";
+        var advice = callNexusAI(aiPrompt);
+        return "<div style='background: #fffbeb; padding: 15px; border-radius: 8px; border: 1px solid #fbd38d; margin: 15px 0; font-style: italic; font-size: 13px; color: #92400e;'>" +
+               "<b>💡 Nexus AI khuyên bạn:</b> " + advice + "</div>";
+      } catch(e) { return ""; }
+    })() +
     
     "<div style='background: #f8f9fb; padding: 20px; border-radius: 12px; margin: 25px 0; border: 1px solid #e2e8f0;'>" +
     "<p style='margin: 5px 0;'><strong>Nghiệp vụ:</strong> <span style='color: #1A237E; font-weight: bold;'>" + category + "</span></p>" +
@@ -437,5 +460,51 @@ function handleLoanReminder(data) {
   return ContentService.createTextOutput(JSON.stringify({
     status: "success",
     message: "Reminders sent"
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * CORE: Nexus AI Engine (DeepSeek / Gemini Proxy)
+ * Cung cấp khả năng xử lý ngôn ngữ tự nhiên cho toàn bộ Script
+ */
+function callNexusAI(prompt) {
+  // Ưu tiên sử dụng DeepSeek cho logic tài chính và phân tích
+  var apiKey = "sk-7d13b487bb8e4a7795325bcc7e834601"; 
+  var url = "https://api.deepseek.com/chat/completions";
+  
+  var payload = {
+    "model": "deepseek-chat",
+    "messages": [
+      { "role": "system", "content": "Bạn là Nexus AI Intelligence tích hợp trong hệ thống quản trị Dunvex Build. Hãy trả lời cực kỳ súc tích, chuyên nghiệp và hữu ích." },
+      { "role": "user", "content": prompt }
+    ],
+    "stream": false
+  };
+  
+  var options = {
+    "method": "post",
+    "contentType": "application/json",
+    "headers": { "Authorization": "Bearer " + apiKey },
+    "payload": JSON.stringify(payload),
+    "muteHttpExceptions": true
+  };
+  
+  try {
+    var response = UrlFetchApp.fetch(url, options);
+    var resData = JSON.parse(response.getContentText());
+    if (resData.choices && resData.choices.length > 0) {
+      return resData.choices[0].message.content;
+    }
+    return "Phân tích tự động đang bận...";
+  } catch (e) {
+    return "AI Off-line";
+  }
+}
+
+function handleAIChat(data) {
+  var response = callNexusAI(data.prompt);
+  return ContentService.createTextOutput(JSON.stringify({
+    status: "success",
+    response: response
   })).setMimeType(ContentService.MimeType.JSON);
 }

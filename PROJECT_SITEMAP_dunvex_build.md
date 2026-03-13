@@ -147,7 +147,11 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
         - **Auto-Note Generation**: Tự động kích hoạt AI phân tích khoản vay ngay khi người dùng nhập đủ thông tin (Số tiền, Ngân hàng, Kỳ hạn, Lãi suất).
         - **Smart UI**: Gỡ bỏ nút bấm thủ công, thay thế bằng quy trình xử lý ngầm (Background Processing) mượt mà hơn cho người mới.
         - **Intelligent Fallback**: AI tự động tra cứu lãi suất ngân hàng thời gian thực nếu người dùng bỏ trống.
-    - [x] **Nexus AI Inventory Intelligence (Mar 13)**:
+    - [x] **Nexus AI Script Intelligence (Mar 13)**:
+    - **Smart Cloud Notifications**: Tích hợp DeepSeek vào Google Apps Script để tự động phân tích hồ sơ đối tác và tư vấn tài chính trong email.
+    - **AI Partner Insights**: Tự động đánh giá tiềm năng đối tác Affiliate và tóm tắt tính cách cho Admin dễ duyệt.
+    - **Financial Advisor Email**: Tự động đính kèm lời khuyên tài chính thông minh vào email nhắc nợ/vay ngân hàng.
+- [x] **Nexus AI Inventory Intelligence (Mar 13)**:
         - **Smart Grouping**: Ghép nhóm SKU thông minh (không phân biệt hoa thường/ký tự đặc biệt).
         - **Nexus AI Phân Tích**: Tích hợp DeepSeek phân tích tốc độ bán hàng, cảnh báo tồn đọng và gợi ý nhập hàng.
         - **Health Indicators**: Tự động gắn nhãn trạng thái (Bán chạy, Sắp hết, Đọng vốn) dựa trên phân tích FIFO.

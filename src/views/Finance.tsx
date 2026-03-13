@@ -393,10 +393,24 @@ const Finance = () => {
 
 	// Auto-fetch interest rate when bank and term are selected
 	useEffect(() => {
-		if (logData.type === 'thu' && logData.category === 'Vay ngân hàng' && logData.bankName && logData.loanTerm && !isFetchingRate) {
+		if (logData.type === 'thu' && logData.category === 'Vay ngân hàng' && logData.bankName && logData.loanTerm && !isFetchingRate && (logData.interestRate === 0)) {
 			handleAIInterestRate();
 		}
 	}, [logData.bankName, logData.loanTerm]);
+
+	// Auto-generate AI Loan Analysis note when all conditions are met
+	useEffect(() => {
+		const hasCondition = logData.type === 'thu' && 
+						   (logData.category === 'Vay ngân hàng' || logData.category === 'Vay khác') &&
+						   logData.amount > 0 && 
+						   (logData.category === 'Vay khác' || logData.bankName) && 
+						   logData.loanTerm && 
+						   logData.interestRate > 0;
+
+		if (hasCondition && !isFetchingRate && !logData.note) {
+			handleAILoanAnalysis();
+		}
+	}, [logData.amount, logData.bankName, logData.loanTerm, logData.interestRate, logData.category]);
 
 	useEffect(() => {
 		if (owner.loading || !owner.ownerId) return;
@@ -1555,16 +1569,11 @@ const Finance = () => {
 								<div className="space-y-3">
 									<div className="flex items-center justify-between px-1">
 										<label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Ghi chú chi tiết</label>
-										{logData.type === 'thu' && (logData.category === 'Vay ngân hàng' || logData.category === 'Vay khác') && (
-											<button
-												type="button"
-												onClick={handleAILoanAnalysis}
-												disabled={isFetchingRate}
-												className="flex items-center gap-1.5 text-[9px] font-black text-indigo-600 hover:text-indigo-700 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-xl transition-all hover:shadow-sm"
-											>
-												<Sparkles size={10} />
-												TẠO GHI CHÚ AI
-											</button>
+										{isFetchingRate && (
+											<div className="flex items-center gap-2 text-[9px] font-black text-indigo-500 animate-pulse uppercase tracking-widest">
+												<Sparkles size={10} className="animate-spin" />
+												Nexus AI đang lập biểu mẫu...
+											</div>
 										)}
 									</div>
 									<textarea

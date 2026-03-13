@@ -143,6 +143,10 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
         - **Phân cấp Tài khoản (Role-based AI)**: Tự động phân biệt Super Admin (`dunvex.green@gmail.com`) và các tài khoản nhân viên để hiển thị cấu hình tương ứng.
     - **AI-Friendly Audit Logs**: Bảng nhật ký được thiết kế chuẩn cấu hình cho Bot, giúp AI dễ dàng kiểm tra lịch sử thao tác, xác định vị trí nhấp chuột và chu trình sử dụng để hỗ trợ khách hàng tốt nhất.
     - **FIFO Inventory Logic**: Thực thi nghiêm ngặt cơ chế Nhập trước - Xuất trước cho toàn bộ sản phẩm theo SKU, đảm bảo tính toán giá vốn và lợi nhuận chính xác 100%.
+    - **Finance AI Automation (Mar 13)**: 
+        - **Auto-Note Generation**: Tự động kích hoạt AI phân tích khoản vay ngay khi người dùng nhập đủ thông tin (Số tiền, Ngân hàng, Kỳ hạn, Lãi suất).
+        - **Smart UI**: Gỡ bỏ nút bấm thủ công, thay thế bằng quy trình xử lý ngầm (Background Processing) mượt mà hơn cho người mới.
+        - **Intelligent Fallback**: AI tự động tra cứu lãi suất ngân hàng thời gian thực nếu người dùng bỏ trống.
     - **Dọn dẹp hệ thống**: Gỡ bỏ các module Flag dư thừa, tập trung vào quản trị dữ liệu và nhật ký hoạt động thời gian thực.
 - [x] **Email & Sao chép nhanh Thông tin (Quick Copy Upgrade - Mar 10)**:
     - **Email khách hàng**: Bổ sung khối hiển thị Email trong chi tiết khách hàng, hỗ trợ link mailto và nút sao chép nhanh.

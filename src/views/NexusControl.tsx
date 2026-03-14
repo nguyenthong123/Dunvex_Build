@@ -322,15 +322,17 @@ const NexusControl = () => {
 	}, [customers.length, isAiActive]);
 
 	const handleUpdatePlan = async (ownerId: string, newPlan: string) => {
-		if (!window.confirm(`Xác nhận đổi gói sang ${newPlan === 'free' ? 'FREE' : newPlan === 'premium_monthly' ? '1 tháng' : '1 năm'}? Ngày hiệu lực sẽ được đặt về hôm nay.`)) return;
+		if (!window.confirm(`Xác nhận đổi gói sang ${newPlan === 'free' ? 'FREE' : newPlan === 'premium_monthly' ? '1 tháng' : newPlan === 'test_expire' ? 'GIẢ LẬP HẾT HẠN' : '1 năm'}? Ngày hiệu lực sẽ được đặt về hôm nay.`)) return;
 		try {
-			const isPro = newPlan !== 'free';
+			const isPro = newPlan !== 'free' && newPlan !== 'test_expire';
 			const expireDate = new Date();
 
 			if (newPlan === 'premium_monthly') {
 				expireDate.setMonth(expireDate.getMonth() + 1);
 			} else if (newPlan === 'premium_yearly') {
 				expireDate.setFullYear(expireDate.getFullYear() + 1);
+			} else if (newPlan === 'test_expire') {
+				expireDate.setDate(expireDate.getDate() - 1);
 			} else {
 				// Free plan policy: 60 days
 				expireDate.setDate(expireDate.getDate() + 60);
@@ -851,6 +853,7 @@ const NexusControl = () => {
 															value={c.planId || (c.isPro ? 'premium_monthly' : 'free')}
 															onChange={(e) => handleUpdatePlan(c.uid, e.target.value)}
 														>
+															<option value="test_expire">TEST HẾT HẠN (-1d)</option>
 															<option value="free">FREE (60d)</option>
 															<option value="premium_monthly">1 THÁNG (30d)</option>
 															<option value="premium_yearly">1 NĂM (365d)</option>
@@ -926,6 +929,7 @@ const NexusControl = () => {
 														value={c.planId || (c.isPro ? 'premium_monthly' : 'free')}
 														onChange={(e) => handleUpdatePlan(c.uid, e.target.value)}
 													>
+														<option value="test_expire">TEST HẾT HẠN</option>
 														<option value="free">FREE</option>
 														<option value="premium_monthly">M-PRO</option>
 														<option value="premium_yearly">Y-PRO</option>

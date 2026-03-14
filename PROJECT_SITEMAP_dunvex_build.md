@@ -138,25 +138,24 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 - **Location:** `upload_script.gs` (Google Apps Script).
 - **Status:** 🟢 Active & Verified.
 - [x] **AI-Powered Training Module (Nexus AI - Mar 14)**:
-    - **Nexus AI Training Generation**: Tự động soạn bài học và câu hỏi trắc nghiệm từ chủ đề bất kỳ. **Điểm nhấn (Mar 14)**: Prompt của AI được tái cấu trúc thành một *Context Guideline* với văn phong thuần Việt 100%, không dùng tiếng lóng IT.
-    - **Nexus AI Adaptive Suggestion (New)**: Khi nhấn Tạo Bài Mới, màn hình sẽ hiển thị tuỳ chọn uỷ quyền cho AI Đề Xuất. Hệ thống tự động thu thập danh sách các bìa bài cũ, truyền sang cho AI đọc hiểu, từ đó AI tự động phát kiến một chủ đề mới toanh mà chưa từng có trong danh mục. Đảm bảo nhân sự được học cái mới liên tục.
-    - **Instructional "How & Why"**: AI bắt buộc phải soạn nội dung hướng dẫn trước mỗi bài tập, giải thích rõ "Nút này ở đâu, bấm thế nào" (How) và "Nếu không làm thì ảnh hưởng phòng ban nào" (Why), giúp nhân viên thấu hiểu hoàn toàn nghiệp vụ.
-    - **Knowledge Base File**: Khởi tạo tài liệu `NEXUS_AI_TRAINING_GUIDE.md` đóng vai trò là "Kiến thức nền tảng" độc lập, hỗ trợ Admin truyền các ngữ cảnh mới vào AI dễ dàng.
-    - **Dynamic Quiz Engine**: Tích hợp trình làm bài thi trắc nghiệm động, tự động xáo trộn đáp án và hiển thị kết quả ngay lập tức.
-    - **Automatic Grading & Skill Points**: Hệ thống tự động chấm điểm bài làm và tích lũy điểm kỹ năng vào hồ sơ nhân sự.
-    - **Automated Ranking (Skill Progression)**: Tự động cập nhật danh hiệu (Nhập môn -> Bậc thầy) dựa trên tổng điểm tích lũy, hiển thị dưới dạng huy hiệu Premium.
-    - **Real-time Level Updates**: Đồng bộ tức thì cấp độ và điểm số của nhân viên vào bộ sưu tập `users` trong Firestore.
-    - **Lab Management**: Hỗ trợ xóa các bài học AI đã soạn cũ để quản lý danh sách đào tạo gọn gàng hơn.
-- [x] **Quản lý Vốn vay**: Thêm các trường Ngân hàng, Kỳ hạn, Lãi suất khi ghi chú các khoản vay, giúp bám sát chi phí tài chính của cơ sở kinh doanh.
-    - **Giao diện động**: Form ghi chú tự động thay đổi dựa trên loại thu/chi và hạng mục được chọn.
+    - **Nexus AI Training Generation**: Tự động soạn bài học và câu hỏi trắc nghiệm từ chủ đề bất kỳ. **Cập nhật Mar 14**: Prompt được tối ưu thuần Việt 100%, dễ hiểu như "dân sale", không dùng từ lóng IT.
+    - **Nexus AI Adaptive Suggestion**: Tự động kiểm tra danh sách bài học cũ để đề xuất tiêu đề và nội dung mới không trùng lặp, giúp nhân sự tiến bộ mỗi ngày.
+    - **Instructional "How & Why"**: AI giải thích rõ "Nút này ở đâu, bấm thế nào" (How) và "Tại sao phải làm đúng quy trình" (Why) để tránh sai sót vận hành.
+    - **Terminology Alignment**: Đồng bộ tên gọi 100% với App: Trang chủ, Đơn hàng, Công nợ, Tài chính, Khách hàng, Sản phẩm, Báo giá.
+    - **Bulk Import Training**: Hướng dẫn chi tiết cách chuẩn bị file Excel/Google Sheet với bộ từ khóa tiêu đề cột (Map Keys) chuẩn để Web nhận biết tự động.
+    - **Knowledge Base File**: Cập nhật `NEXUS_AI_TRAINING_GUIDE.md` làm nguồn tri thức chuẩn cho AI.
+    - **Automatic Testing**: Hệ thống chấm điểm trắc nghiệm, tích lũy điểm kỹ năng và xếp hạng bậc thầy (Skill Progression).
+- [x] **Quản lý Tài chính & Vốn vay**: Thêm các trường Ngân hàng, Kỳ hạn, Lãi suất khi ghi chú các khoản vay.
+    - **Bot Sinh Lãi (AI Interest)**: AI tự động tính toán lãi hàng tháng dự kiến, gộp vào chi phí vận hành để chủ cơ sở nắm được số liệu lợi nhuận ròng chính xác nhất.
+    - **Giao diện động**: Form ghi chú Tài chính tự động thay đổi dựa trên loại thu/chi và hạng mục được chọn (Thu khách, Chi NCC, Lương NV...).
 - [x] **Nâng cấp Nexus Control Pro & AI Management (Mar 13)**:
     - **UI/UX Optimization**: Giao diện thích ứng hoàn hảo trên mọi kích thước màn hình (Mobile, Tablet, Desktop). Sử dụng Sidebar hiện đại và các tab được tối ưu hóa cho thao tác chạm.
     - **Nexus AI Smart Import (AI-Driven Matching)**: 
         - **Phân loại Gói thông minh**: Khắc phục triệt để lỗi ghi đè dữ liệu khi người dùng nhập nhiều mốc giá (ví dụ: gói 4 kiện và gói 6 kiện). 
         - **Semantic Variant Detection**: AI tự động phân tích Mã SKU kết hợp với Danh mục và Tên sản phẩm. Nếu phát hiện sự khác biệt về "Gói" hoặc "Giá", hệ thống sẽ tự động tạo bản ghi mới thay vì ghi đè, bảo toàn 100% dữ liệu đa tầng của đơn vị.
     - **Autonomous AI Management (Nexus AI Auto-Enforcement - Mar 14)**:
-        - **AI Auto-Approval (Trust Model)**: Quản lý tự động dựa trên mức độ tin cậy. Khi khách hàng báo cáo "Đã thanh toán" gói cước (Thử nghiệm -> Chính thức), AI tự động kiểm tra yêu cầu và phê duyệt ngay lập tức (Auto-Approve), mở khóa toàn bộ tính năng và gửi thông báo xác nhận tự động, loại bỏ thời gian trễ chờ Admin. 
-        - **AI Auto-Downgrade & Auto-Lock**: Trình quay vòng (Autonomous Cycle chạy ngầm mỗi 30s) tự động đếm thời gian thực tế người dùng ở tại ứng dụng. Khi người dùng hết hạn (vượt quá 30, 60, 365 ngày tương ứng), AI sẽ tự động gán cờ `subscriptionStatus: 'expired'`, huỷ bỏ quyền Premium `isPro: false`, tự động "bật đỏ" 3 ổ khóa (Orders, Debts, Sheets) và bắn trực tiếp cảnh báo về chuông ứng dụng yêu cầu khách hàng gia hạn để sử dụng tiếp. Mọi quy trình hoàn toàn độc lập và không cần Admin can thiệp tay.
+        - **AI Auto-Approval (Trust Model)**: Quản lý tự động phê duyệt gia hạn gói cước dựa trên lịch sử tin cậy, mở khóa tính năng tức thì cho khách hàng.
+        - **AI Auto-Lock (Customer Management)**: Trong bảng Khách hàng, AI tự động kiểm tra "Ngày vào trang" và "Hạn sử dụng". Khi hết hạn, hệ thống tự động bật nút **Khóa tính năng**, gán trạng thái `expired` và gửi thông báo trực tiếp cho người dùng yêu cầu gia hạn phí dịch vụ để tiếp tục sử dụng (Orders, Debts, Finance...).
         - **Khôi phục phòng ngự (Admin Revoke Lock)**: Trong trường hợp Admin không nhận được lệ phí từ ngân hàng theo lệnh Auto-Approve (gian lận), hệ thống trang bị nút "⛔ HUỶ ĐĂNG KÝ (KHÓA)" nằm ngay trong danh sách chọn gói của quản trị viên. Việc ấn vào nút này sẽ ngay lập tức xoè lệnh đóng chu kỳ, khoá sổ các tính năng và gửi cảnh báo đỏ thẳng tới User.
         - **Phân cấp Tài khoản (Role-based AI)**: Tự động phân biệt Super Admin (`dunvex.green@gmail.com`) và các tài khoản nhân viên để hiển thị cấu hình tương ứng.
         - **Cảnh báo Thông minh (Pocket-Touch Prevention)**: AI tự động gửi thông báo "Chuông báo" trực tiếp cho người dùng nếu phát hiện thao tác liên tục bất thường.

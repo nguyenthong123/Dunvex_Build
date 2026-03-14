@@ -528,7 +528,7 @@ function handleGenerateTraining(data) {
   var contextInfo = `
     DỮ LIỆU APP DUNVEX BUILD ĐỂ BẠN DỰA VÀO SOẠN BÀI:
     - Chấm công: Phải đến công ty mở app quét GPS bán kính 50m mới được chấm công. Quên chấm hoặc đi muộn thì phải bấm tạo Đơn Xin Phép để được duyệt.
-    - Quản lý Kho & Lên đơn: Kho dùng cơ chế nhập trước xuất trước (FIFO). Hàng hết (tồn bằng 0) thì Sale không thể lên đơn. 
+    - Quản lý Kho & Lên đơn: Kho dùng cơ chế FIFO. Hàng hết (tồn bằng 0) thì Sale không thể lên đơn. LƯU Ý TỐI QUAN TRỌNG: App chỉ có "Đơn nháp" (tạo tạm chưa trừ kho) và "Đơn chốt" (đã chốt và trừ kho). TUYỆT ĐỐI KHÔNG CÓ TÍNH NĂNG "HỦY ĐƠN". Không được bịa ra các câu hỏi hay tình huống về việc hủy đơn hàng.
     - Công nợ & Thanh toán: Khi khách nợ, số tiền tự nhảy vào sổ nợ, tự đếm ngày (30-60-90 ngày). Có tiền khách trả thì phải ấn nút 'Thu nợ'.
     - Báo giá PDF: Có thể lên danh sách hàng, chỉnh mức độ thu phóng bản in (60% - 100%) rồi gửi PDF ngay cho khách.
     - Sổ quỹ nội bộ: Ghi chép thu chi chi tiết hàng ngày để biết lời lỗ.

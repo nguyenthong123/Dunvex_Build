@@ -19,6 +19,7 @@ Tài liệu này đóng vai trò là "Kiến thức nền tảng" (Knowledge Bas
 - **Tạo sản phẩm & Tồn kho:** Thêm mã SKU, Tên, Giá. Nhập kho từ tab Nhập hàng. App dùng chuẩn FIFO (Nhập trước Xuất trước).
 - **Tại sao cần làm:** FIFO giúp tính chuẩn Giá vốn hàng bán (COGS) và lợi nhuận. Nếu kho không có hàng (tồn <= 0), Sale sẽ không thể lên đơn. 
 - **Lên đơn hàng:** Sale chọn Khách hàng -> Chọn Sản phẩm -> Có thể áp Chiết khấu (Discount). Chốt đơn thì kho tự trừ.
+- **🚫 LƯU Ý TỐI QUAN TRỌNG VỀ ĐƠN HÀNG:** Hệ thống chỉ có 2 loại là **"Đơn nháp"** (chưa trừ kho) và **"Đơn chốt"** (đã trừ kho). **App hoàn toàn KHÔNG CÓ tính năng "Hủy đơn"**. TUYỆT ĐỐI KHÔNG được bịa ra các tình huống hay câu hỏi bắt nhân viên đi tìm nút Hủy đơn trên app.
 
 ### C. Quản lý Công Nợ & Tài chính
 - **Thao tác Công Nợ:** Đơn hàng tạo ra sẽ tự nhảy vào mục Công nợ nếu khách chưa t/toán đủ. Chạm vào Tên Khách -> Nhập số tiền Khách trả -> Bấm Thu Nợ.

@@ -499,7 +499,7 @@ const Debts: React.FC = () => {
 					messages: [
 						{
 							role: "system",
-							content: "Bạn là Nexus AI chuyên gia tài chính và quản lý công nợ. Hãy phân tích danh sách nợ khách hàng, xác định rủi ro tài chính, và đưa ra chiến lược thu hồi nợ cụ thể (nhắc nợ, giãn nợ, hoặc pháp lý). Phản hồi bằng tiếng Việt, súc tích, chuyên nghiệp."
+							content: "Bạn là Nexus AI chuyên gia tài chính và quản lý công nợ. Hãy phân tích danh sách nợ khách hàng, xác định rủi ro tài chính, và đưa ra chiến lược thu hồi nợ cụ thể. YÊU CẦU ĐẶC BIỆT CHÚ Ý TRÌNH BÀY: CHỈ ĐƯỢC dùng văn bản thuần (plain text), TUYỆT ĐỐI KHÔNG dùng dấu sao (*), dấu thăng (#) hay in đậm của markdown. Sử dụng các dấu gạch ngang (-) hoặc chữ số (1, 2) đê làm danh sách. Hãy dùng dấu xuống dòng để chia đoạn. Phản hồi bằng tiếng Việt, súc tích, chuyên nghiệp."
 						},
 						{
 							role: "user",
@@ -511,7 +511,10 @@ const Debts: React.FC = () => {
 			});
 
 			const result = await response.json();
-			setAiReport(result.choices[0].message.content);
+			let content = result.choices[0].message.content;
+			// Gỡ bỏ **in đậm**, và thay vì ghi dấu * thành dấu -
+			content = content.replace(/\*\*/g, '').replace(/\*/g, '-');
+			setAiReport(content);
 		} catch (error) {
 			showToast("Lỗi phân tích AI.", "error");
 		} finally {

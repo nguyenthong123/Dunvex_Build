@@ -477,14 +477,15 @@ function handleLoanReminder(data) {
  * CORE: Nexus AI Engine (DeepSeek API)
  * Sử dụng DeepSeek (Gói trả phí) để đảm bảo độ ổn định và chính xác cao nhất
  */
-function callNexusAI(prompt) {
+function callNexusAI(prompt, customSystemRole) {
   var apiKey = "sk-35a45d673ff147dabd1e416af5f088f4"; 
   var url = "https://api.deepseek.com/chat/completions";
+  var systemContent = customSystemRole || "Bạn là Nexus AI Intelligence tích hợp trong hệ thống quản trị Dunvex Build. Hãy trả lời cực kỳ súc tích, chuyên nghiệp và hữu ích.";
   
   var payload = {
     "model": "deepseek-chat",
     "messages": [
-      { "role": "system", "content": "Bạn là Nexus AI Intelligence tích hợp trong hệ thống quản trị Dunvex Build. Hãy trả lời cực kỳ súc tích, chuyên nghiệp và hữu ích." },
+      { "role": "system", "content": systemContent },
       { "role": "user", "content": prompt }
     ],
     "stream": false
@@ -514,54 +515,53 @@ function callNexusAI(prompt) {
 }
 
 function handleGenerateTraining(data) {
-  var topic = data.topic || "Sử dụng ứng dụng Dunvex Build";
+  var topic = data.topic || "Sử dụng phần mềm quản lý";
   
-  // Thông tin ngữ cảnh từ PROJECT_SITEMAP_dunvex_build.md
   var contextInfo = `
-    Dưới đây là thông tin về hệ thống Dunvex Build để bạn dựa vào đó soạn bài học:
-    - Module Admin: Quản lý doanh nghiệp, vị trí GPS, giờ làm, nhân sự, bảng công tổng hợp.
-    - Module Chấm công: GPS Geofencing (bán kính 50m), Fingerprint ID, đăng ký nghỉ/đi muộn.
-    - Module Công nợ: KPI phải thu/trả, nhắc nợ, ghi nhận thu nợ, Báo cáo Tuổi nợ (30-60-90 ngày).
-    - Module Kho & Đơn hàng: SKU duy nhất, kho FIFO, lên đơn, check-in viếng thăm khách hàng (kèm ảnh).
-    - Module Báo giá: In ấn Premium, thu phóng 60-100%, đồng bộ Firestore.
-    - Module Tài chính: Sổ quỹ nội bộ, lợi nhuận chi tiết, nhắc nợ vay ngân hàng ngày 25 hàng tháng.
-    - Module Đào tạo: Hands-on Practice trên dữ liệu thật, Interactive Lab, video Youtube, tích lũy điểm kỹ năng (Nhập môn -> Bậc thầy).
-    - Nexus Control: Hệ thống quản trị tập trung, tự động khóa/mở gói cước, đồng bộ Sheets.
+    DỮ LIỆU APP DUNVEX BUILD ĐỂ BẠN DỰA VÀO SOẠN BÀI:
+    - Chấm công: Phải đến công ty mở app quét GPS bán kính 50m mới được chấm công. Quên chấm hoặc đi muộn thì phải bấm tạo Đơn Xin Phép để được duyệt.
+    - Quản lý Kho & Lên đơn: Kho dùng cơ chế nhập trước xuất trước (FIFO). Hàng hết (tồn bằng 0) thì Sale không thể lên đơn. 
+    - Công nợ & Thanh toán: Khi khách nợ, số tiền tự nhảy vào sổ nợ, tự đếm ngày (30-60-90 ngày). Có tiền khách trả thì phải ấn nút 'Thu nợ'.
+    - Báo giá PDF: Có thể lên danh sách hàng, chỉnh mức độ thu phóng bản in (60% - 100%) rồi gửi PDF ngay cho khách.
+    - Sổ quỹ nội bộ: Ghi chép thu chi chi tiết hàng ngày để biết lời lỗ.
   `;
 
-  var systemRole = "Bạn là chuyên gia đào tạo hệ thống Dunvex Build. Hãy tạo bài học thực hành giúp người dùng làm quen và sử dụng thành thạo các tính năng thực tế của app.";
+  var systemRole = "Bạn là người hướng dẫn nhân viên dùng app phần mềm của công ty. Bạn giảng giải cực kỳ thân thiện, dặn dò kỹ lưỡng. Dùng từ ngữ tiếng Việt 100%, tuyệt đối nói KHÔNG với từ phức tạp, hàn lâm, kỹ thuật. Câu hỏi trắc nghiệm phải giống như chuyện thường ngày.";
   
   var prompt = 
-    "Dựa trên thông tin hệ thống sau:\n" + contextInfo + "\n\n" +
-    "Hãy tạo 1 bài học thực hành (Lab) về chủ đề: '" + topic + "'. " +
-    "Yêu cầu nội dung: Các câu hỏi và nhiệm vụ phải bám sát cách sử dụng app Dunvex Build thực tế (ví dụ: cách check-in, cách xem báo cáo tuổi nợ, cách lên đơn kho FIFO...). " +
-    "Cấu trúc JSON yêu cầu chính xác như sau: " +
-    "{" +
-    "  \"title\": \"Tiêu đề bài học\"," +
-    "  \"description\": \"Mô tả ngắn gọn mục tiêu sử dụng app\"," +
-    "  \"duration\": \"Thời gian ước tính (ví dụ: 15 phút)\"," +
-    "  \"seconds\": 900," +
-    "  \"points\": 100," +
-    "  \"difficulty\": \"Cơ bản/Nâng cao/Chuyên gia\"," +
-    "  \"tasks\": [" +
-    "    {" +
-    "      \"id\": 1," +
-    "      \"type\": \"quiz\"," +
-    "      \"title\": \"Tiêu đề nhiệm vụ\"," +
-    "      \"description\": \"Giải thích tính năng hỗ trợ gì cho người dùng\"," +
-    "      \"points\": 50," +
-    "      \"quiz\": {" +
-    "        \"question\": \"Câu hỏi về thao tác cụ thể trên app?\"," +
-    "        \"options\": [\"Đáp án 1\", \"Đáp án 2\", \"Đáp án 3\", \"Đáp án 4\"]," +
-    "        \"answer\": \"Đáp án chính xác sát với luồng app\"" +
-    "      }" +
-    "    }" +
-    "  ]" +
-    "}. " +
-    "Lưu ý: Chỉ trả về chuỗi JSON thô, không kèm markdown hay text giải thích. Hãy tạo 3-4 nhiệm vụ trắc nghiệm.";
+    "Hãy soạn 1 bài học về '" + topic + "' dựa theo quy trình sau:\n" + contextInfo + "\n\n" +
+    "YÊU CẦU NGHIÊM NGẶT DÀNH CHO BẠN:\n" +
+    "1. Lời văn phải thuần Việt, cực kỳ dễ hiểu, tâm lý. Giọng văn như người anh chỉ việc cho người mới.\n" +
+    "2. Trong phần 'description' của mỗi câu hỏi, bạn BẮT BUỘC phải viết Gồm 2 phần:\n" +
+    "   - CÁCH LÀM (How): Chỉ cụ thể bấm vào tab nào, chọn nút gì.\n" +
+    "   - TẠI SAO PHẢI LÀM (Why): Nói rõ hệ quả nếu làm sai. (Ví dụ: Chấm công sai thì kế toán không trả lương, Không nhập kho thì Sale móm không có hàng bán).\n" +
+    "3. Câu hỏi và 4 đáp án (quiz) phải bám lấy thực tiễn công việc hàng ngày, đáp án thực tế vui vẻ.\n\n" +
+    "TRẢ VỀ DUY NHẤT CHUỖI JSON SAU:\n" +
+    "{\n" +
+    "  \"title\": \"Tiêu đề bài học\",\n" +
+    "  \"description\": \"Mô tả: Bạn sẽ học được gì qua thao tác này\",\n" +
+    "  \"duration\": \"15 phút\",\n" +
+    "  \"seconds\": 900,\n" +
+    "  \"points\": 100,\n" +
+    "  \"difficulty\": \"Chọn 1: Nhập môn / Cơ bản / Xịn xò\",\n" +
+    "  \"tasks\": [\n" +
+    "    {\n" +
+    "      \"id\": 1,\n" +
+    "      \"type\": \"quiz\",\n" +
+    "      \"title\": \"Tên thao tác (VD: Check-in đầu ngày)\",\n" +
+    "      \"description\": \"Ví dụ: CÁCH LÀM: Mở app, đứng gần công ty dưới 50m bấm Check-in. TẠI SAO: Nếu không bấm thì kế toán bôi đỏ vắng mặt, cuối tháng khóc tiếng mán nhé em.\",\n" +
+    "      \"points\": 50,\n" +
+    "      \"quiz\": {\n" +
+    "        \"question\": \"Câu hỏi bình dân dễ hiểu?\",\n" +
+    "        \"options\": [\"Đáp án 1\", \"Cách xử lý 2\", \"Tình huống 3\", \"Câu trả lời 4\"],\n" +
+    "        \"answer\": \"Đáp án đúng\"\n" +
+    "      }\n" +
+    "    }\n" +
+    "  ]\n" +
+    "}\n Hãy tạo 3 câu trắc nghiệm.";
 
   try {
-    var response = callNexusAI(prompt);
+    var response = callNexusAI(prompt, systemRole);
     // Clean response if AI adds markdown backticks
     var jsonString = response.replace(/```json/g, "").replace(/```/g, "").trim();
     

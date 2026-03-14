@@ -1,0 +1,61 @@
+# TÀI LIỆU HUẤN LUYỆN NEXUS AI (TRAINING GUIDELINE)
+
+Tài liệu này đóng vai trò là "Kiến thức nền tảng" (Knowledge Base) để cấp dữ liệu cho Nexus AI khi nó tự động soạn thảo các bài học và bài kiểm tra trên ứng dụng Dunvex Build.
+
+## 1. MỤC TIÊU ĐÀO TẠO CỦA AI
+- **Dễ hiểu, thuần Việt:** Tuyệt đối không dùng từ ngữ học thuật, máy móc, Hán Việt phức tạp. Sử dụng ngôn ngữ giao tiếp hàng ngày của dân sale, kế toán, thủ kho. 
+- **Chỉ rõ "How" và "Why":** Trước khi hỏi trắc nghiệm, AI phải có phần `description` (hướng dẫn) mô tả cụ thể:
+  1. **Bước thực hiện (How):** Bấm vào đâu, giao diện nào, điền thông tin gì.
+  2. **Ý nghĩa tác vụ (Why):** Tại sao tính năng này tồn tại? Làm sai thì ảnh hưởng gì đến các bộ phận khác (ví dụ: nhập sai kho thì không lên đơn được, quên check-in thì không được tính công).
+- **Thực tế & Trực quan:** Câu hỏi phải là các tình huống thực tế xảy ra trong ứng dụng.
+
+## 2. BỘ KIẾN THỨC CỐT LÕI CỦA DUNVEX BUILD (AI CONTEXT)
+
+### A. Quản lý Nhân sự & Chấm công
+- **Thao tác:** Nhân viên vào tab Chấm công, ứng dụng quét GPS bán kính 50m quanh chi nhánh. Ấn "Check-in" hoặc "Check-out".
+- **Tại sao cần làm:** Bắt buộc để tính lương. Nếu nhân viên đi muộn, cần làm Đơn xin phép trên app để quản lý duyệt.
+
+### B. Mua bán & Tồn kho (Quy trình Sinh tồn)
+- **Tạo sản phẩm & Tồn kho:** Thêm mã SKU, Tên, Giá. Nhập kho từ tab Nhập hàng. App dùng chuẩn FIFO (Nhập trước Xuất trước).
+- **Tại sao cần làm:** FIFO giúp tính chuẩn Giá vốn hàng bán (COGS) và lợi nhuận. Nếu kho không có hàng (tồn <= 0), Sale sẽ không thể lên đơn. 
+- **Lên đơn hàng:** Sale chọn Khách hàng -> Chọn Sản phẩm -> Có thể áp Chiết khấu (Discount). Chốt đơn thì kho tự trừ.
+
+### C. Quản lý Công Nợ & Tài chính
+- **Thao tác Công Nợ:** Đơn hàng tạo ra sẽ tự nhảy vào mục Công nợ nếu khách chưa t/toán đủ. Chạm vào Tên Khách -> Nhập số tiền Khách trả -> Bấm Thu Nợ.
+- **Tại sao cần làm:** App tự động xếp loại nợ theo tuổi (30-60-90 ngày). Tiền thu nợ tự động chảy vào Sổ Quỹ Kế toán. Không thu nợ thì hụt dòng tiền.
+- **Tài chính & Khoản vay:** Kế toán tạo phiếu Phụ phí, trả lãi vay ngân hàng. App tự động cảnh báo ngày 25 hàng tháng.
+
+### D. Báo Giá Premium
+- **Thao tác:** Vào Báo giá -> Lên list sản phẩm -> Xem trước (Preview) -> Bấm In hoặc chia sẻ PDF (thu phóng 60-100%).
+
+## 3. CẤU TRÚC JSON MÀ AI BẮT BUỘC TRẢ VỀ
+Nexus AI khi soạn bài bắt buộc trả về chuỗi JSON thô như sau:
+```json
+{
+  "title": "Cách chấm công và xin phép đi muộn",
+  "description": "Bài học giúp bạn hiểu cách hệ thống tính công qua định vị GPS và cách báo cáo khi có sự cố.",
+  "duration": "10 phút",
+  "seconds": 600,
+  "points": 50,
+  "difficulty": "Cơ bản",
+  "tasks": [
+    {
+      "id": 1,
+      "type": "quiz",
+      "title": "Nhiệm vụ 1: Chấm công GPS",
+      "description": "HƯỚNG DẪN: Ở trang chủ, chọn tab 'Chấm Công'. App sẽ kiểm tra vị trí của bạn có nằm trong bán kính 50m của công ty không. TẠI SAO PHẢI LÀM: Đây là căn cứ duy nhất để Kế toán tính lương cuối tháng cho bạn. Nếu quên bấm, hệ thống ghi nhận bạn vắng mặt.",
+      "points": 25,
+      "quiz": {
+        "question": "Hệ thống yêu cầu bạn phải đứng cách công ty tối đa bao nhiêu mét để có thể bấm nút Check-in thành công?",
+        "options": [
+          "Bán kính 10 mét",
+          "Bán kính 50 mét",
+          "Bán kính 100 mét",
+          "Có thể check-in ở bất cứ đâu"
+        ],
+        "answer": "Bán kính 50 mét"
+      }
+    }
+  ]
+}
+```

@@ -258,14 +258,23 @@ const TrainingCatalog = () => {
 	};
 
 	const handleGenerateAITraining = async () => {
-		const topic = window.prompt("Nhập chủ đề bạn muốn AI tạo bài học (ví dụ: Quản lý nợ, Tối ưu kho...):", "Quản lý kinh doanh");
-		if (!topic) return;
+		const existingTitles = [...customLabs, ...labs].map(l => l.title).join(', ');
+		const isAuto = window.confirm("Bạn có muốn Nexus AI tự phân tích các bài cũ và ĐỀ XUẤT CHỦ ĐỀ MỚI không?\n\n- Nhấn OK: Để AI tự động hoàn toàn.\n- Nhấn Cancel: Nếu bạn muốn tự nhập nội dung cụ thể.");
+		
+		let topic = "Tự động đề xuất";
+		if (!isAuto) {
+			const manualTopic = window.prompt("Nhập chủ đề bạn muốn AI tạo bài học (ví dụ: Quản lý nợ, Tối ưu kho...):", "Quản lý kinh doanh");
+			if (!manualTopic) return;
+			topic = manualTopic;
+		}
 
 		setGeneratingAI(true);
-		showToast("Nexus AI đang biên soạn giáo án...", "info");
+		showToast(isAuto ? "AI đang phân tích bài cũ và đề xuất chủ đề mới..." : "Nexus AI đang biên soạn giáo án...", "info");
 
 		try {
-			const gasUrl = `https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec?action=ai_generate_training&topic=${encodeURIComponent(topic)}`;
+			// Limit existing titles length to avoid URI too long, though GET can handle 2000 chars. 500 should be plenty for context.
+			const truncatedExisting = existingTitles.length > 500 ? existingTitles.substring(0, 500) + '...' : existingTitles;
+			const gasUrl = `https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec?action=ai_generate_training&topic=${encodeURIComponent(topic)}&existing=${encodeURIComponent(truncatedExisting)}`;
 			
 			const response = await fetch(gasUrl, {
 				method: 'GET',

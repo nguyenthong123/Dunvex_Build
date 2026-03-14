@@ -139,6 +139,7 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 - **Status:** 🟢 Active & Verified.
 - [x] **AI-Powered Training Module (Nexus AI - Mar 14)**:
     - **Nexus AI Training Generation**: Tự động soạn bài học và câu hỏi trắc nghiệm từ chủ đề bất kỳ. **Điểm nhấn (Mar 14)**: Prompt của AI được tái cấu trúc thành một *Context Guideline* với văn phong thuần Việt 100%, không dùng tiếng lóng IT.
+    - **Nexus AI Adaptive Suggestion (New)**: Khi nhấn Tạo Bài Mới, màn hình sẽ hiển thị tuỳ chọn uỷ quyền cho AI Đề Xuất. Hệ thống tự động thu thập danh sách các bìa bài cũ, truyền sang cho AI đọc hiểu, từ đó AI tự động phát kiến một chủ đề mới toanh mà chưa từng có trong danh mục. Đảm bảo nhân sự được học cái mới liên tục.
     - **Instructional "How & Why"**: AI bắt buộc phải soạn nội dung hướng dẫn trước mỗi bài tập, giải thích rõ "Nút này ở đâu, bấm thế nào" (How) và "Nếu không làm thì ảnh hưởng phòng ban nào" (Why), giúp nhân viên thấu hiểu hoàn toàn nghiệp vụ.
     - **Knowledge Base File**: Khởi tạo tài liệu `NEXUS_AI_TRAINING_GUIDE.md` đóng vai trò là "Kiến thức nền tảng" độc lập, hỗ trợ Admin truyền các ngữ cảnh mới vào AI dễ dàng.
     - **Dynamic Quiz Engine**: Tích hợp trình làm bài thi trắc nghiệm động, tự động xáo trộn đáp án và hiển thị kết quả ngay lập tức.

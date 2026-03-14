@@ -516,7 +516,15 @@ function callNexusAI(prompt, customSystemRole) {
 
 function handleGenerateTraining(data) {
   var topic = data.topic || "Sử dụng phần mềm quản lý";
+  var existing = data.existing || "";
   
+  var topicInstruction = "Hãy soạn 1 bài học về chủ đề: '" + topic + "'";
+  if (topic === "Tự động đề xuất" && existing) {
+     topicInstruction = "Danh sách các bài học đã có: " + existing + ". \nNHIỆM VỤ CỦA BẠN: Hãy phân tích các bài cũ, TỰ ĐỘNG ĐỀ XUẤT 1 CHỦ ĐỀ MỚI HOÀN TOÀN (tuyệt đối không trùng lặp danh sách đã có), và soạn bài học cho chủ đề mới đó.";
+  } else if (existing) {
+     topicInstruction = "Danh sách các bài học đã có: " + existing + ". \nNHIỆM VỤ CỦA BẠN: Hãy soạn 1 bài học mới về '" + topic + "' sao cho nội dung và câu hỏi không bị trùng lặp với các bài cũ.";
+  }
+
   var contextInfo = `
     DỮ LIỆU APP DUNVEX BUILD ĐỂ BẠN DỰA VÀO SOẠN BÀI:
     - Chấm công: Phải đến công ty mở app quét GPS bán kính 50m mới được chấm công. Quên chấm hoặc đi muộn thì phải bấm tạo Đơn Xin Phép để được duyệt.
@@ -529,7 +537,7 @@ function handleGenerateTraining(data) {
   var systemRole = "Bạn là người hướng dẫn nhân viên dùng app phần mềm của công ty. Bạn giảng giải cực kỳ thân thiện, dặn dò kỹ lưỡng. Dùng từ ngữ tiếng Việt 100%, tuyệt đối nói KHÔNG với từ phức tạp, hàn lâm, kỹ thuật. Câu hỏi trắc nghiệm phải giống như chuyện thường ngày.";
   
   var prompt = 
-    "Hãy soạn 1 bài học về '" + topic + "' dựa theo quy trình sau:\n" + contextInfo + "\n\n" +
+    topicInstruction + "\n\nDựa theo quy trình sau:\n" + contextInfo + "\n\n" +
     "YÊU CẦU NGHIÊM NGẶT DÀNH CHO BẠN:\n" +
     "1. Lời văn phải thuần Việt, cực kỳ dễ hiểu, tâm lý. Giọng văn như người anh chỉ việc cho người mới.\n" +
     "2. Trong phần 'description' của mỗi câu hỏi, bạn BẮT BUỘC phải viết Gồm 2 phần:\n" +

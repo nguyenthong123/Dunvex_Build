@@ -21,13 +21,16 @@ Tài liệu này đóng vai trò là "Kiến thức nền tảng" (Knowledge Bas
 - **3. Lên đơn hàng:** Vào nút Lên Đơn -> Màn hình chia 2 nửa: Trái chọn Khách, sản phẩm và áp Mã giảm giá (Coupon). Phải điền giảm giá thêm và phí ship.
 - **🚫 LƯU Ý TỐI QUAN TRỌNG VỀ ĐƠN HÀNG:** Ở bước thanh toán, nhân viên chỉ có 2 lựa chọn: **"Đơn nháp"** (lên tạm, không trừ kho) và **"Đơn chốt"** (chốt bán, tự động trừ kho ngay lập tức). **App hoàn toàn KHÔNG CÓ tính năng "Hủy đơn"**. TUYỆT ĐỐI KHÔNG được bịa ra các tình huống hay câu hỏi bắt nhân viên đi tìm nút Hủy đơn trên app.
 
-### C. Quản lý Công Nợ & Tài chính
+### C. Nhập liệu Hàng loạt (Excel / Google Sheets) & Báo giá
+- **1. Nhập liệu Sản phẩm/Khách hàng hàng loạt:** Khuyên dùng tính năng "Nhập Excel" ở các tab Khách hàng và Sản phẩm. Hỗ trợ up thẳng file Excel (.xlsx, .csv) hoặc dán link Google Sheets với điều kiện đã share "Bất kỳ ai có liên kết".
+  - **Lưu ý Tên Cột:** File nguồn phải có hàng đầu tiên tiêu đề cột. Các từ khóa "Tên khách hàng", "SĐT", "Tên sản phẩm", "Giá bán" là bắt buộc. Hệ thống có cơ chế AI tự động khớp cột tương đồng (VD: ghi "sđt", "điện thoại" máy vẫn tự hiểu).
+  - **Cơ chế chống trùng lặp thông minh (Smart Matching):** Khi nhập file, đối với Sản phẩm nếu trùng cột **"Mã SKU"**, hệ thống sẽ tự update sửa hàng cũ (không tạo thêm đồ rác). Đối với Khách hàng, nếu trùng **"Số điện thoại"**, app cũng tự động merge dữ liệu vào khách cũ.
+- **2. Báo Giá File Tự do:** Tính năng ở tab Báo giá. Nhân viên up thẳng file Excel bảng giá, hệ thống **không bắt gò ép định dạng cột**. Nó sẽ tự biến file Excel thành file PDF thu phóng sống động để gửi Khách hàng ngay lập tức.
+ 
+### D. Quản lý Công Nợ & Tài chính
 - **Thao tác Công Nợ:** Đơn hàng tạo ra sẽ tự nhảy vào mục Công nợ nếu khách chưa t/toán đủ. Chạm vào Tên Khách -> Nhập số tiền Khách trả -> Bấm Thu Nợ.
 - **Tại sao cần làm:** App tự động xếp loại nợ theo tuổi (30-60-90 ngày). Tiền thu nợ tự động chảy vào Sổ Quỹ Kế toán. Không thu nợ thì hụt dòng tiền.
 - **Tài chính & Khoản vay:** Kế toán tạo phiếu Phụ phí, trả lãi vay ngân hàng. App tự động cảnh báo ngày 25 hàng tháng.
-
-### D. Báo Giá Premium
-- **Thao tác:** Vào Báo giá -> Lên list sản phẩm -> Xem trước (Preview) -> Bấm In hoặc chia sẻ PDF (thu phóng 60-100%).
 
 ## 3. CẤU TRÚC JSON MÀ AI BẮT BUỘC TRẢ VỀ
 Nexus AI khi soạn bài bắt buộc trả về chuỗi JSON thô như sau:

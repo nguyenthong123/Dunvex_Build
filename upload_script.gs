@@ -527,13 +527,15 @@ function handleGenerateTraining(data) {
 
   var contextInfo = `
     DỮ LIỆU APP DUNVEX BUILD ĐỂ BẠN DỰA VÀO SOẠN BÀI:
-    - Chấm công: Phải đến công ty mở app quét GPS bán kính 50m mới được chấm công. Quên chấm hoặc đi muộn thì bấm xin phép để được duyệt.
     - Quản lý Khách Hàng: Bấm "Thêm mới" để tạo khách hàng với Tên cơ sở kinh doanh, SĐT và Phân loại (Chủ nhà, Cửa hàng...).
     - Quản lý Kho: Bấm "Thêm mới" để sản phẩm với SKU, Tên, Giá bán và Tồn kho khởi tạo (app tự nhập kho đầu kỳ bằng tay). Kho dùng cơ chế FIFO.
     - Nhập Liệu Hàng Loạt (Excel/Sheets): Dùng nút "Nhập Excel" ở tab Sản phẩm/Khách hàng. Bắt buộc có dòng chèn tiêu đề. Hệ thống AI tự hiểu các cột (Ví dụ: "Tên SP", "Giá Tốt" vẫn map vào được "Tên Sản phẩm", "Giá Bán"). Cứ trùng SĐT Khách thì tự update giữ liệu khách cũ. Trùng SKU Sản phẩm thì tự Update giữ liệu sản phẩm.
     - Lên Đơn Hàng (QuickOrder): Giao diện 2 cột. Trái chọn khách, chọn sản phẩm (không đủ tồn kho thì không bán được đơn chốt) và áp mã coupon. LƯU Ý TỐI QUAN TRỌNG: App chỉ có "Đơn nháp" (tạo tạm chưa trừ kho) và "Đơn chốt" (đã chốt và trừ kho). TUYỆT ĐỐI KHÔNG CÓ TÍNH NĂNG "HỦY ĐƠN".
-    - Bảng Báo Giá (Tự Do): Nhân sự tự up file Excel/Sheets giá gốc của mình vào app, không ràng buộc số lượng cột dòng. App tự hiển thị thành file PDF có nút thu phóng gửi luôn cho khách mà không hỏng layout.
-    - Công nợ & Thanh toán: Khi khách nợ, số dư nhảy vào sổ nợ (30-60-90 ngày). Có tiền khách trả thì ấn nút "Thu nợ".
+    - Bảng Báo Giá (Tự Do): Nhân sự tự up file Excel/Sheets giá gốc của mình vào app, không ràng buộc số lượng cột dòng. App tự hiển thị thành file PDF có thẻ thu phóng in gửi luôn cho khách mà không hỏng layout.
+    - Công nợ & Sổ quỹ: Thu nợ tự nhảy vào phiếu Thu Sổ quỹ. Ngoài ra nếu tạo phiếu Thu loại "Vay ngân hàng" thì app tự có bot ngầm đi sinh phiếu "Chi lãi ngân hàng" hàng tháng. 
+    - Chấm công: Cần đến chi nhánh quét GPS bán kính 50m mới được chấm công. Ngoài ra Sale có tính năng 'Chấm công hiện trường' - đứng tại khách hàng (bán kính 50m) up kèm 3 tấm hình để báo cáo.
+    - Khuyến mãi (Coupons): Tạo mã cấp cho khách. Có 2 dạng là Giảm theo phần trăm (%) hoặc Trừ tiền mặt trực tiếp.
+    - Admin Cài đặt: Có công cụ đặc biệt giúp Trích Xuất (Export) đồng loạt Đơn hàng, Giao dịch (Sổ quỹ), Checkin ra file Excel theo ngày tháng (giới hạn 5000 dòng/file).
   `;
 
   var systemRole = "Bạn là người hướng dẫn nhân viên dùng app phần mềm của công ty. Bạn giảng giải cực kỳ thân thiện, dặn dò kỹ lưỡng. Dùng từ ngữ tiếng Việt 100%, tuyệt đối nói KHÔNG với từ phức tạp, hàn lâm, kỹ thuật. Câu hỏi trắc nghiệm phải giống như chuyện thường ngày.";

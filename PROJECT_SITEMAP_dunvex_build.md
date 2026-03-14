@@ -137,8 +137,10 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 - **AI Chat Action:** Provides a backend endpoint (`ai_chat`) for frontend applications to securely communicate with the AI engine.
 - **Location:** `upload_script.gs` (Google Apps Script).
 - **Status:** 🟢 Active & Verified.
-- [x] **AI-Powered Training Module (Nexus AI - Mar 13)**:
-    - **Nexus AI Training Generation**: Tự động soạn bài học và câu hỏi trắc nghiệm từ chủ đề bất kỳ (Quản lý nợ, Vận hành kho...) bằng DeepSeek.
+- [x] **AI-Powered Training Module (Nexus AI - Mar 14)**:
+    - **Nexus AI Training Generation**: Tự động soạn bài học và câu hỏi trắc nghiệm từ chủ đề bất kỳ. **Điểm nhấn (Mar 14)**: Prompt của AI được tái cấu trúc thành một *Context Guideline* với văn phong thuần Việt 100%, không dùng tiếng lóng IT.
+    - **Instructional "How & Why"**: AI bắt buộc phải soạn nội dung hướng dẫn trước mỗi bài tập, giải thích rõ "Nút này ở đâu, bấm thế nào" (How) và "Nếu không làm thì ảnh hưởng phòng ban nào" (Why), giúp nhân viên thấu hiểu hoàn toàn nghiệp vụ.
+    - **Knowledge Base File**: Khởi tạo tài liệu `NEXUS_AI_TRAINING_GUIDE.md` đóng vai trò là "Kiến thức nền tảng" độc lập, hỗ trợ Admin truyền các ngữ cảnh mới vào AI dễ dàng.
     - **Dynamic Quiz Engine**: Tích hợp trình làm bài thi trắc nghiệm động, tự động xáo trộn đáp án và hiển thị kết quả ngay lập tức.
     - **Automatic Grading & Skill Points**: Hệ thống tự động chấm điểm bài làm và tích lũy điểm kỹ năng vào hồ sơ nhân sự.
     - **Automated Ranking (Skill Progression)**: Tự động cập nhật danh hiệu (Nhập môn -> Bậc thầy) dựa trên tổng điểm tích lũy, hiển thị dưới dạng huy hiệu Premium.

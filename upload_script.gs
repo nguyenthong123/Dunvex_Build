@@ -526,28 +526,31 @@ function handleGenerateTraining(data) {
   }
 
   var contextInfo = `
-    DỮ LIỆU APP DUNVEX BUILD ĐỂ BẠN DỰA VÀO SOẠN BÀI:
-    - Quản lý Khách Hàng: Bấm "Thêm mới" để tạo khách hàng với Tên cơ sở kinh doanh, SĐT và Phân loại (Chủ nhà, Cửa hàng...).
-    - Quản lý Kho: Bấm "Thêm mới" để sản phẩm với SKU, Tên, Giá bán và Tồn kho khởi tạo (app tự nhập kho đầu kỳ bằng tay). Kho dùng cơ chế FIFO.
-    - Nhập Liệu Hàng Loạt (Excel/Sheets): Dùng nút "Nhập Excel" ở tab Sản phẩm/Khách hàng. Bắt buộc có dòng chèn tiêu đề. Hệ thống AI tự hiểu các cột (Ví dụ: "Tên SP", "Giá Tốt" vẫn map vào được "Tên Sản phẩm", "Giá Bán"). Cứ trùng SĐT Khách thì tự update giữ liệu khách cũ. Trùng SKU Sản phẩm thì tự Update giữ liệu sản phẩm.
-    - Lên Đơn Hàng (QuickOrder): Giao diện 2 cột. Trái chọn khách, chọn sản phẩm (không đủ tồn kho thì không bán được đơn chốt) và áp mã coupon. LƯU Ý TỐI QUAN TRỌNG: App chỉ có "Đơn nháp" (tạo tạm chưa trừ kho) và "Đơn chốt" (đã chốt và trừ kho). TUYỆT ĐỐI KHÔNG CÓ TÍNH NĂNG "HỦY ĐƠN".
-    - Bảng Báo Giá (Tự Do): Nhân sự tự up file Excel/Sheets giá gốc của mình vào app, không ràng buộc số lượng cột dòng. App tự hiển thị thành file PDF có thẻ thu phóng in gửi luôn cho khách mà không hỏng layout.
-    - Công nợ & Tài chính: Thu nợ tự nhảy vào phiếu Thu của mục Tài chính. Ngoài ra nếu tạo phiếu Thu loại "Vay ngân hàng" thì app tự có bot ngầm đi sinh phiếu "Chi lãi ngân hàng" hàng tháng. 
-    - Chấm công: Cần đến chi nhánh quét GPS bán kính 50m mới được chấm công. Ngoài ra Sale có tính năng 'Chấm công hiện trường' - đứng tại khách hàng (bán kính 50m) up kèm 3 tấm hình để báo cáo.
-    - Khuyến mãi (Coupons): Tạo mã cấp cho khách. Có 2 dạng là Giảm theo phần trăm (%) hoặc Trừ tiền mặt trực tiếp.
-    - Admin Cài đặt: Có công cụ đặc biệt giúp Trích Xuất (Export) đồng loạt Đơn hàng, Giao dịch tài chính, Checkin ra file Excel theo ngày tháng (giới hạn 5000 dòng/file).
+    DỮ LIỆU APP DUNVEX BUILD - CHỈ ĐƯỢC DÙNG CÁC THÔNG TIN NÀY:
+    1. Trang Chủ: Xem doanh số, lợi nhuận, nợ quá hạn và cảnh báo tồn kho.
+    2. Đơn Hàng: Chỉ có "Đơn nháp" và "Đơn chốt". KHÔNG CÓ tính năng "Hủy đơn". Lên đơn tại mục "Lên đơn" (QuickOrder).
+    3. Khách Hàng: Tên, SĐT, Tên cơ sở, Phân loại (Chủ nhà, Thầu thợ, Cửa hàng...), Địa chỉ (GPS). Tự động khóa tính năng nếu hết hạn gói. KHÔNG CÓ mục "Đặt lịch hẹn" hay "Lời nhắc".
+    4. Sản Phẩm (Inventory): SKU, Tên, Giá bán, Giá nhập, Tồn kho. Có tính năng "Tồn kho gộp" để xem tổng tồn theo nhóm.
+    5. Tài Chính: Quản lý Thu/Chi. Có bot "Sinh Lãi" tự động tạo phiếu chi lãi nếu chọn lý do là "Vay ngân hàng".
+    6. Công nợ: Quản lý nợ khách hàng, tuổi nợ.
+    7. Báo giá: Up file Excel/Sheet tự do để app xuất PDF in cho khách.
+    8. Chấm công: Quét GPS tại chi nhánh hoặc "Hiện trường" (tại vị trí khách hàng).
+    9. Khuyến mãi: Tạo mã giảm giá (%) hoặc trừ tiền mặt.
+    10. Nhập liệu hàng loạt: Dùng Excel/Sheet cho Khách hàng và Sản phẩm.
   `;
 
   var systemRole = "Bạn là người hướng dẫn nhân viên dùng app phần mềm của công ty. Bạn giảng giải cực kỳ thân thiện, dặn dò kỹ lưỡng. Dùng từ ngữ tiếng Việt 100%, tuyệt đối nói KHÔNG với từ phức tạp, hàn lâm, kỹ thuật. Câu hỏi trắc nghiệm phải giống như chuyện thường ngày.";
   
   var prompt = 
-    topicInstruction + "\n\nDựa theo quy trình sau:\n" + contextInfo + "\n\n" +
-    "YÊU CẦU NGHIÊM NGẶT DÀNH CHO BẠN:\n" +
-    "1. Lời văn phải thuần Việt, cực kỳ dễ hiểu, tâm lý. Giọng văn như người anh chỉ việc cho người mới.\n" +
-    "2. Trong phần 'description' của mỗi câu hỏi, bạn BẮT BUỘC phải viết Gồm 2 phần:\n" +
-    "   - CÁCH LÀM (How): Chỉ cụ thể bấm vào tab nào, chọn nút gì.\n" +
-    "   - TẠI SAO PHẢI LÀM (Why): Nói rõ hệ quả nếu làm sai. (Ví dụ: Chấm công sai thì kế toán không trả lương, Không nhập kho thì Sale móm không có hàng bán).\n" +
-    "3. Câu hỏi và 4 đáp án (quiz) phải bám lấy thực tiễn công việc hàng ngày, đáp án thực tế vui vẻ.\n\n" +
+    topicInstruction + "\n\n" +
+    "YÊU CẦU NGHIÊM NGẶT:\n" +
+    "1. TUYỆT ĐỐI KHÔNG TỰ BỊA RA TÍNH NĂNG (Ví dụ: Không có 'Lời nhắc hẹn', không có 'Lịch công tác', không có 'Hủy đơn'). Nếu tính năng không có trong danh sách trên, tuyệt đối không nhắc tới.\n" +
+    "2. Lời văn phải thuần Việt, cực kỳ dễ hiểu, tâm lý. Giọng văn như người anh chỉ việc cho người mới.\n" +
+    "3. Trong phần 'description' của mỗi câu hỏi, bạn BẮT BUỘC phải viết Gồm 2 phần:\n" +
+    "   - CÁCH LÀM (How): Chỉ cụ thể bấm vào tab nào, chọn nút gì (Dựa đúng tên tab/nút trong danh sách trên).\n" +
+    "   - TẠI SAO PHẢI LÀM (Why): Nói rõ hệ quả nếu làm sai.\n" +
+    "4. Câu hỏi và 4 đáp án (quiz) phải bám lấy thực tiễn công việc hàng ngày.\n\n" +
+    "DỮ LIỆU APP ĐỂ BẠN DỰA VÀO SOẠN BÀI:\n" + contextInfo + "\n\n" +
     "TRẢ VỀ DUY NHẤT CHUỖI JSON SAU:\n" +
     "{\n" +
     "  \"title\": \"Tiêu đề bài học\",\n" +

@@ -27,7 +27,7 @@ Dưới đây là các module và thuật ngữ chính trong App:
 - **Lên đơn nhanh:** Dùng tính năng "Lên đơn" (Quick Order) để chọn sản phẩm, áp mã giảm giá và chọn khách hàng chỉ trong 1 trang.
 
 ### 3. Tài Chính (Finance - Thu & Chi)
-- **Sổ quỹ:** Là nơi ghi lại mọi dòng tiền ra/vào.
+- **Ý nghĩa:** Quản lý dòng tiền, lưu lại mọi giao dịch Thu và Chi của cơ sở.
 - **Phân loại:** "Thu tiền khách", "Chi trả nhà cung cấp", "Chi phí vận hành", "Vay ngân hàng".
 - **Bot Sinh Lãi:** Nếu chọn lý do là "Vay ngân hàng", hệ thống tự động tính lãi hàng tháng dồn vào chi phí để chủ app biết lợi nhuận thực tế sau khi trừ lãi.
 
@@ -37,6 +37,7 @@ Dưới đây là các module và thuật ngữ chính trong App:
 
 ### 5. Khách Hàng (Customers)
 - **Thông tin:** Tên, Số điện thoại, Tên cơ sở, Loại khách (Chủ nhà, Thầu thợ, Cửa hàng...), Địa chỉ (có GPS).
+- **LƯU Ý:** KHÔNG CÓ tính năng "Đặt lời nhắc", "Lịch hẹn" hay "Ghi chú công tác". Tuyệt đối không bịa ra các tính năng này.
 - **Tự động hóa:** Hệ thống tự đếm ngày vào trang. Nếu gói dịch vụ hết hạn, nút "Khóa tính năng" sẽ tự bật và thông báo cho người dùng.
 
 ### 6. Sản Phẩm (Inventory)

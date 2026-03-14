@@ -15,11 +15,11 @@ Tài liệu này đóng vai trò là "Kiến thức nền tảng" (Knowledge Bas
 - **Thao tác:** Nhân viên vào tab Chấm công, ứng dụng quét GPS bán kính 50m quanh chi nhánh. Ấn "Check-in" hoặc "Check-out".
 - **Tại sao cần làm:** Bắt buộc để tính lương. Nếu nhân viên đi muộn, cần làm Đơn xin phép trên app để quản lý duyệt.
 
-### B. Mua bán & Tồn kho (Quy trình Sinh tồn)
-- **Tạo sản phẩm & Tồn kho:** Thêm mã SKU, Tên, Giá. Nhập kho từ tab Nhập hàng. App dùng chuẩn FIFO (Nhập trước Xuất trước).
-- **Tại sao cần làm:** FIFO giúp tính chuẩn Giá vốn hàng bán (COGS) và lợi nhuận. Nếu kho không có hàng (tồn <= 0), Sale sẽ không thể lên đơn. 
-- **Lên đơn hàng:** Sale chọn Khách hàng -> Chọn Sản phẩm -> Có thể áp Chiết khấu (Discount). Chốt đơn thì kho tự trừ.
-- **🚫 LƯU Ý TỐI QUAN TRỌNG VỀ ĐƠN HÀNG:** Hệ thống chỉ có 2 loại là **"Đơn nháp"** (chưa trừ kho) và **"Đơn chốt"** (đã trừ kho). **App hoàn toàn KHÔNG CÓ tính năng "Hủy đơn"**. TUYỆT ĐỐI KHÔNG được bịa ra các tình huống hay câu hỏi bắt nhân viên đi tìm nút Hủy đơn trên app.
+### B. Khách Hàng, Sản Phẩm & Lên Đơn (Quy trình Cốt lõi)
+- **1. Tạo Khách Hàng:** Vào tab Khách hàng -> Bấm "Thêm mới" -> Điền Tên cơ sở/Tên khách, SĐT và Phân loại (Chủ nhà, Thầu thợ, v.v.). Đây là bước đầu để có đối tượng lên đơn.
+- **2. Tạo Sản phẩm:** Vào tab Sản phẩm -> Bấm "Thêm mới" -> Điền Mã SKU (bắt buộc), Tên, Giá bán và Tồn kho khởi tạo. Lưu ý: Khởi tạo Tồn kho thì hệ thống tự động sinh log phiếu nhập kho. App quản lý theo cơ chế nhập trước xuất trước (FIFO). Nếu tồn kho <= 0, Sale không thể Lên đơn chốt.
+- **3. Lên đơn hàng:** Vào nút Lên Đơn -> Màn hình chia 2 nửa: Trái chọn Khách, sản phẩm và áp Mã giảm giá (Coupon). Phải điền giảm giá thêm và phí ship.
+- **🚫 LƯU Ý TỐI QUAN TRỌNG VỀ ĐƠN HÀNG:** Ở bước thanh toán, nhân viên chỉ có 2 lựa chọn: **"Đơn nháp"** (lên tạm, không trừ kho) và **"Đơn chốt"** (chốt bán, tự động trừ kho ngay lập tức). **App hoàn toàn KHÔNG CÓ tính năng "Hủy đơn"**. TUYỆT ĐỐI KHÔNG được bịa ra các tình huống hay câu hỏi bắt nhân viên đi tìm nút Hủy đơn trên app.
 
 ### C. Quản lý Công Nợ & Tài chính
 - **Thao tác Công Nợ:** Đơn hàng tạo ra sẽ tự nhảy vào mục Công nợ nếu khách chưa t/toán đủ. Chạm vào Tên Khách -> Nhập số tiền Khách trả -> Bấm Thu Nợ.

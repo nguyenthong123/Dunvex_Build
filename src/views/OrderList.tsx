@@ -4,6 +4,7 @@ import { auth, db } from '../services/firebase';
 import { collection, query, orderBy, onSnapshot, updateDoc, doc, getDoc, deleteDoc, serverTimestamp, where, addDoc, getDocs, writeBatch, increment } from 'firebase/firestore';
 import OrderTicket from '../components/OrderTicket';
 import UpgradeModal from '../components/UpgradeModal';
+import { Lock, Crown } from 'lucide-react';
 
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
@@ -196,6 +197,24 @@ const OrderList = () => {
 	const pendingOrders = orders.filter(o => o.status === 'Mới' || o.status === 'Đang xử lý').length;
 	const completedOrders = orders.filter(o => o.status === 'Đã giao').length;
 	const totalRevenue = orders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+
+	if (owner.manualLockOrders) {
+		return (
+			<div className="flex flex-col h-full bg-[#f8f9fa] dark:bg-slate-950 items-center justify-center p-8">
+				<div className="bg-red-500/10 p-6 rounded-full text-red-500 mb-6 border border-red-500/20">
+					<Lock size={64} />
+				</div>
+				<h1 className="text-2xl md:text-4xl font-black uppercase tracking-tighter mb-4 text-[#1A237E] dark:text-indigo-400 text-center">Tính Năng Bị Khóa</h1>
+				<p className="text-slate-500 dark:text-slate-400 text-center max-w-md font-medium text-sm md:text-base leading-relaxed mb-8">
+					Tài khoản của bạn đã bị khóa tính năng Đơn Hàng. Vui lòng nâng cấp gói hoặc liên hệ Quản trị viên để mở khóa.
+				</p>
+				<button onClick={() => navigate('/pricing')} className="bg-[#1A237E] dark:bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold uppercase tracking-widest shadow-xl shadow-blue-900/20 md:hover:bg-blue-800 transition-all flex items-center gap-2">
+					<Crown size={20} />
+					Nâng Cấp Ngay
+				</button>
+			</div>
+		);
+	}
 
 	return (
 		<div className="flex flex-col h-full bg-[#f8f9fa] dark:bg-slate-950 transition-colors duration-300">

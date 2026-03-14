@@ -151,10 +151,12 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Nexus AI Smart Import (AI-Driven Matching)**: 
         - **Phân loại Gói thông minh**: Khắc phục triệt để lỗi ghi đè dữ liệu khi người dùng nhập nhiều mốc giá (ví dụ: gói 4 kiện và gói 6 kiện). 
         - **Semantic Variant Detection**: AI tự động phân tích Mã SKU kết hợp với Danh mục và Tên sản phẩm. Nếu phát hiện sự khác biệt về "Gói" hoặc "Giá", hệ thống sẽ tự động tạo bản ghi mới thay vì ghi đè, bảo toàn 100% dữ liệu đa tầng của đơn vị.
-    - **Autonomous AI Management (Nexus AI)**:
-        - **AI Auto-Lock & Auto-Switch**: Tự động hóa việc quản lý gói cước (Dùng thử -> Chính thức) và khóa/mở các tính năng (Đơn hàng, Công nợ, Đồng bộ Sheets...) dựa trên trạng thái thanh toán và thời gian sử dụng.
-        - **Cảnh báo Thông minh (Pocket-Touch Prevention)**: AI tự động gửi thông báo "Chuông báo" trực tiếp cho người dùng nếu phát hiện thao tác liên tục bất thường, giúp ngăn chặn việc túi quần bị cấn máy làm sai lệch dữ liệu.
+    - **Autonomous AI Management (Nexus AI Auto-Enforcement - Mar 14)**:
+        - **AI Auto-Approval (Trust Model)**: Quản lý tự động dựa trên mức độ tin cậy. Khi khách hàng báo cáo "Đã thanh toán" gói cước (Thử nghiệm -> Chính thức), AI tự động kiểm tra yêu cầu và phê duyệt ngay lập tức (Auto-Approve), mở khóa toàn bộ tính năng và gửi thông báo xác nhận tự động, loại bỏ thời gian trễ chờ Admin. 
+        - **AI Auto-Downgrade & Auto-Lock**: Trình quay vòng (Autonomous Cycle chạy ngầm mỗi 30s) tự động đếm thời gian thực tế người dùng ở tại ứng dụng. Khi người dùng hết hạn (vượt quá 30, 60, 365 ngày tương ứng), AI sẽ tự động gán cờ `subscriptionStatus: 'expired'`, huỷ bỏ quyền Premium `isPro: false`, tự động "bật đỏ" 3 ổ khóa (Orders, Debts, Sheets) và bắn trực tiếp cảnh báo về chuông ứng dụng yêu cầu khách hàng gia hạn để sử dụng tiếp. Mọi quy trình hoàn toàn độc lập và không cần Admin can thiệp tay.
+        - **Khôi phục phòng ngự (Admin Revoke Lock)**: Trong trường hợp Admin không nhận được lệ phí từ ngân hàng theo lệnh Auto-Approve (gian lận), hệ thống trang bị nút "⛔ HUỶ ĐĂNG KÝ (KHÓA)" nằm ngay trong danh sách chọn gói của quản trị viên. Việc ấn vào nút này sẽ ngay lập tức xoè lệnh đóng chu kỳ, khoá sổ các tính năng và gửi cảnh báo đỏ thẳng tới User.
         - **Phân cấp Tài khoản (Role-based AI)**: Tự động phân biệt Super Admin (`dunvex.green@gmail.com`) và các tài khoản nhân viên để hiển thị cấu hình tương ứng.
+        - **Cảnh báo Thông minh (Pocket-Touch Prevention)**: AI tự động gửi thông báo "Chuông báo" trực tiếp cho người dùng nếu phát hiện thao tác liên tục bất thường.
     - **AI-Friendly Audit Logs**: Bảng nhật ký được thiết kế chuẩn cấu hình cho Bot, giúp AI dễ dàng kiểm tra lịch sử thao tác, xác định vị trí nhấp chuột và chu trình sử dụng để hỗ trợ khách hàng tốt nhất.
     - **FIFO Inventory Logic**: Thực thi nghiêm ngặt cơ chế Nhập trước - Xuất trước cho toàn bộ sản phẩm theo SKU, đảm bảo tính toán giá vốn và lợi nhuận chính xác 100%.
     - **Finance AI Automation (Mar 13)**: 

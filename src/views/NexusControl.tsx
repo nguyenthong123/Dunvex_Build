@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
 	LayoutDashboard,
@@ -191,19 +191,27 @@ const NexusControl = () => {
 			const snap = await getDoc(settingsRef);
 			const data = snap.data() || {};
 
-			if (!data.manualLockOrders || !data.manualLockDebts) {
-				await updateDoc(settingsRef, {
+			if (!data.manualLockOrders || !data.manualLockDebts || !data.manualLockSheets) {
+				// We use setDoc with merge instead of updateDoc in case the doc doesn't exist yet
+				await setDoc(settingsRef, {
 					manualLockOrders: true,
 					manualLockDebts: true,
+					manualLockSheets: true,
 					aiLockedAt: serverTimestamp(),
 					aiLockReason: 'POCKET_CLICK_PREVENTION'
-				});
+				}, { merge: true });
+
+				// 🔍 AI Verification Step
+				const verifySnap = await getDoc(settingsRef);
+				const isLocked = verifySnap.exists() && verifySnap.data().manualLockOrders && verifySnap.data().manualLockDebts && verifySnap.data().manualLockSheets;
 
 				// Notify User via Bell
 				await addDoc(collection(db, 'notifications'), {
 					userId: ownerId,
-					title: '⚠️ CẢNH BÁO BẢO MẬT (NEXUS AI)',
-					body: 'Hệ thống phát hiện thao tác nhanh bất thường (có thể do cấn phím). Chúng tôi đã tạm thời khóa các chức năng chính để bảo vệ dữ liệu. Vui lòng liên hệ Admin để mở lại.',
+					title: isLocked ? '🔒 NEXUS AI: ĐÃ XÁC NHẬN KHÓA AN TOÀN' : '⚠️ CẢNH BÁO BẢO MẬT (NEXUS AI)',
+					body: isLocked 
+						? 'Hệ thống phát hiện thao tác nhanh bất thường. AI đã chủ động khóa và XÁC NHẬN KHÓA THÀNH CÔNG toàn bộ tính năng quan trọng để bảo vệ dữ liệu của bạn.'
+						: 'Hệ thống phát hiện thao tác nhanh bất thường. Đang tiến hành khóa các chức năng, vui lòng kiểm tra lại.',
 					type: 'alert',
 					priority: 'high',
 					read: false,
@@ -236,12 +244,85 @@ const NexusControl = () => {
 		});
 	}, []);
 
-	const runAutonomousCycle = async () => {
-		if (!isAiActive || customers.length === 0) return;
+	const customersRef = useRef(customers);
+	useEffect(() => {
+		customersRef.current = customers;
+	}, [customers]);
+
+	useEffect(() => {
+		if (isAiActive) {
+			const interval = setInterval(() => {
+				runAutonomousCycle(customersRef.current, requests);
+			}, 30000); // Check every 30 seconds
+
+			// Initial evaluation
+			runAutonomousCycle(customersRef.current, requests);
+
+			return () => clearInterval(interval);
+		}
+	}, [isAiActive, requests]);
+
+	const runAutonomousCycle = async (currentCustomers: any[], currentRequests: any[]) => {
+		if (!isAiActive) return;
 
 		console.log("Nexus AI: Starting autonomous management cycle...");
+
+		// 0. AUTO-APPROVE PENDING PAYMENT REQUESTS (TRUST MODEL)
+		const pendingRequests = currentRequests.filter(r => r.status === 'pending');
+		for (const req of pendingRequests) {
+			try {
+				await updateDoc(doc(db, 'payment_requests', req.id), {
+					status: 'approved',
+					handledAt: serverTimestamp(),
+					handledBy: 'Nexus_AI_Bot'
+				});
+
+				const isYearly = req.planId === 'premium_yearly';
+				const expireDate = new Date();
+				if (isYearly) {
+					expireDate.setFullYear(expireDate.getFullYear() + 1);
+				} else {
+					expireDate.setMonth(expireDate.getMonth() + 1);
+				}
+
+				await setDoc(doc(db, 'settings', req.ownerId), {
+					subscriptionStatus: 'active',
+					isPro: true,
+					planId: req.planId,
+					paymentConfirmedAt: serverTimestamp(),
+					subscriptionExpiresAt: expireDate,
+					manualLockOrders: false,
+					manualLockDebts: false,
+					manualLockSheets: false
+				}, { merge: true });
+
+				await addDoc(collection(db, 'ai_actions'), {
+					type: 'provisioning',
+					targetEmail: req.userEmail,
+					targetId: req.ownerId,
+					details: `Chấp nhận thanh toán tự động (Trust Model) cho gói ${req.planName || req.planId}. Đã mở khóa tính năng.`,
+					timestamp: serverTimestamp()
+				});
+
+				await addDoc(collection(db, 'notifications'), {
+					userId: req.ownerId,
+					title: '⚡ NEXUS AI: ĐÃ XÁC NHẬN YÊU CẦU',
+					body: `Yêu cầu kích hoạt gói ${req.planName || req.planId} đã được AI tự động duyệt. Tất cả tính năng đã được mở khóa! Vui lòng đảm bảo giao dịch đã hoàn tất.`,
+					type: 'success',
+					priority: 'high',
+					read: false,
+					createdAt: serverTimestamp()
+				});
+				
+				console.log(`Nexus AI: Auto-approved payment for ${req.userEmail}`);
+			} catch (e) {
+				console.error("AI Auto Approve Error:", e);
+			}
+		}
 		
-		for (const customer of customers) {
+		if (currentCustomers.length === 0) return;
+		
+		for (const customer of currentCustomers) {
 			// CRITICAL: NEVER process the Super Admin account
 			if (customer.email === NEXUS_ADMIN_EMAIL) continue;
 
@@ -278,38 +359,56 @@ const NexusControl = () => {
 			}
 
 			// 2. AUTO-ENFORCEMENT FOR EXPIRED USERS
-			// If expired and features are NOT already manually locked
-			if (status.isExpired && (!customer.manualLockOrders || !customer.manualLockDebts || !customer.manualLockSheets)) {
-				// Search if they have a pending payment request
-				const hasPendingRequest = requests.some(r => r.ownerId === customer.uid && r.status === 'pending');
-				
-				if (!hasPendingRequest) {
-					try {
-						await setDoc(doc(db, 'settings', customer.uid), {
-							manualLockOrders: true,
-							manualLockDebts: true,
-							manualLockSheets: true
-						}, { merge: true });
+			// If expired and features are NOT already manually locked or status is not expired
+			if (status.isExpired && (!customer.manualLockOrders || !customer.manualLockDebts || !customer.manualLockSheets || customer.subscriptionStatus !== 'expired')) {
+				try {
+					await setDoc(doc(db, 'settings', customer.uid), {
+						manualLockOrders: true,
+						manualLockDebts: true,
+						manualLockSheets: true,
+						subscriptionStatus: 'expired',
+						isPro: false
+					}, { merge: true });
+
+					// 🔍 AI Verification Step
+						const verifySnap = await getDoc(doc(db, 'settings', customer.uid));
+						const isLocked = verifySnap.exists() && verifySnap.data().manualLockOrders && verifySnap.data().manualLockDebts && verifySnap.data().manualLockSheets;
+
+						// Notify Verification
+						if (isLocked) {
+							await addDoc(collection(db, 'notifications'), {
+								userId: customer.uid,
+								title: '🔒 HỆ THỐNG NEXUS AI: ĐÃ XÁC NHẬN KHÓA',
+								body: 'Gói của bạn đã hết hạn. AI đã chủ động khóa và XÁC NHẬN KHÓA THÀNH CÔNG các tính năng theo chính sách. Vui lòng liên hệ Admin.',
+								type: 'alert',
+								priority: 'high',
+								read: false,
+								createdAt: serverTimestamp()
+							});
+						}
 
 						await addDoc(collection(db, 'ai_actions'), {
 							type: 'enforcement',
 							targetEmail: customer.email,
 							targetId: customer.uid,
-							details: 'Tự động ngắt tất cả tính năng do hết hạn khuyến mãi và không phát hiện giao dịch mới.',
+							details: isLocked 
+								? 'Tự động ngắt TẤT CẢ tính năng do hết hạn (ĐÃ XÁC NHẬN KHÓA THÀNH CÔNG).'
+								: 'Tự động ngắt tính năng do hết hạn (Không thể xác minh khóa).',
 							timestamp: serverTimestamp()
 						});
 
 						await addDoc(collection(db, 'notifications'), {
 							userId: customer.uid,
-							title: '🔒 TỰ ĐỘNG KHÓA TÍNH NĂNG (HẾT HẠN)',
-							body: 'Gói dịch vụ của bạn đã hết hạn. Hệ thống AI đã tự động khóa các tính năng Đơn hàng, Công nợ và Sheet để bảo vệ dữ liệu. Vui lòng thanh toán để tiếp tục sử dụng.',
+							title: '🔒 TỰ ĐỘNG KHÓA VÀ THU HỒI GÓI (HẾT HẠN)',
+							body: 'Gói dịch vụ cũ của bạn đã hết hạn. Hệ thống AI đã tự động cập nhật trạng thái gói và khóa các tính năng (Đơn hàng, Công nợ, Sheet) để bảo vệ dữ liệu. Vui lòng thực hiện thanh toán gia hạn để tự động kích hoạt lại.',
 							type: 'lock',
 							priority: 'high',
 							read: false,
 							createdAt: serverTimestamp()
 						});
 						console.log(`Nexus AI: Auto-locked expired account ${customer.email}`);
-					} catch (e) { console.error("Auto Enforcement Error:", e); }
+					} catch (e) {
+					console.error("Auto Enforcement Error:", e);
 				}
 			}
 		}
@@ -322,8 +421,36 @@ const NexusControl = () => {
 	}, [customers.length, isAiActive]);
 
 	const handleUpdatePlan = async (ownerId: string, newPlan: string) => {
-		if (!window.confirm(`Xác nhận đổi gói sang ${newPlan === 'free' ? 'FREE' : newPlan === 'premium_monthly' ? '1 tháng' : newPlan === 'test_expire' ? 'GIẢ LẬP HẾT HẠN' : '1 năm'}? Ngày hiệu lực sẽ được đặt về hôm nay.`)) return;
+		if (!window.confirm(`Xác nhận hành động: ${newPlan === 'cancel_payment' ? 'HUỶ ĐĂNG KÝ VÀ KHÓA' : newPlan}?`)) return;
 		try {
+			if (newPlan === 'cancel_payment') {
+				const expireDate = new Date();
+				expireDate.setDate(expireDate.getDate() - 2); // Explicitly expired
+
+				await setDoc(doc(db, 'settings', ownerId), {
+					planId: 'free',
+					isPro: false,
+					subscriptionStatus: 'expired',
+					subscriptionExpiresAt: expireDate,
+					manualLockOrders: true,
+					manualLockDebts: true,
+					manualLockSheets: true
+				}, { merge: true });
+
+				await addDoc(collection(db, 'notifications'), {
+					userId: ownerId,
+					title: '⛔ HỦY TRUY CẬP (CHƯA NHẬN ĐƯỢC THANH TOÁN)',
+					body: 'Admin đã kiểm tra đối soát nhưng chưa nhận được lệnh chuyển khoản từ bạn. Hệ thống đã tiến hành thu hồi gói cước và thiết lập khóa tính năng. Vui lòng thanh toán lại hoặc liên hệ hỗ trợ.',
+					type: 'alert',
+					priority: 'high',
+					read: false,
+					createdAt: serverTimestamp()
+				});
+
+				showToast("Đã hủy đăng ký, thiết lập khóa và gửi thông báo cho khách!", "success");
+				return;
+			}
+
 			const isPro = newPlan !== 'free' && newPlan !== 'test_expire';
 			const expireDate = new Date();
 
@@ -372,12 +499,7 @@ const NexusControl = () => {
 
 		return {
 			isExpired,
-			daysUsed: diffDays,
-			locks: {
-				orders: isExpired || c.manualLockOrders,
-				debts: isExpired || c.manualLockDebts,
-				sheets: isExpired || c.manualLockSheets
-			}
+			daysUsed: diffDays
 		};
 	};
 
@@ -857,6 +979,7 @@ const NexusControl = () => {
 															<option value="free">FREE (60d)</option>
 															<option value="premium_monthly">1 THÁNG (30d)</option>
 															<option value="premium_yearly">1 NĂM (365d)</option>
+															<option value="cancel_payment">⛔ HUỶ ĐĂNG KÝ (KHÓA)</option>
 														</select>
 													</td>
 													<td className="px-6 py-6 text-slate-500 whitespace-nowrap">
@@ -870,29 +993,29 @@ const NexusControl = () => {
 													</td>
 													<td className="px-3 py-6 text-center">
 														<button
-															onClick={() => !eff.isExpired && toggleUserLock(c.uid, 'manualLockOrders', c.manualLockOrders)}
-															className={`size-8 rounded-lg flex items-center justify-center mx-auto transition-all ${eff.locks.orders ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'bg-slate-800 text-slate-500 hover:text-white'} ${eff.isExpired ? 'cursor-not-allowed opacity-80' : ''}`}
-															title={eff.isExpired ? "Tự động khóa do hết hạn" : "Khóa thủ công"}
+															onClick={() => toggleUserLock(c.uid, 'manualLockOrders', c.manualLockOrders)}
+															className={`size-8 rounded-lg flex items-center justify-center mx-auto transition-all ${c.manualLockOrders ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'bg-slate-800 text-slate-500 hover:text-white'}`}
+															title={c.manualLockOrders ? "Đã khóa" : "Khóa thủ công"}
 														>
-															{eff.locks.orders ? <Lock size={12} /> : <Unlock size={12} />}
+															{c.manualLockOrders ? <Lock size={12} /> : <Unlock size={12} />}
 														</button>
 													</td>
 													<td className="px-3 py-6 text-center">
 														<button
-															onClick={() => !eff.isExpired && toggleUserLock(c.uid, 'manualLockDebts', c.manualLockDebts)}
-															className={`size-8 rounded-lg flex items-center justify-center mx-auto transition-all ${eff.locks.debts ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'bg-slate-800 text-slate-500 hover:text-white'} ${eff.isExpired ? 'cursor-not-allowed opacity-80' : ''}`}
-															title={eff.isExpired ? "Tự động khóa do hết hạn" : "Khóa thủ công"}
+															onClick={() => toggleUserLock(c.uid, 'manualLockDebts', c.manualLockDebts)}
+															className={`size-8 rounded-lg flex items-center justify-center mx-auto transition-all ${c.manualLockDebts ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'bg-slate-800 text-slate-500 hover:text-white'}`}
+															title={c.manualLockDebts ? "Đã khóa" : "Khóa thủ công"}
 														>
-															{eff.locks.debts ? <Lock size={12} /> : <Unlock size={12} />}
+															{c.manualLockDebts ? <Lock size={12} /> : <Unlock size={12} />}
 														</button>
 													</td>
 													<td className="px-3 py-6 text-center">
 														<button
-															onClick={() => !eff.isExpired && toggleUserLock(c.uid, 'manualLockSheets', c.manualLockSheets)}
-															className={`size-8 rounded-lg flex items-center justify-center mx-auto transition-all ${eff.locks.sheets ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'bg-slate-800 text-slate-500 hover:text-white'} ${eff.isExpired ? 'cursor-not-allowed opacity-80' : ''}`}
-															title={eff.isExpired ? "Tự động khóa do hết hạn" : "Khóa thủ công"}
+															onClick={() => toggleUserLock(c.uid, 'manualLockSheets', c.manualLockSheets)}
+															className={`size-8 rounded-lg flex items-center justify-center mx-auto transition-all ${c.manualLockSheets ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'bg-slate-800 text-slate-500 hover:text-white'}`}
+															title={c.manualLockSheets ? "Đã khóa" : "Khóa thủ công"}
 														>
-															{eff.locks.sheets ? <Lock size={12} /> : <Unlock size={12} />}
+															{c.manualLockSheets ? <Lock size={12} /> : <Unlock size={12} />}
 														</button>
 													</td>
 													<td className="px-6 py-6 text-right">
@@ -933,6 +1056,7 @@ const NexusControl = () => {
 														<option value="free">FREE</option>
 														<option value="premium_monthly">M-PRO</option>
 														<option value="premium_yearly">Y-PRO</option>
+														<option value="cancel_payment">⛔ HUỶ ĐĂNG KÝ (KHÓA)</option>
 													</select>
 												</div>
 												<div className="bg-slate-800/40 p-4 rounded-2xl border border-slate-700/50 flex flex-col justify-center">
@@ -945,28 +1069,28 @@ const NexusControl = () => {
 												<div className="flex flex-col items-center gap-1.5">
 													<p className="text-[8px] font-black text-slate-600 uppercase tracking-widest">Đơn hàng</p>
 													<button
-														onClick={() => !eff.isExpired && toggleUserLock(c.uid, 'manualLockOrders', c.manualLockOrders)}
-														className={`size-10 rounded-xl flex items-center justify-center transition-all ${eff.locks.orders ? 'bg-rose-500 text-white' : 'bg-slate-800 text-slate-500'}`}
+														onClick={() => toggleUserLock(c.uid, 'manualLockOrders', c.manualLockOrders)}
+														className={`size-10 rounded-xl flex items-center justify-center transition-all ${c.manualLockOrders ? 'bg-rose-500 text-white' : 'bg-slate-800 text-slate-500'}`}
 													>
-														{eff.locks.orders ? <Lock size={16} /> : <Unlock size={16} />}
+														{c.manualLockOrders ? <Lock size={16} /> : <Unlock size={16} />}
 													</button>
 												</div>
 												<div className="flex flex-col items-center gap-1.5">
 													<p className="text-[8px] font-black text-slate-600 uppercase tracking-widest">Công nợ</p>
 													<button
-														onClick={() => !eff.isExpired && toggleUserLock(c.uid, 'manualLockDebts', c.manualLockDebts)}
-														className={`size-10 rounded-xl flex items-center justify-center transition-all ${eff.locks.debts ? 'bg-rose-500 text-white' : 'bg-slate-800 text-slate-500'}`}
+														onClick={() => toggleUserLock(c.uid, 'manualLockDebts', c.manualLockDebts)}
+														className={`size-10 rounded-xl flex items-center justify-center transition-all ${c.manualLockDebts ? 'bg-rose-500 text-white' : 'bg-slate-800 text-slate-500'}`}
 													>
-														{eff.locks.debts ? <Lock size={16} /> : <Unlock size={16} />}
+														{c.manualLockDebts ? <Lock size={16} /> : <Unlock size={16} />}
 													</button>
 												</div>
 												<div className="flex flex-col items-center gap-1.5">
 													<p className="text-[8px] font-black text-slate-600 uppercase tracking-widest">Sheets</p>
 													<button
-														onClick={() => !eff.isExpired && toggleUserLock(c.uid, 'manualLockSheets', c.manualLockSheets)}
-														className={`size-10 rounded-xl flex items-center justify-center transition-all ${eff.locks.sheets ? 'bg-rose-500 text-white' : 'bg-slate-800 text-slate-500'}`}
+														onClick={() => toggleUserLock(c.uid, 'manualLockSheets', c.manualLockSheets)}
+														className={`size-10 rounded-xl flex items-center justify-center transition-all ${c.manualLockSheets ? 'bg-rose-500 text-white' : 'bg-slate-800 text-slate-500'}`}
 													>
-														{eff.locks.sheets ? <Lock size={16} /> : <Unlock size={16} />}
+														{c.manualLockSheets ? <Lock size={16} /> : <Unlock size={16} />}
 													</button>
 												</div>
 											</div>
@@ -1028,13 +1152,6 @@ const NexusControl = () => {
 												className={`w-full sm:w-auto px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all ${systemConfig.ai_auto_lock ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-slate-800 text-slate-500 border border-slate-700'}`}
 											>
 												Auto-Lock: {systemConfig.ai_auto_lock ? 'ON' : 'OFF'}
-											</button>
-											<button
-												onClick={runAutonomousCycle}
-												className="w-full sm:w-auto px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] bg-slate-800 text-slate-400 border border-slate-700 hover:text-white hover:bg-slate-700 transition-all flex items-center justify-center gap-2"
-											>
-												<Activity size={14} />
-												Force Run
 											</button>
 										</div>
 									</div>

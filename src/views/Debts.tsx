@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 import { signOut } from 'firebase/auth';
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, deleteDoc, doc, writeBatch, getDocs } from 'firebase/firestore';
-import { Filter, Download, PlusCircle, Printer, X, History, FileText, Edit2, Trash2, MapPin, Phone, Camera, Image } from 'lucide-react';
+import { Filter, Download, PlusCircle, Printer, X, History, FileText, Edit2, Trash2, MapPin, Phone, Camera, Image, Lock, Crown } from 'lucide-react';
 import UpgradeModal from '../components/UpgradeModal';
 
 
@@ -729,6 +729,24 @@ const Debts: React.FC = () => {
 					Bạn không có quyền xem hoặc nhập công nợ. Vui lòng liên hệ Admin.
 				</p>
 				<button onClick={() => navigate('/')} className="mt-6 bg-[#1A237E] text-white px-6 py-2 rounded-xl font-bold">Quay lại</button>
+			</div>
+		);
+	}
+
+	if (owner.manualLockDebts) {
+		return (
+			<div className="flex flex-col h-full bg-[#f8f9fa] dark:bg-slate-950 items-center justify-center p-8 min-h-screen">
+				<div className="bg-red-500/10 p-6 rounded-full text-red-500 mb-6 border border-red-500/20">
+					<Lock size={64} />
+				</div>
+				<h1 className="text-2xl md:text-4xl font-black uppercase tracking-tighter mb-4 text-[#1A237E] dark:text-indigo-400 text-center">Tính Năng Bị Khóa</h1>
+				<p className="text-slate-500 dark:text-slate-400 text-center max-w-md font-medium text-sm md:text-base leading-relaxed mb-8">
+					Tài khoản của bạn đã bị khóa tính năng Công Nợ. Vui lòng nâng cấp gói hoặc liên hệ Quản trị viên để mở khóa.
+				</p>
+				<button onClick={() => navigate('/pricing')} className="bg-[#1A237E] dark:bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold uppercase tracking-widest shadow-xl shadow-blue-900/20 md:hover:bg-blue-800 transition-all flex items-center gap-2">
+					<Crown size={20} />
+					Nâng Cấp Ngay
+				</button>
 			</div>
 		);
 	}

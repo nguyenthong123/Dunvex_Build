@@ -17,6 +17,7 @@ export interface OwnerState {
 	subscriptionExpiresAt?: any;
 	manualLockOrders?: boolean;
 	manualLockDebts?: boolean;
+	manualLockSheets?: boolean;
 	systemConfig: {
 		lock_free_orders: boolean;
 		lock_free_debts: boolean;
@@ -74,6 +75,7 @@ export const useOwner = () => {
 			let planId = userData.planId || null;
 			let manualLockOrders = userData.manualLockOrders || false;
 			let manualLockDebts = userData.manualLockDebts || false;
+			let manualLockSheets = userData.manualLockSheets || false;
 
 			if (settingsData) {
 				subscriptionStatus = settingsData.subscriptionStatus || 'trial';
@@ -81,9 +83,15 @@ export const useOwner = () => {
 				subscriptionExpiresAt = settingsData.subscriptionExpiresAt;
 				planId = settingsData.planId || planId;
 
-				if (subscriptionStatus === 'active') isPro = true;
-				else if (subscriptionStatus === 'trial') {
-					if (trialEndsAt && trialEndsAt.toDate() < new Date()) {
+				if (subscriptionStatus === 'active') {
+					if (subscriptionExpiresAt && typeof subscriptionExpiresAt.toDate === 'function' && subscriptionExpiresAt.toDate() < new Date()) {
+						isPro = false;
+						subscriptionStatus = 'expired';
+					} else {
+						isPro = true;
+					}
+				} else if (subscriptionStatus === 'trial') {
+					if (trialEndsAt && typeof trialEndsAt.toDate === 'function' && trialEndsAt.toDate() < new Date()) {
 						isPro = false;
 						subscriptionStatus = 'expired';
 					} else {
@@ -91,8 +99,9 @@ export const useOwner = () => {
 					}
 				} else isPro = false;
 
-				manualLockOrders = settingsData.manualLockOrders || manualLockOrders;
-				manualLockDebts = settingsData.manualLockDebts || manualLockDebts;
+				manualLockOrders = settingsData.manualLockOrders ?? manualLockOrders;
+				manualLockDebts = settingsData.manualLockDebts ?? manualLockDebts;
+				manualLockSheets = settingsData.manualLockSheets ?? manualLockSheets;
 			}
 
 			// Info from Nexus (Must have defaults)
@@ -116,6 +125,7 @@ export const useOwner = () => {
 				subscriptionExpiresAt,
 				manualLockOrders,
 				manualLockDebts,
+				manualLockSheets,
 				systemConfig
 			});
 		};

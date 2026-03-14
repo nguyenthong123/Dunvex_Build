@@ -7,7 +7,8 @@ import {
 	FileSpreadsheet, Upload, Link as LinkIcon, Download,
 	Printer, Search, Trash2, Globe, ArrowLeft, Building2,
 	Phone, Mail, MapPin, Hash, Info, RefreshCw, QrCode,
-	Calendar, User, ChevronRight, Maximize2, Check, Save
+	Calendar, User, ChevronRight, Maximize2, Check, Save,
+	Lock, Crown
 } from 'lucide-react';
 import { collection, query, where, orderBy, onSnapshot, addDoc, deleteDoc } from 'firebase/firestore';
 import { useOwner } from '../hooks/useOwner';
@@ -387,6 +388,24 @@ const PriceList = () => {
 			</div>
 		</div>
 	);
+
+	if (owner.manualLockSheets) {
+		return (
+			<div className="flex flex-col h-full bg-[#f8f9fa] dark:bg-slate-950 items-center justify-center p-8 min-h-screen">
+				<div className="bg-red-500/10 p-6 rounded-full text-red-500 mb-6 border border-red-500/20">
+					<Lock size={64} />
+				</div>
+				<h1 className="text-2xl md:text-4xl font-black uppercase tracking-tighter mb-4 text-[#1A237E] dark:text-indigo-400 text-center">Tính Năng Bị Khóa</h1>
+				<p className="text-slate-500 dark:text-slate-400 text-center max-w-md font-medium text-sm md:text-base leading-relaxed mb-8">
+					Tài khoản của bạn đã bị khóa tính năng Báo Giá (Sheets). Vui lòng nâng cấp gói hoặc liên hệ Quản trị viên để mở khóa.
+				</p>
+				<button onClick={() => navigate('/pricing')} className="bg-[#1A237E] dark:bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold uppercase tracking-widest shadow-xl shadow-blue-900/20 md:hover:bg-blue-800 transition-all flex items-center gap-2">
+					<Crown size={20} />
+					Nâng Cấp Ngay
+				</button>
+			</div>
+		);
+	}
 
 	return (
 		<div className="flex flex-col min-h-screen bg-slate-100 dark:bg-slate-950 transition-colors duration-300 print:bg-white print:p-0">

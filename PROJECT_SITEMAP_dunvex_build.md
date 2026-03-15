@@ -390,7 +390,7 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     *   **Chính xác 100%**: Đảm bảo số liệu tồn kho, báo cáo sản phẩm và hệ thống cảnh báo hết kho luôn phản ánh đúng thực tế hàng hóa đã xuất đi.
 - [x] **Bảo mật Tài chính & Phân quyền Nhân viên (Finance Security - Mar 1)**:
     *   **Khóa module Tài chính**: Chặn hoàn toàn quyền truy cập của tài khoản nhân viên vào các tab nhạy cảm: **Sổ quỹ, Tuổi nợ và Lợi nhuận**. Nhân viên sẽ tự động bị chuyển về tab KPI cá nhân.
-    *   **Ẩn Thông tin Lợi nhuận (Product List)**: Nhân viên không thể xem **Giá nhập** và **Lợi nhuận gộp** ước tính trong chi tiết sản phẩm. Chức năng sửa Giá nhập cũng bị khóa cho nhân viên.
+    *   **Ẩn Thông vị Lợi nhuận (Product List)**: Nhân viên không thể xem **Giá nhập** và **Lợi nhuận gộp** ước tính trong chi tiết sản phẩm. Chức năng sửa Giá nhập cũng bị khóa cho nhân viên.
     *   **KPI Privacy**: Trong bảng tính hoa hồng, nhân viên chỉ thấy số lượng bán và hoa hồng thực nhận. Các cột liên quan đến lợi nhuận gộp của công ty được ẩn đi hoàn toàn.
     *   **Permission Logic Hardening**: Cập nhật `hasPermission` mặc định trả về **false** cho nhân viên nếu không có quyền cụ thể, đảm bảo tính bảo mật "Whitelist" thay vì "Blacklist".
 - [x] **Sửa lỗi Thêm Khách hàng (Customer List Bug Fix - Mar 1)**:
@@ -404,7 +404,7 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     *   **Cơ chế Throttling**: Thông báo mã hết hạn được giới hạn hiển thị 12 giờ một lần để tránh spam người dùng.
 - [x] **Sửa lỗi tồn kho theo SKU (Stock Sync Fix - Mar 2)**:
     *   **Cơ chế Cộng dồn Tồn kho**: Khắc phục lỗi "Hết hàng" ảo khi sản phẩm có cùng mã SKU nhưng nằm ở các danh mục khác nhau. Hệ thống tự động cộng dồn tồn kho của tất cả sản phẩm cùng SKU trong cùng một công ty.
-    *   **Cô lập dữu liệu Admin (Admin Isolation)**: Cam kết 100% SKU được lọc theo `ownerId`. Dù nhiều công ty dùng chung một mã SKU, tồn kho vẫn hoàn toàn tách biệt, không bao giờ bị trừ nhầm sang đơn vị khác.
+    *   **Cô lập dữ liệu Admin (Admin Isolation)**: Cam kết 100% SKU được lọc theo `ownerId`. Dù nhiều công ty dùng chung một mã SKU, tồn kho vẫn hoàn toàn tách biệt, không bao giờ bị trừ nhầm sang đơn vị khác.
     *   **Cảnh báo SKU trùng**: Khi thêm sản phẩm thủ công, hệ thống sẽ cảnh báo nếu SKU đã tồn tại trong danh mục của Admin đó để tránh tạo nhầm dữ liệu.
     *   **So khớp SKU Toàn diện**: Tự động chuẩn hóa mã SKU (xoá khoảng trắng, NFC, không phân biệt hoa thường) để đồng bộ kho chính xác.
 - [x] **Lịch sử Thu nợ & Quản lý phiếu thu (Payment History - Mar 2)**:
@@ -434,6 +434,8 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     *   **Ngăn ngừa Auto-zoom**: Nâng cấp toàn bộ font-size của các ô nhập liệu lên **16px (text-base)**. Điều này giúp ngăn trình duyệt (đặc biệt là iOS Safari) tự động phóng to và gây hiện tượng "nhảy" layout khi người dùng nhấn vào ô tìm khách hàng hoặc nhập số lượng.
     *   **Click Outside**: Bổ sung cơ chế tự động đóng danh sách gợi ý khách hàng khi người dùng nhấn ra ngoài, giúp giao diện gọn gàng và ổn định hơn trên thiết bị di động.
 - [x] **Tích hợp Dẫn đường Google Maps (Mar 4)**: Cập nhật nút "Xem vị trí" trong chi tiết khách hàng thành **"Tới vị trí"**. Khi nhấp vào, hệ thống tự động mở Google Maps và kích hoạt chế độ dẫn đường (Directions) đến tọa độ GPS của khách hàng.
+- [x] **Sửa lỗi Trùng lặp Dữ liệu khi Nhập Hàng loạt (Bulk Import Fix - Mar 15)**:
+    *   **One-to-One Match Tracking**: Khắc phục lỗi các sản phẩm giống hệt nhau (chỉ khác giá nhập) bị ghi đè lên nhau và hiển thị sai số lượng. Hệ thống giờ đây theo dõi chính xác từng bản ghi đã khớp, đảm bảo mỗi dòng trong file Excel ánh xạ độc lập đến 1 dòng trên CSDL, hoặc tự động tạo mới nếu bản ghi vượt định mức (ví dụ nhập 3 dòng cùng SKU -> tạo đủ 3 records).
 
 ### 📝 Cần làm tiếp (To-do)
 

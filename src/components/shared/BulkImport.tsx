@@ -297,6 +297,7 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 			const totalBatches = Math.ceil(data.length / batchSize);
 			let totalUpdated = 0;
 			let totalCreated = 0;
+			const matchedDocIds = new Set<string>();
 
 			const normalize = (s: string) => String(s || '').toLowerCase().replace(/[\s\u00A0]+/g, ' ').trim();
 
@@ -317,14 +318,14 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 						// NEXUS AI SMART MATCHING: Priority 1 - Match by SKU AND Category
 						if (cleanSku && cleanCat) {
 							existingItem = existingItems.find((e: any) =>
-								normalize(e.sku) === cleanSku && normalize(e.category) === cleanCat
+								!matchedDocIds.has(e.id) && normalize(e.sku) === cleanSku && normalize(e.category) === cleanCat
 							);
 						}
 
 						// Priority 2: Match by Name AND Category
 						if (!existingItem && cleanName && cleanCat) {
 							existingItem = existingItems.find((e: any) =>
-								normalize(e.name) === cleanName && normalize(e.category) === cleanCat
+								!matchedDocIds.has(e.id) && normalize(e.name) === cleanName && normalize(e.category) === cleanCat
 							);
 						}
 
@@ -333,7 +334,7 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 						// If user has SKU X in "Gói 4 kiện" and uploads SKU X in "Gói 6 kiện", 
 						// Priority 1 & 2 will fail, and we WON'T match here to avoid overwriting.
 						if (!existingItem && cleanSku) {
-							const skuMatch = existingItems.find((e: any) => normalize(e.sku) === cleanSku);
+							const skuMatch = existingItems.find((e: any) => !matchedDocIds.has(e.id) && normalize(e.sku) === cleanSku);
 							if (skuMatch) {
 								const existingCat = normalize(skuMatch.category || '');
 								// If categories match or are both generic, allow update.
@@ -350,8 +351,12 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 
 						if (existingItem) existingDocId = existingItem.id;
 					} else if (type === 'customers' && item.phone) {
-						existingItem = existingItems.find((e: any) => e.phone === item.phone);
+						existingItem = existingItems.find((e: any) => !matchedDocIds.has(e.id) && e.phone === item.phone);
 						if (existingItem) existingDocId = existingItem.id;
+					}
+					
+					if (existingDocId) {
+						matchedDocIds.add(existingDocId);
 					}
 
 					const docRef = existingDocId ? doc(db, type, existingDocId) : doc(collection(db, type));

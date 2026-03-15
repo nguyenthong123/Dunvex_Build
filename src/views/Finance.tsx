@@ -802,7 +802,11 @@ const Finance = () => {
 	// 3. Profit breakdown
 	const orderProfits = filteredOrders.filter(o => o.status === 'Đơn chốt').map(o => {
 		const revenue = o.totalAmount || 0;
-		const cost = (o.items || []).reduce((sum: number, item: any) => sum + ((Number(item.buyPrice) || 0) * (Number(item.qty) || 0)), 0);
+		const cost = (o.items || []).reduce((sum: number, item: any) => {
+			const currentProd = products.find(p => p.id === (item.productId || item.id));
+			const activeBuyPrice = currentProd ? (Number(currentProd.priceBuy) || 0) : (Number(item.buyPrice) || 0);
+			return sum + (activeBuyPrice * (Number(item.qty) || 0));
+		}, 0);
 		const profit = revenue - cost;
 		return { ...o, revenue, cost, profit };
 	}).sort((a: any, b: any) => {

@@ -189,18 +189,12 @@ const Home = () => {
 	const revenueToday = todayOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
 
 	const profitToday = todayOrders.reduce((sum, o) => {
-		const orderCost = (o.items || []).reduce((iSum: number, item: any) => {
-			return iSum + ((Number(item.buyPrice) || 0) * (Number(item.qty) || 0));
-		}, 0);
-		// Minimal profit calc: Revenue - (Product Cost) - (Shipping Fee if covered by shop?)
-		// Allowing simple logic: Profit = (Sell Price - Buy Price) * Qty - Discount. 
-		// Assuming Adjustment is shipping fee collected, usually pass-through or income.
-		// Let's stick to Gross Profit from Goods:
 		const itemsProfit = (o.items || []).reduce((pSum: number, item: any) => {
 			const sell = Number(item.price) || 0;
-			const buy = Number(item.buyPrice) || 0;
+			const currentProd = products.find(p => p.id === (item.productId || item.id));
+			const activeBuyPrice = currentProd ? (Number(currentProd.priceBuy) || 0) : (Number(item.buyPrice) || 0);
 			const qty = Number(item.qty) || 0;
-			return pSum + ((sell - buy) * qty);
+			return pSum + ((sell - activeBuyPrice) * qty);
 		}, 0);
 
 		// Subtract Order Discount
@@ -222,9 +216,10 @@ const Home = () => {
 	const profitThisMonth = thisMonthOrders.reduce((sum, o) => {
 		const itemsProfit = (o.items || []).reduce((pSum: number, item: any) => {
 			const sell = Number(item.price) || 0;
-			const buy = Number(item.buyPrice) || 0;
+			const currentProd = products.find(p => p.id === (item.productId || item.id));
+			const activeBuyPrice = currentProd ? (Number(currentProd.priceBuy) || 0) : (Number(item.buyPrice) || 0);
 			const qty = Number(item.qty) || 0;
-			return pSum + ((sell - buy) * qty);
+			return pSum + ((sell - activeBuyPrice) * qty);
 		}, 0);
 		return sum + (itemsProfit - (o.discountValue || 0));
 	}, 0);

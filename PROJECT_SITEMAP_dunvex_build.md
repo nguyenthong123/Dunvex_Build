@@ -436,6 +436,8 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 - [x] **Tích hợp Dẫn đường Google Maps (Mar 4)**: Cập nhật nút "Xem vị trí" trong chi tiết khách hàng thành **"Tới vị trí"**. Khi nhấp vào, hệ thống tự động mở Google Maps và kích hoạt chế độ dẫn đường (Directions) đến tọa độ GPS của khách hàng.
 - [x] **Sửa lỗi Trùng lặp Dữ liệu khi Nhập Hàng loạt (Bulk Import Fix - Mar 15)**:
     *   **One-to-One Match Tracking**: Khắc phục lỗi các sản phẩm giống hệt nhau (chỉ khác giá nhập) bị ghi đè lên nhau và hiển thị sai số lượng. Hệ thống giờ đây theo dõi chính xác từng bản ghi đã khớp, đảm bảo mỗi dòng trong file Excel ánh xạ độc lập đến 1 dòng trên CSDL, hoặc tự động tạo mới nếu bản ghi vượt định mức (ví dụ nhập 3 dòng cùng SKU -> tạo đủ 3 records).
+- [x] **Tối ưu Tính toán Lợi Nhuận Tài Chính (Dynamic Profit Calculation - Mar 15)**:
+    *   **Áp dụng Giá Nhập Hiện Tại**: Cập nhật logic tính toán `Giá Vốn` (Cost) trong module Tài Chính (Finance) và Tổng Quan (Dashboard) để tự động ánh xạ với `Giá nhập` (priceBuy) MỚI NHẤT của sản phẩm trong danh mục. Điều này giúp các báo cáo lợi nhuận cập nhật chính xác ngay lập tức khi Admin điều chỉnh giá nhập qua Bulk Import hoặc chỉnh sửa tay, thay vì bị khóa chết lấy theo giá cũ lúc lên đơn.
 
 ### 📝 Cần làm tiếp (To-do)
 

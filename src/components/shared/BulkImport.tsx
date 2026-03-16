@@ -60,7 +60,8 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 				{ key: 'specification', label: 'Quy cách', type: 'string' },
 				{ key: 'packaging', label: 'Đóng gói', type: 'string' },
 				{ key: 'density', label: 'Trọng lượng', type: 'string' },
-				{ key: 'note', label: 'Ghi chú', type: 'string' }
+				{ key: 'note', label: 'Ghi chú', type: 'string' },
+				{ key: 'expiryDate', label: 'Ngày hết hạn', type: 'string' }
 			]
 		}
 	};
@@ -185,10 +186,37 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 						val = (val !== undefined && val !== null && !isNaN(Number(val))) ? Number(val) : (field.default || 0);
 					} else {
 						if (typeof val === 'number') {
-							// Convert number to locale string to preserve decimal commas in UI
+							// For general numbers, convert to vi-VN locale string
 							val = val.toLocaleString('vi-VN');
 						} else {
 							val = val !== undefined && val !== null ? String(val).trim() : (field.default || '');
+						}
+						
+						// --- Normalize expiryDate for HTML5 Date input (YYYY-MM-DD) ---
+						if (field.key === 'expiryDate' && val) {
+							// If format is DD/MM/YYYY or DD-MM-YYYY
+							const vnDateMatch = val.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+							if (vnDateMatch) {
+								const d = vnDateMatch[1].padStart(2, '0');
+								const m = vnDateMatch[2].padStart(2, '0');
+								const y = vnDateMatch[3];
+								val = `${y}-${m}-${d}`;
+							} else if (val.match(/^\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}$/)) {
+								// Already YYYY-MM-DD or YYYY/MM/DD, just ensure dashes and padding
+								const dateParts = val.split(/[\/\-]/);
+								val = `${dateParts[0]}-${dateParts[1].padStart(2, '0')}-${dateParts[2].padStart(2, '0')}`;
+							} else {
+								// Try parsing generic valid JS dates (e.g., imported as string like 'Mar 17 2026')
+								const parsed = new Date(val);
+								if (!isNaN(parsed.getTime())) {
+									const y = parsed.getFullYear();
+									const m = String(parsed.getMonth() + 1).padStart(2, '0');
+									const d = String(parsed.getDate()).padStart(2, '0');
+									val = `${y}-${m}-${d}`;
+								} else {
+									val = ''; // Invalid date format fallback to empty
+								}
+							}
 						}
 					}
 					obj[field.key] = val;

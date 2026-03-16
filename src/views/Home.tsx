@@ -11,6 +11,7 @@ import QRScanner from '../components/shared/QRScanner';
 import { QrCode } from 'lucide-react';
 import { useToast } from '../components/shared/Toast';
 import { maskSensitiveData } from '../utils/validation';
+import NotificationBell from '../components/NotificationBell';
 
 const Home = () => {
 	const navigate = useNavigate();
@@ -18,9 +19,7 @@ const Home = () => {
 	const isAdmin = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
 	const { showToast } = useToast();
 	const { sidebarItems } = useNavigationConfig();
-	const [unreadCount, setUnreadCount] = useState(0);
-	const [showNotifications, setShowNotifications] = useState(false);
-	const [notifications, setNotifications] = useState<any[]>([]);
+	// --- Removed redundant notification state ---
 
 	// Real Data State
 	const [orders, setOrders] = useState<any[]>([]);
@@ -35,26 +34,7 @@ const Home = () => {
 	useEffect(() => {
 		if (!auth.currentUser || owner.loading || !owner.ownerId) return;
 
-		const qNotif = query(
-			collection(db, 'notifications'),
-			where('userId', '==', auth.currentUser.uid)
-		);
-
-		const unsubscribeNotif = onSnapshot(qNotif, (snapshot) => {
-			const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-			// Unread count (Client-side)
-			const unread = list.filter((n: any) => !n.read).length;
-			setUnreadCount(unread);
-
-			// Sorted list (Client-side)
-			const sorted = [...list].sort((a: any, b: any) => {
-				const timeA = a.createdAt?.seconds || 0;
-				const timeB = b.createdAt?.seconds || 0;
-				return timeB - timeA;
-			});
-			setNotifications(sorted.slice(0, 20));
-		});
+		// ... removed redundant notification snapshot ...
 
 		// 3. Fetch Data for Dashboard Calculations (Owner specific)
 		const isAdmin = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
@@ -114,7 +94,7 @@ const Home = () => {
 		}, (err: any) => console.error("Home: Products Error:", err));
 
 		return () => {
-			unsubscribeNotif();
+			// unsubscribeNotif(); // removed
 			unsubOrders();
 			unsubCust();
 			unsubPay();
@@ -123,39 +103,7 @@ const Home = () => {
 		};
 	}, [owner.loading, owner.ownerId, owner.role, owner.isEmployee]);
 
-	const markAllAsRead = async () => {
-		if (!auth.currentUser) return;
-		const q = query(
-			collection(db, 'notifications'),
-			where('userId', '==', auth.currentUser.uid)
-		);
-		const snapshot = await getDocs(q);
-		const batch = writeBatch(db);
-		snapshot.docs.forEach((d) => {
-			if (!d.data().read) {
-				batch.update(d.ref, { read: true });
-			}
-		});
-		await batch.commit();
-	};
-
-	const handleNotificationClick = async (notification: any) => {
-		if (!notification.read) {
-			await updateDoc(doc(db, 'notifications', notification.id), { read: true });
-		}
-	};
-
-	const formatTimeAgo = (timestamp: any) => {
-		if (!timestamp) return '';
-		const date = timestamp.seconds ? new Date(timestamp.seconds * 1000) : new Date(timestamp);
-		const now = new Date();
-		const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-		if (diffInSeconds < 60) return 'Vừa xong';
-		if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} phút trước`;
-		if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} giờ trước`;
-		return `${date.getDate()}/${date.getMonth() + 1}`;
-	};
+	// --- Removed redundant notification handlers ---
 
 	const handleLogout = async () => {
 		if (window.confirm("Bạn có chắc chắn muốn đăng xuất?")) {
@@ -377,72 +325,7 @@ const Home = () => {
 						<span className="hidden md:inline text-xs font-bold uppercase tracking-widest">Quét Mã</span>
 					</button>
 
-					{/* Notification Bell */}
-					<div className="relative">
-						<button
-							onClick={() => setShowNotifications(!showNotifications)}
-							className="p-2 relative text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors group"
-							title="Thông báo"
-						>
-							<span className="material-symbols-outlined text-2xl group-hover:scale-110 transition-transform">notifications</span>
-							{unreadCount > 0 && (
-								<span className="absolute top-2 right-2 size-4 bg-[#FF6D00] text-white text-[8px] font-black flex items-center justify-center rounded-full border-2 border-white dark:border-slate-900 animate-bounce">
-									{unreadCount}
-								</span>
-							)}
-						</button>
 
-						{/* Notification Dropdown */}
-						{showNotifications && (
-							<>
-								<div className="fixed inset-0 z-30" onClick={() => setShowNotifications(false)}></div>
-								<div className="absolute top-full right-0 mt-2 w-80 md:w-96 bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-100 dark:border-slate-800 z-40 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-									<div className="p-4 border-b border-slate-50 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
-										<h3 className="font-bold text-xs uppercase text-slate-700 dark:text-slate-300 tracking-wider">Thông báo</h3>
-										<button onClick={markAllAsRead} className="text-[10px] font-bold text-[#1A237E] dark:text-indigo-400 hover:underline cursor-pointer">
-											Đánh dấu đã đọc tất cả
-										</button>
-									</div>
-									<div className="max-h-[400px] overflow-y-auto custom-scrollbar bg-white dark:bg-slate-900">
-										{notifications.length === 0 ? (
-											<div className="p-8 text-center flex flex-col items-center">
-												<span className="material-symbols-outlined text-4xl text-slate-200 dark:text-slate-700 mb-2">notifications_off</span>
-												<p className="text-xs text-slate-400 font-medium">Không có thông báo nào</p>
-											</div>
-										) : (
-											<div className="divide-y divide-slate-50 dark:divide-slate-800">
-												{notifications.map((n) => (
-													<div
-														key={n.id}
-														onClick={() => handleNotificationClick(n)}
-														className={`p-4 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors flex gap-3 ${!n.read ? 'bg-blue-50/30 dark:bg-indigo-900/20' : ''}`}
-													>
-														<div className={`mt-1.5 size-2 rounded-full shrink-0 ${!n.read ? 'bg-[#FF6D00] ring-4 ring-orange-50 dark:ring-orange-900/20' : 'bg-slate-200 dark:bg-slate-700'}`}></div>
-														<div>
-															<h4 className={`text-sm ${!n.read ? 'font-bold text-slate-800 dark:text-slate-200' : 'font-medium text-slate-600 dark:text-slate-400'}`}>
-																{n.title || 'Thông báo hệ thống'}
-															</h4>
-															<p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-																{n.message}
-															</p>
-															<p className="text-[10px] text-slate-400 dark:text-slate-500 mt-2 font-medium">
-																{formatTimeAgo(n.createdAt)}
-															</p>
-														</div>
-													</div>
-												))}
-											</div>
-										)}
-									</div>
-									<div className="p-2 border-t border-slate-50 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-800/30 text-center">
-										<button className="text-[10px] font-bold text-slate-500 dark:text-slate-400 hover:text-[#1A237E] dark:hover:text-indigo-400">Xem tất cả</button>
-									</div>
-								</div>
-							</>
-						)}
-					</div>
-
-					<div className="h-8 w-px bg-slate-100 dark:bg-slate-800 mx-2"></div>
 
 					<div
 						onClick={() => navigate('/admin')}

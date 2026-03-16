@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, where, writeBatch, increment, limit } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, where, writeBatch, increment, limit, getDoc, getDocs } from 'firebase/firestore';
 import BulkImport from '../components/shared/BulkImport';
 import QRScanner from '../components/shared/QRScanner';
 import { QRCodeCanvas } from 'qrcode.react';
@@ -185,7 +185,37 @@ const ProductList = () => {
 			setInventoryLogs(sorted);
 		});
 		return unsubscribe;
-	}, [owner.loading, owner.ownerId, activeTab]);
+	}, [owner.loading, owner.ownerId]);
+
+	// NEW: AI Inventory Auditor (Auto-Reconciler) - Runs 19:00 - 21:00
+	useEffect(() => {
+		const triggerAudit = async () => {
+			if (owner.loading || !owner.ownerId || owner.role !== 'admin' || products.length === 0) return;
+			
+			// Check Time Window: 19:00 - 21:00
+			const now = new Date();
+			const hour = now.getHours();
+			if (hour < 19 || hour >= 21) return;
+			
+			// Check if already run today
+			const todayStr = now.toISOString().split('T')[0];
+			try {
+				const settingsRef = doc(db, 'settings', owner.ownerId);
+				const settingsSnap = await getDoc(settingsRef);
+				const lastAudit = settingsSnap.exists() ? settingsSnap.data()?.lastInventoryAutoAuditDate : null;
+				
+				if (lastAudit === todayStr) return;
+				
+				console.log("[Nexus AI] Triggering scheduled inventory reconciliation audit...");
+				await runInventoryAutoReconcile(todayStr);
+			} catch (err) {
+				console.error("[Nexus AI Audit Error]", err);
+			}
+		};
+		
+		const timer = setTimeout(triggerAudit, 10000); // Wait 10s for initial data to be ready
+		return () => clearTimeout(timer);
+	}, [owner.loading, products.length, orders.length]);
 
 	// Fetch Orders (To filter inventory logs by status)
 	useEffect(() => {
@@ -441,6 +471,8 @@ const ProductList = () => {
 					targetProductId: formData.linkedProductId ? newProdRef.id : '',
 					type: 'init',
 					productName: formData.name,
+					sku: formData.sku || '',
+					unit: formData.unit || '',
 					qty: formData.stock,
 					note: formData.linkedProductId ? `Khởi tạo & Cộng vào kho nguồn` : 'Khởi tạo số dư đầu kỳ',
 					ownerId: owner.ownerId,
@@ -493,6 +525,8 @@ const ProductList = () => {
 					type: 'audit',
 					diffType: stockDiff > 0 ? 'increase' : 'decrease',
 					productName: formData.name,
+					sku: formData.sku || '',
+					unit: formData.unit || '',
 					qty: Math.abs(stockDiff),
 					note: `Chỉnh sửa thủ công: ${oldStock} -> ${newStock}`,
 					ownerId: owner.ownerId,
@@ -634,6 +668,149 @@ const ProductList = () => {
 			expiryDate: product.expiryDate || ''
 		});
 		setShowEditForm(true);
+	};
+
+	const runInventoryAutoReconcile = async (auditDay: string) => {
+		const apiKey = import.meta.env.VITE_DEEPSEEK_API_KEY;
+		if (!apiKey) return;
+
+		try {
+			// 1. Calculate Real-World Stats per SKU
+			const normalizeSku = (s: string) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').trim();
+			const auditMap: Record<string, any> = {};
+
+			// Process Current Products
+			products.forEach(p => {
+				const key = p.sku && p.sku.trim() !== '' ? normalizeSku(p.sku) : `ID-${p.id}`;
+				if (!auditMap[key]) {
+					auditMap[key] = {
+						sku: p.sku || 'N/A',
+						name: p.name,
+						currentSystemStock: 0,
+						realIn: 0,
+						realOut: 0,
+						memberIds: []
+					};
+				}
+				auditMap[key].currentSystemStock += (Number(p.stock) || 0);
+				auditMap[key].memberIds.push(p.id);
+			});
+
+			// Map orders for status check (We need full orders to be accurate)
+			const finishedOrdersSnap = await getDocs(query(
+				collection(db, 'orders'),
+				where('ownerId', '==', owner.ownerId),
+				where('status', '==', 'Đơn chốt')
+			));
+			const finishedOrders = finishedOrdersSnap.docs.map((d: any) => d.data());
+
+			// Aggregate Outbound from Orders
+			finishedOrders.forEach((order: any) => {
+				(order.items || []).forEach((item: any) => {
+					const key = item.sku && item.sku.trim() !== '' ? normalizeSku(item.sku) : (item.id ? normalizeSku(`ID-${item.id}`) : '');
+					if (key && auditMap[key]) {
+						auditMap[key].realOut += (Number(item.qty) || 0);
+					}
+				});
+			});
+
+			// Aggregate Inbound from Logs
+			inventoryLogs.forEach(l => {
+				// Match by productId (existing products)
+				const prod = products.find(p => p.id === l.productId);
+				if (prod) {
+					const key = prod.sku && prod.sku.trim() !== '' ? normalizeSku(prod.sku) : `ID-${prod.id}`;
+					if (auditMap[key]) {
+						if (l.type === 'init' || (l.type === 'audit' && l.diffType === 'increase')) {
+							auditMap[key].realIn += (Number(l.qty) || 0);
+						}
+					}
+				}
+			});
+
+			// 2. Identify Discrepancies
+			const discrepancies = Object.values(auditMap).filter((a: any) => {
+				const expected = a.realIn - a.realOut;
+				return Math.abs(expected - a.currentSystemStock) > 0.1;
+			});
+
+			if (discrepancies.length === 0) {
+				// No audit needed, just mark as done
+				await updateDoc(doc(db, 'settings', owner.ownerId), { lastInventoryAutoAuditDate: auditDay });
+				return;
+			}
+
+			// 3. Ask AI to Resolve & Generate Fixes
+			const response = await fetch("https://api.deepseek.com/chat/completions", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"Authorization": `Bearer ${apiKey}`
+				},
+				body: JSON.stringify({
+					model: "deepseek-chat",
+					messages: [
+						{
+							role: "system",
+							content: "Bạn là AI Auditor chuyên gia kho hàng. Hãy phân tích chênh lệch giữa Tồn kho hiện tại và (Nhập - Xuất thực tế). Do người dùng có thể xóa sản phẩm/đơn cũ nên số liệu Logs có thể bị lệch. Hãy tính toán con số 'Tồn kho thật' hợp lý nhất cho từng SKU. Trả về JSON duy nhất: {\"fixes\": [{\"sku\": \"...\", \"newStock\": 123, \"explanation\": \"...\"}]}"
+						},
+						{
+							role: "user",
+							content: `Dữ liệu chênh lệch: ${JSON.stringify(discrepancies.slice(0, 30))}`
+						}
+					],
+					response_format: { type: 'json_object' }
+				})
+			});
+
+			const data = await response.json();
+			const result = JSON.parse(data.choices?.[0]?.message?.content || '{}');
+			
+			if (result.fixes && Array.isArray(result.fixes)) {
+				const batch = writeBatch(db);
+				let fixCount = 0;
+
+				result.fixes.forEach((fix: any) => {
+					const target = auditMap[normalizeSku(fix.sku)];
+					if (target && target.memberIds.length > 0) {
+						// Update the first product in the group (usually the main batch)
+						const mainProdId = target.memberIds[0];
+						batch.update(doc(db, 'products', mainProdId), {
+							stock: fix.newStock,
+							aiAuditVerified: true,
+							aiAuditAt: serverTimestamp(),
+							aiAuditNote: fix.explanation
+						});
+						
+						// Zero out other members if any to avoid double counting
+						target.memberIds.slice(1).forEach((extraId: string) => {
+							batch.update(doc(db, 'products', extraId), { stock: 0 });
+						});
+
+						fixCount++;
+					}
+				});
+
+				// Create Audit Log for the session
+				const auditRef = doc(collection(db, 'audit_logs'));
+				batch.set(auditRef, {
+					action: 'AI Tự Động Cân Bằng Kho',
+					user: 'Nexus AI Auditor',
+					ownerId: owner.ownerId,
+					details: `Hệ thống đã tự động rà soát và sửa lỗi tồn kho cho ${fixCount} mã SKU phát hiện sai lệch.`,
+					createdAt: serverTimestamp()
+				});
+
+				// Save last run date
+				batch.update(doc(db, 'settings', owner.ownerId), { lastInventoryAutoAuditDate: auditDay });
+
+				await batch.commit();
+				showToast(`[AI] Đã tự động cân bằng ${fixCount} mã SKU có sai lệch.`, "success");
+			}
+
+		} catch (error) {
+			console.error("[AI Audit Process Failed]", error);
+		}
 	};
 
 	const handleAIInventoryAnalysis = async () => {

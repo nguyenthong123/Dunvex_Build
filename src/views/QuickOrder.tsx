@@ -163,33 +163,42 @@ const QuickOrder = () => {
 		}
 	}, [id, owner.ownerId, customers.length]);
 	
-	// AI Auto-check & Sync Packaging (Số kiện)
+	// AI Auto-check & Sync Packaging (Số kiện) - Chạy khi data thay đổi hoặc load xong
 	useEffect(() => {
 		if (loading || !owner.ownerId || products.length === 0 || fetchingOrder) return;
 		
 		let hasChanged = false;
 		const updatedItems = lineItems.map(item => {
-			if (!item.name || !item.category) return item;
+			if (!item.name && !item.productId) return item;
 			
 			const currentPkg = parseFloat(item.packaging) || 0;
-			const currentCat = normalizeText(item.category);
-			const currentName = normalizeText(item.name);
 			
-			// Key tìm kiếm: Danh mục + Tên sản phẩm
-			const masterProduct = products.find(p => 
-				normalizeText(p.category) === currentCat && 
-				normalizeText(p.name) === currentName
-			);
+			// Chiến lược tìm kiếm: 1. ID, 2. SKU (chuẩn hóa), 3. Tên (chuẩn hóa)
+			let masterProduct = products.find(p => p.id === item.productId);
+			
+			if (!masterProduct && item.sku) {
+				const currentSku = normalizeText(item.sku);
+				masterProduct = products.find(p => normalizeText(p.sku) === currentSku);
+			}
+			
+			if (!masterProduct && item.name) {
+				const currentName = normalizeText(item.name);
+				masterProduct = products.find(p => normalizeText(p.name) === currentName);
+			}
 			
 			if (masterProduct && masterProduct.packaging) {
 				const masterPkg = parseFloat(masterProduct.packaging) || 0;
-				if (masterPkg > 0 && masterPkg !== currentPkg) {
+				if (masterPkg > 0 && Math.abs(masterPkg - currentPkg) > 0.001) {
 					hasChanged = true;
 					return { 
 						...item, 
 						packaging: masterProduct.packaging,
 						aiValidated: true 
 					};
+				} else if (masterPkg > 0 && !item.aiValidated) {
+					// Nếu đã khớp nhưng chưa đánh dấu là đã rà soát
+					hasChanged = true;
+					return { ...item, aiValidated: true };
 				}
 			}
 			return item;
@@ -198,7 +207,7 @@ const QuickOrder = () => {
 		if (hasChanged) {
 			setLineItems(updatedItems);
 		}
-	}, [lineItems.length, products, loading, fetchingOrder]);
+	}, [lineItems, products, loading, fetchingOrder]);
 
 	const addLineItem = () => {
 		setLineItems([...lineItems, { id: Date.now(), category: '', productId: '', sku: '', name: '', qty: '', price: 0, buyPrice: 0, unit: '', packaging: '', density: '', maxStock: 0 }]);
@@ -1045,9 +1054,9 @@ const QuickOrder = () => {
 										</div>
 
 										{/* PACKAGING - DESKTOP ONLY INFOS */}
-										<div className="hidden md:flex flex-col items-center relative">
+										<div className="hidden md:flex flex-col items-center relative gap-0.5">
 											<div className="flex items-center gap-1">
-												<span className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-tighter">
+												<span className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter">
 													{(() => {
 														const pkg = parseFloat(item.packaging) || 0;
 														if (pkg <= 0) return '0';
@@ -1058,7 +1067,12 @@ const QuickOrder = () => {
 													<Sparkles size={10} className="text-indigo-500 animate-pulse" />
 												)}
 											</div>
-											<span className="text-[9px] font-bold text-slate-300 uppercase">KIỆN</span>
+											<div className="flex flex-col items-center leading-none">
+												<span className="text-[9px] font-bold text-slate-300 uppercase">KIỆN</span>
+												{parseFloat(item.packaging) > 0 && (
+													<span className="text-[8px] font-medium text-slate-300">(/ {item.packaging})</span>
+												)}
+											</div>
 										</div>
 
 										{/* TOTAL PER ITEM */}

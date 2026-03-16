@@ -892,7 +892,10 @@ Yêu cầu tính toán chi tiết và kết luận:`
 					const matches = products.filter(p => p.id === (item.productId || item.id) || (p.sku && item.sku && p.sku === item.sku) || (p.name && item.name && p.name.trim().toLowerCase() === item.name.trim().toLowerCase()));
 					const currentProd = item.category ? (matches.find(p => p.category === item.category) || matches[0]) : matches[0];
 					const activeBuyPrice = currentProd ? (Number(currentProd.priceBuy) || 0) : (Number(item.buyPrice) || 0);
-					return activeBuyPrice === 0;
+					const salePrice = Number(item.price) || 0;
+					
+					// Bất thường khi: Giá gốc = 0 HOẶC Giá gốc lớn hơn Giá bán (Lỗ) HOẶC Giá gốc quá nhỏ (dưới 50% giá bán)
+					return activeBuyPrice === 0 || activeBuyPrice > salePrice || (salePrice > 0 && activeBuyPrice < salePrice * 0.5);
 				});
 
 				if (hasAnomaly) {

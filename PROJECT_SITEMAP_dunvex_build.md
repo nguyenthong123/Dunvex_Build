@@ -82,6 +82,9 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 ## 4. Các mục đã hoàn thành & Cần làm (To-do)
 
 ### ✅ Đã hoàn thành (Done)
+- [x] **Hiển thị Giá Nhập trong Chi tiết Sản phẩm (Product Details Enhancement - Mar 16)**:
+    - **Giao diện Trực quan**: Hiển thị Giá nhập nổi bật ngay bên cạnh Lợi nhuận ước tính (chỉ dành cho Quản lý/Admin).
+    - **Phân quyền Bảo mật (RBAC)**: Tự động ẩn hoàn toàn các trường thông tin nhạy cảm (Giá nhập kho, Lợi nhuận ước tính) khi tài khoản nhân viên đăng nhập, đảm bảo bảo mật dữ liệu nguồn.
 - [x] **Tính năng Nhắc hẹn Tất toán Khoản vay (Loan Repayment Reminder - Mar 12)**:
     - **Cột Nhắc hẹn mới**: Bổ sung cột "Nhắc hẹn" vào bảng Nhật ký thu chi nội bộ.
     - **Công tắc Toggle**: Cho phép bật/tắt nhắc nhở cho từng khoản vay ngân hàng/vay khác.

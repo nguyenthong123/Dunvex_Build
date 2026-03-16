@@ -1908,10 +1908,15 @@ const ProductList = () => {
 								</div>
 
 								{hasManagePermission && (
-									<div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border-l-4 border-orange-500">
-										<p className="text-[10px] font-bold text-orange-400 uppercase mb-1">Lợi nhuận gộp ước tính</p>
-										<p className="text-green-600 dark:text-green-400 font-black text-xl">{formatPrice(selectedProduct.priceSell - selectedProduct.priceBuy)}</p>
-										<p className="text-[10px] text-gray-400 dark:text-slate-500 font-medium">Giá nhập: {formatPrice(selectedProduct.priceBuy)}</p>
+									<div className="grid grid-cols-2 gap-4">
+										<div className="bg-orange-50 dark:bg-slate-800 p-4 rounded-2xl border border-orange-100 dark:border-orange-500/20">
+											<p className="text-[10px] font-bold text-orange-500 uppercase mb-1">Giá nhập kho</p>
+											<p className="text-orange-600 dark:text-orange-400 font-black text-xl">{formatPrice(selectedProduct.priceBuy)}</p>
+										</div>
+										<div className="bg-emerald-50 dark:bg-slate-800 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-500/20">
+											<p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-500 uppercase mb-1">Lợi nhuận ước tính</p>
+											<p className="text-emerald-600 dark:text-emerald-400 font-black text-xl">{formatPrice(selectedProduct.priceSell - selectedProduct.priceBuy)}</p>
+										</div>
 									</div>
 								)}
 

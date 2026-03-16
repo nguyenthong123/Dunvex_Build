@@ -13,16 +13,12 @@ const QuickOrder = () => {
 	const owner = useOwner();
 	const { showToast } = useToast();
 	const normalizeText = (text: any) => text ? String(text).normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase() : '';
+	const removeAccents = (str: any) => String(str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D');
+	const normalizeSmart = (text: any) => removeAccents(normalizeText(text));
 	const vibrate = (pattern: number | number[]) => {
 		if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) {
 			window.navigator.vibrate(pattern);
 		}
-	};
-	const removeAccents = (str: any) => {
-		return String(str || '').normalize('NFD')
-			.replace(/[\u0300-\u036f]/g, '')
-			.replace(/đ/g, 'd')
-			.replace(/Đ/g, 'D');
 	};
 	const isMatch = (target: string, query: string) => {
 		const t = normalizeText(target);
@@ -163,51 +159,91 @@ const QuickOrder = () => {
 		}
 	}, [id, owner.ownerId, customers.length]);
 	
-	// AI Auto-check & Sync Packaging (Số kiện) - Chạy khi data thay đổi hoặc load xong
+	// AI Smart Packaging Auditor & Sync
 	useEffect(() => {
-		if (loading || !owner.ownerId || products.length === 0 || fetchingOrder) return;
+		if (loading || products.length === 0 || fetchingOrder) return;
 		
-		let hasChanged = false;
-		const updatedItems = lineItems.map(item => {
-			if (!item.name && !item.productId) return item;
-			
-			const currentPkg = parseFloat(item.packaging) || 0;
-			
-			// Chiến lược tìm kiếm: 1. ID, 2. SKU (chuẩn hóa), 3. Tên (chuẩn hóa)
-			let masterProduct = products.find(p => p.id === item.productId);
-			
-			if (!masterProduct && item.sku) {
-				const currentSku = normalizeText(item.sku);
-				masterProduct = products.find(p => normalizeText(p.sku) === currentSku);
-			}
-			
-			if (!masterProduct && item.name) {
-				const currentName = normalizeText(item.name);
-				masterProduct = products.find(p => normalizeText(p.name) === currentName);
-			}
-			
-			if (masterProduct && masterProduct.packaging) {
-				const masterPkg = parseFloat(masterProduct.packaging) || 0;
-				if (masterPkg > 0 && Math.abs(masterPkg - currentPkg) > 0.001) {
-					hasChanged = true;
-					return { 
-						...item, 
-						packaging: masterProduct.packaging,
-						aiValidated: true 
-					};
-				} else if (masterPkg > 0 && !item.aiValidated) {
-					// Nếu đã khớp nhưng chưa đánh dấu là đã rà soát
-					hasChanged = true;
-					return { ...item, aiValidated: true };
+		let isCancelled = false;
+		const smartAudit = async () => {
+			let hasLocalChange = false;
+			const updatedItems = lineItems.map(item => {
+				if (!item.name && !item.productId) return item;
+				
+				const currentPkg = parseFloat(item.packaging) || 0;
+				
+				// 1. Local Weighted Matching (Logic AI Cục bộ)
+				const candidates = products.filter(p => 
+					p.id === item.productId || 
+					(p.sku && item.sku && normalizeText(p.sku) === normalizeText(item.sku)) ||
+					(normalizeSmart(p.name) === normalizeSmart(item.name))
+				);
+				
+				// Ưu tiên sản phẩm trùng cả Danh mục hoặc có Packaging hợp lý
+				const bestMatch = candidates.find(p => normalizeSmart(p.category) === normalizeSmart(item.category)) || candidates[0];
+				
+				if (bestMatch && bestMatch.packaging) {
+					const masterPkg = parseFloat(bestMatch.packaging) || 0;
+					if (masterPkg > 0 && Math.abs(masterPkg - currentPkg) > 0.001) {
+						hasLocalChange = true;
+						return { ...item, packaging: bestMatch.packaging, aiValidated: true };
+					} else if (masterPkg > 0 && !item.aiValidated) {
+						hasLocalChange = true;
+						return { ...item, aiValidated: true };
+					}
 				}
+				return item;
+			});
+
+			if (hasLocalChange && !isCancelled) {
+				setLineItems(updatedItems);
+				return;
 			}
-			return item;
-		});
-		
-		if (hasChanged) {
-			setLineItems(updatedItems);
-		}
-	}, [lineItems, products, loading, fetchingOrder]);
+
+			// 2. Deep Intelligence Audit (AI DeepSeek rà soát nâng cao cho các trường hợp nghi ngờ)
+			const suspiciousItems = updatedItems.filter(it => {
+				const pkg = parseFloat(it.packaging) || 0;
+				const qty = parseFloat(it.qty) || 0;
+				const name = (it.name || '').toLowerCase();
+				// Dấu hiệu nghi ngờ: Tấm Duraflex mà đóng gói < 10, hoặc số kiện quá lớn (> 50) cho 1 mặt hàng
+				const result = (qty / (pkg || 1));
+				return (name.includes('duraflex') && pkg < 10) || (result > 50 && qty > 0);
+			});
+
+			if (suspiciousItems.length > 0 && !isCancelled) {
+				const apiKey = import.meta.env.VITE_DEEPSEEK_API_KEY;
+				if (!apiKey) return;
+
+				try {
+					const response = await fetch("https://api.deepseek.com/chat/completions", {
+						method: "POST",
+						headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+						body: JSON.stringify({
+							model: "deepseek-chat",
+							messages: [
+								{ role: "system", content: "Bạn là chuyên gia rà soát dữ liệu kho Dunvex. Hãy phân tích các sản phẩm trong đơn và trả về số lượng Đóng gói (packaging) chính xác nhất. Ví dụ: 'Tấm DURAFlex 15mm' thường là 40 tấm/kiện. Nếu data đang là 4, hãy sửa thành 40. Trả về JSON: { items: [{ name: '...', correctPackaging: 40 }] }" },
+								{ role: "user", content: `Rà soát các item nghi ngờ sau: ${JSON.stringify(suspiciousItems.map(i => ({ name: i.name, currentPkg: i.packaging, qty: i.qty })))}` }
+							],
+							response_format: { type: 'json_object' }
+						})
+					});
+					const resData = await response.json();
+					const findings = JSON.parse(resData.choices[0].message.content).items;
+
+					if (findings && findings.length > 0) {
+						const finalItems = updatedItems.map(it => {
+							const find = findings.find((f: any) => f.name === it.name);
+							if (find) return { ...it, packaging: String(find.correctPackaging), aiValidated: true, aiSmartFix: true };
+							return it;
+						});
+						if (!isCancelled) setLineItems(finalItems);
+					}
+				} catch (e) { console.error("AI Audit Error:", e); }
+			}
+		};
+
+		const timer = setTimeout(smartAudit, 1000); // Trì hoãn 1s để người dùng nhập xong
+		return () => { isCancelled = true; clearTimeout(timer); };
+	}, [lineItems.length, products, loading, fetchingOrder]);
 
 	const addLineItem = () => {
 		setLineItems([...lineItems, { id: Date.now(), category: '', productId: '', sku: '', name: '', qty: '', price: 0, buyPrice: 0, unit: '', packaging: '', density: '', maxStock: 0 }]);
@@ -1055,8 +1091,8 @@ const QuickOrder = () => {
 
 										{/* PACKAGING - DESKTOP ONLY INFOS */}
 										<div className="hidden md:flex flex-col items-center relative gap-0.5">
-											<div className="flex items-center gap-1">
-												<span className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter">
+											<div className="flex items-center gap-1 group">
+												<span className={`text-xs font-black uppercase tracking-tighter transition-colors ${item.aiSmartFix ? 'text-indigo-600 animate-pulse' : 'text-slate-500 dark:text-slate-400'}`}>
 													{(() => {
 														const pkg = parseFloat(item.packaging) || 0;
 														if (pkg <= 0) return '0';
@@ -1064,13 +1100,20 @@ const QuickOrder = () => {
 													})()}
 												</span>
 												{item.aiValidated && (
-													<Sparkles size={10} className="text-indigo-500 animate-pulse" />
+													<Sparkles size={10} className={`${item.aiSmartFix ? 'text-indigo-600' : 'text-indigo-400'} animate-pulse`} />
+												)}
+												{item.aiSmartFix && (
+													<div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-[8px] px-1.5 py-0.5 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
+														AI ĐÃ SỬA ĐÓNG GÓI
+													</div>
 												)}
 											</div>
 											<div className="flex flex-col items-center leading-none">
 												<span className="text-[9px] font-bold text-slate-300 uppercase">KIỆN</span>
 												{parseFloat(item.packaging) > 0 && (
-													<span className="text-[8px] font-medium text-slate-300">(/ {item.packaging})</span>
+													<span className={`text-[8px] font-medium transition-colors ${item.aiSmartFix ? 'text-indigo-400 font-bold' : 'text-slate-300'}`}>
+														(/ {item.packaging})
+													</span>
 												)}
 											</div>
 										</div>

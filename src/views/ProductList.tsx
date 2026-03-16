@@ -71,7 +71,8 @@ const ProductList = () => {
 		specification: '',
 		packaging: '',
 		density: '',
-		linkedProductId: ''
+		linkedProductId: '',
+		expiryDate: ''
 	});
 
 
@@ -114,8 +115,24 @@ const ProductList = () => {
 			limit(1000)
 		);
 		const unsubscribe = onSnapshot(q, (snapshot: any) => {
-			const docs = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
-			const sortedDocs = [...docs].sort((a, b) => {
+			let docs = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+
+			// Check for expired products and delete them
+			const today = new Date();
+			today.setHours(0, 0, 0, 0);
+			const validDocs: any[] = [];
+			for (const p of docs) {
+				if (p.expiryDate) {
+					const expDate = new Date(p.expiryDate);
+					if (today > expDate) {
+						deleteDoc(doc(db, 'products', p.id)).catch(console.error);
+						continue; // Skip expired product
+					}
+				}
+				validDocs.push(p);
+			}
+
+			const sortedDocs = [...validDocs].sort((a, b) => {
 				const stockA = Number(a.stock) || 0;
 				const stockB = Number(b.stock) || 0;
 
@@ -590,7 +607,8 @@ const ProductList = () => {
 			specification: '',
 			packaging: '',
 			density: '',
-			linkedProductId: ''
+			linkedProductId: '',
+			expiryDate: ''
 		});
 		setSelectedProduct(null);
 	};
@@ -612,7 +630,8 @@ const ProductList = () => {
 			specification: product.specification || '',
 			packaging: product.packaging || '',
 			density: product.density || '',
-			linkedProductId: product.linkedProductId || ''
+			linkedProductId: product.linkedProductId || '',
+			expiryDate: product.expiryDate || ''
 		});
 		setShowEditForm(true);
 	};
@@ -1822,15 +1841,29 @@ const ProductList = () => {
 										</div>
 									</div>
 
-									<div>
-										<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Ghi chú sản phẩm</label>
-										<textarea
-											rows={3}
-											placeholder="..."
-											className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-slate-900 dark:text-white font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
-											value={formData.note}
-											onChange={(e) => setFormData({ ...formData, note: e.target.value })}
-										></textarea>
+									<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+										<div>
+											<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Ghi chú sản phẩm</label>
+											<textarea
+												rows={3}
+												placeholder="..."
+												className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-slate-900 dark:text-white font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
+												value={formData.note}
+												onChange={(e) => setFormData({ ...formData, note: e.target.value })}
+											></textarea>
+										</div>
+										<div>
+											<label className="block text-[10px] font-black text-[#FF6D00] uppercase mb-2 tracking-widest flex items-center gap-1">
+												<span className="material-symbols-outlined text-[12px]">calendar_month</span> Ngày hết hạn (Tự động xóa)
+											</label>
+											<input
+												type="date"
+												className="w-full bg-orange-50/50 dark:bg-slate-800/80 border border-orange-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-slate-900 dark:text-white font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
+												value={formData.expiryDate}
+												onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })}
+											/>
+											<p className="text-[9px] text-gray-400 dark:text-slate-500 mt-2 italic">* Nếu chọn ngày, hệ thống sẽ tự động xóa sản phẩm này khi qua ngày đã chọn. Bỏ trống nếu không dùng.</p>
+										</div>
 									</div>
 								</div>
 
@@ -1920,7 +1953,7 @@ const ProductList = () => {
 									</div>
 								)}
 
-								<div className="grid grid-cols-3 gap-3">
+								<div className="grid grid-cols-2 gap-3">
 									<div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
 										<p className="text-[9px] font-bold text-gray-400 dark:text-slate-500 uppercase mb-1">Quy cách</p>
 										<p className="text-xs font-black text-[#1A237E] dark:text-indigo-300">{selectedProduct.specification || '---'}</p>
@@ -1932,6 +1965,12 @@ const ProductList = () => {
 									<div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
 										<p className="text-[9px] font-bold text-gray-400 dark:text-slate-500 uppercase mb-1">Trọng lượng</p>
 										<p className="text-xs font-black text-[#1A237E] dark:text-indigo-300">{selectedProduct.density || '---'}</p>
+									</div>
+									<div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
+										<p className="text-[9px] font-bold text-orange-500 uppercase mb-1">Ngày hết hạn (Auto-Delete)</p>
+										<p className="text-xs font-black text-orange-600 dark:text-orange-400">
+											{selectedProduct.expiryDate ? new Date(selectedProduct.expiryDate).toLocaleDateString('vi-VN') : 'Không giới hạn'}
+										</p>
 									</div>
 								</div>
 

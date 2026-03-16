@@ -443,7 +443,7 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Phân trang Thông minh (3 items/page)**: Tích hợp phân trang cho chuông thông báo, giới hạn tối đa 5 trang (15 tin mới nhất) để tối ưu hiệu suất.
     - **Tự động Dọn dẹp (3-day Retention)**: Hệ thống tự động xóa bỏ các thông báo cũ sau 3 ngày để đảm bảo dữ liệu luôn sạch sẽ.
     - **Rút ngắn Nhắc nợ (3-day threshold)**: Cập nhật ngưỡng nhắc thu công nợ từ 6 ngày xuống còn **3 ngày**.
-    - **Nexus AI Natural Language**: Tích hợp DeepSeek AI để tự động soạn thảo tiêu đề và nội dung thông báo (Hết kho, Nhắc nợ, Đồng bộ) bằng ngôn ngữ tự nhiên, chuyên nghiệp và thân thiện.
+    - **Nexus AI Natural Language**: Tích hợp DeepSeek AI để tự động soạn thảo tiêu đề và nội dung thông báo (Hết kho, Nhắc nợ, Đồng bộ) bằng ngôn ngữ tự nhiên. (Gỡ bỏ tính năng tóm tắt AI để tinh gọn giao diện).
 - [x] **Tự động hóa AI Kế toán & Phân tích Lợi Nhuận (AI Auto-Fix Finance - Mar 16)**:
     *   **Background Checker**: Tự động rà soát ngầm dữ liệu đơn hàng ngay khi truy cập mục Lợi nhuận để phát hiện sai sót (giá vốn = 0, nhân viên chọn sai).
     *   **Tự Động Fix Số Liệu (JSON Override)**: AI DeepSeek lập tức phân tích và tự động ghi đè, hiển thị lại `doanh thu`, `giá vốn` và `lợi nhuận` cho các đơn hàng sai sót mà không chớp trang.

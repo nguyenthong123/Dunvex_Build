@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, CheckCircle2, XCircle, Clock, X, AlertTriangle, Coins, Database, Sparkles, BrainCircuit, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { Bell, CheckCircle2, XCircle, Clock, X, AlertTriangle, Coins, Database, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { db, auth } from '../services/firebase';
 import { collection, query, where, orderBy, onSnapshot, updateDoc, doc, limit, serverTimestamp, setDoc, deleteDoc, getDocs } from 'firebase/firestore';
 import { useToast } from './shared/Toast';
@@ -9,8 +9,7 @@ const NotificationBell = ({ placement = 'down', align = 'right', className = "" 
 	const [showList, setShowList] = useState(false);
 	const [unreadCount, setUnreadCount] = useState(0);
 	const { showToast } = useToast();
-	const [isAnalyzing, setIsAnalyzing] = useState(false);
-	const [aiSummary, setAiSummary] = useState<string | null>(null);
+
 	const [currentPage, setCurrentPage] = useState(1);
 	const itemsPerPage = 3;
 	const maxPages = 5;
@@ -86,65 +85,7 @@ const NotificationBell = ({ placement = 'down', align = 'right', className = "" 
 		}
 	};
 
-	const handleAiSummary = async () => {
-		if (notifications.length === 0) {
-			showToast("Không có thông báo để tóm tắt", "info");
-			return;
-		}
-		const apiKey = import.meta.env.VITE_DEEPSEEK_API_KEY;
-		if (!apiKey) {
-			showToast("Chưa cấu hình Nexus AI Key", "error");
-			return;
-		}
 
-		setIsAnalyzing(true);
-		setAiSummary(null);
-
-		try {
-			const notifData = notifications.map(n => ({
-				title: n.title,
-				body: n.body,
-				type: n.type,
-				time: n.createdAt?.toDate ? n.createdAt.toDate().toLocaleString('vi-VN') : 'Vừa xong'
-			}));
-
-			const response = await fetch("https://api.deepseek.com/chat/completions", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					"Authorization": `Bearer ${apiKey}`
-				},
-				body: JSON.stringify({
-					model: "deepseek-chat",
-					messages: [
-						{
-							role: "system",
-							content: "Bạn là Nexus AI chuyên gia quản trị hệ thống Dunvex Build. Dựa vào danh sách thông báo hệ thống gần đây, hãy đưa ra một TÓM TẮT NHANH 1 ĐOẠN (khoảng 2-3 câu ngắn) đánh giá tình hình rủi ro/cơ hội và ĐỀ XUẤT MỘT HÀNH ĐỘNG QUAN TRỌNG NHẤT cần làm ngay (Actionable Insight). YÊU CẦU TRÌNH BÀY: KHÔNG dùng markdown nhảm như dấu sao (*) hay thăng (#), chỉ dùng nội dung, chữ số hoặc gạch ngang (-) để liệt kê nếu cần. Phục vụ như một giám đốc điều hành đưa ra lệnh."
-						},
-						{
-							role: "user",
-							content: `Danh sách sự kiện: ${JSON.stringify(notifData)}`
-						}
-					],
-					stream: false
-				})
-			});
-
-			const data = await response.json();
-			if (data.choices?.[0]?.message?.content) {
-				let content = data.choices[0].message.content;
-				content = content.replace(/\*\*/g, '').replace(/\*/g, '-');
-				setAiSummary(content);
-			} else {
-				throw new Error("Lỗi phản hồi");
-			}
-		} catch (error) {
-			console.error(error);
-			showToast("Không thể kết nối Nexus AI", "error");
-		} finally {
-			setIsAnalyzing(false);
-		}
-	};
 
 	const totalPages = Math.min(Math.ceil(notifications.length / itemsPerPage), maxPages);
 	const paginatedNotifications = notifications.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -180,18 +121,6 @@ const NotificationBell = ({ placement = 'down', align = 'right', className = "" 
 						<div className="p-5 border-b border-slate-50 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/30">
 							<h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">Thông báo</h3>
 							<div className="flex items-center gap-2">
-								<button 
-									onClick={handleAiSummary}
-									disabled={isAnalyzing || notifications.length === 0}
-									className={`px-3 py-1.5 rounded-xl font-bold text-[10px] uppercase tracking-wider flex items-center gap-1.5 transition-all ${isAnalyzing ? 'bg-indigo-100 text-indigo-400 dark:bg-indigo-900/30 dark:text-indigo-500' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20'}`}
-								>
-									{isAnalyzing ? (
-										<BrainCircuit size={14} className="animate-spin" />
-									) : (
-										<Sparkles size={14} />
-									)}
-									{isAnalyzing ? 'Đang tóm tắt...' : 'Hỏi Nexus AI'}
-								</button>
 								<button onClick={() => setShowList(false)} className="size-8 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-slate-600 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors outline-none">
 									<X size={16} />
 								</button>
@@ -199,22 +128,7 @@ const NotificationBell = ({ placement = 'down', align = 'right', className = "" 
 						</div>
 
 						<div className="max-h-[400px] overflow-y-auto no-scrollbar">
-							{aiSummary && (
-								<div className="p-4 mx-4 mt-4 bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-950/30 dark:to-blue-900/10 border border-indigo-100 dark:border-indigo-800/30 rounded-2xl animate-in slide-in-from-top-4 duration-300">
-									<div className="flex items-center gap-2 mb-2">
-										<BrainCircuit size={16} className="text-indigo-600 dark:text-indigo-400 animate-pulse" />
-										<span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Nexus AI Insight</span>
-									</div>
-									<p className="text-xs font-medium text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
-										{aiSummary}
-									</p>
-									<div className="mt-3 flex justify-end">
-										<button onClick={() => setAiSummary(null)} className="text-[10px] uppercase font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
-											Đóng gợi ý
-										</button>
-									</div>
-								</div>
-							)}
+
 							{paginatedNotifications.length > 0 ? (
 								paginatedNotifications.map((n) => (
 									<div

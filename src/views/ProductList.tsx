@@ -2087,15 +2087,21 @@ const ProductList = () => {
 									<div className="flex-1 min-w-0">
 										<p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider mb-1">{selectedProduct.category}</p>
 										<h2 className="text-xl font-black text-[#1A237E] dark:text-indigo-400 leading-tight break-words">{selectedProduct.name}</h2>
-										<div
-											className="flex items-center gap-2 mt-1 cursor-pointer group/copy"
-											onClick={() => copyToClipboard(selectedProduct.sku || selectedProduct.id, 'mã SKU')}
-											title="Copy mã SKU"
-										>
-											<p className="text-xs font-bold text-gray-400 dark:text-slate-500">SKU: {selectedProduct.sku || '---'}</p>
-											{(selectedProduct.sku || selectedProduct.id) && (
-												<span className="material-symbols-outlined text-[14px] text-gray-300 group-hover/copy:text-blue-500 transition-colors">content_copy</span>
-											)}
+										<div className="flex flex-wrap items-center gap-2 mt-2">
+											<div
+												className="flex items-center gap-2 cursor-pointer group/copy bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded-lg border border-slate-100 dark:border-slate-700"
+												onClick={() => copyToClipboard(selectedProduct.sku || selectedProduct.id, 'mã SKU')}
+												title="Copy mã SKU"
+											>
+												<p className="text-xs font-bold text-slate-500 dark:text-slate-400">SKU: {selectedProduct.sku || '---'}</p>
+												{(selectedProduct.sku || selectedProduct.id) && (
+													<span className="material-symbols-outlined text-[14px] text-gray-300 group-hover/copy:text-blue-500 transition-colors">content_copy</span>
+												)}
+											</div>
+											<div className="flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-1 rounded-lg border border-indigo-100 dark:border-indigo-800/50">
+												<span className="material-symbols-outlined text-[14px] text-indigo-500">category</span>
+												<span className="text-xs font-bold text-indigo-600 dark:text-indigo-300">{selectedProduct.category}</span>
+											</div>
 										</div>
 									</div>
 								</div>

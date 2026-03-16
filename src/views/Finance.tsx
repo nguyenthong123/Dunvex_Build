@@ -888,24 +888,15 @@ Yêu cầu tính toán chi tiết và kết luận:`
 				if (autoCheckedOrders.current.has(order.id) || order.aiFixed) continue;
 				autoCheckedOrders.current.add(order.id);
 
-				const hasAnomaly = (order.items || []).some((item: any) => {
-					const matches = products.filter(p => p.id === (item.productId || item.id) || (p.sku && item.sku && p.sku === item.sku) || (p.name && item.name && p.name.trim().toLowerCase() === item.name.trim().toLowerCase()));
-					const currentProd = item.category ? (matches.find(p => p.category === item.category) || matches[0]) : matches[0];
-					const activeBuyPrice = currentProd ? (Number(currentProd.priceBuy) || 0) : (Number(item.buyPrice) || 0);
-					const salePrice = Number(item.price) || 0;
-					
-					// Bất thường khi: Giá gốc = 0 HOẶC Giá gốc thực sự bằng 0 mà có giá bán HOẶC Giá gốc chiếm một con số quá thấp không tưởng (dưới 30% giá bán)
-					return activeBuyPrice === 0 || (salePrice > 0 && activeBuyPrice < salePrice * 0.3);
-				});
-
-				if (hasAnomaly) {
-					try {
-						const itemDetails = (order.items || []).map((item: any) => {
-							const matches = products.filter(p => p.id === (item.productId || item.id) || (p.sku && item.sku && p.sku === item.sku) || (p.name && item.name && p.name.trim().toLowerCase() === item.name.trim().toLowerCase()));
-							const currentProd = item.category ? (matches.find(p => p.category === item.category) || matches[0]) : matches[0];
-							const activeBuyPrice = currentProd ? (Number(currentProd.priceBuy) || 0) : (Number(item.buyPrice) || 0);
-							return `- Danh mục: ${item.category || 'N/A'} | SP: ${item.name} | SL: ${item.qty} | Giá bán: ${formatPrice(item.price)}/sp | Giá gốc tra cứu kết hợp AI (chưa fix): ${formatPrice(activeBuyPrice)}`;
-						}).join('\n');
+				// Gọi AI tính toán cho mọi đơn hàng được hiển thị (Data thực), không suy đoán/lọc lỗi
+				try {
+					const itemDetails = (order.items || []).map((item: any) => {
+						const matches = products.filter(p => p.id === (item.productId || item.id) || (p.sku && item.sku && p.sku === item.sku) || (p.name && item.name && p.name.trim().toLowerCase() === item.name.trim().toLowerCase()));
+						const currentProd = item.category ? (matches.find(p => p.category === item.category) || matches[0]) : matches[0];
+						const activeBuyPrice = currentProd ? (Number(currentProd.priceBuy) || 0) : (Number(item.buyPrice) || 0);
+						// Data gửi AI
+						return `- Danh mục: ${item.category || 'N/A'} | SP: ${item.name} | SL: ${item.qty} | Giá bán: ${formatPrice(item.price)}/sp | Giá vốn thực tế (DB): ${formatPrice(activeBuyPrice)}`;
+					}).join('\n');
 
 						const response = await fetch("https://api.deepseek.com/chat/completions", {
 							method: "POST",
@@ -938,7 +929,7 @@ Yêu cầu tính toán chi tiết và kết luận:`
 					} catch (error) {
 						console.error('AI AutoCheck Error:', error);
 					}
-				}
+				// Removed `if (hasAnomaly)` wrap
 			}
 		};
 		autoCheck();

@@ -894,8 +894,8 @@ Yêu cầu tính toán chi tiết và kết luận:`
 					const activeBuyPrice = currentProd ? (Number(currentProd.priceBuy) || 0) : (Number(item.buyPrice) || 0);
 					const salePrice = Number(item.price) || 0;
 					
-					// Bất thường khi: Giá gốc = 0 HOẶC Giá gốc lớn hơn Giá bán (Lỗ) HOẶC Giá gốc quá nhỏ (dưới 50% giá bán)
-					return activeBuyPrice === 0 || activeBuyPrice > salePrice || (salePrice > 0 && activeBuyPrice < salePrice * 0.5);
+					// Bất thường khi: Giá gốc = 0 HOẶC Giá gốc thực sự bằng 0 mà có giá bán HOẶC Giá gốc chiếm một con số quá thấp không tưởng (dưới 30% giá bán)
+					return activeBuyPrice === 0 || (salePrice > 0 && activeBuyPrice < salePrice * 0.3);
 				});
 
 				if (hasAnomaly) {

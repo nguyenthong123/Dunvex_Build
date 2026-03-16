@@ -438,6 +438,10 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     *   **Ngăn ngừa Auto-zoom**: Nâng cấp toàn bộ font-size của các ô nhập liệu lên **16px (text-base)**. Điều này giúp ngăn trình duyệt (đặc biệt là iOS Safari) tự động phóng to và gây hiện tượng "nhảy" layout khi người dùng nhấn vào ô tìm khách hàng hoặc nhập số lượng.
     *   **Click Outside**: Bổ sung cơ chế tự động đóng danh sách gợi ý khách hàng khi người dùng nhấn ra ngoài, giúp giao diện gọn gàng và ổn định hơn trên thiết bị di động.
 - [x] **Tích hợp Dẫn đường Google Maps (Mar 4)**: Cập nhật nút "Xem vị trí" trong chi tiết khách hàng thành **"Tới vị trí"**. Khi nhấp vào, hệ thống tự động mở Google Maps và kích hoạt chế độ dẫn đường (Directions) đến tọa độ GPS của khách hàng.
+- [x] **Tự động hóa AI Kế toán & Phân tích Lợi Nhuận (AI Auto-Fix Finance - Mar 16)**:
+    *   **Background Checker**: Tự động rà soát ngầm dữ liệu đơn hàng ngay khi truy cập mục Lợi nhuận để phát hiện sai sót (giá vốn = 0, nhân viên chọn sai).
+    *   **Tự Động Fix Số Liệu (JSON Override)**: AI DeepSeek lập tức phân tích và tự động ghi đè, hiển thị lại `doanh thu`, `giá vốn` và `lợi nhuận` cho các đơn hàng sai sót mà không chớp trang.
+    *   **Sparkles UX**: Thêm hiệu ứng nhấp nháy ánh sao đánh dấu các đơn hàng đã được AI can thiệp để người dùng dễ nhận biết.
 - [x] **Sửa lỗi Trùng lặp Dữ liệu khi Nhập Hàng loạt (Bulk Import Fix - Mar 15)**:
     *   **One-to-One Match Tracking**: Khắc phục lỗi các sản phẩm giống hệt nhau (chỉ khác giá nhập) bị ghi đè lên nhau và hiển thị sai số lượng. Hệ thống giờ đây theo dõi chính xác từng bản ghi đã khớp, đảm bảo mỗi dòng trong file Excel ánh xạ độc lập đến 1 dòng trên CSDL, hoặc tự động tạo mới nếu bản ghi vượt định mức (ví dụ nhập 3 dòng cùng SKU -> tạo đủ 3 records).
 - [x] **Tối ưu Tính toán Lợi Nhuận Tài Chính (Dynamic Profit Calculation - Mar 15)**:

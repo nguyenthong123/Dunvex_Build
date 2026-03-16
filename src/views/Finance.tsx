@@ -51,6 +51,9 @@ const Finance = () => {
 	const [isSendingReminders, setIsSendingReminders] = useState(false);
 	const [agingAiInsight, setAgingAiInsight] = useState<string | null>(null);
 	const [agingData, setAgingData] = useState<any>({ under30: [], between30_60: [], between60_90: [], over90: [] });
+	const [aiProfitInsight, setAiProfitInsight] = useState<{ id: string, insight: string, loading: boolean } | null>(null);
+	const [aiAutoFixes, setAiAutoFixes] = useState<Record<string, { revenue: number, cost: number, profit: number }>>({});
+	const autoCheckedOrders = useRef(new Set<string>());
 
 	// Cashbook Form
 	const [showLogForm, setShowLogForm] = useState(searchParams.get('new') === 'true');
@@ -684,6 +687,56 @@ const Finance = () => {
 		}
 	};
 
+	const handleAICheckProfit = async (order: any) => {
+		setAiProfitInsight({ id: order.id, insight: '', loading: true });
+		try {
+			const itemDetails = (order.items || []).map((item: any) => {
+				const matches = products.filter(p => p.id === (item.productId || item.id) || (p.sku && item.sku && p.sku === item.sku) || (p.name && item.name && p.name.trim().toLowerCase() === item.name.trim().toLowerCase()));
+				const currentProd = item.category ? (matches.find(p => p.category === item.category) || matches[0]) : matches[0];
+				const activeBuyPrice = currentProd ? (Number(currentProd.priceBuy) || 0) : (Number(item.buyPrice) || 0);
+				return `- Danh mục: ${item.category || 'N/A'} | SP: ${item.name} | SL: ${item.qty} | Giá bán: ${formatPrice(item.price)}/sp | Giá gốc tra cứu kết hợp AI: ${formatPrice(activeBuyPrice)}/sp`;
+			}).join('\n');
+
+			const response = await fetch("https://api.deepseek.com/chat/completions", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"Authorization": `Bearer ${import.meta.env.VITE_DEEPSEEK_API_KEY || ""}`
+				},
+				body: JSON.stringify({
+					model: "deepseek-chat",
+					messages: [
+						{
+							role: "system",
+							content: "Bạn là trưởng phòng kế toán siêu việt. Hãy xem dữ liệu đơn hàng và đưa ra phân tích chi tiết về lợi nhuận.\nNhiệm vụ:\n1. Chỉ ra nguyên nhân nếu lợi nhuận sai lệch do lỗi đánh thiếu giá vốn = 0.\n2. Nếu có item Thiếu giá vốn (hoặc =0), hãy ước tính giá nhập vốn hợp lý dưạ theo tên SP, hoặc dùng 80%-85% giá bán làm giá vốn giả định.\n3. Tính toán lại cụ thể Tổng giá vốn thật và Tổng Lợi Nhuận thật.\nTRình bày sạch sẽ, CHÍNH XÁC TOÁN HỌC, dễ nhìn (khoảng 5-6 dòng)."
+						},
+						{
+							role: "user",
+							content: `Đơn hàng: ${order.invoiceId || order.id.slice(-6).toUpperCase()}
+Hệ thống hiện tại đang tính: 
+- Doanh thu: ${formatPrice(order.revenue)} 
+- Giá vốn: ${formatPrice(order.cost)} 
+- Lợi nhuận: ${formatPrice(order.profit)}
+- Tổng chiết khấu cho khách: ${formatPrice(order.discountValue || 0)}
+
+Chi tiết vật tư:
+${itemDetails}
+
+Yêu cầu tính toán chi tiết và kết luận:`
+						}
+					]
+				})
+			});
+
+			const data = await response.json();
+			const insight = data.choices?.[0]?.message?.content || "Không phản hồi được =(";
+			setAiProfitInsight({ id: order.id, insight, loading: false });
+		} catch (error) {
+			console.error("AI Profit Error:", error);
+			setAiProfitInsight({ id: order.id, insight: "Lỗi kết nối AI.", loading: false });
+		}
+	};
+
 	const handleAddLog = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (logData.amount <= 0) return;
@@ -801,14 +854,15 @@ const Finance = () => {
 
 	// 3. Profit breakdown
 	const orderProfits = filteredOrders.filter(o => o.status === 'Đơn chốt').map(o => {
-		const revenue = o.totalAmount || 0;
-		const cost = (o.items || []).reduce((sum: number, item: any) => {
-			const currentProd = products.find(p => p.id === (item.productId || item.id));
+		const revenue = aiAutoFixes[o.id] ? aiAutoFixes[o.id].revenue : (o.totalAmount || 0);
+		const cost = aiAutoFixes[o.id] ? aiAutoFixes[o.id].cost : (o.items || []).reduce((sum: number, item: any) => {
+			const matches = products.filter(p => p.id === (item.productId || item.id) || (p.sku && item.sku && p.sku === item.sku) || (p.name && item.name && p.name.trim().toLowerCase() === item.name.trim().toLowerCase()));
+			const currentProd = item.category ? (matches.find(p => p.category === item.category) || matches[0]) : matches[0];
 			const activeBuyPrice = currentProd ? (Number(currentProd.priceBuy) || 0) : (Number(item.buyPrice) || 0);
 			return sum + (activeBuyPrice * (Number(item.qty) || 0));
 		}, 0);
-		const profit = revenue - cost;
-		return { ...o, revenue, cost, profit };
+		const profit = aiAutoFixes[o.id] ? aiAutoFixes[o.id].profit : (revenue - cost);
+		return { ...o, revenue, cost, profit, aiFixed: !!aiAutoFixes[o.id] };
 	}).sort((a: any, b: any) => {
 		const dateA = new Date(a.orderDate || a.createdAt?.toDate() || a.createdAt).getTime();
 		const dateB = new Date(b.orderDate || b.createdAt?.toDate() || b.createdAt).getTime();
@@ -824,6 +878,69 @@ const Finance = () => {
 
 	const paginatedProfits = orderProfits.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 	const totalProfitsPages = Math.ceil(orderProfits.length / ITEMS_PER_PAGE);
+
+	useEffect(() => {
+		if (activeTab !== 'profit' || !Array.isArray(paginatedProfits)) return;
+		let isCancelled = false;
+		const autoCheck = async () => {
+			for (const order of paginatedProfits) {
+				if (isCancelled) break;
+				if (autoCheckedOrders.current.has(order.id) || order.aiFixed) continue;
+				autoCheckedOrders.current.add(order.id);
+
+				const hasAnomaly = (order.items || []).some((item: any) => {
+					const matches = products.filter(p => p.id === (item.productId || item.id) || (p.sku && item.sku && p.sku === item.sku) || (p.name && item.name && p.name.trim().toLowerCase() === item.name.trim().toLowerCase()));
+					const currentProd = item.category ? (matches.find(p => p.category === item.category) || matches[0]) : matches[0];
+					const activeBuyPrice = currentProd ? (Number(currentProd.priceBuy) || 0) : (Number(item.buyPrice) || 0);
+					return activeBuyPrice === 0;
+				});
+
+				if (hasAnomaly) {
+					try {
+						const itemDetails = (order.items || []).map((item: any) => {
+							const matches = products.filter(p => p.id === (item.productId || item.id) || (p.sku && item.sku && p.sku === item.sku) || (p.name && item.name && p.name.trim().toLowerCase() === item.name.trim().toLowerCase()));
+							const currentProd = item.category ? (matches.find(p => p.category === item.category) || matches[0]) : matches[0];
+							const activeBuyPrice = currentProd ? (Number(currentProd.priceBuy) || 0) : (Number(item.buyPrice) || 0);
+							return `- Danh mục: ${item.category || 'N/A'} | SP: ${item.name} | SL: ${item.qty} | Giá bán: ${formatPrice(item.price)}/sp | Giá gốc tra cứu kết hợp AI (chưa fix): ${formatPrice(activeBuyPrice)}`;
+						}).join('\n');
+
+						const response = await fetch("https://api.deepseek.com/chat/completions", {
+							method: "POST",
+							headers: { "Content-Type": "application/json", "Authorization": `Bearer ${import.meta.env.VITE_DEEPSEEK_API_KEY || ""}` },
+							body: JSON.stringify({
+								model: "deepseek-chat",
+								messages: [
+									{
+										role: "system",
+										content: "Bạn là AI rà soát chứng từ kế toán. Phát hiện đơn hàng có vật tư bị thiết lập sai hệ thống (giá vốn = 0 hoặc nhập sai tỷ lệ). Hãy tính lại. Nội suy giá gốc từ 80%-85% giá bán hoặc dự đoán từ tên. Yêu cầu CHỈ trả về JSON: { \"revenue\": <tổng doanh thu tính đúng>, \"cost\": <tổng giá vốn tính đúng>, \"profit\": <tổng lợi nhuận> }"
+									},
+									{
+										role: "user",
+										content: `Mã đơn: ${order.invoiceId || order.id}\nDoanh thu hiển thị cũ: ${order.revenue}\nChi tiết vật tư:\n${itemDetails}`
+									}
+								],
+								response_format: { type: "json_object" }
+							})
+						});
+
+						const data = await response.json();
+						const jsonStr = data.choices?.[0]?.message?.content || "{}";
+						const match = jsonStr.match(/\{[\s\S]*\}/);
+						if (match) {
+							const result = JSON.parse(match[0]);
+							if (result.revenue && result.cost !== undefined && !isCancelled) {
+								setAiAutoFixes(prev => ({ ...prev, [order.id]: { revenue: result.revenue, cost: result.cost, profit: result.profit || (result.revenue - result.cost) } }));
+							}
+						}
+					} catch (error) {
+						console.error('AI AutoCheck Error:', error);
+					}
+				}
+			}
+		};
+		autoCheck();
+		return () => { isCancelled = true; };
+	}, [paginatedProfits, activeTab, products]);
 
 	if (owner && owner.loading) {
 		return (
@@ -1271,17 +1388,45 @@ const Finance = () => {
 									</thead>
 									<tbody className="divide-y divide-slate-50 dark:divide-slate-800">
 										{paginatedProfits.map((order, i) => (
-											<tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+											<React.Fragment key={i}>
+											<tr className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
 												<td className="px-6 py-4 font-black text-slate-900 dark:text-indigo-400">{order.invoiceId || order.id.slice(-6).toUpperCase()}</td>
 												<td className="px-6 py-4 font-bold text-slate-600 dark:text-slate-400">{order.customerName}</td>
 												<td className="px-6 py-4 text-right font-bold text-slate-700 dark:text-slate-300">{formatPrice(order.revenue)}</td>
 												<td className="px-6 py-4 text-right text-slate-400 italic">{formatPrice(order.cost)}</td>
 												<td className="px-6 py-4 text-right">
-													<span className={`px-2 py-1 rounded-lg font-black ${order.profit > 0 ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20' : 'bg-rose-50 text-rose-600 dark:bg-rose-900/20'}`}>
-														{formatPrice(order.profit)}
-													</span>
+													<div className="flex items-center justify-end gap-2">
+														{order.aiFixed && <span title="Tự động sửa bởi AI"><Sparkles size={12} className="text-indigo-500 animate-pulse" /></span>}
+														<span className={`px-2 py-1 rounded-lg font-black ${order.profit > 0 ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20' : 'bg-rose-50 text-rose-600 dark:bg-rose-900/20'}`}>
+															{formatPrice(order.profit)}
+														</span>
+													</div>
+													<button 
+														onClick={() => handleAICheckProfit(order)}
+														disabled={aiProfitInsight?.loading && aiProfitInsight.id === order.id}
+														className="ml-3 inline-flex items-center justify-center p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors disabled:opacity-50"
+														title="AI Phân tích dữ liệu gốc"
+													>
+														{aiProfitInsight?.id === order.id && aiProfitInsight?.loading ? <Sparkles className="animate-spin" size={14} /> : <Bot size={14} />}
+													</button>
 												</td>
 											</tr>
+											{aiProfitInsight?.id === order.id && (
+												<tr className="bg-indigo-50/50 dark:bg-indigo-900/10 transition-all">
+													<td colSpan={5} className="px-6 py-5">
+														<div className="flex gap-3 animate-in fade-in slide-in-from-top-2">
+															<div className="shrink-0 pt-1 text-indigo-500"><Bot size={18} /></div>
+															<div className="text-xs text-indigo-900 dark:text-indigo-200 whitespace-pre-wrap leading-relaxed w-full font-medium">
+																{aiProfitInsight?.loading ? 'Hệ thống AI đang tính toán lại và rà soát các bất thường...' : aiProfitInsight?.insight}
+															</div>
+															{!aiProfitInsight?.loading && (
+																<button onClick={() => setAiProfitInsight(null)} className="shrink-0 text-slate-400 hover:text-slate-600 px-2 font-black">&times;</button>
+															)}
+														</div>
+													</td>
+												</tr>
+											)}
+										</React.Fragment>
 										))}
 									</tbody>
 								</table>
@@ -1310,11 +1455,36 @@ const Finance = () => {
 												<p className="text-xs font-bold text-slate-500 dark:text-slate-400 italic">{formatPrice(order.cost)}</p>
 											</div>
 											<div className={`p-3 rounded-2xl border shadow-sm ${order.profit > 0 ? 'bg-emerald-50 border-emerald-100 dark:bg-emerald-900/10 dark:border-emerald-800/30' : 'bg-rose-50 border-rose-100 dark:bg-rose-900/10 dark:border-rose-800/30'}`}>
-												<p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Lợi nhuận</p>
+												<div className="flex items-center justify-between mb-1">
+													<p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Lợi nhuận</p>
+													{order.aiFixed && <Sparkles size={10} className="text-indigo-500 animate-pulse" />}
+												</div>
 												<p className={`text-xs font-black ${order.profit > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
 													{formatPrice(order.profit)}
 												</p>
 											</div>
+										</div>
+										<div className="pt-3">
+											<button 
+												onClick={() => handleAICheckProfit(order)}
+												disabled={aiProfitInsight?.loading && aiProfitInsight.id === order.id}
+												className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 font-bold text-xs hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors disabled:opacity-50 shadow-sm"
+											>
+												{aiProfitInsight?.id === order.id && aiProfitInsight?.loading ? <Sparkles className="animate-spin" size={14} /> : <Bot size={14} />}
+												{aiProfitInsight?.id === order.id && aiProfitInsight?.loading ? 'AI đang phân tích...' : 'AI Rà Soát Tính Toán'}
+											</button>
+											{aiProfitInsight?.id === order.id && !aiProfitInsight?.loading && (
+												<div className="relative mt-3 p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl border border-indigo-100 dark:border-indigo-800/40 text-[11px] text-indigo-900 dark:text-indigo-200 whitespace-pre-wrap leading-relaxed animate-in fade-in zoom-in-95 font-medium shadow-sm">
+													<div className="absolute top-2 right-2">
+														<button onClick={() => setAiProfitInsight(null)} className="text-slate-400 hover:text-slate-600 p-1 font-black">&times;</button>
+													</div>
+													<div className="flex items-center gap-2 mb-2 pb-2 border-b border-indigo-200 dark:border-indigo-800/50">
+														<Bot size={14} className="text-indigo-500" />
+														<span className="font-black uppercase tracking-widest text-indigo-700 dark:text-indigo-400">Kết luận từ AI</span>
+													</div>
+													{aiProfitInsight?.insight}
+												</div>
+											)}
 										</div>
 									</div>
 								))}

@@ -283,29 +283,43 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 			const ssId = ssMatch[1];
 			const gid = gidMatch ? gidMatch[1] : '0';
 
-			// Try XLSX format first which is better for data types, but include GID
-			const exportUrl = `https://docs.google.com/spreadsheets/d/${ssId}/export?format=xlsx&gid=${gid}`;
+			// Sử dụng gviz/tq endpoint vì nó hỗ trợ CORS tốt hơn cho các trang tính public
+			const exportUrl = `https://docs.google.com/spreadsheets/d/${ssId}/gviz/tq?tqx=out:csv&gid=${gid}`;
 
 			const response = await fetch(exportUrl, {
-				credentials: 'omit',
-				cache: 'no-cache'
+				method: 'GET',
+				headers: {
+					'Accept': 'text/csv'
+				}
 			});
+			
 			if (!response.ok) {
-				throw new Error("Không thể truy cập trang tính. Hãy chắc chắn bạn đã bật quyền 'Bất kỳ ai có liên kết đều có thể xem'.");
+				throw new Error("Không thể truy cập trang tính. Hãy chắc chắn bạn đã đổi quyền chia sẻ thành 'Bất kỳ ai có liên kết đều có thể xem'.");
 			}
 
-			const arrayBuffer = await response.arrayBuffer();
-			const wb = XLSX.read(arrayBuffer, { type: 'array' });
+			// Lấy dữ liệu dưới dạng text (CSV)
+			const csvText = await response.text();
+			
+			// Xử lý một số trường hợp Google trả về mã HTML (trang đăng nhập) thay vì CSV do chưa chia sẻ
+			if (csvText.trim().startsWith('<!DOCTYPE html>') || csvText.trim().startsWith('<html')) {
+				throw new Error("Trang tính đang bị chặn bởi Google. Hãy chắc chắn chia sẻ ở chế độ 'Bất kỳ ai có liên kết' (Public).");
+			}
 
-			// Select the sheet. Google normally returns the correct sheet even in XLSX if gid is provided,
-			// but we fallback to Sheet 0 if it's the whole book.
+			// XLSX.read hỗ trợ đọc chuỗi CSV trực tiếp khi thiết lập type: 'string'
+			const wb = XLSX.read(csvText, { type: 'string' });
+
+			// Select the sheet
 			const wsname = wb.SheetNames[0];
 			const ws = wb.Sheets[wsname];
 			const jsonData = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
 
 			processRawData(jsonData);
 		} catch (err: any) {
-			setError(err.message || "Lỗi khi lấy dữ liệu từ Google Sheets.");
+			if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
+				setError("Lỗi kết nối (CORS). Vui lòng kiểm tra lại quyền chia sẻ của Google Sheets (cần bật 'Bất kỳ ai có liên kết đều có thể xem') hoặc tải file Excel về máy để nhập.");
+			} else {
+				setError(err.message || "Lỗi khi lấy dữ liệu từ Google Sheets.");
+			}
 		} finally {
 			setLoading(false);
 		}

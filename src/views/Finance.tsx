@@ -888,48 +888,40 @@ Yêu cầu tính toán chi tiết và kết luận:`
 				if (autoCheckedOrders.current.has(order.id) || order.aiFixed) continue;
 				autoCheckedOrders.current.add(order.id);
 
-				// Gọi AI tính toán cho mọi đơn hàng được hiển thị (Data thực), không suy đoán/lọc lỗi
-				try {
-					const itemDetails = (order.items || []).map((item: any) => {
-						const matches = products.filter(p => p.id === (item.productId || item.id) || (p.sku && item.sku && p.sku === item.sku) || (p.name && item.name && p.name.trim().toLowerCase() === item.name.trim().toLowerCase()));
-						const currentProd = item.category ? (matches.find(p => p.category === item.category) || matches[0]) : matches[0];
-						const activeBuyPrice = currentProd ? (Number(currentProd.priceBuy) || 0) : (Number(item.buyPrice) || 0);
-						// Data gửi AI
-						return `- Danh mục: ${item.category || 'N/A'} | SP: ${item.name} | SL: ${item.qty} | Giá bán: ${formatPrice(item.price)}/sp | Giá vốn thực tế (DB): ${formatPrice(activeBuyPrice)}`;
-					}).join('\n');
+				// Dùng thuật toán Local JS để tính lại số đúng nhanh gọn, bỏ qua gọi API DeepSeek ngầm
+				let totalCost = 0;
+				let totalRevenue = 0;
 
-						const response = await fetch("https://api.deepseek.com/chat/completions", {
-							method: "POST",
-							headers: { "Content-Type": "application/json", "Authorization": `Bearer ${import.meta.env.VITE_DEEPSEEK_API_KEY || ""}` },
-							body: JSON.stringify({
-								model: "deepseek-chat",
-								messages: [
-									{
-										role: "system",
-										content: "Bạn là AI rà soát chứng từ kế toán. Phát hiện đơn hàng có vật tư bị thiết lập sai hệ thống (giá vốn = 0 hoặc nhập sai tỷ lệ). Hãy tính lại. Nội suy giá gốc từ 80%-85% giá bán hoặc dự đoán từ tên. Yêu cầu CHỈ trả về JSON: { \"revenue\": <tổng doanh thu tính đúng>, \"cost\": <tổng giá vốn tính đúng>, \"profit\": <tổng lợi nhuận> }"
-									},
-									{
-										role: "user",
-										content: `Mã đơn: ${order.invoiceId || order.id}\nDoanh thu hiển thị cũ: ${order.revenue}\nChi tiết vật tư:\n${itemDetails}`
-									}
-								],
-								response_format: { type: "json_object" }
-							})
-						});
+				const itemsWithCorrectCost = (order.items || []).map((item: any) => {
+					const matches = products.filter(p => p.id === (item.productId || item.id) || (p.sku && item.sku && p.sku === item.sku) || (p.name && item.name && p.name.trim().toLowerCase() === item.name.trim().toLowerCase()));
+					const currentProd = item.category ? (matches.find(p => p.category === item.category) || matches[0]) : matches[0];
+					const correctBuyPrice = currentProd ? (Number(currentProd.priceBuy) || 0) : (Number(item.buyPrice) || 0);
+					const salePrice = Number(item.price) || 0;
+					const qty = Number(item.qty) || 0;
+					
+					totalCost += correctBuyPrice * qty;
+					totalRevenue += salePrice * qty;
 
-						const data = await response.json();
-						const jsonStr = data.choices?.[0]?.message?.content || "{}";
-						const match = jsonStr.match(/\{[\s\S]*\}/);
-						if (match) {
-							const result = JSON.parse(match[0]);
-							if (result.revenue && result.cost !== undefined && !isCancelled) {
-								setAiAutoFixes(prev => ({ ...prev, [order.id]: { revenue: result.revenue, cost: result.cost, profit: result.profit || (result.revenue - result.cost) } }));
-							}
+					return { ...item };
+				});
+
+				const correctProfit = totalRevenue - totalCost;
+
+				// Chỉ đánh dấu Fix khi thực sự có chênh lệch so với ban đầu
+				const originalCost = Number(order.cost) || 0;
+				const isChanged = Math.abs(originalCost - totalCost) > 0;
+
+				if (isChanged && !isCancelled) {
+					setAiAutoFixes(prev => ({
+						...prev,
+						[order.id]: {
+							revenue: totalRevenue,
+							cost: totalCost,
+							profit: correctProfit,
+							insight: `Hệ thống tự động đồng bộ lại Giá vốn & Lợi nhuận chuẩn xác từ data gốc.`
 						}
-					} catch (error) {
-						console.error('AI AutoCheck Error:', error);
-					}
-				// Removed `if (hasAnomaly)` wrap
+					}));
+				}
 			}
 		};
 		autoCheck();

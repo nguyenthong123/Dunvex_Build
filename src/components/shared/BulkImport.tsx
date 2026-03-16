@@ -288,9 +288,7 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 
 			const response = await fetch(exportUrl, {
 				method: 'GET',
-				headers: {
-					'Accept': 'text/csv'
-				}
+				credentials: 'omit'
 			});
 			
 			if (!response.ok) {

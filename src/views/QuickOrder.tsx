@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Search, Plus, Minus, Trash2, ShoppingCart, User, Package, MapPin, Truck, FileText, ChevronDown, X, Layers, CheckCircle, Mail, RotateCcw, QrCode, Ticket, Tag, Lock, Crown } from 'lucide-react';
+import { ArrowLeft, Search, Plus, Minus, Trash2, ShoppingCart, User, Package, MapPin, Truck, FileText, ChevronDown, X, Layers, CheckCircle, Mail, RotateCcw, QrCode, Ticket, Tag, Lock, Crown, Sparkles } from 'lucide-react';
 import QRScanner from '../components/shared/QRScanner';
 import { useNavigate, useParams } from 'react-router-dom';
 import { db, auth } from '../services/firebase';
@@ -162,6 +162,43 @@ const QuickOrder = () => {
 			fetchOrder();
 		}
 	}, [id, owner.ownerId, customers.length]);
+	
+	// AI Auto-check & Sync Packaging (Số kiện)
+	useEffect(() => {
+		if (loading || !owner.ownerId || products.length === 0 || fetchingOrder) return;
+		
+		let hasChanged = false;
+		const updatedItems = lineItems.map(item => {
+			if (!item.name || !item.category) return item;
+			
+			const currentPkg = parseFloat(item.packaging) || 0;
+			const currentCat = normalizeText(item.category);
+			const currentName = normalizeText(item.name);
+			
+			// Key tìm kiếm: Danh mục + Tên sản phẩm
+			const masterProduct = products.find(p => 
+				normalizeText(p.category) === currentCat && 
+				normalizeText(p.name) === currentName
+			);
+			
+			if (masterProduct && masterProduct.packaging) {
+				const masterPkg = parseFloat(masterProduct.packaging) || 0;
+				if (masterPkg > 0 && masterPkg !== currentPkg) {
+					hasChanged = true;
+					return { 
+						...item, 
+						packaging: masterProduct.packaging,
+						aiValidated: true 
+					};
+				}
+			}
+			return item;
+		});
+		
+		if (hasChanged) {
+			setLineItems(updatedItems);
+		}
+	}, [lineItems.length, products, loading, fetchingOrder]);
 
 	const addLineItem = () => {
 		setLineItems([...lineItems, { id: Date.now(), category: '', productId: '', sku: '', name: '', qty: '', price: 0, buyPrice: 0, unit: '', packaging: '', density: '', maxStock: 0 }]);
@@ -1008,14 +1045,19 @@ const QuickOrder = () => {
 										</div>
 
 										{/* PACKAGING - DESKTOP ONLY INFOS */}
-										<div className="hidden md:flex flex-col items-center">
-											<span className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-tighter">
-												{(() => {
-													const pkg = parseFloat(item.packaging) || 0;
-													if (pkg <= 0) return '0';
-													return (Number(item.qty) / pkg).toLocaleString('vi-VN', { maximumFractionDigits: 2 });
-												})()}
-											</span>
+										<div className="hidden md:flex flex-col items-center relative">
+											<div className="flex items-center gap-1">
+												<span className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-tighter">
+													{(() => {
+														const pkg = parseFloat(item.packaging) || 0;
+														if (pkg <= 0) return '0';
+														return (Number(item.qty) / pkg).toLocaleString('vi-VN', { maximumFractionDigits: 2 });
+													})()}
+												</span>
+												{item.aiValidated && (
+													<Sparkles size={10} className="text-indigo-500 animate-pulse" />
+												)}
+											</div>
 											<span className="text-[9px] font-bold text-slate-300 uppercase">KIỆN</span>
 										</div>
 
@@ -1023,12 +1065,15 @@ const QuickOrder = () => {
 										<div className="col-span-2 md:col-auto mt-4 md:mt-0 pt-4 md:pt-0 border-t md:border-none border-slate-100 dark:border-slate-800 flex items-center justify-between md:justify-end">
 											<div className="md:hidden flex flex-col">
 												<span className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">THÀNH TIỀN</span>
-												<span className="text-[10px] font-bold text-slate-300 uppercase">
+												<span className="text-[10px] font-bold text-slate-300 uppercase flex items-center gap-1">
 													Kiện: {(() => {
 														const pkg = parseFloat(item.packaging) || 0;
 														if (pkg <= 0) return '0';
 														return (Number(item.qty) / pkg).toLocaleString('vi-VN', { maximumFractionDigits: 2 });
 													})()} KIỆN
+													{item.aiValidated && (
+														<Sparkles size={8} className="text-indigo-500 animate-pulse" />
+													)}
 												</span>
 											</div>
 											<span className="text-base md:text-sm font-black text-[#f27121] tabular-nums">

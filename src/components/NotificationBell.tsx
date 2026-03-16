@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, CheckCircle2, XCircle, Clock, X, AlertTriangle, Coins, Database, Sparkles, BrainCircuit } from 'lucide-react';
+import { Bell, CheckCircle2, XCircle, Clock, X, AlertTriangle, Coins, Database, Sparkles, BrainCircuit, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { db, auth } from '../services/firebase';
-import { collection, query, where, orderBy, onSnapshot, updateDoc, doc, limit, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, updateDoc, doc, limit, serverTimestamp, setDoc, deleteDoc, getDocs } from 'firebase/firestore';
 import { useToast } from './shared/Toast';
 
 const NotificationBell = ({ placement = 'down', align = 'right', className = "" }: { placement?: 'up' | 'down', align?: 'left' | 'right', className?: string }) => {
@@ -11,9 +11,37 @@ const NotificationBell = ({ placement = 'down', align = 'right', className = "" 
 	const { showToast } = useToast();
 	const [isAnalyzing, setIsAnalyzing] = useState(false);
 	const [aiSummary, setAiSummary] = useState<string | null>(null);
+	const [currentPage, setCurrentPage] = useState(1);
+	const itemsPerPage = 3;
+	const maxPages = 5;
 
 	useEffect(() => {
 		if (!auth.currentUser) return;
+
+		// Cleanup old notifications (> 3 days)
+		const cleanup = async () => {
+			const threeDaysAgo = new Date();
+			threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+
+			const qCleanup = query(
+				collection(db, 'notifications'),
+				where('userId', '==', auth.currentUser?.uid)
+			);
+
+			try {
+				const snap = await getDocs(qCleanup);
+				for (const d of snap.docs) {
+					const data = d.data();
+					const created = data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
+					if (created < threeDaysAgo) {
+						await deleteDoc(doc(db, 'notifications', d.id));
+					}
+				}
+			} catch (err) {
+				console.error("Cleanup error:", err);
+			}
+		};
+		cleanup();
 
 		const q = query(
 			collection(db, 'notifications'),
@@ -24,15 +52,15 @@ const NotificationBell = ({ placement = 'down', align = 'right', className = "" 
 			(snap) => {
 				const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-				// Client-side sort and limit
+				// Client-side sort and limit (Max 15 items for 5 pages of 3)
 				const sorted = data.sort((a: any, b: any) => {
 					const timeA = a.createdAt?.seconds || 0;
 					const timeB = b.createdAt?.seconds || 0;
 					return timeB - timeA;
 				});
 
-				const recent = sorted.slice(0, 10);
-				setNotifications(recent);
+				const limited = sorted.slice(0, itemsPerPage * maxPages);
+				setNotifications(limited);
 				setUnreadCount(data.filter((n: any) => !n.read).length);
 			},
 			(error) => {
@@ -118,12 +146,18 @@ const NotificationBell = ({ placement = 'down', align = 'right', className = "" 
 		}
 	};
 
+	const totalPages = Math.min(Math.ceil(notifications.length / itemsPerPage), maxPages);
+	const paginatedNotifications = notifications.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
 	return (
 		<div className="relative">
 			<button
 				onClick={() => {
 					setShowList(!showList);
-					if (!showList) markAllAsRead();
+					if (!showList) {
+						markAllAsRead();
+						setCurrentPage(1);
+					}
 				}}
 				className={`relative p-2 rounded-xl transition-all group ${className || 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
 				title="Thông báo"
@@ -181,8 +215,8 @@ const NotificationBell = ({ placement = 'down', align = 'right', className = "" 
 									</div>
 								</div>
 							)}
-							{notifications.length > 0 ? (
-								notifications.map((n) => (
+							{paginatedNotifications.length > 0 ? (
+								paginatedNotifications.map((n) => (
 									<div
 										key={n.id}
 										className={`p-4 border-b border-slate-50 dark:border-slate-800/50 flex gap-3 transition-colors ${!n.read ? 'bg-indigo-50/30 dark:bg-indigo-500/5' : 'hover:bg-slate-50 dark:hover:bg-slate-800/20'}`}
@@ -205,9 +239,17 @@ const NotificationBell = ({ placement = 'down', align = 'right', className = "" 
 										<div className="flex-1">
 											<p className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-snug">{n.title}</p>
 											<p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">{n.body}</p>
-											<div className="flex items-center gap-1 mt-2 text-[9px] font-bold text-slate-400 uppercase">
-												<Clock size={10} />
-												{n.createdAt?.toDate ? formatTimeAgo(n.createdAt.toDate()) : 'Vừa xong'}
+											<div className="flex flex-wrap items-center gap-2 mt-2 text-[9px] font-bold text-slate-400 uppercase">
+												<div className="flex items-center gap-1">
+													<Clock size={10} />
+													{n.createdAt?.toDate ? formatTimeAgo(n.createdAt.toDate()) : 'Vừa xong'}
+												</div>
+												{n.createdAt?.toDate && (
+													<span className="text-slate-300 dark:text-slate-600">|</span>
+												)}
+												{n.createdAt?.toDate && (
+													<span>{n.createdAt.toDate().toLocaleDateString('vi-VN')}</span>
+												)}
 											</div>
 										</div>
 									</div>
@@ -221,6 +263,38 @@ const NotificationBell = ({ placement = 'down', align = 'right', className = "" 
 								</div>
 							)}
 						</div>
+
+						{totalPages > 1 && (
+							<div className="p-3 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-50 dark:border-slate-800 flex items-center justify-between">
+								<button
+									disabled={currentPage === 1}
+									onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+									className="size-8 flex items-center justify-center rounded-lg bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors shadow-sm"
+								>
+									<ChevronLeft size={16} />
+								</button>
+								<div className="flex items-center gap-1">
+									{[...Array(totalPages)].map((_, i) => (
+										<button
+											key={i}
+											onClick={() => setCurrentPage(i + 1)}
+											className={`size-6 rounded-md text-[10px] font-black transition-all ${currentPage === i + 1 
+												? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-none scale-110' 
+												: 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+										>
+											{i + 1}
+										</button>
+									))}
+								</div>
+								<button
+									disabled={currentPage === totalPages}
+									onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+									className="size-8 flex items-center justify-center rounded-lg bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors shadow-sm"
+								>
+									<ChevronRight size={16} />
+								</button>
+							</div>
+						)}
 					</div>
 				</>
 			)}
@@ -230,16 +304,17 @@ const NotificationBell = ({ placement = 'down', align = 'right', className = "" 
 
 const formatTimeAgo = (date: Date) => {
 	const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+	if (seconds < 60) return "Vừa xong";
 	let interval = seconds / 31536000;
-	if (interval > 1) return Math.floor(interval) + " năm";
+	if (interval > 1) return Math.floor(interval) + " năm trước";
 	interval = seconds / 2592000;
-	if (interval > 1) return Math.floor(interval) + " tháng";
+	if (interval > 1) return Math.floor(interval) + " tháng trước";
 	interval = seconds / 86400;
-	if (interval > 1) return Math.floor(interval) + " ngày";
+	if (interval > 1) return Math.floor(interval) + " ngày trước";
 	interval = seconds / 3600;
-	if (interval > 1) return Math.floor(interval) + " giờ";
+	if (interval > 1) return Math.floor(interval) + " giờ trước";
 	interval = seconds / 60;
-	if (interval > 1) return Math.floor(interval) + " phút";
+	if (interval > 1) return Math.floor(interval) + " phút trước";
 	return "Vừa xong";
 };
 

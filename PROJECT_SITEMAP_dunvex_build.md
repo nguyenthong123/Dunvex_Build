@@ -332,8 +332,8 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Lưu trữ Thông tin**: Tự động lưu và hiển thị tên doanh nghiệp trong chi tiết đơn hàng giúp kế toán đối soát chính xác.
 - [x] **Cảnh báo & Phân tích thông minh (System Alerts)**:
     - **Dự báo Hết kho (Low Stock Velocity)**: Tự động phân tích tốc độ bán hàng trong 30 ngày để cảnh báo các sản phẩm sắp hết kho trong vòng 7 ngày tới.
-    - **Nhắc nợ Tự động (Debt Aging)**: Hệ thống tự động quét và gửi thông báo nhắc thu hồi công nợ cho các đơn hàng đã chốt quá 6 ngày mà vẫn chưa thanh toán đủ.
-    - **Trung tâm Thông báo**: Tích hợp biểu tượng trực quan (⚠️, 💰) vào nút chuông thông báo giúp Admin nắm bắt tình hình kinh doanh tức thì.
+    - **Nhắc nợ Tự động (Debt Aging - 3 Days)**: Hệ thống tự động quét và gửi thông báo nhắc thu hồi công nợ cho các đơn hàng đã chốt quá **3 ngày** thông qua Nexus AI.
+    - **Trung tâm Thông báo**: Tích hợp biểu tượng trực quan (⚠️, 💰) và ngôn ngữ tự nhiên AI vào nút chuông thông báo.
 - [x] **PWA & Offline Support**:
     - **Cài đặt như Mobile App**: Hỗ trợ cài đặt vào màn hình chính (Add to Home Screen) trên cả iOS và Android với giao diện standalone chuyên nghiệp.
     - **Hoạt động Offline**: Kích hoạt bộ nhớ đệm Firestore Persistence cho phép xem dữ liệu khách hàng, sản phẩm và công nợ ngay cả khi không có mạng. Tự động đồng bộ dữ liệu khi kết nối lại.
@@ -438,6 +438,12 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     *   **Ngăn ngừa Auto-zoom**: Nâng cấp toàn bộ font-size của các ô nhập liệu lên **16px (text-base)**. Điều này giúp ngăn trình duyệt (đặc biệt là iOS Safari) tự động phóng to và gây hiện tượng "nhảy" layout khi người dùng nhấn vào ô tìm khách hàng hoặc nhập số lượng.
     *   **Click Outside**: Bổ sung cơ chế tự động đóng danh sách gợi ý khách hàng khi người dùng nhấn ra ngoài, giúp giao diện gọn gàng và ổn định hơn trên thiết bị di động.
 - [x] **Tích hợp Dẫn đường Google Maps (Mar 4)**: Cập nhật nút "Xem vị trí" trong chi tiết khách hàng thành **"Tới vị trí"**. Khi nhấp vào, hệ thống tự động mở Google Maps và kích hoạt chế độ dẫn đường (Directions) đến tọa độ GPS của khách hàng.
+- [x] **Nâng cấp Hệ thống Thông báo & AI Notification (Enhanced Notification System - Mar 16)**:
+    - **Hiển thị Ngày tháng**: Mỗi thông báo hiện đã hiển thị đầy đủ ngày giờ cụ thể bên cạnh thời gian tương đối.
+    - **Phân trang Thông minh (3 items/page)**: Tích hợp phân trang cho chuông thông báo, giới hạn tối đa 5 trang (15 tin mới nhất) để tối ưu hiệu suất.
+    - **Tự động Dọn dẹp (3-day Retention)**: Hệ thống tự động xóa bỏ các thông báo cũ sau 3 ngày để đảm bảo dữ liệu luôn sạch sẽ.
+    - **Rút ngắn Nhắc nợ (3-day threshold)**: Cập nhật ngưỡng nhắc thu công nợ từ 6 ngày xuống còn **3 ngày**.
+    - **Nexus AI Natural Language**: Tích hợp DeepSeek AI để tự động soạn thảo tiêu đề và nội dung thông báo (Hết kho, Nhắc nợ, Đồng bộ) bằng ngôn ngữ tự nhiên, chuyên nghiệp và thân thiện.
 - [x] **Tự động hóa AI Kế toán & Phân tích Lợi Nhuận (AI Auto-Fix Finance - Mar 16)**:
     *   **Background Checker**: Tự động rà soát ngầm dữ liệu đơn hàng ngay khi truy cập mục Lợi nhuận để phát hiện sai sót (giá vốn = 0, nhân viên chọn sai).
     *   **Tự Động Fix Số Liệu (JSON Override)**: AI DeepSeek lập tức phân tích và tự động ghi đè, hiển thị lại `doanh thu`, `giá vốn` và `lợi nhuận` cho các đơn hàng sai sót mà không chớp trang.

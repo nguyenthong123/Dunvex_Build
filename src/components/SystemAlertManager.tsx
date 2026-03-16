@@ -19,6 +19,7 @@ const SystemAlertManager: React.FC = () => {
 		const runSystemChecks = async () => {
 			await checkInventory();
 			await checkDebts();
+			// checkAutoSync is handled inside its own logic with internal notifications
 			await checkAutoSync();
 		};
 
@@ -32,7 +33,6 @@ const SystemAlertManager: React.FC = () => {
 					collection(db, 'products'),
 					where('ownerId', '==', owner.ownerId)
 				));
-				// Filter status client-side to avoid complex index requirements
 				const products = productSnap.docs.map(d => ({ id: d.id, ...d.data() as any })).filter(p => p.status === 'Kinh doanh');
 
 				const thirtyDaysAgo = new Date();
@@ -42,7 +42,6 @@ const SystemAlertManager: React.FC = () => {
 					collection(db, 'inventory_logs'),
 					where('ownerId', '==', owner.ownerId)
 				));
-				// Filter by type and date client-side
 				const logs = logSnap.docs.map(d => d.data() as any).filter(log => {
 					const createdDate = log.createdAt?.toDate ? log.createdAt.toDate() : new Date(log.createdAt);
 					return log.type === 'out' && createdDate >= thirtyDaysAgo;
@@ -84,7 +83,6 @@ const SystemAlertManager: React.FC = () => {
 					collection(db, 'orders'),
 					where('ownerId', '==', owner.ownerId)
 				));
-				// Filter status client-side to avoid complex index requirements
 				const orders = orderSnap.docs.map(d => ({ id: d.id, ...d.data() as any })).filter(o => o.status === 'Đơn chốt');
 
 				const paymentSnap = await getDocs(query(
@@ -105,9 +103,9 @@ const SystemAlertManager: React.FC = () => {
 					}
 				});
 
-				const sixDaysAgo = new Date();
-				sixDaysAgo.setDate(sixDaysAgo.getDate() - 6);
-				const compareDateStr = sixDaysAgo.toISOString().split('T')[0];
+				const threeDaysAgo = new Date();
+				threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+				const compareDateStr = threeDaysAgo.toISOString().split('T')[0];
 
 				for (const order of orders as any[]) {
 					if (!order.customerId) continue;
@@ -119,7 +117,7 @@ const SystemAlertManager: React.FC = () => {
 							(order.orderDate || '');
 
 						if (dateString === compareDateStr) {
-							await createNotificationIfNew('debt_warning', order.id, order.customerName, 6, 0, '', customerDebt);
+							await createNotificationIfNew('debt_warning', order.id, order.customerName, 3, 0, '', customerDebt);
 						}
 					}
 				}
@@ -217,7 +215,6 @@ const SystemAlertManager: React.FC = () => {
 						orderDetails: orderDetails
 					};
 
-					// Calculate stats for email notification
 					const stats = syncOrders.reduce((acc: any, order: any) => {
 						const email = order.createdByEmail || 'N/A';
 						const name = order.createdByEmail?.split('@')[0] || 'Nhân viên';
@@ -227,7 +224,6 @@ const SystemAlertManager: React.FC = () => {
 						return acc;
 					}, {});
 
-					// Count new customers in range
 					custSnap.docs.forEach(d => {
 						const c = d.data();
 						if (!c.createdAt) return;
@@ -258,11 +254,13 @@ const SystemAlertManager: React.FC = () => {
 							lastSyncAt: serverTimestamp()
 						});
 
+						const aiNotif = await generateAiNotification('auto_sync', { schedule });
+
 						await addDoc(collection(db, 'notifications'), {
 							userId: auth.currentUser?.uid,
-							title: '📊 Tự động đồng bộ',
-							message: `Dữ liệu đã được tự động đồng bộ vào Google Sheets theo lịch (${schedule}).`,
-							body: `Dữ liệu đã được tự động đồng bộ vào Google Sheets theo lịch (${schedule}).`,
+							title: aiNotif?.title || '📊 Tự động đồng bộ',
+							message: aiNotif?.body || `Dữ liệu đã được tự động đồng bộ vào Google Sheets theo lịch (${schedule}).`,
+							body: aiNotif?.body || `Dữ liệu đã được tự động đồng bộ vào Google Sheets theo lịch (${schedule}).`,
 							type: 'auto_sync',
 							read: false,
 							createdAt: serverTimestamp()
@@ -271,6 +269,40 @@ const SystemAlertManager: React.FC = () => {
 				}
 			} catch (error) {
 				console.error("SystemAlertManager (AutoSync) Error:", error);
+			}
+		};
+
+		const generateAiNotification = async (type: string, details: any) => {
+			const apiKey = import.meta.env.VITE_DEEPSEEK_API_KEY;
+			if (!apiKey) return null;
+
+			try {
+				const response = await fetch("https://api.deepseek.com/chat/completions", {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						"Authorization": `Bearer ${apiKey}`
+					},
+					body: JSON.stringify({
+						model: "deepseek-chat",
+						messages: [
+							{
+								role: "system",
+								content: "Bạn là Nexus AI chuyên gia quản trị Dunvex Build. Hãy viết tiêu đề và nội dung thông báo hệ thống bằng NGÔN NGỮ TỰ NHIÊN, chuyên nghiệp nhưng thân thiện như một trợ lý thông minh. TRÌNH BÀY: Trả về JSON duy nhất với 2 trường 'title' và 'body'. KHÔNG dùng markdown. Ngôn ngữ: Tiếng Việt."
+							},
+							{
+								role: "user",
+								content: `Hãy viết thông báo cho loại: ${type}. Chi tiết sự kiện: ${JSON.stringify(details)}`
+							}
+						],
+						response_format: { type: 'json_object' }
+					})
+				});
+
+				const data = await response.json();
+				return JSON.parse(data.choices[0].message.content);
+			} catch (err) {
+				return null;
 			}
 		};
 
@@ -283,7 +315,6 @@ const SystemAlertManager: React.FC = () => {
 				where('userId', '==', auth.currentUser?.uid)
 			));
 
-			// Filter type client-side
 			const isAlreadyAlertedToday = existingSnap.docs.some(d => {
 				const data = d.data();
 				if (data.type !== type) return false;
@@ -293,20 +324,22 @@ const SystemAlertManager: React.FC = () => {
 			});
 
 			if (!isAlreadyAlertedToday) {
-				let title = "";
-				let body = "";
+				const aiNotif = await generateAiNotification(type, { name, daysVal, velocity, unit, currentVal, isStatic });
 
-				if (type === 'low_stock') {
-					title = '⚡ Cảnh báo hết kho';
-					if (isStatic) {
-						body = `Sản phẩm ${name} đang ở mức báo động (${currentVal} ${unit}). Vui lòng nhập thêm hàng.`;
+				let title = aiNotif?.title || (type === 'low_stock' ? '⚡ Cảnh báo hết kho' : '💰 Nhắc thu công nợ');
+				let body = aiNotif?.body || "";
+
+				if (!body) {
+					if (type === 'low_stock') {
+						if (isStatic) {
+							body = `Sản phẩm ${name} đang ở mức báo động (${currentVal} ${unit}). Vui lòng nhập thêm hàng.`;
+						} else {
+							const daysStr = Math.ceil(daysVal) === 0 ? "hết ngay hôm nay" : `đủ dùng trong khoảng ${Math.ceil(daysVal)} ngày`;
+							body = `Tốc độ bán (${velocity.toFixed(1)} ${unit}/ngày) cho thấy ${name} chỉ còn ${daysStr}. Hiện còn ${currentVal} ${unit}.`;
+						}
 					} else {
-						const daysStr = Math.ceil(daysVal) === 0 ? "hết ngay hôm nay" : `đủ dùng trong khoảng ${Math.ceil(daysVal)} ngày`;
-						body = `Tốc độ bán (${velocity.toFixed(1)} ${unit}/ngày) cho thấy ${name} chỉ còn ${daysStr}. Hiện còn ${currentVal} ${unit}.`;
+						body = `Đơn hàng của khách ${name} đã lên được 3 ngày. Tổng dư nợ hiện tại của khách là ${currentVal.toLocaleString('vi-VN')} đ. Đã đến lúc nhắc nợ!`;
 					}
-				} else {
-					title = '💰 Nhắc thu công nợ';
-					body = `Đơn hàng của khách ${name} đã lên được 6 ngày. Tổng dư nợ hiện tại của khách là ${currentVal.toLocaleString('vi-VN')} đ. Đã đến lúc nhắc nợ!`;
 				}
 
 				await addDoc(collection(db, 'notifications'), {

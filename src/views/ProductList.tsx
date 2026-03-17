@@ -1124,13 +1124,7 @@ const ProductList = () => {
 									<span>Xóa ({selectedIds.length})</span>
 								</button>
 							)}
-							<button
-								onClick={() => setShowScanner(true)}
-								className="md:flex bg-[#1A237E] text-white px-4 py-2.5 rounded-xl font-bold border border-[#1A237E] active:scale-95 transition-all items-center gap-2 hover:bg-indigo-700"
-							>
-								<span className="material-symbols-outlined">qr_code_scanner</span>
-								<span className="hidden md:inline">Quét Mã QR</span>
-							</button>
+
 							<button
 								onClick={() => setShowImport(true)}
 								className="hidden md:flex bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-4 py-2.5 rounded-xl font-bold border border-slate-200 dark:border-slate-800 active:scale-95 transition-all items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-700"

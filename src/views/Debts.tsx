@@ -940,9 +940,10 @@ const Debts: React.FC = () => {
 								)}
 							</div>
 
-							{/* Table */}
+							{/* Table & Cards */}
 							<div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-xl shadow-blue-900/5 dark:shadow-indigo-900/5 border border-slate-100 dark:border-slate-800 overflow-hidden transition-colors duration-300">
-								<div className="overflow-x-auto">
+								{/* Desktop Table */}
+								<div className="overflow-x-auto hidden md:block">
 									<table className="w-full text-left">
 										<thead>
 											<tr className="bg-slate-100/50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
@@ -1028,6 +1029,91 @@ const Debts: React.FC = () => {
 											))}
 										</tbody>
 									</table>
+								</div>
+
+								{/* Mobile Cards */}
+								<div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
+									{loading ? (
+										[1, 2, 3].map(i => (
+											<div key={i} className="p-5 animate-pulse">
+												<div className="flex items-center gap-4 mb-4">
+													<div className="size-12 rounded-2xl skeleton" />
+													<div className="space-y-2 flex-1">
+														<div className="w-32 h-4 skeleton" />
+														<div className="w-20 h-3 skeleton opacity-50" />
+													</div>
+												</div>
+												<div className="h-10 skeleton rounded-xl" />
+											</div>
+										))
+									) : paginatedData.length === 0 ? (
+										<div className="py-20 text-center text-slate-400 dark:text-slate-500 uppercase font-black text-xs tracking-[4px]">
+											Không tìm thấy đối tác nào
+										</div>
+									) : paginatedData.map((row) => (
+										<div key={row.id} className="p-5 active:bg-slate-50 dark:active:bg-slate-800 transition-colors" onClick={() => openStatement(row)}>
+											<div className="flex items-center gap-4 mb-4">
+												<div className={`size-12 rounded-2xl bg-[#1A237E]/10 dark:bg-indigo-500/10 flex items-center justify-center text-[#1A237E] dark:text-indigo-400 font-black text-sm shrink-0 border border-slate-200 dark:border-slate-800 transition-colors`}>
+													{(row.businessName || row.name || 'KH').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+												</div>
+												<div className="flex-1 min-w-0">
+													<p className="text-sm font-black text-slate-900 dark:text-indigo-400 uppercase tracking-tight leading-tight truncate">{row.businessName || row.name}</p>
+													<p className="text-[10px] text-slate-500 dark:text-slate-500 font-bold mt-1 tracking-wider uppercase">{row.phone || '#' + row.id.slice(-6).toUpperCase()}</p>
+												</div>
+												<div className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest ${
+													row.debtHealth === 'critical' ? 'bg-rose-100 text-rose-600' :
+													row.debtHealth === 'risk' ? 'bg-orange-100 text-orange-600' :
+													row.debtHealth === 'slow' ? 'bg-amber-100 text-amber-600' :
+													'bg-emerald-100 text-emerald-600'
+												}`}>
+													{row.debtHealth === 'critical' ? 'Rủi ro cao' :
+													 row.debtHealth === 'risk' ? 'Chậm trả' :
+													 row.debtHealth === 'slow' ? 'Theo dõi' : 'An toàn'}
+												</div>
+											</div>
+
+											<div className="grid grid-cols-3 gap-2 py-3 border-y border-slate-50 dark:border-slate-800/50">
+												<div className="flex flex-col">
+													<span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Tổng mua</span>
+													<span className="text-[11px] font-black text-slate-700 dark:text-slate-300">{formatPrice(row.totalOrdersAmount)}</span>
+												</div>
+												<div className="flex flex-col">
+													<span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Đã trả</span>
+													<span className="text-[11px] font-black text-emerald-600 dark:text-emerald-400">{formatPrice(row.totalPaymentsAmount)}</span>
+												</div>
+												<div className="flex flex-col text-right">
+													<span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Dư nợ</span>
+													<span className={`text-[11px] font-black ${row.currentDebt > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+														{formatPrice(row.currentDebt)}
+													</span>
+												</div>
+											</div>
+
+											<div className="flex items-center justify-between mt-4" onClick={(e) => e.stopPropagation()}>
+												<div className="flex flex-col">
+													<span className="text-[9px] font-bold text-slate-400 uppercase">GD cuối</span>
+													<span className="text-[10px] font-black text-slate-600 dark:text-slate-400">{row.lastTx ? formatDate(row.lastTx) : '---'}</span>
+												</div>
+												<div className="flex items-center gap-2">
+													<button
+														onClick={() => openStatement(row)}
+														className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-[#1A237E] transition-all"
+													>
+														<FileText size={18} />
+													</button>
+													<button
+														onClick={() => {
+															setPaymentData({ ...paymentData, customerId: row.id, customerName: row.name });
+															setShowPaymentForm(true);
+														}}
+														className="p-2.5 rounded-xl bg-orange-50 dark:bg-orange-900/20 text-orange-500 hover:bg-orange-100 transition-all"
+													>
+														<PlusCircle size={18} />
+													</button>
+												</div>
+											</div>
+										</div>
+									))}
 								</div>
 							</div>
 

@@ -1042,38 +1042,38 @@ const ProductList = () => {
 						<span className="material-symbols-outlined text-xl group-hover:rotate-[-45deg] transition-transform">home</span>
 					</button>
 					<div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
-					<h2 className="text-lg md:text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight">Sản Phẩm & Tồn Kho</h2>
+					<h2 className="text-sm lg:text-lg xl:text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight line-clamp-1">Sản Phẩm & Tồn Kho</h2>
 				</div>
 
 				<div className="flex items-center gap-4">
-					<div className="hidden md:flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 border border-slate-200 dark:border-slate-800">
+					<div className="hidden lg:flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 border border-slate-200 dark:border-slate-800">
 						<button
 							onClick={() => { setActiveTab('products'); setCurrentFilter(null); }}
-							className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all ${activeTab === 'products' ? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm' : 'text-slate-400'}`}
+							className={`px-3 xl:px-4 py-1.5 rounded-lg text-xs font-black transition-all ${activeTab === 'products' ? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm' : 'text-slate-400'}`}
 						>
-							DANH SÁCH SP
+							<span className="xl:inline">DANH SÁCH </span>SP
 						</button>
 						<button
 							onClick={() => { setActiveTab('inventory'); setCurrentFilter(null); }}
-							className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all ${activeTab === 'inventory' ? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm' : 'text-slate-400'}`}
+							className={`px-3 xl:px-4 py-1.5 rounded-lg text-xs font-black transition-all ${activeTab === 'inventory' ? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm' : 'text-slate-400'}`}
 						>
-							TỒN KHO GỘP
+							<span className="xl:inline">TỒN KHO </span>GỘP
 						</button>
 						<button
 							onClick={() => { setActiveTab('logs'); setCurrentFilter(null); }}
-							className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all ${activeTab === 'logs' ? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm' : 'text-slate-400'}`}
+							className={`px-3 xl:px-4 py-1.5 rounded-lg text-xs font-black transition-all ${activeTab === 'logs' ? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm' : 'text-slate-400'}`}
 						>
-							LỊCH SỬ KHO
+							<span className="xl:inline">LỊCH SỬ </span>KHO
 						</button>
 					</div>
 
 					{activeTab !== 'logs' && (
-						<div className="hidden md:flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-full px-4 py-2 w-64 border border-slate-200 dark:border-transparent focus-within:border-[#FF6D00] focus-within:bg-white dark:focus-within:bg-slate-900 transition-all">
+						<div className="hidden lg:flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-full px-4 py-2 w-48 xl:w-64 border border-slate-200 dark:border-transparent focus-within:border-[#FF6D00] focus-within:bg-white dark:focus-within:bg-slate-900 transition-all">
 							<span className="material-symbols-outlined text-slate-500 text-lg">search</span>
 							<input
 								ref={searchRef}
 								type="text"
-								placeholder="Tìm tên, mã SKU..."
+								placeholder="Tìm kiếm..."
 								className="bg-transparent border-none outline-none w-full text-sm font-black text-slate-900 dark:text-slate-200 placeholder:text-slate-500"
 								value={searchTerm}
 								onChange={(e) => setSearchTerm(e.target.value)}
@@ -1101,7 +1101,7 @@ const ProductList = () => {
 								<button
 									onClick={handleAIInventoryAnalysis}
 									disabled={analyzing}
-									className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all border ${
+									className={`flex items-center gap-2 px-3 xl:px-4 py-2.5 rounded-xl font-bold transition-all border ${
 										analyzing 
 										? 'bg-slate-50 dark:bg-slate-800 text-slate-400 border-slate-200 cursor-not-allowed' 
 										: 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-800 hover:bg-indigo-100'
@@ -1112,7 +1112,8 @@ const ProductList = () => {
 									) : (
 										<span className="material-symbols-outlined text-[20px]">psychology</span>
 									)}
-									<span>{analyzing ? 'Đang phân tích...' : 'Nexus AI Phân Tích'}</span>
+									<span className="hidden xl:inline">{analyzing ? 'Đang phân tích...' : 'Nexus AI Phân Tích'}</span>
+									<span className="xl:hidden">{analyzing ? '...' : 'AI'}</span>
 								</button>
 							)}
 							{selectedIds.length > 0 && (
@@ -1127,17 +1128,17 @@ const ProductList = () => {
 
 							<button
 								onClick={() => setShowImport(true)}
-								className="hidden md:flex bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-4 py-2.5 rounded-xl font-bold border border-slate-200 dark:border-slate-800 active:scale-95 transition-all items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-700"
+								className="hidden md:flex bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-3 xl:px-4 py-2.5 rounded-xl font-bold border border-slate-200 dark:border-slate-800 active:scale-95 transition-all items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-700"
 							>
 								<span className="material-symbols-outlined">file_upload</span>
-								<span>Nhập Excel</span>
+								<span className="hidden xl:inline">Nhập Excel</span>
 							</button>
 							<button
 								onClick={() => setShowAddForm(true)}
-								className="hidden md:flex bg-[#FF6D00] hover:bg-orange-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-orange-500/20 active:scale-95 transition-all items-center gap-2"
+								className="hidden md:flex bg-[#FF6D00] hover:bg-orange-600 text-white px-3 xl:px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-orange-500/20 active:scale-95 transition-all items-center gap-2"
 							>
 								<span className="material-symbols-outlined text-xl">add</span>
-								<span>Thêm Mới</span>
+								<span className="hidden xl:inline">Thêm Mới</span>
 							</button>
 						</div>
 					)}

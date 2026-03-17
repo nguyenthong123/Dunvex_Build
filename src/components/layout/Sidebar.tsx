@@ -27,7 +27,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onToggle }) => {
 	const menuItems = sidebarItems;
 
 	return (
-		<aside className="hidden md:flex flex-col h-screen bg-gradient-to-b from-[#1A237E] to-[#0D1240] dark:from-slate-900 dark:to-slate-950 text-white transition-all duration-300 z-40 md:w-20 lg:w-64 flex-shrink-0 border-r border-white/5 relative">
+		<aside className="hidden lg:flex flex-col h-screen bg-gradient-to-b from-[#1A237E] to-[#0D1240] dark:from-slate-900 dark:to-slate-950 text-white transition-all duration-300 z-40 lg:w-64 flex-shrink-0 border-r border-white/5 relative">
 			{/* Toggle Button Inside Sidebar */}
 			<button
 				onClick={onToggle}

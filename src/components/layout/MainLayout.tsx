@@ -21,15 +21,17 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 	}, [isSidebarVisible]);
 
 	return (
-		<div className="bg-[#f8f9fa] dark:bg-slate-950 text-slate-900 dark:text-slate-100 h-screen w-full overflow-hidden flex flex-col md:flex-row font-['Manrope'] transition-colors duration-300">
-			{isSidebarVisible && <Sidebar onToggle={() => setIsSidebarVisible(false)} />}
+		<div className="bg-[#f8f9fa] dark:bg-slate-950 text-slate-900 dark:text-slate-100 h-screen w-full overflow-hidden flex flex-col lg:flex-row font-['Manrope'] transition-colors duration-300">
+			<div className="hidden lg:block">
+				{isSidebarVisible && <Sidebar onToggle={() => setIsSidebarVisible(false)} />}
+			</div>
 			<SystemAlertManager />
 
 			<main className="flex-1 flex flex-col h-full overflow-hidden bg-white dark:bg-slate-900 relative transition-colors duration-300 print:overflow-visible print:h-auto print:block">
 				{/* MOBILE TOP BAR - Premium Glassmorphism */}
 				{!window.location.pathname.includes('/price-list') && (
 					<header
-						className="md:hidden flex items-center justify-between px-6 h-14 border-b border-slate-100 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl fixed top-0 left-0 right-0 z-[60] shadow-sm print:hidden"
+						className="lg:hidden flex items-center justify-between px-6 h-14 border-b border-slate-100 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl fixed top-0 left-0 right-0 z-[60] shadow-sm print:hidden"
 						style={{ WebkitBackdropFilter: 'blur(20px)' }}
 					>
 						<div className="flex items-center gap-2">
@@ -50,7 +52,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 				{!isSidebarVisible && (
 					<button
 						onClick={() => setIsSidebarVisible(true)}
-						className="fixed top-5 left-5 z-[60] size-10 bg-[#1A237E] text-white rounded-xl shadow-xl hover:scale-110 active:scale-95 transition-all hidden md:flex items-center justify-center group print:hidden"
+						className="fixed top-5 left-5 z-[60] size-10 bg-[#1A237E] text-white rounded-xl shadow-xl hover:scale-110 active:scale-95 transition-all hidden lg:flex items-center justify-center group print:hidden"
 						title="Hiện Menu"
 					>
 						<span className="material-symbols-outlined text-2xl group-hover:rotate-90 transition-transform">menu</span>
@@ -59,7 +61,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
 				<div
 					onScroll={handleScroll}
-					className={`flex-1 overflow-y-auto no-scrollbar md:pt-0 ${window.location.pathname.includes('/price-list') ? 'pt-0' : 'pt-20'} print:overflow-visible print:h-auto print:block print:pt-0`}
+					className={`flex-1 overflow-y-auto no-scrollbar lg:pt-0 ${window.location.pathname.includes('/price-list') ? 'pt-0' : 'pt-20'} print:overflow-visible print:h-auto print:block print:pt-0`}
 				>
 					<div className="min-h-full print:block print:h-auto">
 						{children}

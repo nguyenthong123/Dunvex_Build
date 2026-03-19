@@ -123,8 +123,11 @@ const ProductList = () => {
 			const validDocs: any[] = [];
 			for (const p of docs) {
 				if (p.expiryDate) {
-					const expDate = new Date(p.expiryDate);
-					if (today > expDate) {
+					// Parse date manually to avoid UTC timezone offset (new Date('YYYY-MM-DD') parses as UTC midnight = 7am Vietnam)
+					const parts = String(p.expiryDate).split('-');
+					const expDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+					expDate.setHours(0, 0, 0, 0);
+					if (today >= expDate) {
 						deleteDoc(doc(db, 'products', p.id)).catch(console.error);
 						continue; // Skip expired product
 					}

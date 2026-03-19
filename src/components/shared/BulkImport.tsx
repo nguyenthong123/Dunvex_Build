@@ -272,51 +272,70 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 		setError(null);
 
 		try {
-			// Extract spreadsheet ID and GID
-			const ssMatch = sheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
-			const gidMatch = sheetUrl.match(/gid=([0-9]+)/);
+			let csvText = '';
 
-			if (!ssMatch) {
-				throw new Error("Link Google Sheets không đúng định dạng.");
+			// Case 1: User pastes a "Publish to web" URL (most reliable, no CORS issues)
+			// Format: https://docs.google.com/spreadsheets/d/e/.../pub?gid=...&output=csv
+			if (sheetUrl.includes('/pub?') || sheetUrl.includes('&output=csv') || sheetUrl.includes('pub?output=csv')) {
+				// Ensure it fetches as CSV
+				const pubUrl = sheetUrl.includes('output=csv')
+					? sheetUrl
+					: sheetUrl + (sheetUrl.includes('?') ? '&output=csv' : '?output=csv');
+				const res = await fetch(pubUrl, { method: 'GET', credentials: 'omit' });
+				if (!res.ok) throw new Error('Không thể tải dữ liệu từ link đã xuất bản.');
+				csvText = await res.text();
+			} else {
+				// Case 2: Standard Google Sheets edit URL
+				const ssMatch = sheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+				const gidMatch = sheetUrl.match(/gid=([0-9]+)/);
+
+				if (!ssMatch) throw new Error('Link Google Sheets không đúng định dạng.');
+
+				const ssId = ssMatch[1];
+				const gid = gidMatch ? gidMatch[1] : '0';
+
+				// Try endpoint 1: gviz/tq (Google Visualization API)
+				const gvizUrl = `https://docs.google.com/spreadsheets/d/${ssId}/gviz/tq?tqx=out:csv&gid=${gid}`;
+				// Try endpoint 2: export CSV (fallback)
+				const exportUrl = `https://docs.google.com/spreadsheets/d/${ssId}/export?format=csv&gid=${gid}`;
+
+				let fetchOk = false;
+				for (const url of [gvizUrl, exportUrl]) {
+					try {
+						const res = await fetch(url, { method: 'GET', credentials: 'omit' });
+						if (res.ok) {
+							const text = await res.text();
+							if (!text.trim().startsWith('<!DOCTYPE') && !text.trim().startsWith('<html')) {
+								csvText = text;
+								fetchOk = true;
+								break;
+							}
+						}
+					} catch (_) {
+						// Try next URL
+					}
+				}
+
+				if (!fetchOk) {
+					throw new Error(
+						'CORS_ERROR'
+					);
+				}
 			}
 
-			const ssId = ssMatch[1];
-			const gid = gidMatch ? gidMatch[1] : '0';
+			if (!csvText) throw new Error('Dữ liệu trống hoặc không hợp lệ.');
 
-			// Sử dụng gviz/tq endpoint vì nó hỗ trợ CORS tốt hơn cho các trang tính public
-			const exportUrl = `https://docs.google.com/spreadsheets/d/${ssId}/gviz/tq?tqx=out:csv&gid=${gid}`;
-
-			const response = await fetch(exportUrl, {
-				method: 'GET',
-				credentials: 'omit'
-			});
-			
-			if (!response.ok) {
-				throw new Error("Không thể truy cập trang tính. Hãy chắc chắn bạn đã đổi quyền chia sẻ thành 'Bất kỳ ai có liên kết đều có thể xem'.");
-			}
-
-			// Lấy dữ liệu dưới dạng text (CSV)
-			const csvText = await response.text();
-			
-			// Xử lý một số trường hợp Google trả về mã HTML (trang đăng nhập) thay vì CSV do chưa chia sẻ
-			if (csvText.trim().startsWith('<!DOCTYPE html>') || csvText.trim().startsWith('<html')) {
-				throw new Error("Trang tính đang bị chặn bởi Google. Hãy chắc chắn chia sẻ ở chế độ 'Bất kỳ ai có liên kết' (Public).");
-			}
-
-			// XLSX.read hỗ trợ đọc chuỗi CSV trực tiếp khi thiết lập type: 'string'
 			const wb = XLSX.read(csvText, { type: 'string' });
-
-			// Select the sheet
 			const wsname = wb.SheetNames[0];
 			const ws = wb.Sheets[wsname];
 			const jsonData = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
-
 			processRawData(jsonData);
+
 		} catch (err: any) {
-			if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
-				setError("Lỗi kết nối (CORS). Vui lòng kiểm tra lại quyền chia sẻ của Google Sheets (cần bật 'Bất kỳ ai có liên kết đều có thể xem') hoặc tải file Excel về máy để nhập.");
+			if (err.message === 'CORS_ERROR' || err.message === 'Failed to fetch' || err.name === 'TypeError') {
+				setError('Không fetch được dữ liệu do CORS. Vui lòng dùng tính năng "Xuất bản lên web" trong Google Sheets (Tệp → Chia sẻ → Xuất bản lên web → chọn CSV) rồi dán link đó vào đây.');
 			} else {
-				setError(err.message || "Lỗi khi lấy dữ liệu từ Google Sheets.");
+				setError(err.message || 'Lỗi khi lấy dữ liệu từ Google Sheets.');
 			}
 		} finally {
 			setLoading(false);
@@ -526,8 +545,8 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 											</>
 										) : (
 											<>
-												<li>• Trang tính phải ở chế độ <b>"Bất kỳ ai có liên kết đều có thể xem"</b>.</li>
-												<li>• Hoặc sử dụng tính năng <b>"Xuất bản lên web"</b> của Google.</li>
+												<li>• <b>Cách 1 (Đề xuất):</b> Vào <b>Tệp → Chia sẻ → Xuất bản lên web</b>, chọn <b>CSV</b>, dán link vào đây.</li>
+												<li>• <b>Cách 2:</b> Đổi quyền <b>"Bất kỳ ai có liên kết"</b> rồi dán link thông thường.</li>
 												<li>• Link có dạng: <i>docs.google.com/spreadsheets/d/...</i></li>
 											</>
 										)}

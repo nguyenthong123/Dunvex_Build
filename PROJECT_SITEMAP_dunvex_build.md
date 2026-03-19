@@ -115,6 +115,13 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Xem trước Lợi nhuận (Quick Order Preview)**: Bổ sung tính năng cho phép Admin xem trước "Tổng giá vốn" và "Lợi nhuận thực tế" ngay khi đang nhập số lượng đơn hàng. Tích hợp nút **Ẩn/Hiện (Eye icon)** để bảo mật thông tin khi có khách hàng đứng cạnh.
     - **Bảo mật Đa tầng (Admin Only)**: Cột "Lợi nhuận" trong Danh sách đơn hàng và bộ công cụ xem trước lợi nhuận được thiết lập ẩn hoàn toàn đối với tài khoản nhân viên (Employee), đảm bảo an toàn dữ liệu kinh doanh nhạy cảm.
     - **Tối ưu Module Tài chính (Finance Performance)**: Gỡ bỏ các cơ chế AI quét lỗi tự động (AI Auto-fix) gây nặng máy. Thay vào đó, báo cáo lợi nhuận lấy trực tiếp dữ liệu đã "đóng băng" từ các đơn hàng chốt, giúp trang Tài chính tải tức thì và số liệu luôn khớp với thực tế.
+    - **Sửa lỗi Công thức Lợi nhuận**: Chuẩn hóa công thức tính lợi nhuận thành `Doanh thu thuần - Giá vốn - Chiết khấu`, loại bỏ hoàn toàn Phí vận chuyển khỏi phần tính lãi để đảm bảo số liệu kinh doanh trung thực.
+    - **Logic FIFO theo Danh mục**: Nâng cấp thuật toán FIFO ưu tiên trừ sản phẩm cùng Danh mục trước khi tràn sang các danh mục khác cùng SKU. Tách biệt logic trừ tồn kho (theo SKU toàn cục) và tính giá vốn (theo Danh mục chọn), đảm bảo lãi lỗ chính xác ngay cả khi một mã SKU có nhiều mức giá nhập khác nhau.
+- [x] **Nâng cấp Nhập liệu Google Sheets & Fix CORS (Bulk Import Upgrade - Mar 19)**:
+    - **Cơ chế Đa Endpoint**: Tự động chuyển đổi giữa các phương thức fetch (`gviz/tq`, `export?format=csv`) để vượt qua rào cản CORS của trình duyệt, giúp việc nhập liệu từ link Google Sheets ổn định hơn.
+    - **Hỗ trợ "Xuất bản lên web"**: Tích hợp khả năng đọc trực tiếp link CSV từ tính năng "Xuất bản lên web" của Google - giải pháp an toàn và tin cậy nhất để tránh lỗi chặn kết nối.
+    - **Hướng dẫn Giao diện mới**: Cập nhật hướng dẫn chi tiết 2 bước (Cách 1 là đề xuất, Cách 2 là fallback) giúp người dùng dễ dàng thao tác mà không cần hỗ trợ kỹ thuật.
+- [x] **Sửa lỗi Vòng đời Sản phẩm (Product Expiry Fix - Mar 19)**: Khắc phục triệt để lỗi múi giờ và logic so sánh khiến tính năng tự động xóa sản phẩm quá hạn hoạt động chưa chính xác.
 - [x] **Tối ưu Form Sổ quỹ (Cashbook Form Optimization - Mar 13)**:
     - **Giao diện Compact**: Thu gọn bố cục form ghi sổ, sử dụng Grid linh hoạt (1 cột trên Mobile, 2 cột trên Desktop) để giảm chiều dài trang.
     - **Hạng mục mới**: Thêm mục **"Chiết khấu"** 🎁 vào phần Thu vào theo yêu cầu người dùng.

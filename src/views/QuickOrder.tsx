@@ -113,7 +113,7 @@ const QuickOrder = () => {
 
 	// Fetch Order for Editing
 	useEffect(() => {
-		if (id && owner.ownerId && customers.length > 0) {
+		if (id && owner.ownerId && customers.length > 0 && products.length > 0) {
 			const fetchOrder = async () => {
 				setFetchingOrder(true);
 				try {
@@ -122,19 +122,26 @@ const QuickOrder = () => {
 					if (orderSnap.exists()) {
 						const data = orderSnap.data();
 
-						setLineItems((data.items || []).map((item: any) => ({
-							id: Math.random(),
-							productId: item.id || '',
-							name: item.name || '',
-							category: item.category || '',
-							qty: item.qty || 0,
-							price: item.price || 0,
-							buyPrice: item.buyPrice || 0, // Load historical buy price
-							unit: item.unit || '',
-							packaging: item.packaging || '',
-							density: item.density || '',
-							maxStock: 0 // Will be updated if product still exists
-						})));
+						setLineItems((data.items || []).map((item: any) => {
+							// ✅ FIX: Look up current product to get accurate buyPrice per category
+							// This fixes the case where saved buyPrice was an incorrect FIFO average
+							const currentProduct = products.find(p => p.id === (item.id || item.productId));
+							const accurateBuyPrice = currentProduct?.priceBuy || item.buyPrice || 0;
+
+							return {
+								id: Math.random(),
+								productId: item.id || '',
+								name: item.name || '',
+								category: item.category || '',
+								qty: item.qty || 0,
+								price: item.price || 0,
+								buyPrice: accurateBuyPrice, // Use current product's buyPrice for accurate profit preview
+								unit: item.unit || '',
+								packaging: item.packaging || '',
+								density: item.density || '',
+								maxStock: currentProduct ? (Number(currentProduct.stock) || 0) : 0
+							};
+						}));
 
 						setOrderDate(data.orderDate || new Date().toISOString().split('T')[0]);
 						setOrderStatus(data.status || 'Đơn chốt');
@@ -159,7 +166,7 @@ const QuickOrder = () => {
 			};
 			fetchOrder();
 		}
-	}, [id, owner.ownerId, customers.length]);
+	}, [id, owner.ownerId, customers.length, products.length]);
 	
 	// AI Smart Packaging Auditor & Sync
 	useEffect(() => {
@@ -187,6 +194,7 @@ const QuickOrder = () => {
 					const masterPkg = parseFloat(bestMatch.packaging) || 0;
 					if (masterPkg > 0 && Math.abs(masterPkg - currentPkg) > 0.001) {
 						hasLocalChange = true;
+						// ⚠️ FIX: Only update packaging, NEVER overwrite buyPrice (historical cost must be preserved)
 						return { ...item, packaging: bestMatch.packaging, aiValidated: true };
 					} else if (masterPkg > 0 && !item.aiValidated) {
 						hasLocalChange = true;
@@ -234,6 +242,7 @@ const QuickOrder = () => {
 					if (findings && findings.length > 0) {
 						const finalItems = updatedItems.map(it => {
 							const find = findings.find((f: any) => f.name === it.name);
+							// ⚠️ FIX: AI only overwrites packaging, never buyPrice (historical cost must be preserved)
 							if (find) return { ...it, packaging: String(find.correctPackaging), aiValidated: true, aiSmartFix: true };
 							return it;
 						});
@@ -408,7 +417,9 @@ const QuickOrder = () => {
 		const cost = Number(item.buyPrice) || 0;
 		return sum + (qty * cost);
 	}, 0);
-	const totalProfitActual = finalTotal - totalCostActual;
+	// ✅ FIX: Profit = Revenue - Cost - Discount (shipping is not profit, it's pass-through)
+	// subTotal (giá bán thuần) - giá vốn - chiết khấu = lợi nhuận thực
+	const totalProfitActual = subTotal - totalCostActual - Number(discountAmt);
 
 	const formatPrice = (num: number) => {
 		return new Intl.NumberFormat('vi-VN').format(num || 0);
@@ -437,41 +448,36 @@ const QuickOrder = () => {
 
 			validItems.forEach(item => {
 				let remainingQty = Number(item.qty);
-				let totalBuyCost = 0;
 
 				const sourceProduct = products.find(p => p.id === item.productId);
 				const cleanSku = normalizeText(sourceProduct?.sku);
 
-				let candidates = [];
-				if (cleanSku) {
-					candidates = products.filter(p =>
-						normalizeText(p.sku) === cleanSku && !p.linkedProductId
-					);
-				} else if (sourceProduct?.linkedProductId) {
+				// ✅ STOCK DEDUCTION: SKU-based FIFO across ALL categories
+				// Trừ tồn kho theo SKU, không phân biệt category (FIFO theo ngày nhập cũ nhất trước)
+				let stockCandidates: any[] = [];
+				if (sourceProduct?.linkedProductId) {
 					const linked = products.find(p => p.id === sourceProduct.linkedProductId);
-					if (linked) candidates = [linked];
+					if (linked) stockCandidates = [linked];
+				} else if (cleanSku) {
+					stockCandidates = products
+						.filter(p => normalizeText(p.sku) === cleanSku && !p.linkedProductId)
+						.sort((a: any, b: any) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+				}
+				if (stockCandidates.length === 0 && sourceProduct) {
+					stockCandidates = [sourceProduct];
 				}
 
-				// If no candidates found through SKU/Link, use the selected product itself
-				if (candidates.length === 0) {
-					candidates = [sourceProduct].filter(Boolean);
-				}
+				// ✅ COST/PROFIT: Exact priceBuy from the selected product's category ONLY
+				// Giá vốn lấy đúng theo sản phẩm đã chọn, không pha trộn category
+				const exactBuyPrice = Number(sourceProduct?.priceBuy) || 0;
 
-				// Sort by Creation Date (Oldest first for FIFO)
-				// We use this to decide which cost to apply first
-				candidates.sort((a: any, b: any) => {
-					const dateA = a.createdAt?.seconds || 0;
-					const dateB = b.createdAt?.seconds || 0;
-					return dateA - dateB;
-				});
-
-				for (const cand of candidates) {
+				// Build stockDeletions for inventory (SKU-based)
+				for (const cand of stockCandidates) {
 					if (remainingQty <= 0) break;
 					const available = Number(cand.stock) || 0;
 					if (available <= 0) continue;
 
 					const take = Math.min(remainingQty, available);
-					totalBuyCost += take * (Number(cand.priceBuy) || 0);
 					stockDeletions.push({
 						originProductId: item.productId,
 						productId: cand.id,
@@ -482,11 +488,10 @@ const QuickOrder = () => {
 					remainingQty -= take;
 				}
 
-				// If still remaining (not enough stock), take from the first/main one anyway (allow negative)
+				// If still remaining (not enough stock across all SKU batches), allow negative on first candidate
 				if (remainingQty > 0) {
-					const mainCand = candidates[0] || sourceProduct;
+					const mainCand = stockCandidates[0] || sourceProduct;
 					if (mainCand) {
-						totalBuyCost += remainingQty * (Number(mainCand.priceBuy) || 0);
 						stockDeletions.push({
 							originProductId: item.productId,
 							productId: mainCand.id,
@@ -497,14 +502,12 @@ const QuickOrder = () => {
 					}
 				}
 
-				const avgBuyPrice = totalBuyCost / Number(item.qty);
-
 				processedItems.push({
 					id: item.productId,
 					sku: item.sku || '',
 					name: item.name,
 					price: Number(item.price) || 0,
-					buyPrice: avgBuyPrice, // Accurate weighted average cost for this order line
+					buyPrice: exactBuyPrice, // Giá vốn đúng theo category đã chọn
 					qty: Number(item.qty) || 0,
 					unit: item.unit || '',
 					category: item.category || '',
@@ -512,6 +515,11 @@ const QuickOrder = () => {
 					packaging: item.packaging || ''
 				});
 			});
+
+		// ✅ FIX: Calculate accurate cost & profit from FIFO-processed items
+		const totalCostFinal = processedItems.reduce((sum, it) => sum + (Number(it.buyPrice) || 0) * (Number(it.qty) || 0), 0);
+		// Profit = subTotal (gross revenue) - cost - discount (shipping is pass-through, not profit)
+		const totalProfitFinal = subTotal - totalCostFinal - Number(discountAmt);
 
 			const orderData: any = {
 				customerName: selectedCustomer?.name || searchCustomerQuery || 'Khách vãng lai',
@@ -525,8 +533,8 @@ const QuickOrder = () => {
 				discountValue: Number(discountAmt) || 0,
 				totalAmount: Number(finalTotal) || 0,
 				totalWeight: Number(totalWeight) || 0,
-				totalCost: Number(totalCostActual) || 0,
-				totalProfit: Number(totalProfitActual) || 0,
+				totalCost: Number(totalCostFinal) || 0,
+				totalProfit: Number(totalProfitFinal) || 0,
 				note: orderNote,
 				status: orderStatus,
 				couponCode: couponCode || null,

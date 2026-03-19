@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Search, Plus, Minus, Trash2, ShoppingCart, User, Package, MapPin, Truck, FileText, ChevronDown, X, Layers, CheckCircle, Mail, RotateCcw, QrCode, Ticket, Tag, Lock, Crown, Sparkles } from 'lucide-react';
+import { ArrowLeft, Search, Plus, Minus, Trash2, ShoppingCart, User, Package, MapPin, Truck, FileText, ChevronDown, X, Layers, CheckCircle, Mail, RotateCcw, QrCode, Ticket, Tag, Lock, Crown, Sparkles, Eye, EyeOff } from 'lucide-react';
 import QRScanner from '../components/shared/QRScanner';
 import { useNavigate, useParams } from 'react-router-dom';
 import { db, auth } from '../services/firebase';
@@ -58,6 +58,8 @@ const QuickOrder = () => {
 	const [activeRow, setActiveRow] = useState<number | null>(null);
 	const [activeField, setActiveField] = useState<'category' | 'productId' | null>(null);
 	const [lineSearchQuery, setLineSearchQuery] = useState('');
+	const [showProfitPreview, setShowProfitPreview] = useState(false);
+	const isAdmin = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
 
 	// Handle outside click for custom dropdowns
 	useEffect(() => {
@@ -401,6 +403,13 @@ const QuickOrder = () => {
 		return sum + (qty * density);
 	}, 0);
 
+	const totalCostActual = lineItems.reduce((sum, item) => {
+		const qty = Number(item.qty) || 0;
+		const cost = Number(item.buyPrice) || 0;
+		return sum + (qty * cost);
+	}, 0);
+	const totalProfitActual = finalTotal - totalCostActual;
+
 	const formatPrice = (num: number) => {
 		return new Intl.NumberFormat('vi-VN').format(num || 0);
 	};
@@ -516,6 +525,8 @@ const QuickOrder = () => {
 				discountValue: Number(discountAmt) || 0,
 				totalAmount: Number(finalTotal) || 0,
 				totalWeight: Number(totalWeight) || 0,
+				totalCost: Number(totalCostActual) || 0,
+				totalProfit: Number(totalProfitActual) || 0,
 				note: orderNote,
 				status: orderStatus,
 				couponCode: couponCode || null,
@@ -1258,9 +1269,39 @@ const QuickOrder = () => {
 							</div>
 
 							<div className="text-right">
-								<div className="text-4xl md:text-[56px] font-black text-[#00a859] leading-none mb-6 md:mb-8 tracking-tighter tabular-nums">
-									{finalTotal.toLocaleString('vi-VN')} đ
+								<div className="text-4xl md:text-[56px] font-black text-[#00a859] leading-none mb-4 md:mb-6 tracking-tighter tabular-nums flex items-baseline justify-end gap-2">
+									{finalTotal.toLocaleString('vi-VN')} <span className="text-xl">đ</span>
 								</div>
+
+								{isAdmin && (
+									<div className="flex flex-col items-end mb-8">
+										<button
+											onClick={() => setShowProfitPreview(!showProfitPreview)}
+											className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${showProfitPreview ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-50 text-slate-400'}`}
+										>
+											{showProfitPreview ? <EyeOff size={14} /> : <Eye size={14} />}
+											 {showProfitPreview ? 'Ẩn Lợi Nhuận' : 'Xem Lợi Nhuận Dự Kiến'}
+										</button>
+
+										{showProfitPreview && (
+											<div className="mt-4 p-4 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 rounded-2xl animate-in slide-in-from-right-5 duration-300">
+												<div className="flex flex-col gap-1 items-end">
+													<div className="flex items-center gap-4">
+														<span className="text-[10px] font-bold text-indigo-400 uppercase">Giá vốn ước tính:</span>
+														<span className="text-sm font-black text-slate-800 dark:text-slate-200">{totalCostActual.toLocaleString('vi-VN')} đ</span>
+													</div>
+													<div className="flex items-center gap-4">
+														<span className="text-[10px] font-bold text-indigo-400 uppercase">Lợi nhuận ước tính:</span>
+														<span className="text-lg font-black text-[#1A237E] dark:text-indigo-400">{totalProfitActual.toLocaleString('vi-VN')} đ</span>
+													</div>
+													<div className="mt-1 px-2 py-0.5 bg-green-500/10 text-green-600 rounded text-[9px] font-black">
+														BIÊN LỢI NHUẬN: {finalTotal > 0 ? ((totalProfitActual / finalTotal) * 100).toFixed(1) : 0}%
+													</div>
+												</div>
+											</div>
+										)}
+									</div>
+								)}
 								<button
 									onClick={handleConfirmOrder}
 									className="hidden md:flex items-center justify-center w-[350px] ml-auto h-16 bg-[#ffcc00] text-slate-900 rounded-2xl font-black text-sm uppercase tracking-[2px] shadow-xl shadow-yellow-500/10 hover:bg-[#fbc02d] transition-all active:scale-[0.98]"

@@ -140,7 +140,7 @@ const Home = () => {
 		const itemsProfit = (o.items || []).reduce((pSum: number, item: any) => {
 			const sell = Number(item.price) || 0;
 			const currentProd = products.find(p => p.id === (item.productId || item.id));
-			const activeBuyPrice = currentProd ? (Number(currentProd.priceBuy) || 0) : (Number(item.buyPrice) || 0);
+			const activeBuyPrice = (Number(item.buyPrice) || 0) > 0 ? Number(item.buyPrice) : (currentProd ? (Number(currentProd.priceBuy) || 0) : 0);
 			const qty = Number(item.qty) || 0;
 			return pSum + ((sell - activeBuyPrice) * qty);
 		}, 0);
@@ -165,7 +165,7 @@ const Home = () => {
 		const itemsProfit = (o.items || []).reduce((pSum: number, item: any) => {
 			const sell = Number(item.price) || 0;
 			const currentProd = products.find(p => p.id === (item.productId || item.id));
-			const activeBuyPrice = currentProd ? (Number(currentProd.priceBuy) || 0) : (Number(item.buyPrice) || 0);
+			const activeBuyPrice = (Number(item.buyPrice) || 0) > 0 ? Number(item.buyPrice) : (currentProd ? (Number(currentProd.priceBuy) || 0) : 0);
 			const qty = Number(item.qty) || 0;
 			return pSum + ((sell - activeBuyPrice) * qty);
 		}, 0);

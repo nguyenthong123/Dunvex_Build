@@ -52,8 +52,6 @@ const Finance = () => {
 	const [agingAiInsight, setAgingAiInsight] = useState<string | null>(null);
 	const [agingData, setAgingData] = useState<any>({ under30: [], between30_60: [], between60_90: [], over90: [] });
 	const [aiProfitInsight, setAiProfitInsight] = useState<{ id: string, insight: string, loading: boolean } | null>(null);
-	const [aiAutoFixes, setAiAutoFixes] = useState<Record<string, { revenue: number, cost: number, profit: number }>>({});
-	const autoCheckedOrders = useRef(new Set<string>());
 
 	// Cashbook Form
 	const [showLogForm, setShowLogForm] = useState(searchParams.get('new') === 'true');
@@ -854,15 +852,10 @@ Yêu cầu tính toán chi tiết và kết luận:`
 
 	// 3. Profit breakdown
 	const orderProfits = filteredOrders.filter(o => o.status === 'Đơn chốt').map(o => {
-		const revenue = aiAutoFixes[o.id] ? aiAutoFixes[o.id].revenue : (o.totalAmount || 0);
-		const cost = aiAutoFixes[o.id] ? aiAutoFixes[o.id].cost : (o.items || []).reduce((sum: number, item: any) => {
-			const matches = products.filter(p => p.id === (item.productId || item.id) || (p.sku && item.sku && p.sku === item.sku) || (p.name && item.name && p.name.trim().toLowerCase() === item.name.trim().toLowerCase()));
-			const currentProd = item.category ? (matches.find(p => p.category === item.category) || matches[0]) : matches[0];
-			const activeBuyPrice = currentProd ? (Number(currentProd.priceBuy) || 0) : (Number(item.buyPrice) || 0);
-			return sum + (activeBuyPrice * (Number(item.qty) || 0));
-		}, 0);
-		const profit = aiAutoFixes[o.id] ? aiAutoFixes[o.id].profit : (revenue - cost);
-		return { ...o, revenue, cost, profit, aiFixed: !!aiAutoFixes[o.id] };
+		const revenue = o.totalAmount || 0;
+		const cost = o.totalCost || 0;
+		const profit = o.totalProfit || (revenue - cost);
+		return { ...o, revenue, cost, profit };
 	}).sort((a: any, b: any) => {
 		const dateA = new Date(a.orderDate || a.createdAt?.toDate() || a.createdAt).getTime();
 		const dateB = new Date(b.orderDate || b.createdAt?.toDate() || b.createdAt).getTime();
@@ -879,54 +872,7 @@ Yêu cầu tính toán chi tiết và kết luận:`
 	const paginatedProfits = orderProfits.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 	const totalProfitsPages = Math.ceil(orderProfits.length / ITEMS_PER_PAGE);
 
-	useEffect(() => {
-		if (activeTab !== 'profit' || !Array.isArray(paginatedProfits)) return;
-		let isCancelled = false;
-		const autoCheck = async () => {
-			for (const order of paginatedProfits) {
-				if (isCancelled) break;
-				if (autoCheckedOrders.current.has(order.id) || order.aiFixed) continue;
-				autoCheckedOrders.current.add(order.id);
 
-				// Dùng thuật toán Local JS để tính lại số đúng nhanh gọn, bỏ qua gọi API DeepSeek ngầm
-				let totalCost = 0;
-				let totalRevenue = 0;
-
-				const itemsWithCorrectCost = (order.items || []).map((item: any) => {
-					const matches = products.filter(p => p.id === (item.productId || item.id) || (p.sku && item.sku && p.sku === item.sku) || (p.name && item.name && p.name.trim().toLowerCase() === item.name.trim().toLowerCase()));
-					const currentProd = item.category ? (matches.find(p => p.category === item.category) || matches[0]) : matches[0];
-					const correctBuyPrice = currentProd ? (Number(currentProd.priceBuy) || 0) : (Number(item.buyPrice) || 0);
-					const salePrice = Number(item.price) || 0;
-					const qty = Number(item.qty) || 0;
-					
-					totalCost += correctBuyPrice * qty;
-					totalRevenue += salePrice * qty;
-
-					return { ...item };
-				});
-
-				const correctProfit = totalRevenue - totalCost;
-
-				// Chỉ đánh dấu Fix khi thực sự có chênh lệch so với ban đầu
-				const originalCost = Number(order.cost) || 0;
-				const isChanged = Math.abs(originalCost - totalCost) > 0;
-
-				if (isChanged && !isCancelled) {
-					setAiAutoFixes(prev => ({
-						...prev,
-						[order.id]: {
-							revenue: totalRevenue,
-							cost: totalCost,
-							profit: correctProfit,
-							insight: `Hệ thống tự động đồng bộ lại Giá vốn & Lợi nhuận chuẩn xác từ data gốc.`
-						}
-					}));
-				}
-			}
-		};
-		autoCheck();
-		return () => { isCancelled = true; };
-	}, [paginatedProfits, activeTab, products]);
 
 	if (owner && owner.loading) {
 		return (
@@ -1382,19 +1328,10 @@ Yêu cầu tính toán chi tiết và kết luận:`
 												<td className="px-6 py-4 text-right text-slate-400 italic">{formatPrice(order.cost)}</td>
 												<td className="px-6 py-4 text-right">
 													<div className="flex items-center justify-end gap-2">
-														{order.aiFixed && <span title="Tự động sửa bởi AI"><Sparkles size={12} className="text-indigo-500 animate-pulse" /></span>}
 														<span className={`px-2 py-1 rounded-lg font-black ${order.profit > 0 ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20' : 'bg-rose-50 text-rose-600 dark:bg-rose-900/20'}`}>
 															{formatPrice(order.profit)}
 														</span>
 													</div>
-													<button 
-														onClick={() => handleAICheckProfit(order)}
-														disabled={aiProfitInsight?.loading && aiProfitInsight.id === order.id}
-														className="ml-3 inline-flex items-center justify-center p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors disabled:opacity-50"
-														title="AI Phân tích dữ liệu gốc"
-													>
-														{aiProfitInsight?.id === order.id && aiProfitInsight?.loading ? <Sparkles className="animate-spin" size={14} /> : <Bot size={14} />}
-													</button>
 												</td>
 											</tr>
 											{aiProfitInsight?.id === order.id && (

@@ -14,6 +14,7 @@ const OrderList = () => {
 	const owner = useOwner();
 	const { showToast } = useToast();
 	const [orders, setOrders] = useState<any[]>([]);
+	const isAdmin = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
 	const [loading, setLoading] = useState(true);
 	const [searchTerm, setSearchTerm] = useState('');
 	const [showDetail, setShowDetail] = useState(false);
@@ -37,8 +38,6 @@ const OrderList = () => {
 
 		const unsubscribe = onSnapshot(q, (snapshot: any) => {
 			const docs = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
-
-			// Apply client-side filter for employees
 			const filteredByRole = isAdmin ? docs : docs.filter((o: any) => o.createdByEmail === auth.currentUser?.email);
 
 			const sortedDocs = [...filteredByRole].sort((a, b) => {
@@ -298,6 +297,7 @@ const OrderList = () => {
 								<th className="py-4 px-6 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-[0.1em]">Đơn hàng</th>
 								<th className="py-4 px-6 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-[0.1em]">Khách hàng</th>
 								<th className="py-4 px-6 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-[0.1em] text-center">Trạng thái</th>
+								{isAdmin && <th className="py-4 px-6 text-[10px] font-black text-pink-500 dark:text-pink-400 uppercase tracking-[0.1em] text-right">Lợi nhuận</th>}
 								<th className="py-4 px-6 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-[0.1em] text-right">Tổng tiền</th>
 								<th className="py-4 px-6 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-[0.1em] text-right">Hành động</th>
 							</tr>
@@ -320,12 +320,13 @@ const OrderList = () => {
 											</div>
 										</td>
 										<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800"><div className="w-20 h-6 skeleton mx-auto rounded-full" /></td>
+										{isAdmin && <td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800"><div className="w-20 h-5 skeleton ml-auto" /></td>}
 										<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800"><div className="w-24 h-5 skeleton ml-auto" /></td>
 										<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800"><div className="w-16 h-8 skeleton ml-auto rounded-lg" /></td>
 									</tr>
 								))
 							) : paginatedOrders.length === 0 ? (
-								<tr><td colSpan={5} className="py-12 text-center">
+								<tr><td colSpan={isAdmin ? 6 : 5} className="py-12 text-center">
 									<div className="flex flex-col items-center gap-2">
 										<span className="material-symbols-outlined text-4xl text-slate-200 dark:text-slate-700">inventory_2</span>
 										<p className="text-slate-400 dark:text-slate-500 font-medium">Không tìm thấy đơn hàng nào</p>
@@ -353,6 +354,11 @@ const OrderList = () => {
 											{order.status}
 										</span>
 									</td>
+									{isAdmin && (
+										<td className="py-4 px-6 text-right font-black text-pink-500 dark:text-pink-400">
+											{formatPrice(order.totalProfit || 0)}
+										</td>
+									)}
 									<td className="py-4 px-6 text-right font-black text-slate-900 dark:text-indigo-400">
 										{formatPrice(order.totalAmount || 0)}
 									</td>
@@ -417,6 +423,12 @@ const OrderList = () => {
 									</div>
 								</div>
 							</div>
+							{isAdmin && (
+								<div className="flex justify-between items-center mb-2 px-1">
+									<span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Lợi nhuận:</span>
+									<span className="text-xs font-black text-pink-500">{formatPrice(order.totalProfit || 0)}</span>
+								</div>
+							)}
 							<div className="flex justify-between items-baseline pt-2 border-t border-gray-50 dark:border-slate-800">
 								<span className="text-[10px] text-gray-400 dark:text-slate-500 font-medium">{new Date(order.createdAt?.seconds * 1000).toLocaleDateString('vi-VN')}</span>
 								<span className="font-black text-[#FF6D00] text-lg">{formatPrice(order.totalAmount || 0)}</span>

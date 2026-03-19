@@ -110,6 +110,11 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     - **Tối giản hóa Tài chính**: Loại bỏ hoàn toàn tính năng lập kế hoạch KPI, theo dõi hiệu suất đội ngũ và bảng tính thưởng phạt để tinh gọn hệ thống theo yêu cầu thực tế.
     - **Dọn dẹp Giao diện**: Gỡ bỏ tab "Performance", các state biến liên quan, logic fetching dữ liệu KPI và các modal lập kế hoạch cũ.
     - **Phân quyền truy cập Tài chính**: Thiết lập thông báo "Truy cập bị hạn chế" chuyên nghiệp cho tài khoản nhân viên khi cố gắng truy cập module Tài chính, đảm bảo bảo mật số liệu doanh nghiệp.
+- [x] **Nâng cấp Hệ thống Tính Lợi nhuận & Bảo mật (Profit Logic & Security - Mar 19)**:
+    - **Lợi nhuận theo Giá vốn Lịch sử**: Hệ thống tự động ghi nhận và lưu trữ `Giá nhập` (buyPrice) của từng sản phẩm ngay tại thời điểm lên đơn. Điều này đảm bảo báo cáo tài chính luôn chính xác 100%, không bị ảnh hưởng nếu sản phẩm sau này bị xoá hoặc thay đổi giá trong danh mục.
+    - **Xem trước Lợi nhuận (Quick Order Preview)**: Bổ sung tính năng cho phép Admin xem trước "Tổng giá vốn" và "Lợi nhuận thực tế" ngay khi đang nhập số lượng đơn hàng. Tích hợp nút **Ẩn/Hiện (Eye icon)** để bảo mật thông tin khi có khách hàng đứng cạnh.
+    - **Bảo mật Đa tầng (Admin Only)**: Cột "Lợi nhuận" trong Danh sách đơn hàng và bộ công cụ xem trước lợi nhuận được thiết lập ẩn hoàn toàn đối với tài khoản nhân viên (Employee), đảm bảo an toàn dữ liệu kinh doanh nhạy cảm.
+    - **Tối ưu Module Tài chính (Finance Performance)**: Gỡ bỏ các cơ chế AI quét lỗi tự động (AI Auto-fix) gây nặng máy. Thay vào đó, báo cáo lợi nhuận lấy trực tiếp dữ liệu đã "đóng băng" từ các đơn hàng chốt, giúp trang Tài chính tải tức thì và số liệu luôn khớp với thực tế.
 - [x] **Tối ưu Form Sổ quỹ (Cashbook Form Optimization - Mar 13)**:
     - **Giao diện Compact**: Thu gọn bố cục form ghi sổ, sử dụng Grid linh hoạt (1 cột trên Mobile, 2 cột trên Desktop) để giảm chiều dài trang.
     - **Hạng mục mới**: Thêm mục **"Chiết khấu"** 🎁 vào phần Thu vào theo yêu cầu người dùng.
@@ -452,6 +457,11 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
     *   **One-to-One Match Tracking**: Khắc phục lỗi các sản phẩm giống hệt nhau (chỉ khác giá nhập) bị ghi đè lên nhau và hiển thị sai số lượng. Hệ thống giờ đây theo dõi chính xác từng bản ghi đã khớp, đảm bảo mỗi dòng trong file Excel ánh xạ độc lập đến 1 dòng trên CSDL, hoặc tự động tạo mới nếu bản ghi vượt định mức (ví dụ nhập 3 dòng cùng SKU -> tạo đủ 3 records).
 - [x] **Tối ưu Tính toán Lợi Nhuận Tài Chính (Dynamic Profit Calculation - Mar 15)**:
     *   **Áp dụng Giá Nhập Hiện Tại**: Cập nhật logic tính toán `Giá Vốn` (Cost) trong module Tài Chính (Finance) và Tổng Quan (Dashboard) để tự động ánh xạ với `Giá nhập` (priceBuy) MỚI NHẤT của sản phẩm trong danh mục. Điều này giúp các báo cáo lợi nhuận cập nhật chính xác ngay lập tức khi Admin điều chỉnh giá nhập qua Bulk Import hoặc chỉnh sửa tay, thay vì bị khóa chết lấy theo giá cũ lúc lên đơn.
+- [x] **Tối ưu Danh sách Công nợ trên Di động (Debt List Mobile Optimization - Mar 17)**:
+    - **Giao diện Thẻ (Card Layout)**: Thiết kế lại danh sách công nợ cho điện thoại, chuyển từ bảng trượt ngang sang dạng thẻ trắng bo tròn hiện đại, giúp dễ theo dõi và thao tác.
+    - **Trạng thái Sức khỏe Nợ (Debt Health)**: Tự động phân loại và gắn nhãn mức độ rủi ro (Rủi ro cao, Chậm trả, Theo dõi, An toàn) bằng màu sắc trực quan ngay trên thẻ.
+    - **Thông tin Tập trung**: Mỗi thẻ hiển thị đầy đủ Tổng mua, Đã trả, Dư nợ và ngày giao dịch cuối cùng, tối ưu hóa không gian hiển thị.
+    - **Tương tác Nhanh**: Tích hợp các nút chức năng "Xem chi tiết" và "Thu nợ" trực tiếp trên từng thẻ, hỗ trợ thao tác một tay mượt mà.
 
 ### 📝 Cần làm tiếp (To-do)
 

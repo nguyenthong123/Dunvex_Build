@@ -1,7 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth } from '../../services/firebase';
-import { signOut } from 'firebase/auth';
 import { useNavigationConfig } from '../../hooks/useNavigationConfig';
 import { Moon, Sun, LogOut } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
@@ -17,11 +16,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onToggle }) => {
 	const { sidebarItems, currentPath } = useNavigationConfig();
 	const { theme, toggleTheme } = useTheme();
 
-	const handleLogout = async () => {
-		if (window.confirm("Bạn có chắc chắn muốn đăng xuất?")) {
-			await signOut(auth);
-			navigate('/login');
-		}
+	const handleLogout = () => {
+		navigate('/settings?action=logout');
 	};
 
 	const menuItems = sidebarItems;

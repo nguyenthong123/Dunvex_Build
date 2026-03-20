@@ -191,11 +191,12 @@ const OrderList = () => {
 		}
 	};
 
-	// Stats
-	const totalOrders = orders.length;
-	const pendingOrders = orders.filter(o => o.status === 'Mới' || o.status === 'Đang xử lý').length;
-	const completedOrders = orders.filter(o => o.status === 'Đã giao').length;
-	const totalRevenue = orders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+	// Stats - Only count "Đơn chốt" orders
+	const confirmedOrders = orders.filter(o => o.status === 'Đơn chốt');
+	const totalConfirmedCount = confirmedOrders.length;
+	const totalProfit = isAdmin ? confirmedOrders.reduce((sum, o) => sum + (o.totalProfit || 0), 0) : 0;
+	const totalDiscount = confirmedOrders.reduce((sum, o) => sum + (o.discountValue || 0), 0);
+	const totalRevenue = confirmedOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
 
 	if (owner.manualLockOrders) {
 		return (
@@ -283,9 +284,9 @@ const OrderList = () => {
 				)}
 				{/* Stats Cards */}
 				<div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-					<StatCard icon="receipt_long" label="Tổng đơn" value={totalOrders.toString()} color="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400" />
-					<StatCard icon="pending" label="Chờ xử lý" value={pendingOrders.toString()} color="bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400" />
-					<StatCard icon="check_circle" label="Hoàn tất" value={completedOrders.toString()} color="bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400" />
+					<StatCard icon="receipt_long" label="Tổng đơn chốt" value={totalConfirmedCount.toString()} color="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400" />
+					<StatCard icon="trending_up" label="Lợi nhuận" value={formatPrice(totalProfit)} color="bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400" />
+					<StatCard icon="sell" label="Tổng chiết khấu" value={formatPrice(totalDiscount)} color="bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400" />
 					<StatCard icon="payments" label="Doanh thu" value={formatPrice(totalRevenue)} color="bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400" />
 				</div>
 

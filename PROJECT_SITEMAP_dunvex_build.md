@@ -82,6 +82,14 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 ## 4. Các mục đã hoàn thành & Cần làm (To-do)
 
 ### ✅ Đã hoàn thành (Done)
+- [x] **Tinh chỉnh Hệ thống & Trải nghiệm Người dùng (System & UX Refinement - Mar 20)**:
+    - **Sửa lỗi Đăng xuất (Logout Fix)**: Khắc phục triệt để lỗi nút đăng xuất ở Sidebar không hoạt động trên một số trình duyệt/thiết bị di động. Chuyển sang cơ chế điều hướng xác nhận tập trung tại trang Cài đặt, đảm bảo tính ổn định 100%.
+    - **Nâng cấp Thẻ Thống kê Đơn hàng (Order Stat Cards Upgrade)**: Tái thiết lập 4 thẻ thống kê tại danh sách đơn hàng để tập trung vào số liệu thực tế:
+        - **Tổng đơn**: Chỉ đếm đơn hàng trạng thái "Đơn chốt".
+        - **Lợi nhuận**: Hiển thị tổng lãi từ đơn chốt (Bảo mật 0đ cho nhân viên).
+        - **Tổng chiết khấu**: Thống kê tổng tiền giảm giá của các đơn chốt.
+        - **Doanh thu**: Tổng giá trị thực nhận từ các đơn hàng đã chốt.
+    - **Cảnh báo Hết hạn khi Nhập liệu (Bulk Import Expiry Warning)**: Tích hợp trí tuệ nhân tạo kiểm tra dữ liệu đầu vào. Hệ thống tự động phát hiện và hiển thị cảnh báo màu cam nổi bật nếu file Excel/Google Sheets chứa sản phẩm có ngày hết hạn đã qua, giúp ngăn chặn sai sót dữ liệu kho ngay từ bước nhập liệu.
 - [x] **Quản lý Vòng đời & Hiển thị Sản phẩm (Product Management Upgrade - Mar 16)**:
     - **Tự động hóa (Auto-delete)**: Bổ sung "Ngày hết hạn" trong form Thêm/Sửa. Tự động kiểm tra và xóa sản phẩm khỏi hệ thống nếu quá hạn.
     - **Hiển thị Giá nhập**: Bổ sung hiển thị Giá nhập nổi bật ngay bên cạnh Lợi nhuận ước tính trong chi tiết sản phẩm.

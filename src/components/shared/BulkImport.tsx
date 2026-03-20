@@ -31,6 +31,7 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 	const [error, setError] = useState<string | null>(null);
 	const [importMethod, setImportMethod] = useState<'file' | 'link'>('file');
 	const [sheetUrl, setSheetUrl] = useState('');
+	const [hasExpiredDates, setHasExpiredDates] = useState(false);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
 	const fieldConfig: Record<string, { title: string, fields: FieldConfig[] }> = {
@@ -72,6 +73,11 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 		if (jsonData.length < 1) {
 			throw new Error("Dữ liệu không hợp lệ hoặc trang tính trống.");
 		}
+
+		setHasExpiredDates(false);
+		const today = new Date();
+		today.setHours(0, 0, 0, 0); // Reset time for comparison
+		let foundExpired = false;
 
 		// Dynamically find the header row (first row with a "name" or equivalent column)
 		let headerRowIndex = -1;
@@ -217,6 +223,14 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 									val = ''; // Invalid date format fallback to empty
 								}
 							}
+
+							// Check if date is in the past
+							if (val && type === 'products') {
+								const expDate = new Date(val);
+								if (expDate < today) {
+									foundExpired = true;
+								}
+							}
 						}
 					}
 					obj[field.key] = val;
@@ -233,6 +247,7 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 
 		setColumns(config.fields.map(f => f.label));
 		setData(mappedData);
+		setHasExpiredDates(foundExpired);
 		setStep(2);
 	};
 
@@ -347,10 +362,13 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 		setImporting(true);
 
 		try {
+			console.log('[BulkImport] Starting import...', { type, ownerId, dataLength: data.length });
+			
 			// 1. Fetch existing items to check for duplicates
 			const q = query(collection(db, type), where('ownerId', '==', ownerId));
 			const snapshot = await getDocs(q);
 			const existingItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+			console.log('[BulkImport] Found existing items:', existingItems.length);
 
 			const batchSize = 500;
 			const totalBatches = Math.ceil(data.length / batchSize);
@@ -457,7 +475,9 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 					}
 				});
 
+				console.log(`[BulkImport] Committing batch ${i + 1}/${totalBatches}, chunk size: ${currentChunk.length}`);
 				await batch.commit();
+				console.log(`[BulkImport] Batch ${i + 1} committed successfully.`);
 			}
 
 			await addDoc(collection(db, 'audit_logs'), {
@@ -473,8 +493,9 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 			onClose();
 			showToast(`Thành công! Đã cập nhật ${totalUpdated} và thêm mới ${totalCreated} ${config.title}.`, "success");
 		} catch (err: any) {
-			console.error("Import error:", err);
-			showToast("Lỗi khi nhập dữ liệu: " + err.message, "error");
+			console.error("[BulkImport] Import error:", err);
+			console.error("[BulkImport] Error details:", { code: err.code, message: err.message, stack: err.stack });
+			showToast("Lỗi khi nhập dữ liệu: " + (err.code || err.message), "error");
 		} finally {
 			setImporting(false);
 		}
@@ -638,6 +659,18 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 									Quay lại bước chọn nguồn
 								</button>
 							</div>
+
+							{hasExpiredDates && (
+								<div className="p-4 bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-900/30 rounded-2xl flex items-center gap-4 text-orange-700 dark:text-orange-400">
+									<div className="size-10 bg-orange-500 text-white rounded-full flex items-center justify-center shrink-0 shadow-lg shadow-orange-500/20">
+										<AlertCircle size={24} />
+									</div>
+									<div className="flex-1">
+										<p className="text-sm font-black uppercase tracking-tight">Cảnh báo: Có sản phẩm hết hạn!</p>
+										<p className="text-xs font-bold opacity-80 mt-0.5">Một số sản phẩm trong bảng dữ liệu có ngày hết hạn đã qua hoặc trùng với hôm nay. Vui lòng kiểm tra lại file của bạn và cập nhật ngày mới trước khi nhập nếu cần thiết.</p>
+									</div>
+								</div>
+							)}
 
 							<div className="bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-slate-100 dark:border-slate-800 overflow-hidden">
 								<div className="overflow-x-auto max-h-[400px] custom-scrollbar">

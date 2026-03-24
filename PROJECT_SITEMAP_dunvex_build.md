@@ -84,7 +84,7 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 ### ✅ Đã hoàn thành (Done)
 - [x] **Tối ưu Hóa Tạo mã SKU Thông minh (Dynamic SKU Generation - Mar 24)**:
     - **Cơ chế Tăng dần (Incremental Scaling)**: Thay đổi logic tạo SKU từ mã 6 số ngẫu nhiên cố định sang hệ thống tự động điều chỉnh độ dài. Bắt đầu từ **3 số** (ví dụ: `DV-101`), khi hết kho số 3 chữ số sẽ tự động chuyển sang **4 số**, **5 số** và tối đa **6 số**.
-    - **Đề xuất Không trùng (Unique Proposal)**: Hệ thống tự động kiểm tra toàn bộ danh mục sản phẩm hiện có của doanh nghiệp để đề xuất mã SKU mới nhanh chóng, đảm bảo không bao giờ trùng lặp.
+    - **Đề xuất Không trùng (Global Unique Proposal)**: Hệ thống tự động kiểm tra toàn bộ danh mục sản phẩm của **tất cả khách hàng** trên toàn hệ thống để đề xuất mã SKU mới. Điều này đảm bảo tính duy nhất tuyệt đối, ngăn chặn việc trùng mã giữa các doanh nghiệp khác nhau, giúp việc đồng bộ tồn kho và báo cáo tập trung luôn chính xác.
     - **Tiết kiệm Tài nguyên**: Việc ưu tiên sử dụng mã ngắn giúp bảng mã gọn gàng, chuyên nghiệp và giảm thiểu xác suất xung đột dữ liệu khi số lượng sản phẩm còn ít.
     - **Duy trì Tiêu chuẩn**: Vẫn giữ tiền tố `DV-` đặc trưng của thương hiệu, đảm bảo tính đồng nhất với các hệ thống quét mã QR hiện tại.
 - [x] **Tinh chỉnh Hệ thống & Trải nghiệm Người dùng (System & UX Refinement - Mar 20)**:

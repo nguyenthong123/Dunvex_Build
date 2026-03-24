@@ -614,48 +614,43 @@ const ProductList = () => {
 		);
 	};
 
-	const generateSKU = () => {
+	const generateSKU = async () => {
 		const prefix = 'DV';
 		
-		// Get all numeric parts of existing SKUs with prefix DV-
-		const existingSkus = products
+		// Get local SKUs for a quick first-pass check (offline)
+		const localSkus = products
 			.filter(p => p.sku && p.sku.startsWith(`${prefix}-`))
-			.map(p => p.sku.split('-')[1]);
+			.map(p => p.sku);
 
 		// Try lengths from 3 to 6 digits
 		for (let length = 3; length <= 6; length++) {
 			const min = Math.pow(10, length - 1);
 			const max = Math.pow(10, length) - 1;
-			const totalPossible = max - min + 1;
 			
-			// Filter existing numeric parts that match this specific length
-			const usedOfThisLength = existingSkus.filter(s => s.length === length);
-			
-			// If the current length's space is not nearly exhausted, use random generation
-			if (usedOfThisLength.length < totalPossible) {
-				// Try 100 random attempts first (highly efficient for sparse ranges)
-				for (let attempt = 0; attempt < 100; attempt++) {
-					const randomNum = Math.floor(min + Math.random() * (max - min + 1)).toString();
-					if (!usedOfThisLength.includes(randomNum)) {
-						return `${prefix}-${randomNum}`;
-					}
-				}
+			// Try 10 random attempts globally for each length
+			// Using random candidates is highly efficient for global checks in sparse ranges
+			for (let attempt = 0; attempt < 10; attempt++) {
+				const randomNum = Math.floor(min + Math.random() * (max - min + 1)).toString();
+				const candidate = `${prefix}-${randomNum}`;
 				
-				// If random attempts failed (range is very full), perform a sequential search for the first gap
-				// Only do this for smaller lengths (3 or 4) to avoid long loops
-				if (length <= 4) {
-					for (let i = min; i <= max; i++) {
-						const numStr = i.toString();
-						if (!usedOfThisLength.includes(numStr)) {
-							return `${prefix}-${numStr}`;
-						}
-					}
+				// 1. Quick local check
+				if (localSkus.includes(candidate)) continue;
+				
+				// 2. Global Check: Verify uniqueness across the ENTIRE system (all owners)
+				// This prevents SKU collisions between different administrators
+				const qGlobal = query(collection(db, 'products'), where('sku', '==', candidate), limit(1));
+				const snap = await getDocs(qGlobal);
+				
+				if (snap.empty) {
+					return candidate;
 				}
 			}
-			// If this length is full, the loop naturally transitions to the next length (e.g., 3 -> 4)
+			
+			// If 10 random attempts for 3-digits fail, it's likely many are taken globally.
+			// We move to the next length (e.g. 4) which has 10x more capacity.
 		}
 		
-		// Extreme fallback: 8-digit random if 6-digit space (1 million) is fully exhausted
+		// Extreme fallback: 8-digit random if all shorter spaces are extremely congested
 		return `${prefix}-${Math.floor(10000000 + Math.random() * 90000000)}`;
 	};
 
@@ -668,10 +663,11 @@ const ProductList = () => {
 		});
 	};
 
-	const resetForm = () => {
+	const resetForm = async () => {
+		const newSku = await generateSKU();
 		setFormData({
 			name: '',
-			sku: generateSKU(),
+			sku: newSku,
 			category: 'Tôn lợp',
 			priceBuy: 0,
 			priceSell: 0,
@@ -1944,7 +1940,10 @@ const ProductList = () => {
 														type="button"
 														className="p-2 rounded-full text-slate-400 hover:text-orange-500 transition-all"
 														title="Tạo mã mới"
-														onClick={() => setFormData(prev => ({ ...prev, sku: generateSKU() }))}
+														onClick={async () => {
+															const newSku = await generateSKU();
+															setFormData(prev => ({ ...prev, sku: newSku }));
+														}}
 													>
 														<span className="material-symbols-outlined text-xl">autorenew</span>
 													</button>

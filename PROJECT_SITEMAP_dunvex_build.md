@@ -82,6 +82,11 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 ## 4. Các mục đã hoàn thành & Cần làm (To-do)
 
 ### ✅ Đã hoàn thành (Done)
+- [x] **Tối ưu Hóa Tạo mã SKU Thông minh (Dynamic SKU Generation - Mar 24)**:
+    - **Cơ chế Tăng dần (Incremental Scaling)**: Thay đổi logic tạo SKU từ mã 6 số ngẫu nhiên cố định sang hệ thống tự động điều chỉnh độ dài. Bắt đầu từ **3 số** (ví dụ: `DV-101`), khi hết kho số 3 chữ số sẽ tự động chuyển sang **4 số**, **5 số** và tối đa **6 số**.
+    - **Đề xuất Không trùng (Unique Proposal)**: Hệ thống tự động kiểm tra toàn bộ danh mục sản phẩm hiện có của doanh nghiệp để đề xuất mã SKU mới nhanh chóng, đảm bảo không bao giờ trùng lặp.
+    - **Tiết kiệm Tài nguyên**: Việc ưu tiên sử dụng mã ngắn giúp bảng mã gọn gàng, chuyên nghiệp và giảm thiểu xác suất xung đột dữ liệu khi số lượng sản phẩm còn ít.
+    - **Duy trì Tiêu chuẩn**: Vẫn giữ tiền tố `DV-` đặc trưng của thương hiệu, đảm bảo tính đồng nhất với các hệ thống quét mã QR hiện tại.
 - [x] **Tinh chỉnh Hệ thống & Trải nghiệm Người dùng (System & UX Refinement - Mar 20)**:
     - **Sửa lỗi Đăng xuất (Logout Fix)**: Khắc phục triệt để lỗi nút đăng xuất ở Sidebar không hoạt động trên một số trình duyệt/thiết bị di động. Chuyển sang cơ chế điều hướng xác nhận tập trung tại trang Cài đặt, đảm bảo tính ổn định 100%.
     - **Nâng cấp Thẻ Thống kê Đơn hàng (Order Stat Cards Upgrade)**: Tái thiết lập 4 thẻ thống kê tại danh sách đơn hàng để tập trung vào số liệu thực tế:

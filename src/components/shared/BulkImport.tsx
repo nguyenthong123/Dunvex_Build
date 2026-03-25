@@ -32,6 +32,8 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 	const [importMethod, setImportMethod] = useState<'file' | 'link'>('file');
 	const [sheetUrl, setSheetUrl] = useState('');
 	const [hasExpiredDates, setHasExpiredDates] = useState(false);
+	const [missingSkuCount, setMissingSkuCount] = useState(0);
+	const [generatingSkus, setGeneratingSkus] = useState(false);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
 	const fieldConfig: Record<string, { title: string, fields: FieldConfig[] }> = {
@@ -59,8 +61,9 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 				{ key: 'unit', label: 'Đơn vị', default: 'Cái', type: 'string' },
 				{ key: 'sku', label: 'Mã SKU', type: 'string' },
 				{ key: 'specification', label: 'Quy cách', type: 'string' },
-				{ key: 'packaging', label: 'Đóng gói', type: 'string' },
-				{ key: 'density', label: 'Trọng lượng', type: 'string' },
+				{ key: 'specification', label: 'Quy cách', type: 'string' },
+				{ key: 'packaging', label: 'Đóng gói', type: 'number', default: 0 },
+				{ key: 'density', label: 'Trọng lượng', type: 'number', default: 0 },
 				{ key: 'note', label: 'Ghi chú', type: 'string' },
 				{ key: 'expiryDate', label: 'Ngày hết hạn', type: 'string' }
 			]
@@ -75,9 +78,11 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 		}
 
 		setHasExpiredDates(false);
+		setMissingSkuCount(0);
 		const today = new Date();
 		today.setHours(0, 0, 0, 0); // Reset time for comparison
 		let foundExpired = false;
+		let missingSkus = 0;
 
 		// Dynamically find the header row (first row with a "name" or equivalent column)
 		let headerRowIndex = -1;
@@ -164,30 +169,49 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 				if (colIndex !== -1) {
 					let val = row[colIndex];
 					if (field.type === 'number') {
-						if (typeof val === 'string') {
-							// Remove currency units (đ, VND), and other non-numeric chars except separators
-							let cleaned = val.replace(/[^0-9,.-]/g, '').trim();
+						if (typeof val === 'string' || typeof val === 'number') {
+							let cleaned = String(val).replace(/[^0-9,.-]/g, '').trim();
 
-							// Handle Vietnamese locale: 
-							// 1. If it has BOTH comma and dot (1.234.567,89) -> Remove dots, use comma as dot
-							if (cleaned.includes(',') && cleaned.includes('.')) {
-								cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+							if (cleaned) {
+								// Handle Vietnamese locale: 
+								// 1. If it has BOTH comma and dot (1.234.567,89) -> Remove dots, use comma as dot
+								if (cleaned.includes(',') && cleaned.includes('.')) {
+									// Determine which one is the decimal separator (the one that appears last and only once at the end)
+									const lastComma = cleaned.lastIndexOf(',');
+									const lastDot = cleaned.lastIndexOf('.');
+									
+									if (lastComma > lastDot) {
+										// Dot is thousands, comma is decimal
+										cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+									} else {
+										// Comma is thousands, dot is decimal (US style)
+										cleaned = cleaned.replace(/,/g, '');
+									}
+								}
+								// 2. If it has ONLY comma (1234,56 or 0,9) -> use comma as dot
+								else if (cleaned.includes(',')) {
+									cleaned = cleaned.replace(',', '.');
+								}
+								// 3. If it has ONLY dot (133.215 or 1.234.567) -> In VN, this is often thousands
+								else if (cleaned.includes('.')) {
+									// If it looks like 123.456 (dot as thousands separator)
+									// We assume it's thousands if it has exactly 3 digits after the last dot 
+									// AND the field is usually an integer (like stock/price)
+									const parts = cleaned.split('.');
+									const lastPart = parts[parts.length - 1];
+									
+									if (parts.length > 2 || (parts.length === 2 && lastPart.length === 3)) {
+										// High probability of being thousands separator in VN
+										// Only strip if it doesn't look like a clear decimal (e.g. 0.9)
+										if (cleaned.startsWith('0.')) {
+											// Keep as is, it's 0.9
+										} else {
+											cleaned = cleaned.replace(/\./g, '');
+										}
+									}
+								}
+								val = Number(cleaned);
 							}
-							// 2. If it has ONLY comma (1234,56) -> use comma as dot
-							else if (cleaned.includes(',')) {
-								cleaned = cleaned.replace(',', '.');
-							}
-							// 3. If it has ONLY dot (133.215) -> In VN, this is usually thousands
-							// We can identify this if the dot is followed by 3 digits at the end
-							else if (cleaned.includes('.') && /^\d+\.\d{3}$/.test(cleaned)) {
-								cleaned = cleaned.replace(/\./g, '');
-							}
-							// If it looks like 123.456 (dot as thousands separator in VN) 
-							// and it's for price fields, we might need caution.
-							// But standard Number("123.456") treats dot as decimal.
-							// For prices in VN, usually it's integer.
-
-							val = Number(cleaned);
 						}
 						val = (val !== undefined && val !== null && !isNaN(Number(val))) ? Number(val) : (field.default || 0);
 					} else {
@@ -242,12 +266,17 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 					}
 				}
 			});
+			if (type === 'products' && (!obj.sku || String(obj.sku).trim() === '')) {
+				missingSkus++;
+			}
+
 			return obj;
 		}).filter(row => row.name && String(row.name).length > 2);
 
 		setColumns(config.fields.map(f => f.label));
 		setData(mappedData);
 		setHasExpiredDates(foundExpired);
+		setMissingSkuCount(missingSkus);
 		setStep(2);
 	};
 
@@ -265,7 +294,7 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 				const wb = XLSX.read(bstr, { type: 'binary' });
 				const wsname = wb.SheetNames[0];
 				const ws = wb.Sheets[wsname];
-				const jsonData = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
+				const jsonData = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false }) as any[][];
 				processRawData(jsonData);
 			} catch (err: any) {
 				setError(err.message || "Lỗi khi đọc file Excel.");
@@ -343,7 +372,7 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 			const wb = XLSX.read(csvText, { type: 'string' });
 			const wsname = wb.SheetNames[0];
 			const ws = wb.Sheets[wsname];
-			const jsonData = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
+			const jsonData = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false }) as any[][];
 			processRawData(jsonData);
 
 		} catch (err: any) {
@@ -354,6 +383,70 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 			}
 		} finally {
 			setLoading(false);
+		}
+	};
+
+	const handleAutoGenerateSkus = async () => {
+		if (missingSkuCount === 0 || type !== 'products') return;
+		setGeneratingSkus(true);
+		
+		try {
+			const prefix = 'DV';
+			const newData = [...data];
+			const assignedInThisBatch = new Set<string>();
+			
+			// Get all SKUs already present in the current import data to avoid internal collisions
+			newData.forEach(item => {
+				if (item.sku) assignedInThisBatch.add(String(item.sku).trim());
+			});
+			
+			const generateUniqueSku = async () => {
+				// Try 6 digits first (standard), then expand to 10 if collisions found
+				const lengths = [6, 8, 10];
+				
+				for (const len of lengths) {
+					const min = Math.pow(10, len - 1);
+					const max = Math.pow(10, len) - 1;
+					
+					// Multiple random attempts per length
+					for (let attempt = 0; attempt < 5; attempt++) {
+						const randomNum = Math.floor(min + Math.random() * (max - min + 1)).toString();
+						const candidate = `${prefix}-${randomNum}`;
+						
+						// 1. Check if already assigned in this import batch
+						if (assignedInThisBatch.has(candidate)) continue;
+						
+						// 2. GLOBAL UNIQUENESS CHECK: Query entire Firestore products collection
+						// This ensures the SKU is unique across ALL owners in the system
+						const q = query(collection(db, 'products'), where('sku', '==', candidate));
+						const snap = await getDocs(q);
+						
+						if (snap.empty) {
+							assignedInThisBatch.add(candidate);
+							return candidate;
+						}
+					}
+				}
+				// Fallback to high-entropy timestamp based SKU if somehow everything else fails
+				return `${prefix}-SYS-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+			};
+
+			let poolIdx = 0;
+			for (const item of newData) {
+				if (!item.sku || String(item.sku).trim() === '') {
+					item.sku = await generateUniqueSku();
+					poolIdx++;
+				}
+			}
+
+			setData(newData);
+			setMissingSkuCount(0);
+			showToast(`Đã tự động tạo ${poolIdx} mã SKU duy nhất trên toàn hệ thống`, "success");
+		} catch (err) {
+			console.error("SKU Gen Error:", err);
+			showToast("Lỗi khi tạo mã SKU", "error");
+		} finally {
+			setGeneratingSkus(false);
 		}
 	};
 
@@ -660,6 +753,34 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 								</button>
 							</div>
 
+							{missingSkuCount > 0 && type === 'products' && (
+								<div className="p-5 bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-900/30 rounded-3xl flex flex-col md:flex-row items-center gap-4 text-indigo-700 dark:text-indigo-400">
+									<div className="size-12 bg-indigo-500 text-white rounded-2xl flex items-center justify-center shrink-0 shadow-lg shadow-indigo-500/20">
+										<Globe size={28} />
+									</div>
+									<div className="flex-1 text-center md:text-left">
+										<p className="text-sm font-black uppercase tracking-tight">Thiếu mã SKU ({missingSkuCount} sản phẩm)</p>
+										<p className="text-xs font-bold opacity-80 mt-0.5">Một số sản phẩm chưa có mã SKU. Bạn có muốn hệ thống tự động tạo mã SKU mới không?</p>
+									</div>
+									<div className="flex gap-2 shrink-0">
+										<button 
+											onClick={handleAutoGenerateSkus}
+											disabled={generatingSkus}
+											className="px-5 py-2.5 bg-[#1A237E] text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-900 transition-all flex items-center gap-2"
+										>
+											{generatingSkus ? <div className="size-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <CheckCircle2 size={14} />}
+											Có, Tạo Mới SKU
+										</button>
+										<button 
+											onClick={() => setMissingSkuCount(0)}
+											className="px-5 py-2.5 bg-white dark:bg-slate-800 text-slate-400 border border-slate-200 dark:border-slate-700 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-50 transition-all"
+										>
+											Để sau
+										</button>
+									</div>
+								</div>
+							)}
+
 							{hasExpiredDates && (
 								<div className="p-4 bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-900/30 rounded-2xl flex items-center gap-4 text-orange-700 dark:text-orange-400">
 									<div className="size-10 bg-orange-500 text-white rounded-full flex items-center justify-center shrink-0 shadow-lg shadow-orange-500/20">
@@ -689,7 +810,12 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 												<tr key={rowIdx} className="hover:bg-indigo-50/30 dark:hover:bg-indigo-500/5 transition-colors">
 													{config.fields.map((field, colIdx) => (
 														<td key={colIdx} className="py-3 px-6 text-xs font-bold text-slate-600 dark:text-slate-300 whitespace-nowrap">
-															{row[field.key]?.toLocaleString() || '---'}
+															{typeof row[field.key] === 'number' 
+																? Number(row[field.key]).toLocaleString('vi-VN', { 
+																	minimumFractionDigits: 0,
+																	maximumFractionDigits: 3 
+																}) 
+																: (row[field.key] || '---')}
 														</td>
 													))}
 												</tr>

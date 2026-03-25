@@ -82,6 +82,11 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 ## 4. Các mục đã hoàn thành & Cần làm (To-do)
 
 ### ✅ Đã hoàn thành (Done)
+- [x] **Nâng cấp Hệ thống Nhập liệu Hàng loạt & SKU Toàn cầu (Bulk Import & Global SKU Upgrade - Mar 25)**:
+    - **Xử lý Số liệu Tiếng Việt (Vietnamese Number Parsing)**: Cập nhật cơ chế phân tích dữ liệu để hỗ trợ dấu phẩy (`,`) làm dấu thập phân (ví dụ: `0,9` kg). Hệ thống tự động chuyển đổi chính xác về định dạng số chuẩn, ngăn chặn lỗi parse thành số nguyên sai lệch.
+    - **Tự động Tạo SKU Thiếu (Auto-generate Missing SKUs)**: Tích hợp tính năng phát hiện sản phẩm thiếu mã SKU tại bước Xem trước. Cho phép người dùng tạo hàng loạt mã SKU chỉ với một cú click.
+    - **Duy nhất Toàn hệ thống (Global Unique Constraint)**: Mã SKU được kiểm tra đối chiếu với **Toàn bộ cơ sở dữ liệu Firestore** và các item trong cùng lô nhập, đảm bảo tính duy nhất tuyệt đối trên toàn bộ nền tảng Dunvex.
+    - **Đồng bộ Quick Order**: Cập nhật cơ chế xử lý số liệu tương tự vào module Lên đơn nhanh để tính toán trọng lượng sản phẩm chính xác 100%.
 - [x] **Tối ưu Hóa Tạo mã SKU Thông minh (Dynamic SKU Generation - Mar 24)**:
     - **Cơ chế Tăng dần (Incremental Scaling)**: Thay đổi logic tạo SKU từ mã 6 số ngẫu nhiên cố định sang hệ thống tự động điều chỉnh độ dài. Bắt đầu từ **3 số** (ví dụ: `DV-101`), khi hết kho số 3 chữ số sẽ tự động chuyển sang **4 số**, **5 số** và tối đa **6 số**.
     - **Đề xuất Không trùng (Global Unique Proposal)**: Hệ thống tự động kiểm tra toàn bộ danh mục sản phẩm của **tất cả khách hàng** trên toàn hệ thống để đề xuất mã SKU mới. Điều này đảm bảo tính duy nhất tuyệt đối, ngăn chặn việc trùng mã giữa các doanh nghiệp khác nhau, giúp việc đồng bộ tồn kho và báo cáo tập trung luôn chính xác.

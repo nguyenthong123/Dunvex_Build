@@ -178,7 +178,13 @@ const QuickOrder = () => {
 			const updatedItems = lineItems.map(item => {
 				if (!item.name && !item.productId) return item;
 				
-				const currentPkg = parseFloat(item.packaging) || 0;
+				const parseVNNumber = (val: any) => {
+					if (typeof val === 'number') return val;
+					if (!val) return 0;
+					const cleaned = String(val).replace(/[^0-9,.-]/g, '').replace(',', '.');
+					return parseFloat(cleaned) || 0;
+				};
+				const currentPkg = parseVNNumber(item.packaging);
 				
 				// 1. Local Weighted Matching (Logic AI Cục bộ)
 				const candidates = products.filter(p => 
@@ -191,7 +197,7 @@ const QuickOrder = () => {
 				const bestMatch = candidates.find(p => normalizeSmart(p.category) === normalizeSmart(item.category)) || candidates[0];
 				
 				if (bestMatch && bestMatch.packaging) {
-					const masterPkg = parseFloat(bestMatch.packaging) || 0;
+					const masterPkg = parseVNNumber(bestMatch.packaging);
 					if (masterPkg > 0 && Math.abs(masterPkg - currentPkg) > 0.001) {
 						hasLocalChange = true;
 						// ⚠️ FIX: Only update packaging, NEVER overwrite buyPrice (historical cost must be preserved)
@@ -211,8 +217,14 @@ const QuickOrder = () => {
 
 			// 2. Deep Intelligence Audit (AI DeepSeek rà soát nâng cao cho các trường hợp nghi ngờ)
 			const suspiciousItems = updatedItems.filter(it => {
-				const pkg = parseFloat(it.packaging) || 0;
-				const qty = parseFloat(it.qty) || 0;
+				const parseVNNumber = (val: any) => {
+					if (typeof val === 'number') return val;
+					if (!val) return 0;
+					const cleaned = String(val).replace(/[^0-9,.-]/g, '').replace(',', '.');
+					return parseFloat(cleaned) || 0;
+				};
+				const pkg = parseVNNumber(it.packaging);
+				const qty = parseFloat(String(it.qty)) || 0;
 				const name = (it.name || '').toLowerCase();
 				// Dấu hiệu nghi ngờ: Tấm Duraflex mà đóng gói < 10, hoặc số kiện quá lớn (> 50) cho 1 mặt hàng
 				const result = (qty / (pkg || 1));
@@ -406,7 +418,14 @@ const QuickOrder = () => {
 
 	const totalWeight = lineItems.reduce((sum, item) => {
 		const unit = item.unit?.toLowerCase();
-		const density = parseFloat(item.density) || 0;
+		// Robust parsing for VN locale numbers (handles both 0.9 and 0,9)
+		const parseVNNumber = (val: any) => {
+			if (typeof val === 'number') return val;
+			if (!val) return 0;
+			const cleaned = String(val).replace(/[^0-9,.-]/g, '').replace(',', '.');
+			return parseFloat(cleaned) || 0;
+		};
+		const density = parseVNNumber(item.density);
 		const qty = Number(item.qty) || 0;
 		if (unit === 'kg') return sum + qty;
 		return sum + (qty * density);

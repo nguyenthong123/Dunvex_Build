@@ -82,6 +82,11 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 ## 4. Các mục đã hoàn thành & Cần làm (To-do)
 
 ### ✅ Đã hoàn thành (Done)
+- [x] **Di cư AI sang Groq & Sửa lỗi Module Tài chính (AI Migration & Finance Fix - Mar 28)**:
+    - **Di cư AI sang Groq API**: Thay thế toàn bộ DeepSeek/Gemini bằng Groq API (`llama-3.3-70b-versatile`) để tăng tốc độ phản hồi và độ chính xác cho các tính năng: Tra cứu lãi suất, Phân tích nợ, Kiểm tra đóng gói, Phân tích tồn kho và Thông báo hệ thống.
+    - **Sửa lỗi Nút Xóa Sổ Quỹ**: Thay thế `window.confirm` lỗi thời bằng **Custom Delete Modal** tùy chỉnh. Giải quyết triệt để lỗi event bubbling khiến việc nhấn nút xóa bị đứng hoặc mở popup chi tiết ghi chú.
+    - **Cải tiến Nhập Lãi Suất**: Thêm cơ chế ghi nhớ trạng thái nhập tay (`interestRateManual`). Hệ thống AI sẽ không tự động ghi đè lãi suất khi người dùng đang tự nhập, đảm bảo trải nghiệm người dùng linh hoạt.
+    - **Bảo mật**: Chuyển API Key vào tệp `.env` và cấu hình Git để bảo vệ thông tin nhạy cảm.
 - [x] **Nâng cấp Hệ thống Nhập liệu Hàng loạt & SKU Toàn cầu (Bulk Import & Global SKU Upgrade - Mar 25)**:
     - **Xử lý Số liệu Tiếng Việt (Vietnamese Number Parsing)**: Cập nhật cơ chế phân tích dữ liệu để hỗ trợ dấu phẩy (`,`) làm dấu thập phân (ví dụ: `0,9` kg). Hệ thống tự động chuyển đổi chính xác về định dạng số chuẩn, ngăn chặn lỗi parse thành số nguyên sai lệch.
     - **Tự động Tạo SKU Thiếu (Auto-generate Missing SKUs)**: Tích hợp tính năng phát hiện sản phẩm thiếu mã SKU tại bước Xem trước. Cho phép người dùng tạo hàng loạt mã SKU chỉ với một cú click.

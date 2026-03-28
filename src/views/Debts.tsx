@@ -462,7 +462,7 @@ const Debts: React.FC = () => {
 
 
 	const handleAIDebtAnalysis = async () => {
-		const apiKey = import.meta.env.VITE_DEEPSEEK_API_KEY;
+		const apiKey = import.meta.env.VITE_GROQ_API_KEY;
 		if (!apiKey) {
 			showToast("Chưa cấu hình Nexus AI Key.", "error");
 			return;
@@ -488,14 +488,14 @@ const Debts: React.FC = () => {
 				health: d.debtHealth
 			}));
 
-			const response = await fetch("https://api.deepseek.com/chat/completions", {
+			const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
 					"Authorization": `Bearer ${apiKey}`
 				},
 				body: JSON.stringify({
-					model: "deepseek-chat",
+					model: "llama-3.3-70b-versatile",
 					messages: [
 						{
 							role: "system",

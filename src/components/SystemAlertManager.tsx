@@ -273,18 +273,18 @@ const SystemAlertManager: React.FC = () => {
 		};
 
 		const generateAiNotification = async (type: string, details: any) => {
-			const apiKey = import.meta.env.VITE_DEEPSEEK_API_KEY;
+			const apiKey = import.meta.env.VITE_GROQ_API_KEY;
 			if (!apiKey) return null;
 
 			try {
-				const response = await fetch("https://api.deepseek.com/chat/completions", {
+				const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
 					method: "POST",
 					headers: {
 						"Content-Type": "application/json",
 						"Authorization": `Bearer ${apiKey}`
 					},
 					body: JSON.stringify({
-						model: "deepseek-chat",
+						model: "llama-3.3-70b-versatile",
 						messages: [
 							{
 								role: "system",

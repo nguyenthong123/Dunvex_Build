@@ -69,7 +69,9 @@ const Finance = () => {
 		parentId: ''
 	});
 	const [isFetchingRate, setIsFetchingRate] = useState(false);
+	const interestRateManual = useRef(false);
 	const [selectedNote, setSelectedNote] = useState<string | null>(null);
+	const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; log: any } | null>(null);
 
 	// Sync tab with URL
 	useEffect(() => {
@@ -348,21 +350,21 @@ const Finance = () => {
 			return;
 		}
 
-		if (!import.meta.env.VITE_DEEPSEEK_API_KEY) {
-			showToast("Chưa cấu hình VITE_DEEPSEEK_API_KEY", "error");
+		if (!import.meta.env.VITE_GROQ_API_KEY) {
+			showToast("Chưa cấu hình VITE_GROQ_API_KEY", "error");
 			return;
 		}
 
 		setIsFetchingRate(true);
 		try {
-			const response = await fetch("https://api.deepseek.com/chat/completions", {
+			const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
-					"Authorization": `Bearer ${import.meta.env.VITE_DEEPSEEK_API_KEY}`
+					"Authorization": `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`
 				},
 				body: JSON.stringify({
-					model: "deepseek-chat",
+					model: "llama-3.3-70b-versatile",
 					messages: [
 						{
 							role: "system",
@@ -383,18 +385,20 @@ const Finance = () => {
 
 			if (!isNaN(rate)) {
 				setLogData(prev => ({ ...prev, interestRate: rate }));
-				showToast(`DeepSeek: Lãi suất ${logData.bankName} là ${rate}%`, "success");
+				interestRateManual.current = false;
+				showToast(`Groq AI: Lãi suất ${logData.bankName} là ${rate}%`, "success");
 			}
 		} catch (error: any) {
-			console.error("DeepSeek Error:", error);
+			console.error("Groq AI Error:", error);
+			showToast("Không thể tra cứu lãi suất. Vui lòng nhập thủ công.", "error");
 		} finally {
 			setIsFetchingRate(false);
 		}
 	};
 
-	// Auto-fetch interest rate when bank and term are selected
+	// Auto-fetch interest rate when bank and term are selected (only if user hasn't manually entered a rate)
 	useEffect(() => {
-		if (logData.type === 'thu' && logData.category === 'Vay ngân hàng' && logData.bankName && logData.loanTerm && !isFetchingRate && (logData.interestRate === 0)) {
+		if (logData.type === 'thu' && logData.category === 'Vay ngân hàng' && logData.bankName && logData.loanTerm && !isFetchingRate && logData.interestRate === 0 && !interestRateManual.current) {
 			handleAIInterestRate();
 		}
 	}, [logData.bankName, logData.loanTerm]);
@@ -520,14 +524,14 @@ const Finance = () => {
 
 		setIsFetchingRate(true);
 		try {
-			const response = await fetch("https://api.deepseek.com/chat/completions", {
+			const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
-					"Authorization": `Bearer ${import.meta.env.VITE_DEEPSEEK_API_KEY || ""}`
+					"Authorization": `Bearer ${import.meta.env.VITE_GROQ_API_KEY || ""}`
 				},
 				body: JSON.stringify({
-					model: "deepseek-chat",
+					model: "llama-3.3-70b-versatile",
 					messages: [
 						{
 							role: "system",
@@ -564,7 +568,7 @@ const Finance = () => {
 
 			const analysis = data.choices[0].message.content.trim();
 			setLogData(prev => ({ ...prev, note: analysis }));
-			showToast("DeepSeek đã hoàn tất phân tích khoản vay", "success");
+			showToast("AI đã hoàn tất phân tích khoản vay", "success");
 		} catch (error: any) {
 			console.error("Project AI Analysis Error:", error);
 			showToast(`Không thể tạo phân tích AI: ${error.message || 'Lỗi kết nối'}`, "error");
@@ -652,14 +656,14 @@ const Finance = () => {
 
       Yêu cầu: Đưa ra nhận xét ngắn gọn (3-4 dòng) về mức độ rủi ro dòng tiền và gợi ý hành động thu hồi nợ hiệu quả nhất cho từng nhóm.`;
 
-			const response = await fetch("https://api.deepseek.com/chat/completions", {
+			const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
-					"Authorization": `Bearer ${import.meta.env.VITE_DEEPSEEK_API_KEY || ""}`
+					"Authorization": `Bearer ${import.meta.env.VITE_GROQ_API_KEY || ""}`
 				},
 				body: JSON.stringify({
-					model: "deepseek-chat",
+					model: "llama-3.3-70b-versatile",
 					messages: [
 						{
 							role: "system",
@@ -695,14 +699,14 @@ const Finance = () => {
 				return `- Danh mục: ${item.category || 'N/A'} | SP: ${item.name} | SL: ${item.qty} | Giá bán: ${formatPrice(item.price)}/sp | Giá gốc tra cứu kết hợp AI: ${formatPrice(activeBuyPrice)}/sp`;
 			}).join('\n');
 
-			const response = await fetch("https://api.deepseek.com/chat/completions", {
+			const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
-					"Authorization": `Bearer ${import.meta.env.VITE_DEEPSEEK_API_KEY || ""}`
+					"Authorization": `Bearer ${import.meta.env.VITE_GROQ_API_KEY || ""}`
 				},
 				body: JSON.stringify({
-					model: "deepseek-chat",
+					model: "llama-3.3-70b-versatile",
 					messages: [
 						{
 							role: "system",
@@ -810,7 +814,13 @@ Yêu cầu tính toán chi tiết và kết luận:`
 	// --- CALCULATIONS ---
 
 	const handleDeleteLog = async (id: string, log: any) => {
-		if (!window.confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn ghi chép này: "${log.note || 'Không có tiêu đề'}"?`)) return;
+		setDeleteConfirm({ id, log });
+	};
+
+	const confirmDelete = async () => {
+		if (!deleteConfirm) return;
+		const { id, log } = deleteConfirm;
+		setDeleteConfirm(null);
 
 		try {
 			await deleteDoc(doc(db, 'cash_book', id));
@@ -1055,7 +1065,7 @@ Yêu cầu tính toán chi tiết và kết luận:`
 												</div>
 												<button
 													type="button"
-													onClick={() => handleDeleteLog(log.id, log)}
+													onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleDeleteLog(log.id, log); }}
 													className="flex items-center gap-1 ps-3 pe-2 py-1.5 bg-rose-50 text-rose-600 rounded-xl text-[10px] font-black uppercase active:scale-95 transition-transform"
 												>
 													Xoá <Trash2 size={12} />
@@ -1134,7 +1144,7 @@ Yêu cầu tính toán chi tiết và kết luận:`
 													<td className="px-6 py-4 text-right">
 														<button
 															type="button"
-															onClick={() => handleDeleteLog(log.id, log)}
+															onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleDeleteLog(log.id, log); }}
 															className="size-9 flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-xl transition-all active:scale-95 cursor-pointer relative z-10"
 															title="Xóa ghi chép"
 														>
@@ -1602,7 +1612,11 @@ Yêu cầu tính toán chi tiết và kết luận:`
 														className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 font-black text-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
 														placeholder="0.0"
 														value={logData.interestRate === 0 ? '' : logData.interestRate}
-														onChange={(e) => setLogData({ ...logData, interestRate: parseFloat(e.target.value) || 0 })}
+														onChange={(e) => {
+															const val = parseFloat(e.target.value) || 0;
+															interestRateManual.current = val > 0;
+															setLogData({ ...logData, interestRate: val });
+														}}
 													/>
 												</div>
 												{logData.category === 'Vay ngân hàng' && (
@@ -1735,6 +1749,42 @@ Yêu cầu tính toán chi tiết và kết luận:`
 						</div>
 					</div>
 					<div className="absolute inset-0 -z-10" onClick={() => setSelectedNote(null)} />
+				</div>
+			)}
+
+			{/* Delete Confirmation Modal */}
+			{deleteConfirm && (
+				<div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+					<div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-in">
+						<div className="p-6 text-center">
+							<div className="size-16 mx-auto mb-4 bg-rose-100 dark:bg-rose-900/30 rounded-full flex items-center justify-center">
+								<Trash2 size={28} className="text-rose-500" />
+							</div>
+							<h3 className="text-lg font-black text-slate-800 dark:text-slate-100 mb-2">Xác nhận xóa</h3>
+							<p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+								Bạn có chắc chắn muốn xóa vĩnh viễn ghi chép:<br />
+								<span className="font-bold text-slate-700 dark:text-slate-200">"{deleteConfirm.log.note || 'Không có tiêu đề'}"</span>
+							</p>
+							<p className="text-xs text-rose-400 font-bold mt-2">⚠ Hành động này không thể hoàn tác</p>
+						</div>
+						<div className="flex gap-3 p-6 pt-0">
+							<button
+								type="button"
+								onClick={() => setDeleteConfirm(null)}
+								className="flex-1 py-3 px-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-slate-700 transition-all active:scale-95"
+							>
+								Hủy
+							</button>
+							<button
+								type="button"
+								onClick={confirmDelete}
+								className="flex-1 py-3 px-4 bg-rose-500 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-rose-600 transition-all active:scale-95 shadow-lg shadow-rose-500/25"
+							>
+								Xóa vĩnh viễn
+							</button>
+						</div>
+					</div>
+					<div className="absolute inset-0 -z-10" onClick={() => setDeleteConfirm(null)} />
 				</div>
 			)}
 		</div >

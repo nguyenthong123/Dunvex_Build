@@ -215,7 +215,7 @@ const QuickOrder = () => {
 				return;
 			}
 
-			// 2. Deep Intelligence Audit (AI DeepSeek rà soát nâng cao cho các trường hợp nghi ngờ)
+			// 2. Deep Intelligence Audit (AI Groq rà soát nâng cao cho các trường hợp nghi ngờ)
 			const suspiciousItems = updatedItems.filter(it => {
 				const parseVNNumber = (val: any) => {
 					if (typeof val === 'number') return val;
@@ -232,15 +232,15 @@ const QuickOrder = () => {
 			});
 
 			if (suspiciousItems.length > 0 && !isCancelled) {
-				const apiKey = import.meta.env.VITE_DEEPSEEK_API_KEY;
+				const apiKey = import.meta.env.VITE_GROQ_API_KEY;
 				if (!apiKey) return;
 
 				try {
-					const response = await fetch("https://api.deepseek.com/chat/completions", {
+					const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
 						method: "POST",
 						headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
 						body: JSON.stringify({
-							model: "deepseek-chat",
+							model: "llama-3.3-70b-versatile",
 							messages: [
 								{ role: "system", content: "Bạn là chuyên gia rà soát dữ liệu kho Dunvex. Hãy phân tích các sản phẩm trong đơn và trả về số lượng Đóng gói (packaging) chính xác nhất. Ví dụ: 'Tấm DURAFlex 15mm' thường là 40 tấm/kiện. Nếu data đang là 4, hãy sửa thành 40. Trả về JSON: { items: [{ name: '...', correctPackaging: 40 }] }" },
 								{ role: "user", content: `Rà soát các item nghi ngờ sau: ${JSON.stringify(suspiciousItems.map(i => ({ name: i.name, currentPkg: i.packaging, qty: i.qty })))}` }

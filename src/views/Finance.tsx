@@ -55,6 +55,7 @@ const Finance = () => {
 
 	// Cashbook Form
 	const [showLogForm, setShowLogForm] = useState(searchParams.get('new') === 'true');
+	const [editingId, setEditingId] = useState<string | null>(null);
 	const [logData, setLogData] = useState({
 		type: 'chi' as 'thu' | 'chi',
 		amount: 0,
@@ -739,25 +740,43 @@ Yêu cầu tính toán chi tiết và kết luận:`
 		}
 	};
 
-	const handleAddLog = async (e: React.FormEvent) => {
+	const handleSaveLog = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (logData.amount <= 0) return;
 
 		try {
-			const docRef = await addDoc(collection(db, 'cash_book'), {
-				...logData,
-				ownerId: owner.ownerId,
-				createdBy: auth.currentUser?.uid,
-				createdAt: serverTimestamp()
-			});
-			console.log("Cash log added successfully, ID:", docRef.id);
-			setShowLogForm(false);
-			
-			// Kích hoạt bot ngay lập tức với ID thật vừa tạo
-			if (logData.type === 'thu' && (logData.category === 'Vay ngân hàng' || logData.category === 'Vay khác')) {
-				handleAutoGenerateBankTransactions(false, { ...logData, id: docRef.id });
+			if (editingId) {
+				await updateDoc(doc(db, 'cash_book', editingId), {
+					...logData,
+					updatedAt: serverTimestamp()
+				});
+				console.log("Cash log updated successfully, ID:", editingId);
+				setShowLogForm(false);
+				
+				// Kích hoạt bot ngay lập tức với ID được chỉnh sửa
+				if (logData.type === 'thu' && (logData.category === 'Vay ngân hàng' || logData.category === 'Vay khác')) {
+					handleAutoGenerateBankTransactions(false);
+				}
+				showToast("Cập nhật ghi chú thành công", "success");
+			} else {
+				const docRef = await addDoc(collection(db, 'cash_book'), {
+					...logData,
+					ownerId: owner.ownerId,
+					createdBy: auth.currentUser?.uid,
+					createdByEmail: auth.currentUser?.email || '',
+					createdAt: serverTimestamp()
+				});
+				console.log("Cash log added successfully, ID:", docRef.id);
+				setShowLogForm(false);
+				
+				// Kích hoạt bot ngay lập tức với ID thật vừa tạo
+				if (logData.type === 'thu' && (logData.category === 'Vay ngân hàng' || logData.category === 'Vay khác')) {
+					handleAutoGenerateBankTransactions(false, { ...logData, id: docRef.id });
+				}
+				showToast("Ghi sổ quỹ thành công", "success");
 			}
 
+			setEditingId(null);
 			setLogData({
 				type: 'chi',
 				amount: 0,
@@ -771,11 +790,28 @@ Yêu cầu tính toán chi tiết và kết luận:`
 				email: '',
 				parentId: ''
 			});
-			showToast("Ghi sổ quỹ thành công", "success");
 		} catch (error) {
-			console.error("Error adding cash log:", error);
-			showToast("Lỗi khi ghi sổ quỹ", "error");
+			console.error("Error saving cash log:", error);
+			showToast("Lỗi khi lưu sổ quỹ", "error");
 		}
+	};
+
+	const handleEditLog = (log: any) => {
+		setEditingId(log.id);
+		setLogData({
+			type: log.type || 'chi',
+			amount: log.amount || 0,
+			category: log.category || 'Vận hành',
+			note: log.note || '',
+			date: log.date || new Date().toISOString().split('T')[0],
+			interestRate: log.interestRate || 0,
+			bankName: log.bankName || '',
+			loanTerm: log.loanTerm || '',
+			reminderEnabled: log.reminderEnabled || false,
+			email: log.email || '',
+			parentId: log.parentId || ''
+		});
+		setShowLogForm(true);
 	};
 
 	const formatPrice = (price: number) => {
@@ -1063,13 +1099,22 @@ Yêu cầu tính toán chi tiết và kết luận:`
 														<span className="text-[8px] text-slate-300 font-bold uppercase opacity-30">Chi phí lẻ</span>
 													)}
 												</div>
-												<button
-													type="button"
-													onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleDeleteLog(log.id, log); }}
-													className="flex items-center gap-1 ps-3 pe-2 py-1.5 bg-rose-50 text-rose-600 rounded-xl text-[10px] font-black uppercase active:scale-95 transition-transform"
-												>
-													Xoá <Trash2 size={12} />
-												</button>
+												<div className="flex items-center gap-1">
+													<button
+														type="button"
+														onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleEditLog(log); }}
+														className="flex items-center gap-1 ps-3 pe-2 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase active:scale-95 transition-transform"
+													>
+														Sửa
+													</button>
+													<button
+														type="button"
+														onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleDeleteLog(log.id, log); }}
+														className="flex items-center gap-1 ps-3 pe-2 py-1.5 bg-rose-50 text-rose-600 rounded-xl text-[10px] font-black uppercase active:scale-95 transition-transform"
+													>
+														Xoá <Trash2 size={12} />
+													</button>
+												</div>
 											</div>
 										</div>
 									))
@@ -1142,14 +1187,24 @@ Yêu cầu tính toán chi tiết và kết luận:`
 														)}
 													</td>
 													<td className="px-6 py-4 text-right">
-														<button
-															type="button"
-															onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleDeleteLog(log.id, log); }}
-															className="size-9 flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-xl transition-all active:scale-95 cursor-pointer relative z-10"
-															title="Xóa ghi chép"
-														>
-															<Trash2 size={16} />
-														</button>
+														<div className="flex items-center justify-end gap-1">
+															<button
+																type="button"
+																onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleEditLog(log); }}
+																className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl text-[10px] font-black uppercase active:scale-95 transition-transform"
+																title="Chỉnh sửa ghi chép"
+															>
+																Sửa
+															</button>
+															<button
+																type="button"
+																onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleDeleteLog(log.id, log); }}
+																className="size-9 flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-xl transition-all active:scale-95 cursor-pointer relative z-10"
+																title="Xóa ghi chép"
+															>
+																<Trash2 size={16} />
+															</button>
+														</div>
 													</td>
 												</tr>
 											))
@@ -1487,11 +1542,12 @@ Yêu cầu tính toán chi tiết và kết luận:`
 							{/* HEADER CỐ ĐỊNH */}
 							<div className="px-8 py-5 bg-indigo-600 text-white flex items-center justify-between shrink-0">
 								<div className="flex flex-col">
-									<h3 className="text-lg font-black uppercase tracking-tight leading-none">Ghi chú Thu / Chi</h3>
+									<h3 className="text-lg font-black uppercase tracking-tight leading-none">{editingId ? 'Chỉnh sửa Ghi chú' : 'Ghi chú Thu / Chi'}</h3>
 									<span className="text-[9px] font-bold text-white/60 uppercase mt-1 tracking-widest">Sổ quỹ nội bộ</span>
 								</div>
 								<button onClick={() => {
 									setShowLogForm(false);
+									setEditingId(null);
 									setSearchParams(prev => {
 										prev.delete('new');
 										return prev;
@@ -1499,7 +1555,7 @@ Yêu cầu tính toán chi tiết và kết luận:`
 								}} className="size-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-all text-2xl font-light">&times;</button>
 							</div>
 
-							<form onSubmit={handleAddLog} className="flex-1 flex flex-col overflow-hidden">
+							<form onSubmit={handleSaveLog} className="flex-1 flex flex-col overflow-hidden">
 								{/* NỘI DUNG CUỘN */}
 								<div className="flex-1 overflow-y-auto no-scrollbar p-6 md:p-8 space-y-5">
 								<div className="flex bg-slate-50 dark:bg-slate-800 p-1 rounded-2xl">

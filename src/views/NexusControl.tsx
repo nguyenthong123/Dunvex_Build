@@ -331,18 +331,21 @@ const NexusControl = () => {
 			// 1. AUTO-PROVISIONING FOR NEW USERS (ADMINS/OWNERS)
 			// A user is an "Admin/Owner" if uid matches ownerId (it's how we filtered them in useEffect)
 			// Staff/Employees are NOT in this list, so they are never processed individually.
-			const isNewOwner = !customer.planId && (!customer.paymentConfirmedAt || (customer.createdAt?.toDate && (Date.now() - customer.createdAt.toDate().getTime()) < 86400000));
+			// Check: user has no planId set in settings AND has not been processed by AI yet
+			const isNewOwner = !customer.planId && !customer.isAiProcessed;
 			
-			if (isNewOwner && !customer.isAiProcessed) {
+			if (isNewOwner) {
 				try {
-					const expireDate = new Date();
-					expireDate.setDate(expireDate.getDate() + 60); // 60 days trial
+					// Use the user's original account creation date as the start point
+					const userCreatedDate = customer.createdAt?.toDate ? customer.createdAt.toDate() : new Date();
+					const expireDate = new Date(userCreatedDate.getTime());
+					expireDate.setDate(expireDate.getDate() + 60); // 60 days trial from account creation
 
 					await setDoc(doc(db, 'settings', customer.uid), {
 						planId: 'free',
 						isPro: false,
 						subscriptionStatus: 'trial',
-						paymentConfirmedAt: serverTimestamp(),
+						paymentConfirmedAt: customer.createdAt || serverTimestamp(),
 						subscriptionExpiresAt: expireDate,
 						isAiProcessed: true // Mark so we don't repeat
 					}, { merge: true });
@@ -481,10 +484,30 @@ const NexusControl = () => {
 
 	const getEffectiveStatus = (c: any) => {
 		const now = new Date();
-		const joinedAt = c.paymentConfirmedAt?.toDate ? c.paymentConfirmedAt.toDate() : (c.paymentConfirmedAt?.seconds ? new Date(c.paymentConfirmedAt.seconds * 1000) : null);
-		const expireAt = c.subscriptionExpiresAt?.toDate ? c.subscriptionExpiresAt.toDate() : (c.subscriptionExpiresAt?.seconds ? new Date(c.subscriptionExpiresAt.seconds * 1000) : null);
+		// Try paymentConfirmedAt first, then fall back to user's createdAt (account creation date)
+		const parseDate = (val: any) => {
+			if (!val) return null;
+			if (val.toDate) return val.toDate();
+			if (val.seconds) return new Date(val.seconds * 1000);
+			if (val instanceof Date) return val;
+			if (typeof val === 'string') return new Date(val);
+			return null;
+		};
+		const joinedAt = parseDate(c.paymentConfirmedAt) || parseDate(c.createdAt);
+		const expireAt = parseDate(c.subscriptionExpiresAt);
 
 		const diffDays = joinedAt ? Math.floor((now.getTime() - joinedAt.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+
+		// Calculate days remaining from expireAt
+		let daysRemaining = 0;
+		if (expireAt) {
+			daysRemaining = Math.max(0, Math.ceil((expireAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+		} else if (joinedAt) {
+			// Legacy fallback: calculate remaining based on plan duration
+			const plan = c.planId || (c.isPro ? 'premium_monthly' : 'free');
+			const totalDays = plan === 'free' ? 60 : plan === 'premium_monthly' ? 30 : 365;
+			daysRemaining = Math.max(0, totalDays - diffDays);
+		}
 
 		let isExpired = false;
 		if (expireAt) {
@@ -499,7 +522,9 @@ const NexusControl = () => {
 
 		return {
 			isExpired,
-			daysUsed: diffDays
+			daysUsed: diffDays,
+			daysRemaining,
+			joinedAt
 		};
 	};
 
@@ -987,8 +1012,8 @@ const NexusControl = () => {
 															{eff.isExpired ? 'ĐÃ HẾT HẠN' : 'ĐANG HIỆU LỰC'}
 														</div>
 														<div className="text-[10px] uppercase font-black tracking-tighter">
-															{c.paymentConfirmedAt?.toDate ? c.paymentConfirmedAt.toDate().toLocaleDateString('vi-VN') : '---'}
-															<span className="ml-1 opacity-50">({eff.daysUsed}d)</span>
+															{eff.joinedAt ? eff.joinedAt.toLocaleDateString('vi-VN') : '---'}
+															<span className="ml-1 opacity-50">({eff.isExpired ? `${eff.daysUsed}D` : `${eff.daysRemaining}D`})</span>
 														</div>
 													</td>
 													<td className="px-3 py-6 text-center">
@@ -1060,8 +1085,9 @@ const NexusControl = () => {
 													</select>
 												</div>
 												<div className="bg-slate-800/40 p-4 rounded-2xl border border-slate-700/50 flex flex-col justify-center">
-													<p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Thời gian đã dùng</p>
-													<p className="text-white font-black text-sm uppercase">{eff.daysUsed} ngày</p>
+													<p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">{eff.isExpired ? 'Đã dùng' : 'Còn lại'}</p>
+													<p className={`font-black text-sm uppercase ${eff.isExpired ? 'text-rose-400' : 'text-white'}`}>{eff.isExpired ? `${eff.daysUsed} ngày` : `${eff.daysRemaining} ngày`}</p>
+													{eff.joinedAt && <p className="text-[8px] text-slate-600 font-medium mt-1">Vào: {eff.joinedAt.toLocaleDateString('vi-VN')}</p>}
 												</div>
 											</div>
 

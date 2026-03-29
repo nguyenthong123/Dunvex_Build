@@ -523,59 +523,28 @@ const Finance = () => {
 			return;
 		}
 
-		setIsFetchingRate(true);
-		try {
-			const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					"Authorization": `Bearer ${import.meta.env.VITE_GROQ_API_KEY || ""}`
-				},
-				body: JSON.stringify({
-					model: "llama-3.3-70b-versatile",
-					messages: [
-						{
-							role: "system",
-							content: "Bạn là chuyên gia tài chính. Hãy trả về bản tóm tắt CỰC KỲ NGẮN GỌN, vắn tắt, thuần văn bản. KHÔNG định dạng markdown, KHÔNG lời chào, KHÔNG giải thích."
-						},
-						{
-							role: "user",
-							content: `Tóm tắt khoản vay (Vắn tắt):
-              - Ngân hàng: ${logData.bankName}
-              - Gốc: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(logData.amount)}
-              - Ngày: ${logData.date}
-              - Lãi: ${logData.interestRate}%/năm
-              - Kỳ hạn: ${logData.loanTerm}
+		// Tính toán trước tất cả số liệu lãi suất (không để AI tự tính vì hay bị sai)
+		const principal = logData.amount; // Số tiền gốc (VND)
+		const annualRate = logData.interestRate; // Lãi suất %/năm
+		const termMonthsStr = logData.loanTerm.match(/\d+/)?.[0];
+		const termMonths = termMonthsStr ? parseInt(termMonthsStr) : 0;
+		
+		const yearlyInterest = principal * (annualRate / 100); // Lãi 1 năm
+		const monthlyInterest = yearlyInterest / 12; // Lãi 1 tháng
+		const dailyInterest = monthlyInterest / 30; // Lãi 1 ngày
+		const totalInterest = monthlyInterest * termMonths; // Tổng lãi theo kỳ hạn
+		const totalDebt = principal + totalInterest; // Tổng nợ (gốc + lãi)
 
-              Mẫu:
-              🏦 Vay [Ngân hàng] gói kinh doanh ngày [Ngày], lãi [Lãi suất]%/năm.
-              🕒 Lãi tháng: [Số tiền lãi] | Lãi ngày: [Lãi tháng / 30]
-              💰 Đáo hạn ([Kỳ hạn]): [Gốc] + [Lãi cuối] = [Số tiền đáo hạn]
-              📈 Tổng nợ (Gốc + Lãi): [Tổng cộng]`
-						}
-					]
-				})
-			});
+		const fmtVND = (v: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Math.round(v));
 
-			if (!response.ok) {
-				const errorData = await response.json().catch(() => ({}));
-				throw new Error(errorData.error?.message || `HTTP error! status: ${response.status}`);
-			}
+		// Tạo ghi chú trực tiếp, không cần AI tính toán
+		const note = `🏦 Vay ${logData.bankName} gói kinh doanh ngày ${logData.date}, lãi ${annualRate}%/năm.
+🕒 Lãi tháng: ${fmtVND(monthlyInterest)} | Lãi ngày: ${fmtVND(dailyInterest)}
+💰 Đáo hạn (${logData.loanTerm}): ${fmtVND(principal)} + ${fmtVND(totalInterest)} = ${fmtVND(totalDebt)}
+📈 Tổng nợ (Gốc + Lãi): ${fmtVND(totalDebt)}`;
 
-			const data = await response.json();
-			if (!data.choices || data.choices.length === 0) {
-				throw new Error("Không nhận được phản hồi từ AI");
-			}
-
-			const analysis = data.choices[0].message.content.trim();
-			setLogData(prev => ({ ...prev, note: analysis }));
-			showToast("AI đã hoàn tất phân tích khoản vay", "success");
-		} catch (error: any) {
-			console.error("Project AI Analysis Error:", error);
-			showToast(`Không thể tạo phân tích AI: ${error.message || 'Lỗi kết nối'}`, "error");
-		} finally {
-			setIsFetchingRate(false);
-		}
+		setLogData(prev => ({ ...prev, note }));
+		showToast("Đã tạo ghi chú khoản vay", "success");
 	};
 
 	const handleToggleReminder = async (id: string, currentStatus: boolean) => {

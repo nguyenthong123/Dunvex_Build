@@ -2,14 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
 	Clock, ChevronRight, CheckCircle2, AlertCircle, Play,
-	ExternalLink, Award, Trophy, Info, Key, User,
-	ArrowLeft, RefreshCcw, Star
+	ExternalLink, Award, Trophy, Info, Key, User, BookOpen,
+	ArrowLeft, RefreshCcw, Star, Calendar, FileText, Download,
+	Share2, Bookmark, BookmarkPlus, MessageCircle, Link
 } from 'lucide-react';
 import { db } from '../services/firebase';
 import { collection, query, where, getDocs, doc, getDoc, limit, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
 
+// Lab Task definitions
 // Lab Task definitions
 const labData: Record<string, any> = {
 	'lab-01': {
@@ -216,6 +218,18 @@ const TrainingLab = () => {
 	const [totalPoints, setTotalPoints] = useState(0);
 	const [labCompleted, setLabCompleted] = useState(false);
 	const [quizOptions, setQuizOptions] = useState<Record<number, string[]>>({});
+	const [scrollProgress, setScrollProgress] = useState(0);
+
+	useEffect(() => {
+		const handleScroll = () => {
+			const totalHeight = document.documentElement.scrollHeight - window.innerHeight;
+			if (totalHeight > 0) {
+				setScrollProgress((window.scrollY / totalHeight) * 100);
+			}
+		};
+		window.addEventListener('scroll', handleScroll);
+		return () => window.removeEventListener('scroll', handleScroll);
+	}, []);
 
 	useEffect(() => {
 		const fetchLab = async () => {
@@ -454,6 +468,223 @@ const TrainingLab = () => {
 					<RefreshCcw className="animate-spin text-indigo-600" size={40} />
 					<p className="text-xs font-black text-slate-400 uppercase tracking-widest">Đang tải giáo án...</p>
 				</div>
+			</div>
+		);
+	}
+
+	if (!lab) return null;
+
+	if (lab.type === 'article') {
+		const readingTime = Math.ceil((lab.content?.length || 0) / 1500); // Rough estimate: 1500 chars per min
+		
+		return (
+			<div className="min-h-screen bg-white dark:bg-slate-950 font-['Manrope'] overflow-y-auto custom-scrollbar selection:bg-indigo-100 selection:text-indigo-900">
+				{/* Reading Progress Bar */}
+				<div className="fixed top-0 left-0 right-0 h-1 z-[100] bg-slate-100 dark:bg-slate-800">
+					<div 
+						className="h-full bg-gradient-to-r from-indigo-500 via-blue-600 to-indigo-500 transition-all duration-300"
+						style={{ width: `${scrollProgress}%` }}
+					></div>
+				</div>
+
+				{/* Article Header */}
+				<header className="sticky top-0 z-50 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-slate-100 dark:border-slate-800/50">
+					<div className="max-w-5xl mx-auto px-6 h-20 flex items-center justify-between">
+						<button onClick={() => navigate('/khoa-dao-tao')} className="group text-slate-500 hover:text-indigo-600 flex items-center gap-3 text-[10px] font-black uppercase tracking-[2px] transition-all">
+							<div className="size-8 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center group-hover:-translate-x-1 transition-transform">
+								<ArrowLeft size={16} />
+							</div>
+							Cẩm nang hướng dẫn
+						</button>
+						<div className="flex items-center gap-6">
+							<div className="hidden sm:flex flex-col items-end">
+								<span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Thời gian đọc dự kiến</span>
+								<span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">{readingTime} PHÚT</span>
+							</div>
+							<div className="h-8 w-px bg-slate-100 dark:bg-slate-800 hidden sm:block"></div>
+							<div className="flex items-center gap-2">
+								<button className="p-3 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-xl transition-all">
+									<Bookmark size={18} />
+								</button>
+								<button className="p-3 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-xl transition-all">
+									<Share2 size={18} />
+								</button>
+							</div>
+						</div>
+					</div>
+				</header>
+
+				<main className="max-w-4xl mx-auto px-6 py-16 md:py-24">
+					<article className="space-y-16">
+						{/* Meta & Title */}
+						<div className="space-y-8 text-center animate-in fade-in slide-in-from-bottom-8 duration-700">
+							<div className="flex items-center justify-center gap-6 text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-[3px]">
+								<span className="flex items-center gap-2 bg-indigo-50 dark:bg-indigo-900/20 px-4 py-1.5 rounded-full">
+									<Calendar size={12} strokeWidth={3} /> {lab.createdAt?.seconds ? new Date(lab.createdAt.seconds * 1000).toLocaleDateString('vi-VN') : 'BÁO CÁO MỚI'}
+								</span>
+								<span className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-4 py-1.5 rounded-full text-slate-500">
+									<User size={12} strokeWidth={3} /> {lab.createdBy || 'DUNVEX ACADEMY'}
+								</span>
+							</div>
+							<h1 className="text-4xl md:text-6xl font-black text-[#1A237E] dark:text-white uppercase leading-[1.1] tracking-tight">
+								{lab.title}
+							</h1>
+							<div className="w-24 h-1 bg-gradient-to-r from-indigo-600 to-blue-500 mx-auto rounded-full"></div>
+							<p className="text-xl md:text-2xl text-slate-500 dark:text-slate-400 font-medium max-w-2xl mx-auto leading-relaxed italic border-l-4 border-indigo-100 dark:border-indigo-900/30 pl-8 text-left">
+								"{lab.description}"
+							</p>
+						</div>
+
+						{/* Smart Content Rendering with Interleaved Images */}
+						<div className="prose prose-blue dark:prose-invert max-w-none animate-in fade-in slide-in-from-bottom-12 duration-1000 delay-300">
+							<div className="text-[#334155] dark:text-gray-300 font-medium text-lg md:text-xl leading-relaxed tracking-normal space-y-8">
+								{(() => {
+									if (!lab.content) return null;
+									
+									let renderedContent: React.ReactNode[] = [];
+									let currentText = lab.content;
+									const images = lab.imageUrls || [];
+
+									// 1. Handle [[IMG_X]] tags first if they exist
+									const hasTags = /\[\[IMG_[123]\]\]/.test(currentText);
+
+									if (hasTags) {
+										// Split by tags and interleave
+										const parts = currentText.split(/(\[\[IMG_[123]\]\])/g);
+											let firstTextPartFound = false;
+											return parts.map((part: string, i: number) => {
+												if (!part || part.trim().length === 0) return null;
+												
+												const match = part.match(/\[\[IMG_([123])\]\]/);
+												if (match) {
+													const idx = parseInt(match[1]) - 1;
+													if (images[idx]) {
+														return (
+															<div key={`img-${i}`} className="my-8 max-w-[700px] mx-auto rounded-2xl overflow-hidden shadow-lg border-2 border-white dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 animate-in zoom-in duration-500">
+																<img 
+																	src={images[idx]} 
+																	className="w-full h-auto object-contain max-h-[400px] block" 
+																	alt={`Article figure ${idx + 1}`} 
+																/>
+															</div>
+														);
+													}
+													return null;
+												}
+
+												const isFirst = !firstTextPartFound;
+												if (!firstTextPartFound) firstTextPartFound = true;
+
+												return (
+													<div 
+														key={`txt-${i}`} 
+														className="whitespace-pre-wrap leading-relaxed text-slate-700 dark:text-gray-300 text-lg"
+													>
+														{part}
+													</div>
+												);
+											});
+									} else {
+										// Fallback: 1st image at top, rest nested in middle
+										const lines = currentText.split('\n');
+										const midPoint = Math.floor(lines.length / 2);
+										
+										renderedContent.push(
+											<div key="top-part" className="space-y-12">
+												{images[0] && (
+													<div className="mb-8 max-w-[700px] mx-auto rounded-2xl overflow-hidden shadow-lg bg-slate-50 dark:bg-slate-900/50 animate-in zoom-in duration-700">
+														<img src={images[0]} className="w-full h-auto object-contain max-h-[400px] block" alt="Feature" />
+													</div>
+												)}
+												<div className="whitespace-pre-wrap leading-relaxed text-slate-700 dark:text-gray-300 text-lg">
+													{lines.slice(0, midPoint).join('\n')}
+												</div>
+												{images.length > 1 && (
+													<div className={`grid ${images.length > 2 ? 'grid-cols-2' : 'grid-cols-1'} gap-6 my-8 animate-in fade-in duration-700`}>
+														{images.slice(1).map((url: string, idx: number) => (
+															<div key={idx} className="rounded-xl overflow-hidden shadow-md border border-white dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
+																<img src={url} className="w-full h-auto object-contain max-h-[300px]" alt={`Detail ${idx + 1}`} />
+															</div>
+														))}
+													</div>
+												)}
+												<div className="whitespace-pre-wrap leading-relaxed text-slate-700 dark:text-gray-300 text-lg">
+													{lines.slice(midPoint).join('\n')}
+												</div>
+											</div>
+										);
+									}
+									return renderedContent;
+								})()}
+							</div>
+						</div>
+
+						{/* Guidance/Instruction Section - if provided separately */}
+						{lab.guidance && (
+							<div className="bg-amber-50 dark:bg-amber-900/10 border-l-4 border-amber-400 p-8 rounded-2xl animate-in fade-in slide-in-from-left-8 duration-1000 delay-500">
+								<div className="flex items-center gap-3 mb-4 text-amber-700 dark:text-amber-400">
+									<Info size={20} />
+									<h4 className="text-lg font-black uppercase tracking-widest">Hướng dẫn thực hành</h4>
+								</div>
+								<div className="text-amber-900/80 dark:text-amber-200/80 font-medium leading-relaxed whitespace-pre-wrap">
+									{lab.guidance}
+								</div>
+							</div>
+						)}
+
+						{/* Document Link / Resources */}
+						{lab.documentLink && (
+							<div className="bg-gradient-to-br from-slate-50 to-white dark:from-slate-900 dark:to-slate-950 rounded-[3.5rem] p-12 border-2 border-slate-100 dark:border-slate-800/50 flex flex-col md:flex-row items-center justify-between gap-10 shadow-2xl relative overflow-hidden group">
+								<div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl group-hover:bg-indigo-500/10 transition-colors"></div>
+								<div className="space-y-3 text-center md:text-left relative z-10">
+									<div className="flex items-center justify-center md:justify-start gap-3 mb-2">
+										<div className="size-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white">
+											<Link size={20} />
+										</div>
+										<h4 className="text-2xl font-black text-[#1A237E] dark:text-white uppercase tracking-tight">Tài nguyên quản trị</h4>
+									</div>
+									<p className="text-sm text-slate-500 font-bold uppercase tracking-[2px]">TRUY CẬP GOOGLE SHEETS ĐỂ THỰC HÀNH NGAY</p>
+								</div>
+								<a
+									href={lab.documentLink}
+									target="_blank"
+									rel="noopener noreferrer"
+									className="w-full md:w-auto px-12 py-6 bg-[#1A237E] text-white rounded-[2.5rem] font-black text-xs uppercase tracking-[0.3em] flex items-center justify-center gap-4 hover:bg-slate-900 hover:scale-105 active:scale-95 transition-all shadow-2xl shadow-indigo-500/20 relative z-10"
+								>
+									Mở Database <ExternalLink size={20} />
+								</a>
+							</div>
+						)}
+
+						{/* Footer / Back to Catalog */}
+						<div className="pt-24 border-t-2 border-slate-50 dark:border-slate-800/50 text-center space-y-10 pb-20">
+							<div className="flex flex-col items-center max-w-lg mx-auto">
+								<div className="size-16 bg-indigo-50 dark:bg-indigo-900/20 rounded-full flex items-center justify-center text-indigo-500 mb-8 border-4 border-white dark:border-slate-900 shadow-xl">
+									<BookOpen size={32} />
+								</div>
+								<h3 className="text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tight mb-4">Bạn đã xem hết nội dung này</h3>
+								<p className="text-slate-400 text-sm font-medium leading-relaxed italic">
+									Hy vọng những hướng dẫn trên sẽ giúp bạn tối ưu hóa quy trình vận hành và quản lý dữ liệu hiệu quả hơn.
+								</p>
+							</div>
+							
+							<div className="flex flex-wrap items-center justify-center gap-6 pt-10">
+								<button
+									onClick={() => navigate('/khoa-dao-tao')}
+									className="px-12 py-5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full font-black text-[10px] uppercase tracking-[0.3em] hover:bg-slate-200 dark:hover:bg-slate-700 transition-all flex items-center gap-3 border-b-4 border-slate-300 dark:border-slate-900"
+								>
+									<ArrowLeft size={18} /> QUAY LẠI CẨM NANG
+								</button>
+								<button
+									onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+									className="px-12 py-5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-full font-black text-[10px] uppercase tracking-[0.3em] hover:bg-indigo-100 transition-all flex items-center gap-3 border-b-4 border-indigo-200 dark:border-indigo-900/40"
+								>
+									LÊN ĐẦU TRANG <ChevronRight size={18} className="-rotate-90" />
+								</button>
+							</div>
+						</div>
+					</article>
+				</main>
 			</div>
 		);
 	}

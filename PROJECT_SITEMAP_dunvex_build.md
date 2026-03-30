@@ -45,13 +45,13 @@ Dưới đây là sơ đồ tóm tắt các trang và luồng dữ liệu chính
     - **Sổ quỹ nội bộ**: Theo dõi thu chi vận hành, lương, nhập hàng và số dư thực tế.
     - **Báo cáo Tuổi nợ (Debt Aging)**: Phân loại nợ quá hạn theo các mốc 30-60-90 ngày để đánh giá rủi ro tài chính.
     - **Lợi nhuận chi tiết**: Thống kê doanh thu, giá vốn và lợi nhuận gộp trên từng đơn hàng đã chốt.
-- **Hệ thống Đào tạo (`/khoa-dao-tao`)** 🎓:
-    - **Hands-on Practice**: Thực hành trực tiếp trên dữ liệu thật của chính người dùng.
-    - **Môi trường Interactive Lab**: Chia đôi màn hình, hướng dẫn chi tiết từng bước.
-    - **Video Hướng dẫn** 🆕: Thư viện video tutorial YouTube dành cho toàn bộ người dùng.
-    - **Quản lý Nội dung**: Tính năng Thêm/Sửa/Xóa video bảo mật bằng mã xác thực gửi qua Email Admin.
-    - **Real-time Scoring**: Tự động chấm điểm bằng cách truy vấn dữ liệu thực tế gắn với `ownerId`.
-    - **Chứng chỉ Digital**: Cấp chứng chỉ ngay sau khi hoàn thành các nhiệm vụ trong bài Lab.
+- **Knowledge Base - Blog Hướng dẫn (`/khoa-dao-tao`)** 📚:
+    - **Giao diện Blog**: Trình bày hướng dẫn vận hành dưới dạng bài viết chuyên nghiệp, tinh giản.
+    - **Môi trường Blog Chi tiết**: Hiển thị nội dung hướng dẫn kèm hình ảnh minh họa sinh động theo từng bước.
+    - **Tài liệu đính kèm**: Hỗ trợ chèn link Google Sheets/Tài liệu để người dùng tải về trực tiếp.
+    - **Video Hướng dẫn**: Thư viện video tutorial YouTube dành cho toàn bộ người dùng.
+    - **Quản lý Nội dung (Admin Studio)**: Thêm/Sửa/Xóa bài viết và video linh hoạt, bảo mật bằng mã xác thực.
+    - **Loại bỏ Gamification**: Gỡ bỏ hoàn toàn hệ thống điểm số (Points) và Chứng chỉ (Certifications) để tập trung vào trải nghiệm đọc và học tập chuyên sâu.
 ---
 
 ## 2. Hệ thống Giao diện & Điều hướng (Nâng cấp 🚀)
@@ -82,6 +82,12 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 ## 4. Các mục đã hoàn thành & Cần làm (To-do)
 
 ### ✅ Đã hoàn thành (Done)
+- [x] **Chuyển đổi Trung tâm Đào tạo thành Knowledge Base (Blog-style Training Center - Mar 30)**:
+    - **Loại bỏ Gamification (Gần dân hơn)**: Gỡ bỏ hoàn toàn hệ thống tính điểm (userPoints), huy hiệu kỹ năng và hệ thống chứng chỉ (Nhập môn, Thành thạo...). Thay thế bằng giao diện Bookmark tinh tế để lưu lại các bài viết quan trọng.
+    - **Cải tiến Terminology**: Chuyển đổi toàn bộ thuật ngữ từ "Bài học/Lab" sang **"Bài viết" (Article)** để phù hợp với phong cách Blog hướng dẫn chuyên nghiệp.
+    - **Blog Layout Chi tiết**: Tối ưu hiển thị nội dung bài viết với hình ảnh minh họa xen kẽ văn bản, giúp dễ theo dõi và thực hành theo.
+    - **Đơn giản hóa Admin Studio**: Tinh giản form tạo nội dung bài viết, loại bỏ các trường Độ khó và Điểm thưởng. Bổ sung nơi chèn link tài liệu (Google Sheets) cho người dùng.
+    - **Tối ưu Hiển thị Card**: Loại bỏ các tag "PTS" và "Difficulty" dư thừa trên thẻ bài viết, chỉ giữ lại thời gian đọc ước tính để tạo giao diện sạch sẽ nhất.
 - [x] **Di cư AI sang Groq & Sửa lỗi Module Tài chính (AI Migration & Finance Fix - Mar 28)**:
     - **Di cư AI sang Groq API**: Thay thế toàn bộ DeepSeek/Gemini bằng Groq API (`llama-3.3-70b-versatile`) để tăng tốc độ phản hồi và độ chính xác cho các tính năng: Tra cứu lãi suất, Phân tích nợ, Kiểm tra đóng gói, Phân tích tồn kho và Thông báo hệ thống.
     - **Sửa lỗi Nút Xóa Sổ Quỹ**: Thay thế `window.confirm` lỗi thời bằng **Custom Delete Modal** tùy chỉnh. Giải quyết triệt để lỗi event bubbling khiến việc nhấn nút xóa bị đứng hoặc mở popup chi tiết ghi chú.

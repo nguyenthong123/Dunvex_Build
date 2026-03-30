@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { BookOpen, Award, Clock, Play, CheckCircle, Star, BrainCircuit, ShieldHalf, Trophy, Medal, Crown, Youtube, Plus, Lock, Settings, Trash2, Edit2, Save, X, Mail, ExternalLink, RefreshCcw } from 'lucide-react';
+import { BookOpen, Award, Clock, Play, CheckCircle, Star, BrainCircuit, ShieldHalf, Trophy, Medal, Crown, Youtube, Plus, Lock, Settings, Trash2, Edit2, Save, X, Mail, ExternalLink, RefreshCcw, Video, Github, Search, FileText, Download, Link, Calendar, User, Layout, Info, Bookmark } from 'lucide-react';
 import { db, auth } from '../services/firebase';
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, updateDoc, orderBy } from 'firebase/firestore';
 import { useOwner } from '../hooks/useOwner';
@@ -76,6 +76,23 @@ const TrainingCatalog = () => {
 	const [videoTitle, setVideoTitle] = useState('');
 	const [videoUrl, setVideoUrl] = useState('');
 	const [isSaving, setIsSaving] = useState(false);
+
+	// Manual Lab Form state
+	const [showManualForm, setShowManualForm] = useState(false);
+	const [manualLabData, setManualLabData] = useState({
+		title: '',
+		description: '',
+		content: '',
+		guidance: '', // New field for instructional guidance
+		imageUrls: [] as string[],
+		documentLink: '',
+		points: 50, // Customizable points
+		difficulty: 'Cơ bản'
+	});
+	const [uploadingImage, setUploadingImage] = useState(false);
+	const [savingLab, setSavingLab] = useState(false);
+	const [editingLabId, setEditingLabId] = useState<string | null>(null);
+	const [showPreview, setShowPreview] = useState(false);
 
 	useEffect(() => {
 		if (owner.loading || !owner.ownerId) return;
@@ -257,74 +274,113 @@ const TrainingCatalog = () => {
 		setGeneratedCode('');
 	};
 
-	const handleGenerateAITraining = async () => {
-		const existingTitles = [...customLabs, ...labs].map(l => l.title).join(', ');
-		const isAuto = window.confirm("Bạn có muốn Nexus AI tự phân tích các bài cũ và ĐỀ XUẤT CHỦ ĐỀ MỚI không?\n\n- Nhấn OK: Để AI tự động hoàn toàn.\n- Nhấn Cancel: Nếu bạn muốn tự nhập nội dung cụ thể.");
-		
-		let topic = "Tự động đề xuất";
-		if (!isAuto) {
-			const manualTopic = window.prompt("Nhập chủ đề bạn muốn AI tạo bài học (ví dụ: Quản lý nợ, Tối ưu kho...):", "Quản lý kinh doanh");
-			if (!manualTopic) return;
-			topic = manualTopic;
-		}
+	const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+		const files = e.target.files;
+		if (!files || files.length === 0) return;
 
-		setGeneratingAI(true);
-		showToast(isAuto ? "AI đang phân tích bài cũ và đề xuất chủ đề mới..." : "Nexus AI đang biên soạn giáo án...", "info");
-
+		setUploadingImage(true);
 		try {
-			// Limit existing titles length to avoid URI too long, though GET can handle 2000 chars. 500 should be plenty for context.
-			const truncatedExisting = existingTitles.length > 500 ? existingTitles.substring(0, 500) + '...' : existingTitles;
-			const gasUrl = `https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec?action=ai_generate_training&topic=${encodeURIComponent(topic)}&existing=${encodeURIComponent(truncatedExisting)}`;
-			
-			const response = await fetch(gasUrl, {
-				method: 'GET',
-				mode: 'cors'
+			const uploadPromises = Array.from(files).map(async (file) => {
+				const fData = new FormData();
+				fData.append('file', file);
+				fData.append('upload_preset', 'dunvexbuil');
+				fData.append('folder', 'training_images');
+
+				const response = await fetch(
+					`https://api.cloudinary.com/v1_1/dtx0uvb4e/image/upload`,
+					{ method: 'POST', body: fData }
+				);
+				const result = await response.json();
+				return result.secure_url;
 			});
 
-			const text = await response.text();
-			let res;
-			try {
-				res = JSON.parse(text);
-			} catch (e) {
-				console.error("Non-JSON response:", text);
-				showToast("Lỗi: Script Google chưa được cập nhật. Vui lòng Triển khai phiên bản mới của upload_script.gs", "error");
-				return;
-			}
+			const urls = await Promise.all(uploadPromises);
+			setManualLabData(prev => ({
+				...prev,
+				imageUrls: [...prev.imageUrls, ...urls.filter(u => !!u)]
+			}));
+			showToast("Đã tải ảnh thành công", "success");
+		} catch (error) {
+			console.error("Upload error:", error);
+			showToast("Lỗi khi tải ảnh", "error");
+		} finally {
+			setUploadingImage(false);
+			e.target.value = '';
+		}
+	};
 
-			if (res.status === 'success') {
-				const labData = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
+	const handleSaveManualLab = async () => {
+		if (!manualLabData.title || !manualLabData.content) {
+			showToast("Vui lòng nhập tiêu đề và nội dung bài viết", "error");
+			return;
+		}
+
+		setSavingLab(true);
+		try {
+			const labToSave = {
+				...manualLabData,
+				type: 'article',
+				ownerId: owner.ownerId,
+				points: manualLabData.points || 50,
+				guidance: manualLabData.guidance || '',
+				difficulty: manualLabData.difficulty
+			};
+
+			if (editingLabId) {
+				await updateDoc(doc(db, 'training_labs', editingLabId), {
+					...labToSave,
+					updatedAt: serverTimestamp()
+				});
+				showToast("Đã cập nhật bài viết thành công!", "success");
+			} else {
 				await addDoc(collection(db, 'training_labs'), {
-					...labData,
-					isAI: true,
-					ownerId: owner.ownerId,
+					...labToSave,
 					createdAt: serverTimestamp(),
 					createdBy: auth.currentUser?.email
 				});
-				showToast("Đã tạo bài học AI mới thành công!", "success");
-			} else {
-				showToast(res.message || "Lỗi khi tạo bài học AI.", "error");
+				showToast("Đã đăng bài viết mới thành công!", "success");
 			}
+			
+			setShowManualForm(false);
+			setEditingLabId(null);
+			setManualLabData({ title: '', description: '', content: '', guidance: '', imageUrls: [], documentLink: '', points: 50, difficulty: 'Cơ bản' });
 		} catch (err) {
 			console.error(err);
-			showToast("Lỗi khi tạo bài học AI.", "error");
+			showToast("Lỗi khi lưu bài viết.", "error");
 		} finally {
-			setGeneratingAI(false);
+			setSavingLab(false);
 		}
+	};
+
+	const handleEditLab = (lab: any, e: React.MouseEvent) => {
+		e.stopPropagation();
+		setEditingLabId(lab.id);
+		setManualLabData({
+			title: lab.title || '',
+			description: lab.description || '',
+			content: lab.content || '',
+			imageUrls: lab.imageUrls || [],
+			documentLink: lab.documentLink || '',
+			points: lab.points || 50,
+			guidance: lab.guidance || '',
+			difficulty: lab.difficulty || 'Cơ bản'
+		});
+		setShowManualForm(true);
 	};
 
 	const handleDeleteLab = async (id: string, e: React.MouseEvent, isAI: boolean) => {
 		e.stopPropagation();
 		const isHidden = hiddenLabs.includes(id);
 		const confirmMsg = isAI 
-			? "Bạn có chắc chắn muốn xóa vĩnh viễn bài học này?" 
-			: (isHidden ? "Bạn muốn hiện lại bài học này?" : "Bạn muốn ẩn bài học này với tất cả người dùng?");
+			? "Bạn có chắc chắn muốn xóa vĩnh viễn bài viết này?" 
+			: (isHidden ? "Bạn muốn hiện lại bài viết này?" : "Bạn muốn ẩn bài viết này với tất cả người dùng?");
 		
 		if (!window.confirm(confirmMsg)) return;
 		
 		try {
-			if (isAI) {
+			if (isAI || labs.find(l => l.id === id) || (customLabs.find(l => l.id === id)?.type === 'article')) {
 				await deleteDoc(doc(db, 'training_labs', id));
-				showToast("Đã xóa bài học AI", "success");
+				showToast("Đã xóa bài viết vĩnh viễn", "success");
 			} else {
 				if (isHidden) {
 					// Unhide: find and delete the doc in hidden_labs
@@ -333,19 +389,19 @@ const TrainingCatalog = () => {
 						snapshot.forEach(d => deleteDoc(d.ref));
 						unsubscribe();
 					});
-					showToast("Đã hiện lại bài học", "success");
+					showToast("Đã hiện lại bài viết", "success");
 				} else {
 					// Hide
 					await addDoc(collection(db, 'hidden_labs'), {
 						labId: id,
 						createdAt: serverTimestamp()
 					});
-					showToast("Đã ẩn bài học", "success");
+					showToast("Đã ẩn bài viết", "success");
 				}
 			}
 		} catch (error) {
 			console.error("Error deleting/hiding lab:", error);
-			showToast("Lỗi khi xử lý bài học", "error");
+			showToast("Lỗi khi xử lý bài viết", "error");
 		}
 	};
 
@@ -364,12 +420,8 @@ const TrainingCatalog = () => {
 					</div>
 				</div>
 				<div className="flex items-center gap-6">
-					<div className="hidden md:flex flex-col items-end">
-						<span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Điểm kỹ năng</span>
-						<span className="text-lg font-black text-indigo-600 dark:text-indigo-400">{userPoints.toLocaleString()} PTS</span>
-					</div>
-					<div className="size-10 bg-amber-50 dark:bg-amber-900/20 rounded-full flex items-center justify-center text-amber-500 shadow-sm shadow-amber-200/50">
-						<Award size={20} />
+					<div className="size-10 bg-slate-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400">
+						<Bookmark size={20} />
 					</div>
 				</div>
 			</header>
@@ -379,12 +431,9 @@ const TrainingCatalog = () => {
 				<div className="flex items-center gap-8 max-w-6xl mx-auto">
 					<button
 						onClick={() => setActiveTab('labs')}
-						className={`py-4 text-[10px] font-black uppercase tracking-[2px] transition-all relative ${activeTab === 'labs' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+						className={`flex items-center gap-2 px-6 py-3 rounded-full text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'labs' ? 'bg-[#1A237E] text-white shadow-lg' : 'text-slate-400 hover:text-indigo-600'}`}
 					>
-						<div className="flex items-center gap-2">
-							<BrainCircuit size={16} /> Thực hành Lab
-						</div>
-						{activeTab === 'labs' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-indigo-600 rounded-t-full"></div>}
+						<FileText size={16} /> BÀI VIẾT HƯỚNG DẪN
 					</button>
 					<button
 						onClick={() => setActiveTab('videos')}
@@ -402,70 +451,266 @@ const TrainingCatalog = () => {
 				<div className="max-w-6xl mx-auto">
 					{activeTab === 'labs' ? (
 						<>
-							{/* Certifications Section - Replaces Hero */}
-							<div className="mb-12">
-								<div className="flex items-center justify-between mb-6">
-									<div>
-										<h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-[4px]">Hệ thống Chứng chỉ</h3>
-										<p className="text-xs text-slate-400 font-medium">Tích lũy điểm kỹ năng để mở khóa các danh hiệu cao cấp.</p>
-									</div>
-									<div className="bg-indigo-600 text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest">
-										Cấp độ: {userPoints >= 500 ? 'Bậc thầy' : userPoints >= 400 ? 'Chuyên gia' : userPoints >= 250 ? 'Thành thạo' : 'Nhập môn'}
-									</div>
-								</div>
 
-								<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-									{[
-										{ id: 1, name: 'Nhập môn', points: 100, icon: <ShieldHalf size={24} />, color: 'blue' },
-										{ id: 2, name: 'Thành thạo', points: 250, icon: <Medal size={24} />, color: 'emerald' },
-										{ id: 3, name: 'Chuyên gia', points: 400, icon: <Trophy size={24} />, color: 'amber' },
-										{ id: 4, name: 'Bậc thầy', points: 500, icon: <Crown size={24} />, color: 'indigo' }
-									].sort((a, b) => {
-										const aAchieved = userPoints >= a.points;
-										const bAchieved = userPoints >= b.points;
-										if (aAchieved && !bAchieved) return -1;
-										if (!aAchieved && bAchieved) return 1;
-										return a.points - b.points;
-									}).map((cert) => {
-										const isAchieved = userPoints >= cert.points;
-										return (
-											<div
-												key={cert.id}
-												className={`relative p-6 rounded-[2rem] border transition-all duration-500 overflow-hidden ${isAchieved
-													? 'bg-white dark:bg-slate-900 border-indigo-500/30 shadow-lg shadow-indigo-500/5'
-													: 'bg-slate-50/50 dark:bg-slate-900/30 border-transparent opacity-40 grayscale'}`}
-											>
-												<div className={`size-12 rounded-2xl flex items-center justify-center mb-4 ${isAchieved ? `bg-indigo-600 text-white` : 'bg-slate-200 dark:bg-slate-800 text-slate-400'}`}>
-													{cert.icon}
-												</div>
-												<h4 className="font-black text-sm dark:text-white uppercase tracking-tight mb-1">{cert.name}</h4>
-												<p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-													{isAchieved ? 'ĐÃ ĐẠT ĐƯỢC' : `CẦN ${cert.points} PTS`}
-												</p>
-												{isAchieved && (
-													<div className="absolute top-4 right-4 text-emerald-500 scale-75 animate-in zoom-in duration-500">
-														<CheckCircle size={20} />
-													</div>
-												)}
-											</div>
-										);
-									})}
-								</div>
-							</div>
 
-							<div className="flex items-center justify-between mb-8">
-								<h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-[4px]">Danh sách bài thi</h3>
-								{auth.currentUser?.email === 'dunvex.green@gmail.com' && (
+							<div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+								<div>
+									<h2 className="text-2xl font-black text-[#1A237E] dark:text-white uppercase tracking-tight mb-2">CẨM NANG HƯỚNG DẪN</h2>
+									<p className="text-slate-400 text-sm font-medium tracking-wide">NÂNG CAO NĂNG LỰC VẬN HÀNH DOANH NGHIỆP</p>
+								</div>
+								{isAdmin && (
 									<button
-										onClick={handleGenerateAITraining}
-										disabled={generatingAI}
-										className="flex items-center gap-2 bg-slate-900 dark:bg-indigo-600 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-indigo-500/20 disabled:opacity-50"
+										onClick={() => {
+											setEditingLabId(null);
+											setManualLabData({ title: '', description: '', content: '', guidance: '', imageUrls: [], documentLink: '', points: 50, difficulty: 'Cơ bản' });
+											setShowManualForm(true);
+										}}
+										className="group flex items-center gap-3 bg-gradient-to-r from-indigo-600 to-blue-700 text-white px-8 py-4 rounded-[2rem] text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-indigo-500/25 active:scale-95 border-b-4 border-indigo-900/30"
 									>
-										{generatingAI ? <RefreshCcw className="animate-spin" size={16} /> : <BrainCircuit size={16} />} 
-										Tạo bài thi AI mới
+										<div className="size-6 bg-white/20 rounded-full flex items-center justify-center group-hover:rotate-90 transition-transform">
+											<Plus size={14} /> 
+										</div>
+										Viết Bài Đào Tạo Mới
 									</button>
 								)}
 							</div>
+
+							{showManualForm && (
+								<div className="bg-white dark:bg-slate-900 rounded-[3rem] border-2 border-indigo-500/10 p-10 mb-16 shadow-2xl animate-in fade-in slide-in-from-top-8 duration-500 relative overflow-hidden">
+									{/* Decorative background element */}
+									<div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50 dark:bg-indigo-900/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl pointer-events-none"></div>
+									
+									<div className="flex items-center justify-between mb-10 relative z-10">
+										<div className="flex items-center gap-4">
+											<div className="size-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
+												<Edit2 size={20} />
+											</div>
+											<div>
+												<h4 className="text-2xl font-black text-[#1A237E] dark:text-white uppercase tracking-tight">{editingLabId ? 'Chỉnh sửa giáo án' : 'Soạn thảo giáo án mới'}</h4>
+												<p className="text-[10px] font-bold text-slate-400 uppercase tracking-[2px]">Manager Content Studio</p>
+											</div>
+										</div>
+										<button onClick={() => { setShowManualForm(false); setEditingLabId(null); }} className="size-12 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-all active:scale-90">
+											<X size={24} />
+										</button>
+									</div>
+
+									<div className="grid grid-cols-1 lg:grid-cols-12 gap-10 mb-10 relative z-10">
+										<div className="lg:col-span-4 space-y-8">
+											<div className="space-y-3">
+												<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
+													<Layout size={12} className="text-indigo-500" /> Cấu trúc bài viết
+												</label>
+												<div className="space-y-4">
+													<input
+														type="text"
+														value={manualLabData.title}
+														onChange={(e) => setManualLabData(prev => ({ ...prev, title: e.target.value }))}
+														className="w-full bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700/50 rounded-[1.5rem] px-6 py-4 text-sm font-bold text-slate-800 dark:text-white focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-800 outline-none transition-all shadow-sm"
+														placeholder="Tiêu đề bài viết (Ví dụ: Quy trình 5S)"
+													/>
+													<textarea
+														value={manualLabData.description}
+														onChange={(e) => setManualLabData(prev => ({ ...prev, description: e.target.value }))}
+														className="w-full bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700/50 rounded-[1.5rem] px-6 py-4 text-sm font-bold text-slate-800 dark:text-white focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-800 outline-none transition-all h-24 no-scrollbar resize-none"
+														placeholder="Tóm tắt ngắn gọn nội dung đào tạo..."
+													/>
+												</div>
+											</div>
+
+											<div className="space-y-3">
+												<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
+													<Link size={12} className="text-indigo-500" /> Tài nguyên đính kèm
+												</label>
+												<div className="relative group">
+													<div className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-indigo-500 transition-colors">
+														<ExternalLink size={18} />
+													</div>
+													<input
+														type="text"
+														value={manualLabData.documentLink}
+														onChange={(e) => setManualLabData(prev => ({ ...prev, documentLink: e.target.value }))}
+														className="w-full bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700/50 rounded-[1.5rem] pl-16 pr-6 py-4 text-xs font-bold text-slate-600 dark:text-gray-300 focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-800 outline-none transition-all"
+														placeholder="Link Google Sheet / Drive..."
+													/>
+												</div>
+											</div>
+
+
+										</div>
+
+										<div className="lg:col-span-8 space-y-8">
+											<div className="space-y-3">
+												<div className="flex items-center justify-between ml-1">
+													<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+														<FileText size={12} className="text-indigo-500" /> Soạn thảo nội dung bài viết
+													</label>
+													<span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-0.5 rounded">Markdown & Tags Supported</span>
+												</div>
+												<textarea
+													value={manualLabData.content}
+													onChange={(e) => setManualLabData(prev => ({ ...prev, content: e.target.value }))}
+													className="w-full bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700/50 rounded-[2rem] px-8 py-8 text-base font-medium text-slate-800 dark:text-gray-200 focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-800 outline-none transition-all h-[300px] no-scrollbar resize-none leading-relaxed mb-6"
+													placeholder={"Nhập nội dung bài viết tại đây...\n\nSử dụng các thẻ [[IMG_1]], [[IMG_2]], [[IMG_3]] để chèn hình ảnh tương ứng vào giữa các đoạn văn mong muốn."}
+												/>
+
+												<div className="space-y-3">
+													<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
+														<Info size={12} className="text-amber-500" /> Hướng dẫn thực hành (Tùy chọn)
+													</label>
+													<textarea
+														value={manualLabData.guidance}
+														onChange={(e) => setManualLabData(prev => ({ ...prev, guidance: e.target.value }))}
+														className="w-full bg-amber-50/50 dark:bg-amber-900/5 border-2 border-amber-100 dark:border-amber-900/20 rounded-[1.5rem] px-6 py-4 text-sm font-medium text-slate-700 dark:text-amber-200 focus:border-amber-400 outline-none transition-all h-24 no-scrollbar resize-none"
+														placeholder="Các lưu ý hoặc bước thực hành cụ thể..."
+													/>
+												</div>
+											</div>
+											
+											<div className="space-y-4">
+												<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
+													<Layout size={12} className="text-indigo-500" /> Media & Hình ảnh (Tối đa 3)
+												</label>
+												<div className="grid grid-cols-4 gap-4">
+													{manualLabData.imageUrls.map((url, idx) => (
+														<div key={idx} className="relative aspect-video rounded-2xl overflow-hidden group shadow-md border-2 border-white dark:border-slate-800">
+															<img src={url} className="size-full object-cover transition-transform duration-500 group-hover:scale-110" alt="preview" />
+															<div className="absolute inset-0 bg-gradient-to-t from-rose-600/80 to-transparent opacity-0 group-hover:opacity-100 flex items-end justify-center pb-4 transition-all translate-y-2 group-hover:translate-y-0">
+																<button 
+																	onClick={() => setManualLabData(prev => ({ ...prev, imageUrls: prev.imageUrls.filter((_, i) => i !== idx) }))}
+																	className="bg-white text-rose-600 p-2 rounded-full shadow-lg hover:scale-110 active:scale-90 transition-all"
+																>
+																	<Trash2 size={16} />
+																</button>
+															</div>
+														</div>
+													))}
+													{manualLabData.imageUrls.length < 3 && (
+														<label className="aspect-video bg-indigo-50/50 dark:bg-slate-800/50 rounded-2xl border-2 border-dashed border-indigo-200 dark:border-slate-700 flex flex-col items-center justify-center text-indigo-400 hover:text-indigo-600 hover:border-indigo-400 cursor-pointer transition-all hover:bg-white dark:hover:bg-slate-800">
+															<input type="file" className="hidden" accept="image/*" multiple onChange={handleImageUpload} />
+															{uploadingImage ? <RefreshCcw className="animate-spin" size={24} /> : (
+																<>
+																	<Download size={24} className="mb-2" />
+																	<span className="text-[8px] font-black uppercase tracking-widest">Tải ảnh lên</span>
+																</>
+															)}
+														</label>
+													)}
+												</div>
+											</div>
+										</div>
+									</div>
+
+									{showPreview && (
+										<div className="mb-10 p-10 bg-white dark:bg-slate-900 rounded-[2.5rem] border-4 border-indigo-100 dark:border-indigo-900/30 shadow-inner animate-in fade-in zoom-in duration-500 overflow-hidden">
+											<div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100 dark:border-slate-800">
+												<h5 className="text-[10px] font-black text-indigo-500 uppercase tracking-widest flex items-center gap-2">
+													<Star size={14} className="animate-pulse" /> Chế độ xem trước (Preview)
+												</h5>
+												<button onClick={() => setShowPreview(false)} className="text-[10px] font-black text-slate-400 hover:text-slate-600 uppercase tracking-widest">Đóng</button>
+											</div>
+											<div className="prose prose-blue dark:prose-invert max-w-none text-left">
+												<h1 className="text-4xl font-black text-[#1A237E] dark:text-white uppercase mb-8">{manualLabData.title || 'CHƯA CÓ TIÊU ĐỀ'}</h1>
+												<div className="text-[#334155] dark:text-gray-300 font-medium text-lg leading-relaxed space-y-6">
+													{(() => {
+														const currentText = manualLabData.content;
+														if (!currentText) return <p className="text-slate-400 italic">Chưa có nội dung bài viết...</p>;
+														
+														const images = manualLabData.imageUrls || [];
+														const hasTags = /\[\[IMG_[123]\]\]/.test(currentText);
+
+														if (hasTags) {
+															const parts = currentText.split(/(\[\[IMG_[123]\]\])/g);
+															let firstTextPartFound = false;
+															return parts.map((part, i) => {
+																if (!part || part.trim().length === 0) return null;
+																const match = part.match(/\[\[IMG_([123])\]\]/);
+																if (match) {
+																	const idx = parseInt(match[1]) - 1;
+																	if (images[idx]) {
+																		return (
+																			<div key={`img-${i}`} className="my-10 max-w-[700px] mx-auto rounded-[2rem] overflow-hidden shadow-xl border-2 border-white dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
+																				<img src={images[idx]} className="w-full h-auto object-contain max-h-[400px]" alt={`Figure ${idx + 1}`} />
+																			</div>
+																		);
+																	}
+																	return null;
+																}
+																
+																const isFirst = !firstTextPartFound;
+																if (!firstTextPartFound) firstTextPartFound = true;
+																
+																return (
+																	<div 
+																		key={`txt-${i}`} 
+																		className="whitespace-pre-wrap leading-relaxed text-slate-700 dark:text-gray-300 text-lg"
+																	>
+																		{part}
+																	</div>
+																);
+															});
+														} else {
+															const lines = currentText.split('\n');
+															const midPoint = Math.floor(lines.length / 2);
+															return (
+																<div className="space-y-8">
+																	{images[0] && (
+																		<div className="mb-8 max-w-[700px] mx-auto rounded-2xl overflow-hidden shadow-lg bg-slate-50 dark:bg-slate-900/50">
+																			<img src={images[0]} className="w-full h-auto object-contain max-h-[350px] block" alt="Top" />
+																		</div>
+																	)}
+																	<div className="whitespace-pre-wrap leading-relaxed text-slate-700 dark:text-gray-300 text-lg">
+																		{lines.slice(0, midPoint).join('\n')}
+																	</div>
+																	{images.length > 1 && (
+																		<div className={`grid ${images.length > 2 ? 'grid-cols-2' : 'grid-cols-1'} gap-6 my-8`}>
+																			{images.slice(1).map((url, idx) => (
+																				<div key={idx} className="rounded-xl overflow-hidden shadow-md border border-white dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
+																					<img src={url} className="w-full h-auto object-contain max-h-[250px] block" alt={`Detail ${idx + 1}`} />
+																				</div>
+																			))}
+																		</div>
+																	)}
+																	<div className="whitespace-pre-wrap leading-relaxed text-slate-700 dark:text-gray-300 text-lg">
+																		{lines.slice(midPoint).join('\n')}
+																	</div>
+																</div>
+															);
+														}
+													})()}
+												</div>
+											</div>
+										</div>
+									)}
+
+									<div className="flex justify-end items-center gap-6 pt-10 border-t border-slate-50 dark:border-slate-800 relative z-10">
+										<button
+											onClick={() => { setShowManualForm(false); setEditingLabId(null); }}
+											className="px-8 py-4 text-slate-400 hover:text-slate-600 dark:hover:text-white font-black uppercase tracking-widest text-[10px] transition-all"
+										>
+											Hủy soạn thảo
+										</button>
+										<button
+											onClick={() => setShowPreview(!showPreview)}
+											className={`px-8 py-4 ${showPreview ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/40' : 'bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-300'} rounded-full font-black uppercase tracking-widest text-[10px] transition-all hover:scale-105 active:scale-95`}
+										>
+											{showPreview ? 'Đóng chế độ xem trước' : 'Xem trước bài viết'}
+										</button>
+										<button
+											onClick={handleSaveManualLab}
+											disabled={savingLab}
+											className="px-12 py-5 bg-gradient-to-r from-[#1A237E] to-indigo-700 text-white rounded-[2rem] font-black uppercase tracking-widest text-[10px] shadow-2xl shadow-indigo-500/30 hover:scale-105 active:scale-95 transition-all flex items-center gap-3 disabled:opacity-50 border-b-4 border-slate-900/30"
+										>
+											{savingLab ? <RefreshCcw className="animate-spin" size={18} /> : (
+												<>
+													<Save size={18} fill="currentColor" fillOpacity={0.2} /> 
+													{editingLabId ? 'Cập nhật giáo án' : 'Phát hành giáo án'}
+												</>
+											)}
+										</button>
+									</div>
+								</div>
+							)}
 
 							{/* Labs List */}
 							<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -481,33 +726,38 @@ const TrainingCatalog = () => {
 									>
 										{/* Admin Action: Delete/Hide */}
 										{isAdmin && (
-											<button 
-												onClick={(e) => handleDeleteLab(lab.id, e, !!lab.isAI)}
-												className="absolute top-6 right-6 p-2.5 text-slate-300 hover:text-white hover:bg-rose-500 rounded-xl transition-all duration-300 shadow-sm z-20 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm"
-												title={lab.isAI ? "Xóa vĩnh viễn" : "Ẩn bài hệ thống"}
-											>
-												<Trash2 size={16} />
-											</button>
+											<div className="absolute top-6 right-6 flex gap-2 z-20">
+												{(lab.type === 'article' || lab.isAI) && (
+													<button 
+														onClick={(e) => handleEditLab(lab, e)}
+														className="p-2.5 text-slate-300 hover:text-indigo-600 hover:bg-white rounded-xl transition-all duration-300 shadow-sm bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm"
+														title="Chỉnh sửa"
+													>
+														<Edit2 size={16} />
+													</button>
+												)}
+												<button 
+													onClick={(e) => handleDeleteLab(lab.id, e, !!lab.isAI)}
+													className="p-2.5 text-slate-300 hover:text-white hover:bg-rose-500 rounded-xl transition-all duration-300 shadow-sm bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm"
+													title={lab.isAI || lab.type === 'article' ? "Xóa vĩnh viễn" : "Ẩn bài hệ thống"}
+												>
+													<Trash2 size={16} />
+												</button>
+											</div>
 										)}
 
 										<div className="size-16 bg-slate-50 dark:bg-slate-800/50 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-500 shadow-inner">
-											{lab.isAI ? <BrainCircuit className="text-indigo-600" size={32} /> : (lab.icon || <CheckCircle size={32} />)}
+											{lab.type === 'article' ? <FileText className="text-indigo-600" size={32} /> : lab.isAI ? <BrainCircuit className="text-indigo-600" size={32} /> : (lab.icon || <CheckCircle size={32} />)}
 										</div>
-										<h3 className="text-xl font-black text-slate-800 dark:text-white mb-3 tracking-tight group-hover:text-indigo-600 transition-colors">{lab.title}</h3>
-										<p className="text-sm text-slate-500 dark:text-slate-400 font-medium leading-relaxed mb-6 flex-1">{lab.description}</p>
+										<h3 className="text-xl font-black text-slate-800 dark:text-white mb-3 tracking-tight group-hover:text-indigo-600 transition-colors uppercase line-clamp-2">{lab.title}</h3>
+										<p className="text-sm text-slate-500 dark:text-slate-400 font-medium leading-relaxed mb-6 flex-1 line-clamp-3">{lab.description}</p>
 
 										<div className="flex items-center gap-4 mb-8 pt-6 border-t border-slate-50 dark:border-slate-800">
 											<div className="flex items-center gap-1.5 text-slate-400 dark:text-slate-500">
 												<Clock size={14} />
-												<span className="text-[10px] font-black uppercase">{lab.duration}</span>
+												<span className="text-[10px] font-black uppercase">{lab.duration || '5 phút đọc'}</span>
 											</div>
-											<div className="flex items-center gap-1.5 text-emerald-500">
-												<Award size={14} />
-												<span className="text-[10px] font-black uppercase">{labProgress[lab.id]?.points || 0}/{lab.points} PTS</span>
-											</div>
-											<div className="ml-auto bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest">
-												{lab.difficulty}
-											</div>
+
 										</div>
 
 										<div className="flex items-center justify-between">
@@ -525,7 +775,7 @@ const TrainingCatalog = () => {
 											</div>
 											<div className="flex items-center gap-3">
 												<div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-black text-xs uppercase tracking-widest group-hover:translate-x-2 transition-transform">
-													Bắt đầu Lab <Play size={14} fill="currentColor" />
+													XEM BÀI VIẾT <Play size={14} fill="currentColor" />
 												</div>
 											</div>
 										</div>

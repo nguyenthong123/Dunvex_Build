@@ -326,9 +326,11 @@ const Finance = () => {
 				await batch.commit();
 				console.log(`Finance Bot: Generated ${count} transactions.`);
 				
-				// Tự động gửi email thông báo cho các bản ghi mới
+				// Tự động gửi email thông báo cho các bản ghi mới (chỉ khi bật nhắc hẹn)
 				for (const record of newAutoRecords) {
-					handleBatchSendReminders(record);
+					if (record.reminderEnabled && record.email) {
+						handleBatchSendReminders(record);
+					}
 				}
 
 				const currentToDateObj = new Date(toDate);

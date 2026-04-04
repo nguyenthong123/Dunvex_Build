@@ -561,8 +561,20 @@ const ProductList = () => {
 	const handleDeleteProduct = async (id: string, bypassConfirm = false) => {
 		if (bypassConfirm || window.confirm("Bạn có chắc chắn muốn xóa sản phẩm này không?")) {
 			try {
+				const productToDelete = products.find(p => p.id === id);
 				await deleteDoc(doc(db, 'products', id));
 				setSelectedIds(prev => prev.filter(item => item !== id));
+
+				// Log Delete Product
+				await addDoc(collection(db, 'audit_logs'), {
+					action: 'Xóa sản phẩm',
+					user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
+					userId: auth.currentUser?.uid,
+					ownerId: owner.ownerId,
+					details: `Đã xóa sản phẩm: ${productToDelete?.name || id}`,
+					createdAt: serverTimestamp()
+				}).catch(err => console.error('Audit log failed for product deletion:', err));
+
 				showToast("Đã xóa sản phẩm", "success");
 			} catch (error) {
 				showToast("Lỗi khi xóa sản phẩm", "error");
@@ -573,25 +585,28 @@ const ProductList = () => {
 	const handleBulkDelete = async () => {
 		if (!window.confirm(`Bạn có chắc chắn muốn xóa ${selectedIds.length} sản phẩm đã chọn không?`)) return;
 
+		const deletedCount = selectedIds.length;
+
 		try {
 			const batch = writeBatch(db);
 			selectedIds.forEach(id => {
 				batch.delete(doc(db, 'products', id));
 			});
 
-			// Log Bulk Delete
-			await addDoc(collection(db, 'audit_logs'), {
+			// Log Bulk Delete inside the batch (atomic with product deletions)
+			const auditRef = doc(collection(db, 'audit_logs'));
+			batch.set(auditRef, {
 				action: 'Xóa hàng loạt sản phẩm',
 				user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
 				userId: auth.currentUser?.uid,
 				ownerId: owner.ownerId,
-				details: `Đã xóa ${selectedIds.length} sản phẩm`,
+				details: `Đã xóa ${deletedCount} sản phẩm`,
 				createdAt: serverTimestamp()
 			});
 
 			await batch.commit();
 			setSelectedIds([]);
-			showToast(`Đã xóa ${selectedIds.length} sản phẩm thành công`, "success");
+			showToast(`Đã xóa ${deletedCount} sản phẩm thành công`, "success");
 		} catch (error) {
 			showToast("Lỗi khi xóa hàng loạt sản phẩm", "error");
 		}
@@ -2231,7 +2246,7 @@ const ProductList = () => {
 										<span className="material-symbols-outlined text-lg">edit</span> Chỉnh sửa
 									</button>
 									<button
-										onClick={() => { setShowDetail(false); handleDeleteProduct(selectedProduct.id); }}
+										onClick={() => { setShowDetail(false); handleDeleteProduct(selectedProduct.id, true); }}
 										className="flex-1 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
 									>
 										<span className="material-symbols-outlined text-lg">delete</span> Xóa sản phẩm

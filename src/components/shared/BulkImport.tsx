@@ -595,16 +595,7 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 	};
 
 	const downloadTemplate = () => {
-		if (type === 'products') {
-			window.open('https://docs.google.com/spreadsheets/d/1H3HIbPwMx0igc1zlj55SvHTi5zLtedh1Nho5UQZk6hY/copy', '_blank');
-			return;
-		}
-		const ws = XLSX.utils.json_to_sheet([
-			config.fields.reduce((acc, f) => ({ ...acc, [f.label]: '' }), {})
-		]);
-		const wb = XLSX.utils.book_new();
-		XLSX.utils.book_append_sheet(wb, ws, "Template");
-		XLSX.writeFile(wb, `Template_Import_${type}.xlsx`);
+		window.open('https://docs.google.com/spreadsheets/d/1H3HIbPwMx0igc1zlj55SvHTi5zLtedh1Nho5UQZk6hY/copy', '_blank');
 	};
 
 	return (
@@ -670,7 +661,7 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 										onClick={downloadTemplate}
 										className="mt-6 w-full py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center justify-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
 									>
-										<Download size={16} /> {type === 'products' ? 'Sử dụng Spreadsheet Mẫu' : 'Tải file mẫu (.xlsx)'}
+										<Download size={16} /> Sử dụng Spreadsheet Mẫu
 									</button>
 								</div>
 

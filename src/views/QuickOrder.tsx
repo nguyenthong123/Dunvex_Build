@@ -1034,7 +1034,13 @@ const QuickOrder = () => {
 															// Filter products based on selected category (if any) and search query
 															const matches = products.filter(p => {
 																const isCatMatch = !item.category || normalizeText(p.category) === currentCategory;
-																const isProductMatch = isMatch(p.name, lineSearchQuery) || (p.sku && isMatch(p.sku, lineSearchQuery));
+																const isProductMatch = isMatch(p.name || '', lineSearchQuery) || 
+																	isMatch(p.sku || '', lineSearchQuery) || 
+																	isMatch(p.category || '', lineSearchQuery) || 
+																	isMatch(p.note || '', lineSearchQuery) || 
+																	isMatch(p.specification || '', lineSearchQuery) || 
+																	isMatch(p.packaging || '', lineSearchQuery) || 
+																	isMatch(p.density || '', lineSearchQuery);
 																return isCatMatch && isProductMatch;
 															});
 

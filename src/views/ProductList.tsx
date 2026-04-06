@@ -929,7 +929,11 @@ const ProductList = () => {
 	const filteredProducts = sourceList.filter(product => {
 		const matchesSearch = isMatch(product.name || '', searchTerm) ||
 			isMatch(product.sku || '', searchTerm) ||
-			isMatch(product.category || '', searchTerm);
+			isMatch(product.category || '', searchTerm) ||
+			isMatch(product.note || '', searchTerm) ||
+			isMatch(product.specification || '', searchTerm) ||
+			isMatch(product.packaging || '', searchTerm) ||
+			isMatch(product.density || '', searchTerm);
 
 		if (currentFilter === 'low_stock') {
 			return matchesSearch && (Number(product.stock) || 0) <= 10;

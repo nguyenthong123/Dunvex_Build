@@ -27,7 +27,7 @@ import MainLayout from './components/layout/MainLayout';
 import ReloadPrompt from './components/ReloadPrompt';
 import { ToastProvider } from './components/shared/Toast';
 import OfflineBanner from './components/shared/OfflineBanner';
-import ZenithChatbot from './components/ZenithChatbot';
+
 
 const LoadingSpinner = () => (
 	<div className="min-h-screen bg-[#F0F2F5] flex items-center justify-center">
@@ -160,7 +160,7 @@ function App() {
 				</Suspense>
 				<ReloadPrompt />
 				<OfflineBanner />
-				{currentUser && <ZenithChatbot />}
+
 			</div>
 		</ToastProvider>
 	);

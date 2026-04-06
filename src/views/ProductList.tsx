@@ -60,8 +60,9 @@ const ProductList = () => {
 	const [formData, setFormData] = useState({
 		name: '',
 		sku: '',
+		serialNumber: '',
 		category: 'Tôn lợp',
-		priceBuy: 0,
+		priceImport: 0,
 		priceSell: 0,
 		stock: 0,
 		unit: 'm2',
@@ -668,8 +669,9 @@ const ProductList = () => {
 		setFormData({
 			name: '',
 			sku: newSku,
+			serialNumber: '',
 			category: 'Tôn lợp',
-			priceBuy: 0,
+			priceImport: 0,
 			priceSell: 0,
 			stock: 0,
 			unit: 'm2',
@@ -691,8 +693,9 @@ const ProductList = () => {
 		setFormData({
 			name: product.name,
 			sku: product.sku || '',
+			serialNumber: product.serialNumber || '',
 			category: product.category || 'Tôn lợp',
-			priceBuy: product.priceBuy || 0,
+			priceImport: product.priceImport || 0,
 			priceSell: product.priceSell || 0,
 			stock: product.stock || 0,
 			unit: product.unit || 'm2',
@@ -929,6 +932,8 @@ const ProductList = () => {
 	const filteredProducts = sourceList.filter(product => {
 		const matchesSearch = isMatch(product.name || '', searchTerm) ||
 			isMatch(product.sku || '', searchTerm) ||
+			isMatch(product.serialNumber || '', searchTerm) ||
+			isMatch(product.id || '', searchTerm) ||
 			isMatch(product.category || '', searchTerm) ||
 			isMatch(product.note || '', searchTerm) ||
 			isMatch(product.specification || '', searchTerm) ||
@@ -1301,7 +1306,7 @@ const ProductList = () => {
 													/>
 												</th>
 												<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Sản phẩm</th>
-												<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Mã SKU</th>
+												<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">SKU / Số Seri</th>
 												<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-right">Giá Bán</th>
 												<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Tồn kho</th>
 												<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Trạng thái</th>
@@ -1346,9 +1351,12 @@ const ProductList = () => {
 															</div>
 														</td>
 														<td className="py-4 px-6">
-															<div className="flex items-center gap-1.5 group/sku" onClick={(e) => { e.stopPropagation(); copyToClipboard(product.sku || product.id, 'mã SKU'); }}>
-																<span className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">{product.sku || 'N/A'}</span>
-																<span className="material-symbols-outlined text-[14px] opacity-0 group-hover/sku:opacity-100">content_copy</span>
+															<div className="flex flex-col gap-0.5">
+																<div className="flex items-center gap-1.5 group/sku" onClick={(e) => { e.stopPropagation(); copyToClipboard(product.sku || product.id, 'mã SKU'); }}>
+																	<span className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">{product.sku || 'N/A'}</span>
+																	<span className="material-symbols-outlined text-[14px] opacity-0 group-hover/sku:opacity-100">content_copy</span>
+																</div>
+																{product.serialNumber && <div className="text-[9px] font-bold text-orange-500 uppercase">SN: {product.serialNumber}</div>}
 															</div>
 														</td>
 														<td className="py-4 px-6 text-right">
@@ -1643,7 +1651,8 @@ const ProductList = () => {
 														<div>
 															<h3 className="font-bold text-[#1A237E] dark:text-indigo-400 leading-tight uppercase text-xs">{product.name}</h3>
 															<div className="text-[9px] text-slate-400 font-black uppercase tracking-widest mt-0.5">{product.category}</div>
-															<div className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">{product.sku || 'N/A'}</div>
+															<div className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 uppercase leading-none">{product.sku || 'N/A'}</div>
+															{product.serialNumber && <div className="text-[9px] text-orange-500 font-bold mt-1 uppercase tracking-widest leading-none">SN: {product.serialNumber}</div>}
 														</div>
 													</div>
 													<button onClick={(e) => { e.stopPropagation(); openEdit(product); }} className="size-8 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-400 flex items-center justify-center">
@@ -1955,6 +1964,16 @@ const ProductList = () => {
 											</div>
 										</div>
 										<div>
+											<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Số Seri (Serial Number)</label>
+											<input
+												type="text"
+												placeholder="Nhập số seri..."
+												className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-slate-900 dark:text-white font-bold placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
+												value={formData.serialNumber}
+												onChange={(e) => setFormData({ ...formData, serialNumber: e.target.value })}
+											/>
+										</div>
+										<div>
 											<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Đơn vị tính</label>
 											<input
 												list="product-units"
@@ -1976,8 +1995,8 @@ const ProductList = () => {
 												<input
 													type="number"
 													className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-slate-900 dark:text-white font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
-													value={formData.priceBuy === 0 ? '' : formData.priceBuy}
-													onChange={(e) => setFormData({ ...formData, priceBuy: e.target.value === '' ? 0 : Number(e.target.value) })}
+													value={formData.priceImport === 0 ? '' : formData.priceImport}
+													onChange={(e) => setFormData({ ...formData, priceImport: e.target.value === '' ? 0 : Number(e.target.value) })}
 												/>
 											</div>
 										)}
@@ -2138,6 +2157,17 @@ const ProductList = () => {
 													<span className="material-symbols-outlined text-[14px] text-gray-300 group-hover/copy:text-blue-500 transition-colors">content_copy</span>
 												)}
 											</div>
+											{selectedProduct.serialNumber && (
+												<div
+													className="flex items-center gap-1.5 bg-orange-50 dark:bg-orange-900/30 px-2 py-1 rounded-lg border border-orange-100 dark:border-orange-800/50 cursor-pointer group/copy hover:bg-orange-100/50 transition-all active:scale-95"
+													onClick={() => copyToClipboard(selectedProduct.serialNumber, 'số Seri')}
+													title="Copy số Seri"
+												>
+													<span className="material-symbols-outlined text-[14px] text-orange-500">fingerprint</span>
+													<span className="text-xs font-bold text-orange-600 dark:text-orange-300">SN: {selectedProduct.serialNumber}</span>
+													<span className="material-symbols-outlined text-[12px] text-orange-400 opacity-0 group-hover/copy:opacity-100 transition-opacity">content_copy</span>
+												</div>
+											)}
 											<div className="flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-1 rounded-lg border border-indigo-100 dark:border-indigo-800/50">
 												<span className="material-symbols-outlined text-[14px] text-indigo-500">category</span>
 												<span className="text-xs font-bold text-indigo-600 dark:text-indigo-300">{selectedProduct.category}</span>
@@ -2167,11 +2197,11 @@ const ProductList = () => {
 									<div className="grid grid-cols-2 gap-4">
 										<div className="bg-orange-50 dark:bg-slate-800 p-4 rounded-2xl border border-orange-100 dark:border-orange-500/20">
 											<p className="text-[10px] font-bold text-orange-500 uppercase mb-1">Giá nhập kho</p>
-											<p className="text-orange-600 dark:text-orange-400 font-black text-xl">{formatPrice(selectedProduct.priceBuy)}</p>
+											<p className="text-orange-600 dark:text-orange-400 font-black text-xl">{formatPrice(selectedProduct.priceImport)}</p>
 										</div>
 										<div className="bg-emerald-50 dark:bg-slate-800 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-500/20">
 											<p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-500 uppercase mb-1">Lợi nhuận ước tính</p>
-											<p className="text-emerald-600 dark:text-emerald-400 font-black text-xl">{formatPrice(selectedProduct.priceSell - selectedProduct.priceBuy)}</p>
+											<p className="text-emerald-600 dark:text-emerald-400 font-black text-xl">{formatPrice(selectedProduct.priceSell - selectedProduct.priceImport)}</p>
 										</div>
 									</div>
 								)}

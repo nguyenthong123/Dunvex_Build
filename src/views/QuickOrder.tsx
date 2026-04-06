@@ -126,7 +126,7 @@ const QuickOrder = () => {
 							// ✅ FIX: Look up current product to get accurate buyPrice per category
 							// This fixes the case where saved buyPrice was an incorrect FIFO average
 							const currentProduct = products.find(p => p.id === (item.id || item.productId));
-							const accurateBuyPrice = currentProduct?.priceBuy || item.buyPrice || 0;
+							const accurateBuyPrice = currentProduct?.priceImport || item.buyPrice || 0;
 
 							return {
 								id: Math.random(),
@@ -310,7 +310,7 @@ const QuickOrder = () => {
 				newItems[index].name = prod.name;
 				newItems[index].sku = prod.sku || '';
 				newItems[index].price = prod.priceSell;
-				newItems[index].buyPrice = prod.priceBuy || 0; // Capture current buy price
+				newItems[index].buyPrice = prod.priceImport || 0; // Capture current buy price
 				newItems[index].unit = prod.unit;
 				newItems[index].category = prod.category;
 				newItems[index].packaging = prod.packaging;
@@ -341,7 +341,7 @@ const QuickOrder = () => {
 						name: product.name,
 						qty: 1,
 						price: product.priceSell,
-						buyPrice: product.priceBuy || 0,
+						buyPrice: product.priceImport || 0,
 						unit: product.unit,
 						packaging: product.packaging,
 						density: product.density,
@@ -486,9 +486,9 @@ const QuickOrder = () => {
 					stockCandidates = [sourceProduct];
 				}
 
-				// ✅ COST/PROFIT: Exact priceBuy from the selected product's category ONLY
+				// ✅ COST/PROFIT: Exact priceImport from the selected product's category ONLY
 				// Giá vốn lấy đúng theo sản phẩm đã chọn, không pha trộn category
-				const exactBuyPrice = Number(sourceProduct?.priceBuy) || 0;
+				const exactBuyPrice = Number(sourceProduct?.priceImport) || 0;
 
 				// Build stockDeletions for inventory (SKU-based)
 				for (const cand of stockCandidates) {
@@ -502,7 +502,7 @@ const QuickOrder = () => {
 						productId: cand.id,
 						qty: take,
 						productName: cand.name,
-						buyPrice: cand.priceBuy || 0
+						buyPrice: cand.priceImport || 0
 					});
 					remainingQty -= take;
 				}
@@ -516,7 +516,7 @@ const QuickOrder = () => {
 							productId: mainCand.id,
 							qty: remainingQty,
 							productName: mainCand.name,
-							buyPrice: mainCand.priceBuy || 0
+							buyPrice: mainCand.priceImport || 0
 						});
 					}
 				}

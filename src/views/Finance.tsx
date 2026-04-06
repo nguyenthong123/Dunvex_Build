@@ -665,7 +665,7 @@ const Finance = () => {
 			const itemDetails = (order.items || []).map((item: any) => {
 				const matches = products.filter(p => p.id === (item.productId || item.id) || (p.sku && item.sku && p.sku === item.sku) || (p.name && item.name && p.name.trim().toLowerCase() === item.name.trim().toLowerCase()));
 				const currentProd = item.category ? (matches.find(p => p.category === item.category) || matches[0]) : matches[0];
-				const activeBuyPrice = currentProd ? (Number(currentProd.priceBuy) || 0) : (Number(item.buyPrice) || 0);
+				const activeBuyPrice = currentProd ? (Number(currentProd.priceImport) || 0) : (Number(item.buyPrice) || 0);
 				return `- Danh mục: ${item.category || 'N/A'} | SP: ${item.name} | SL: ${item.qty} | Giá bán: ${formatPrice(item.price)}/sp | Giá gốc tra cứu kết hợp AI: ${formatPrice(activeBuyPrice)}/sp`;
 			}).join('\n');
 

@@ -55,7 +55,7 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 			fields: [
 				{ key: 'name', label: 'Tên sản phẩm', required: true, type: 'string' },
 				{ key: 'category', label: 'Danh mục', default: 'Khác', type: 'string' },
-				{ key: 'priceBuy', label: 'Giá nhập', type: 'number', default: 0 },
+				{ key: 'priceImport', label: 'Giá nhập', type: 'number', default: 0 },
 				{ key: 'priceSell', label: 'Giá bán', type: 'number', required: true },
 				{ key: 'stock', label: 'Tồn kho', type: 'number', default: 0 },
 				{ key: 'unit', label: 'Đơn vị', default: 'Cái', type: 'string' },

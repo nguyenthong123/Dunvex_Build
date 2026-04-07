@@ -1034,6 +1034,7 @@ const ProductList = () => {
 						<div class="product-name">${product.name}</div>
 						<div class="sku-details">ID: ${product.id}</div>
 						<div class="sku-details">SKU: ${product.sku || '---'}</div>
+						<div class="sku-details" style="color: #B48C00;">SN: ${product.serialNumber || '---'}</div>
 					</div>
 					<div class="no-print" style="margin-top: 40px; display: flex; gap: 15px;">
 						<button onclick="window.print()" style="padding: 15px 35px; background: #1A237E; color: white; border: none; border-radius: 12px; font-weight: 900; cursor: pointer; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 10px 20px rgba(26,35,126,0.2);">IN TEM NGAY</button>

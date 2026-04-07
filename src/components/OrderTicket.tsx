@@ -123,11 +123,11 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 	};
 
 	return (
-		<div className="fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-xl flex flex-col items-center overflow-y-auto pt-32 md:pt-10 pb-10 custom-scrollbar print:hidden">
+		<div className="fixed inset-0 z-100 bg-slate-900/95 backdrop-blur-xl flex flex-col items-center overflow-y-auto pt-32 md:pt-10 pb-10 custom-scrollbar print:hidden">
 
 
 			{/* CONTROLS - Hidden when printing */}
-			<div className="fixed top-4 right-4 flex items-center gap-3 z-[110] no-print">
+			<div className="fixed top-4 right-4 flex items-center gap-3 z-110 no-print">
 				<div className="flex bg-white/10 backdrop-blur-md rounded-full p-1 border border-white/20 mr-4">
 					{[0.6, 0.85, 1.0].map((v) => (
 						<button
@@ -162,7 +162,7 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 					transformOrigin: 'top center',
 					marginBottom: (scale * zoom) < 1 ? `-${(1 - (scale * zoom)) * 1100}px` : '0'
 				}}
-				className="flex-shrink-0 print-scale"
+				className="shrink-0 print-scale"
 			>
 				<div
 					id="order-ticket-paper"
@@ -290,7 +290,12 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 										{order.items?.map((item: any, idx: number) => (
 											<tr key={idx} className="hover:bg-gray-50/50 transition-colors">
 												<td className="px-3 py-4 text-center border-r border-gray-50 font-bold text-gray-400 text-xs">{idx + 1}</td>
-												<td className="px-5 py-4 border-r border-gray-50 font-black text-[#1A237E] uppercase tracking-tight leading-tight">{item.name}</td>
+												<td className="px-5 py-4 border-r border-gray-50 font-black text-[#1A237E] uppercase tracking-tight leading-tight">
+													<div>{item.name}</div>
+													{item.serialNumber && (
+														<div className="text-[10px] text-[#B48C00] mt-0.5 font-bold">SN: {item.serialNumber}</div>
+													)}
+												</td>
 												<td className="px-3 py-4 text-center border-r border-gray-50 text-gray-500 font-bold text-xs uppercase">{item.unit || '---'}</td>
 												<td className="px-3 py-4 text-center border-r border-gray-50 font-black text-gray-900 text-base">{item.qty}</td>
 												<td className="px-5 py-4 text-right border-r border-gray-50 text-gray-600 font-bold">{formatPrice(item.price)}</td>

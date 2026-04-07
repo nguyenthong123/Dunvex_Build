@@ -43,7 +43,7 @@ const QuickOrder = () => {
 
 	// Line items state
 	const [lineItems, setLineItems] = useState<any[]>([
-		{ id: Date.now(), category: '', productId: '', name: '', qty: '', price: 0, buyPrice: 0, unit: '', packaging: '', density: '', maxStock: 0 }
+		{ id: Date.now(), category: '', productId: '', name: '', serialNumber: '', qty: '', price: 0, buyPrice: 0, unit: '', packaging: '', density: '', maxStock: 0 }
 	]);
 
 	// Adjustments
@@ -139,6 +139,7 @@ const QuickOrder = () => {
 								unit: item.unit || '',
 								packaging: item.packaging || '',
 								density: item.density || '',
+								serialNumber: item.serialNumber || '',
 								maxStock: currentProduct ? (Number(currentProduct.stock) || 0) : 0
 							};
 						}));
@@ -269,7 +270,7 @@ const QuickOrder = () => {
 	}, [lineItems.length, products, loading, fetchingOrder]);
 
 	const addLineItem = () => {
-		setLineItems([...lineItems, { id: Date.now(), category: '', productId: '', sku: '', name: '', qty: '', price: 0, buyPrice: 0, unit: '', packaging: '', density: '', maxStock: 0 }]);
+		setLineItems([...lineItems, { id: Date.now(), category: '', productId: '', sku: '', name: '', serialNumber: '', qty: '', price: 0, buyPrice: 0, unit: '', packaging: '', density: '', maxStock: 0 }]);
 	};
 
 	const removeLineItem = (index: number) => {
@@ -309,6 +310,7 @@ const QuickOrder = () => {
 			if (prod) {
 				newItems[index].name = prod.name;
 				newItems[index].sku = prod.sku || '';
+				newItems[index].serialNumber = prod.serialNumber || '';
 				newItems[index].price = prod.priceSell;
 				newItems[index].buyPrice = prod.priceImport || 0; // Capture current buy price
 				newItems[index].unit = prod.unit;
@@ -345,6 +347,7 @@ const QuickOrder = () => {
 						unit: product.unit,
 						packaging: product.packaging,
 						density: product.density,
+						serialNumber: product.serialNumber || '',
 						maxStock: getEffectiveStock(product)
 					}
 				]);
@@ -531,7 +534,8 @@ const QuickOrder = () => {
 					unit: item.unit || '',
 					category: item.category || '',
 					density: item.density || '',
-					packaging: item.packaging || ''
+					packaging: item.packaging || '',
+					serialNumber: item.serialNumber || ''
 				});
 			});
 
@@ -1000,6 +1004,11 @@ const QuickOrder = () => {
 													<span className={`text-[12px] font-bold truncate ${item.name ? 'text-slate-900 dark:text-white' : 'text-slate-300 dark:text-slate-600'} mr-2`}>
 														{item.name || 'Tìm sản phẩm...'}
 													</span>
+													{item.serialNumber && (
+														<span className="text-[10px] font-black text-[#B48C00] uppercase leading-none mb-1">
+															SN: {item.serialNumber}
+														</span>
+													)}
 													{item.sku && (
 														<span
 															className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase flex items-center gap-1 hover:text-[#f27121] transition-colors"
@@ -1069,6 +1078,11 @@ const QuickOrder = () => {
 																		>
 																			<div className="flex flex-col gap-1 max-w-[70%]">
 																				<span className="text-xs font-black text-slate-800 dark:text-slate-200 group-hover/prod:text-[#1A237E] dark:group-hover/prod:text-indigo-400 transition-colors uppercase leading-tight line-clamp-2">{p.name}</span>
+																				{p.serialNumber && (
+																					<span className="text-[9px] font-black text-[#B48C00] uppercase leading-none">
+																						SN: {p.serialNumber}
+																					</span>
+																				)}
 																				<div className="flex items-center gap-2">
 																					<div
 																						className="flex items-center gap-1 cursor-pointer group/sku"

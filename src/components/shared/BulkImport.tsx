@@ -60,7 +60,7 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 				{ key: 'stock', label: 'Tồn kho', type: 'number', default: 0 },
 				{ key: 'unit', label: 'Đơn vị', default: 'Cái', type: 'string' },
 				{ key: 'sku', label: 'Mã SKU', type: 'string' },
-				{ key: 'specification', label: 'Quy cách', type: 'string' },
+				{ key: 'serialNumber', label: 'Số Seri (SN)', type: 'string' },
 				{ key: 'specification', label: 'Quy cách', type: 'string' },
 				{ key: 'packaging', label: 'Đóng gói', type: 'number', default: 0 },
 				{ key: 'density', label: 'Trọng lượng', type: 'number', default: 0 },
@@ -161,6 +161,12 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 					if (field.key === 'category') {
 						const catSynonyms = ['danhmục', 'ngànhhàng', 'loại', 'phânloại', 'nhóm', 'group', 'category'];
 						if (catSynonyms.some(s => cleanH.includes(s) || s.includes(cleanH))) return true;
+					}
+
+					// Synonyms for 'serialNumber'
+					if (field.key === 'serialNumber') {
+						const snSynonyms = ['sốseri', 'seri', 'sn', 'serial', 'mãvạch'];
+						if (snSynonyms.some(s => cleanH.includes(s) || s.includes(cleanH))) return true;
 					}
 
 					return false;

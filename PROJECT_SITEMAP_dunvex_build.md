@@ -81,6 +81,10 @@ Hệ thống điều hướng đã được nâng cấp để thay đổi ngữ 
 
 ## 4. Các mục đã hoàn thành & Cần làm (To-do)
 
+### April 7, 2026 - Device Tracking & Printing
+- [x] **Product SN Field**: Added `serialNumber` field to Product model.
+- [x] **QR Label Update**: Included SN on printed QR tags for better item tracking.
+
 ### ✅ Đã hoàn thành (Done)
 - [x] **Chuyển đổi Trung tâm Đào tạo thành Knowledge Base (Blog-style Training Center - Mar 30)**:
     - **Loại bỏ Gamification (Gần dân hơn)**: Gỡ bỏ hoàn toàn hệ thống tính điểm (userPoints), huy hiệu kỹ năng và hệ thống chứng chỉ (Nhập môn, Thành thạo...). Thay thế bằng giao diện Bookmark tinh tế để lưu lại các bài viết quan trọng.

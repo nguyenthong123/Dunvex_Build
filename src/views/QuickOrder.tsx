@@ -1029,7 +1029,7 @@ const QuickOrder = () => {
 														<input
 															autoFocus
 															type="text"
-															placeholder="Tìm theo tên hoặc SKU..."
+															placeholder="Tìm theo tên, SKU hoặc Số Seri..."
 															className="w-full h-11 px-4 bg-slate-50 dark:bg-slate-900 border-none rounded-xl text-base font-bold focus:ring-0"
 															value={lineSearchQuery}
 															onChange={(e) => setLineSearchQuery(e.target.value)}
@@ -1045,6 +1045,7 @@ const QuickOrder = () => {
 																const isCatMatch = !item.category || normalizeText(p.category) === currentCategory;
 																const isProductMatch = isMatch(p.name || '', lineSearchQuery) || 
 																	isMatch(p.sku || '', lineSearchQuery) || 
+																	isMatch(p.serialNumber || '', lineSearchQuery) || 
 																	isMatch(p.category || '', lineSearchQuery) || 
 																	isMatch(p.note || '', lineSearchQuery) || 
 																	isMatch(p.specification || '', lineSearchQuery) || 

@@ -140,6 +140,7 @@ const QuickOrder = () => {
 								packaging: item.packaging || '',
 								density: item.density || '',
 								serialNumber: item.serialNumber || '',
+								imageUrl: item.imageUrl || currentProduct?.imageUrl || '',
 								maxStock: currentProduct ? (Number(currentProduct.stock) || 0) : 0
 							};
 						}));
@@ -270,7 +271,7 @@ const QuickOrder = () => {
 	}, [lineItems.length, products, loading, fetchingOrder]);
 
 	const addLineItem = () => {
-		setLineItems([...lineItems, { id: Date.now(), category: '', productId: '', sku: '', name: '', serialNumber: '', qty: '', price: 0, buyPrice: 0, unit: '', packaging: '', density: '', maxStock: 0 }]);
+		setLineItems([...lineItems, { id: Date.now(), category: '', productId: '', sku: '', name: '', imageUrl: '', serialNumber: '', qty: '', price: 0, buyPrice: 0, unit: '', packaging: '', density: '', maxStock: 0 }]);
 	};
 
 	const removeLineItem = (index: number) => {
@@ -317,6 +318,7 @@ const QuickOrder = () => {
 				newItems[index].category = prod.category;
 				newItems[index].packaging = prod.packaging;
 				newItems[index].density = prod.density;
+				newItems[index].imageUrl = prod.imageUrl || '';
 				newItems[index].maxStock = getEffectiveStock(prod);
 			}
 		}
@@ -347,6 +349,7 @@ const QuickOrder = () => {
 						unit: product.unit,
 						packaging: product.packaging,
 						density: product.density,
+						imageUrl: product.imageUrl || '',
 						serialNumber: product.serialNumber || '',
 						maxStock: getEffectiveStock(product)
 					}
@@ -535,6 +538,7 @@ const QuickOrder = () => {
 					category: item.category || '',
 					density: item.density || '',
 					packaging: item.packaging || '',
+					imageUrl: item.imageUrl || '',
 					serialNumber: item.serialNumber || ''
 				});
 			});

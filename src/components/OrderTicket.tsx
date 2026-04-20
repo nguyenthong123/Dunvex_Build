@@ -3,6 +3,7 @@ import { FileText, Download, Share2, Building2, MapPin, Phone, Mail } from 'luci
 import { db } from '../services/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { useOwner } from '../hooks/useOwner';
+import { getOptimizedImageUrl } from '../utils/validation';
 
 interface OrderTicketProps {
 	order: any;
@@ -278,7 +279,7 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 								<table className="w-full text-left text-sm border-collapse">
 									<thead className="bg-[#1c130d] text-white uppercase font-black text-[10px] tracking-widest">
 										<tr>
-											<th className="px-3 py-4 text-center w-10 border-r border-white/10">STT</th>
+											<th className="px-3 py-4 text-center w-14 border-r border-white/10">ẢNH</th>
 											<th className="px-5 py-4 border-r border-white/10">Tên Hàng Hóa / Sản phẩm</th>
 											<th className="px-3 py-4 text-center border-r border-white/10 w-16">ĐVT</th>
 											<th className="px-3 py-4 text-center border-r border-white/10 w-16">SL</th>
@@ -289,7 +290,23 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 									<tbody className="divide-y divide-gray-100">
 										{order.items?.map((item: any, idx: number) => (
 											<tr key={idx} className="hover:bg-gray-50/50 transition-colors">
-												<td className="px-3 py-4 text-center border-r border-gray-50 font-bold text-gray-400 text-xs">{idx + 1}</td>
+												<td className="px-2 py-4 text-center border-r border-gray-50 align-middle">
+													<div className="flex justify-center">
+														{item.imageUrl ? (
+															<div className="size-12 rounded-full border-2 border-white shadow-[0_8px_16px_rgba(0,0,0,0.15),inset_0_2px_4px_rgba(255,255,255,0.4)] ring-1 ring-gray-200 overflow-hidden bg-white shrink-0 transform transition-transform hover:scale-105 active:scale-95">
+																<img 
+																	src={getOptimizedImageUrl(item.imageUrl)} 
+																	alt={item.name} 
+																	className="size-full object-cover"
+																/>
+															</div>
+														) : (
+															<div className="size-12 rounded-full border-2 border-dashed border-gray-200 bg-gray-50 flex items-center justify-center text-[10px] font-black text-gray-400 uppercase tracking-tighter shadow-inner">
+																{item.name?.slice(0, 2)}
+															</div>
+														)}
+													</div>
+												</td>
 												<td className="px-5 py-4 border-r border-gray-50 font-black text-[#1A237E] uppercase tracking-tight leading-tight">
 													<div>{item.name}</div>
 													{item.serialNumber && (

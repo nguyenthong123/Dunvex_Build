@@ -4,7 +4,12 @@ import { auth, db } from '../services/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, where, writeBatch, increment, limit, getDoc, getDocs } from 'firebase/firestore';
 import BulkImport from '../components/shared/BulkImport';
 import QRScanner from '../components/shared/QRScanner';
-import { QRCodeCanvas } from 'qrcode.react';
+import InventoryActionButtons from '../components/inventory/InventoryActionButtons';
+import InventoryFormModal from '../components/inventory/InventoryFormModal';
+import InventoryDetailModal from '../components/inventory/InventoryDetailModal';
+import InventoryDesktopTable from '../components/inventory/InventoryDesktopTable';
+import InventoryMobileGrid from '../components/inventory/InventoryMobileGrid';
+import InventoryLogsTable from '../components/inventory/InventoryLogsTable';
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
 import { getOptimizedImageUrl } from '../utils/validation';
@@ -559,7 +564,7 @@ const ProductList = () => {
 		}
 	};
 
-	const handleDeleteProduct = async (id: string, bypassConfirm = false) => {
+	const handleDeleteProduct = async (id: string, bypassConfirm: boolean = false) => {
 		if (bypassConfirm || window.confirm("Bạn có chắc chắn muốn xóa sản phẩm này không?")) {
 			try {
 				await deleteDoc(doc(db, 'products', id));
@@ -1292,452 +1297,42 @@ const ProductList = () => {
 				{activeTab !== 'logs' ? (
 					<>
 						{/* Table - Desktop */}
-						<div className="hidden md:block bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-800 overflow-hidden transition-colors duration-300">
-							<table className="w-full text-left">
-								{activeTab === 'products' ? (
-									<>
-										<thead>
-											<tr className="bg-slate-100/50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
-												<th className="py-4 px-6 w-10">
-													<input
-														type="checkbox"
-														className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-														checked={paginatedProducts.length > 0 && paginatedProducts.every(p => selectedIds.includes(p.id))}
-														onChange={toggleSelectAll}
-													/>
-												</th>
-												<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Sản phẩm</th>
-												<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">SKU / Số Seri</th>
-												<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-right">Giá Bán</th>
-												<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Tồn kho</th>
-												<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Trạng thái</th>
-												<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-right">Hành động</th>
-											</tr>
-										</thead>
-										<tbody className="divide-y divide-gray-100 dark:divide-slate-800">
-											{loading ? (
-												[1, 2, 3, 4, 5].map(i => (
-													<tr key={i} className="animate-pulse">
-														<td className="py-4 px-6"><div className="size-4 skeleton" /></td>
-														<td className="py-4 px-6"><div className="w-48 h-4 skeleton" /></td>
-														<td className="py-4 px-6"><div className="w-24 h-4 skeleton" /></td>
-														<td className="py-4 px-6"><div className="w-20 h-4 skeleton ml-auto" /></td>
-														<td className="py-4 px-6"><div className="w-12 h-4 skeleton mx-auto" /></td>
-														<td className="py-4 px-6"><div className="w-16 h-4 skeleton mx-auto" /></td>
-														<td className="py-4 px-6"><div className="w-20 h-8 skeleton ml-auto" /></td>
-													</tr>
-												))
-											) : paginatedProducts.length === 0 ? (
-												<tr><td colSpan={7} className="py-8 text-center text-slate-400">Không tìm thấy sản phẩm nào</td></tr>
-											) : (
-												paginatedProducts.map((product) => (
-													<tr key={product.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer ${selectedIds.includes(product.id) ? 'bg-indigo-50/30' : ''}`} onClick={() => openDetail(product)}>
-														<td className="py-4 px-6" onClick={(e) => e.stopPropagation()}>
-															<input
-																type="checkbox"
-																className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-																checked={selectedIds.includes(product.id)}
-																onChange={() => toggleSelect(product.id)}
-															/>
-														</td>
-														<td className="py-4 px-6">
-															<div className="flex items-center gap-3">
-																<div className="size-10 rounded-lg bg-slate-50 dark:bg-slate-800 flex items-center justify-center overflow-hidden border border-slate-100 dark:border-slate-700">
-																	{product.imageUrl ? <img src={getImageUrl(product.imageUrl)} alt="" className="size-full object-cover" /> : <span className="material-symbols-outlined text-slate-300">image</span>}
-																</div>
-																<div>
-																	<div className="font-bold text-slate-900 dark:text-white">{product.name}</div>
-																	<div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{product.category}</div>
-																</div>
-															</div>
-														</td>
-														<td className="py-4 px-6">
-															<div className="flex flex-col gap-0.5">
-																<div className="flex items-center gap-1.5 group/sku" onClick={(e) => { e.stopPropagation(); copyToClipboard(product.sku || product.id, 'mã SKU'); }}>
-																	<span className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">{product.sku || 'N/A'}</span>
-																	<span className="material-symbols-outlined text-[14px] opacity-0 group-hover/sku:opacity-100">content_copy</span>
-																</div>
-																{product.serialNumber && <div className="text-[9px] font-bold text-orange-500 uppercase">SN: {product.serialNumber}</div>}
-															</div>
-														</td>
-														<td className="py-4 px-6 text-right">
-															<div className="font-black text-[#1A237E] dark:text-indigo-400">{formatPrice(product.priceSell)}</div>
-														</td>
-														<td className="py-4 px-6 text-center">
-															<div className={`text-sm font-black ${product.stock <= 5 ? 'text-rose-500' : 'text-slate-600 dark:text-slate-300'}`}>{product.stock} {product.unit}</div>
-														</td>
-														<td className="py-4 px-6 text-center">
-															<span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${product.status === 'Kinh doanh' ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-500'}`}>
-																{product.status || 'Kinh doanh'}
-															</span>
-														</td>
-														<td className="py-4 px-6 text-right">
-															{hasManagePermission && (
-																<div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-																	<button onClick={() => openEdit(product)} className="p-2 text-slate-300 hover:text-orange-500 transition-colors">
-																		<span className="material-symbols-outlined text-[20px]">edit</span>
-																	</button>
-																	<button onClick={() => setDeleteConfirmId(product.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
-																		<span className="material-symbols-outlined text-[20px]">delete</span>
-																	</button>
-																</div>
-															)}
-														</td>
-													</tr>
-												))
-											)}
-										</tbody>
-									</>
-								) : (
-									<>
-										<thead>
-											<tr className="bg-slate-100/50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
-												<th className="py-4 px-6 w-10">
-													<input
-														type="checkbox"
-														className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-														checked={paginatedProducts.length > 0 && paginatedProducts.every(p => selectedIds.includes(p.id))}
-														onChange={toggleSelectAll}
-													/>
-												</th>
-												<th className="py-4 px-2 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Mã SKU / Code</th>
-												<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Tên sản phẩm (Gộp)</th>
-												<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Nhập kho</th>
-												<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Xuất kho</th>
-												<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Còn lại</th>
-												<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-right">Hành động</th>
-											</tr>
-										</thead>
-										<tbody className="divide-y divide-gray-100 dark:divide-slate-800">
-											{loading ? (
-												[1, 2, 3, 4, 5].map(i => (
-													<tr key={i} className="animate-pulse">
-														<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800"><div className="size-4 skeleton" /></td>
-														<td className="py-4 px-2 border-b border-slate-50 dark:border-slate-800"><div className="w-24 h-4 skeleton" /></td>
-														<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800">
-															<div className="w-48 h-4 skeleton mb-2" />
-															<div className="w-20 h-3 skeleton opacity-60" />
-														</td>
-														<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800"><div className="w-12 h-4 skeleton mx-auto" /></td>
-														<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800"><div className="w-12 h-4 skeleton mx-auto" /></td>
-														<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800"><div className="w-12 h-6 skeleton mx-auto rounded-full" /></td>
-														<td className="py-4 px-6 border-b border-slate-50 dark:border-slate-800"><div className="w-20 h-8 skeleton ml-auto" /></td>
-													</tr>
-												))
-											) : paginatedProducts.length === 0 ? (
-												<tr><td colSpan={7} className="py-8 text-center text-slate-400 dark:text-slate-500">Không tìm thấy sản phẩm nào</td></tr>
-											) : (
-												paginatedProducts.map((product) => (
-													<React.Fragment key={product.groupKey || product.id}>
-														<tr className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer ${selectedIds.includes(product.id) ? 'bg-indigo-50/30' : ''}`} onClick={() => openDetail(product)}>
-															<td className="py-4 px-6" onClick={(e) => e.stopPropagation()}>
-																<input
-																	type="checkbox"
-																	className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-																	checked={selectedIds.includes(product.id)}
-																	onChange={() => toggleSelect(product.id)}
-																/>
-															</td>
-															<td className="py-4 px-2" onClick={(e) => e.stopPropagation()}>
-																<div
-																	className="flex items-center gap-1.5 cursor-pointer hover:text-blue-600 dark:hover:text-indigo-400 transition-colors group/sku"
-																	onClick={() => copyToClipboard(product.sku || '#' + (product.id || '').slice(-6).toUpperCase(), 'mã SKU')}
-																	title="Copy mã SKU"
-																>
-																	<span className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-																		{product.sku || '#' + (product.id || '').slice(-6).toUpperCase()}
-																	</span>
-																	<span className="material-symbols-outlined text-[14px] opacity-0 group-hover/sku:opacity-100 transition-opacity">content_copy</span>
-																</div>
-															</td>
-															<td className="py-4 px-6">
-																<div className="flex items-center gap-2">
-																	<div className="font-black text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-indigo-400 transition-colors">
-																		{product.name}
-																	</div>
-																	{product.aiHealth && (
-																		<span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-tighter shadow-sm animate-pulse ${
-																			product.aiHealth === 'hot' ? 'bg-orange-100 text-orange-600 border border-orange-200' :
-																			product.aiHealth === 'urgent' ? 'bg-rose-100 text-rose-600 border border-rose-200' :
-																			product.aiHealth === 'stale' ? 'bg-slate-100 text-slate-500 border border-slate-200' :
-																			'hidden'
-																		}`}>
-																			{product.aiHealth === 'hot' ? '🔥 Bán chạy' : 
-																			 product.aiHealth === 'urgent' ? '⚠️ Sắp hết' : 
-																			 '💤 Đọng vốn'}
-																		</span>
-																	)}
-																	{product.isGrouped && (
-																		<button
-																			onClick={(e) => {
-																				e.stopPropagation();
-																				setExpandedSkus(prev => {
-																					const next = new Set(prev);
-																					if (next.has(product.groupKey)) next.delete(product.groupKey);
-																					else next.add(product.groupKey);
-																					return next;
-																				});
-																			}}
-																			className={`flex items-center gap-1 px-2 py-0.5 rounded-full border transition-all ${expandedSkus.has(product.groupKey)
-																				? 'bg-blue-600 text-white border-blue-600'
-																				: 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-800/50'
-																				}`}
-																		>
-																			<span className="text-[8px] font-black uppercase">Nhóm SKU</span>
-																			<span className={`material-symbols-outlined text-[12px] transition-transform duration-300 ${expandedSkus.has(product.groupKey) ? 'rotate-180' : ''}`}>
-																				keyboard_arrow_down
-																			</span>
-																		</button>
-																	)}
-																</div>
-																<div className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest mt-0.5 opacity-60">
-																	{product.category}
-																</div>
-															</td>
-															<td className="py-4 px-6 text-center bg-slate-50/50 dark:bg-slate-800/30">
-																<div className="flex flex-col items-center">
-																	<span className="text-sm font-black text-slate-600 dark:text-slate-300">
-																		{product.skuImport}
-																	</span>
-																	<span className="text-[9px] text-slate-400 uppercase font-black tracking-widest">{product.unit}</span>
-																</div>
-															</td>
-															<td className="py-4 px-6 text-center">
-																<div className="flex flex-col items-center">
-																	<span className="text-sm font-black text-orange-600 dark:text-orange-400">
-																		{product.skuExport}
-																	</span>
-																	<span className="text-[9px] text-slate-400 uppercase font-black tracking-widest">{product.unit}</span>
-																</div>
-															</td>
-															<td className="py-4 px-6 text-center bg-indigo-50/30 dark:bg-indigo-900/10">
-																<div className="flex flex-col items-center">
-																	<span className={`text-base font-black ${product.stock <= 5 ? 'text-rose-500' : 'text-[#1A237E] dark:text-indigo-400'}`}>
-																		{product.stock}
-																	</span>
-																	<span className="text-[9px] text-slate-400 uppercase font-black tracking-widest">{product.unit}</span>
-																</div>
-															</td>
-															<td className="py-4 px-6 text-right">
-																{hasManagePermission && (
-																	<div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-																		<button onClick={() => openEdit(product)} className="p-2 text-slate-300 dark:text-slate-600 hover:text-orange-500 dark:hover:text-orange-400 transition-colors">
-																			<span className="material-symbols-outlined text-[20px]">edit</span>
-																		</button>
-																		{deleteConfirmId === product.id ? (
-																			<div className="flex items-center gap-1 bg-rose-50 dark:bg-rose-900/20 p-1 rounded-lg border border-rose-100 dark:border-rose-900/30 animate-in fade-in zoom-in duration-200">
-																				<button
-																					onClick={() => setDeleteConfirmId(null)}
-																					className="px-2 py-1 text-[10px] font-bold text-slate-500 hover:text-slate-700 bg-white dark:bg-slate-800 rounded shadow-sm"
-																				>
-																					Hủy
-																				</button>
-																				<button
-																					onClick={() => {
-																						handleDeleteProduct(product.id, true);
-																						setDeleteConfirmId(null);
-																					}}
-																					className="px-2 py-1 text-[10px] font-bold text-white bg-rose-500 hover:bg-rose-600 rounded shadow-sm"
-																				>
-																					Xóa
-																				</button>
-																			</div>
-																		) : (
-																			<button onClick={() => setDeleteConfirmId(product.id)} className="p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors">
-																				<span className="material-symbols-outlined text-[20px]">delete</span>
-																			</button>
-																		)}
-																	</div>
-																)}
-															</td>
-														</tr>
-
-														{/* Expanded Child Rows */}
-														{product.isGrouped && expandedSkus.has(product.groupKey) && product.memberIds.map((memberId: string) => {
-															const member = products.find(p => p.id === memberId);
-															if (!member) return null;
-															const mStats = getProductInventoryStats(member.id);
-															return (
-																<tr key={member.id} className="bg-slate-50/40 dark:bg-slate-800/20 border-l-4 border-blue-400/50 hover:bg-slate-100/50 dark:hover:bg-slate-800/40 transition-colors group/child cursor-pointer" onClick={() => openDetail(member)}>
-																	<td className="py-3 px-6"></td>
-																	<td className="py-3 px-2">
-																		<span className="text-[10px] font-bold text-slate-400">{member.sku || member.id.slice(-6).toUpperCase()}</span>
-																	</td>
-																	<td className="py-3 px-6">
-																		<div className="flex items-center gap-2">
-																			<span className="text-xs font-bold text-slate-600 dark:text-slate-300">{member.name}</span>
-																			{member.spec && <span className="text-[9px] bg-slate-100 dark:bg-slate-800 px-1 rounded text-slate-400">{member.spec}</span>}
-																		</div>
-																		<div className="text-[9px] font-black text-blue-500/70 uppercase">Giá: {formatPrice(member.priceSell)}</div>
-																	</td>
-																	<td className="py-3 px-6 text-center opacity-60">
-																		<span className="text-xs font-bold text-slate-500">{mStats.import}</span>
-																	</td>
-																	<td className="py-3 px-6 text-center opacity-60">
-																		<span className="text-xs font-bold text-slate-500">{mStats.export}</span>
-																	</td>
-																	<td className="py-3 px-6 text-center">
-																		<span className={`text-xs font-black ${member.stock <= 5 ? 'text-rose-400' : 'text-slate-500'}`}>{member.stock}</span>
-																	</td>
-																	<td className="py-3 px-6 text-right">
-																		{hasManagePermission && (
-																			<div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-																				<button onClick={() => openEdit(member)} className="p-1 text-slate-300 hover:text-orange-400 transition-colors">
-																					<span className="material-symbols-outlined text-[16px]">edit</span>
-																				</button>
-																				{deleteConfirmId === member.id ? (
-																					<div className="flex items-center gap-1 bg-rose-50 dark:bg-rose-900/20 p-1 rounded-lg border border-rose-100 dark:border-rose-900/30 animate-in fade-in zoom-in duration-200">
-																						<button
-																							onClick={() => setDeleteConfirmId(null)}
-																							className="px-2 py-1 text-[10px] font-bold text-slate-500 hover:text-slate-700 bg-white dark:bg-slate-800 rounded shadow-sm"
-																						>
-																							Hủy
-																						</button>
-																						<button
-																							onClick={() => {
-																								handleDeleteProduct(member.id, true);
-																								setDeleteConfirmId(null);
-																							}}
-																							className="px-2 py-1 text-[10px] font-bold text-white bg-rose-500 hover:bg-rose-600 rounded shadow-sm"
-																						>
-																							Xóa
-																						</button>
-																					</div>
-																				) : (
-																					<button onClick={() => setDeleteConfirmId(member.id)} className="p-1 text-slate-300 hover:text-red-400 transition-colors">
-																						<span className="material-symbols-outlined text-[16px]">delete</span>
-																					</button>
-																				)}
-																			</div>
-																		)}
-																	</td>
-																</tr>
-															);
-														})}
-													</React.Fragment>
-												))
-											)}
-										</tbody>
-									</>
-								)}
-							</table>
-						</div>
+						<InventoryDesktopTable
+							loading={loading}
+							paginatedProducts={paginatedProducts}
+							selectedIds={selectedIds}
+							activeTab={activeTab}
+							expandedSkus={expandedSkus}
+							hasManagePermission={hasManagePermission}
+							toggleSelectAll={toggleSelectAll}
+							toggleSelect={toggleSelect}
+							openDetail={openDetail}
+							openEdit={openEdit}
+							copyToClipboard={copyToClipboard}
+							formatPrice={formatPrice}
+							setExpandedSkus={setExpandedSkus}
+							handleDeleteProduct={handleDeleteProduct}
+							getProductInventoryStats={getProductInventoryStats}
+							products={products}
+							getImageUrl={getImageUrl}
+						/>
 
 						{/* Grid - Mobile */}
-						<div className="md:hidden pb-4 relative">
-							{loading ? (
-								<div className="space-y-4">
-									{[1, 2, 3].map(i => (
-										<div key={i} className="bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm border border-gray-200 animate-pulse">
-											<div className="flex gap-3">
-												<div className="size-14 rounded-xl skeleton" />
-												<div className="space-y-2 flex-1">
-													<div className="w-3/4 h-4 skeleton" />
-													<div className="w-1/2 h-3 skeleton" />
-												</div>
-											</div>
-										</div>
-									))}
-								</div>
-							) : (
-								<div className="grid grid-cols-1 gap-4 pb-12">
-									{activeTab === 'products' ? (
-										paginatedProducts.map((product) => (
-											<div key={product.id} className="bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-slate-800 flex flex-col justify-between" onClick={() => openDetail(product)}>
-												<div className="flex justify-between items-start mb-4">
-													<div className="flex items-center gap-3">
-														<div className="size-14 rounded-xl bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 flex items-center justify-center overflow-hidden border border-gray-100 dark:border-slate-700 shrink-0">
-															{product.imageUrl ? <img src={getImageUrl(product.imageUrl)} alt={product.name} className="size-full object-cover" /> : <span className="material-symbols-outlined text-2xl">package_2</span>}
-														</div>
-														<div>
-															<h3 className="font-bold text-[#1A237E] dark:text-indigo-400 leading-tight uppercase text-xs">{product.name}</h3>
-															<div className="text-[9px] text-slate-400 font-black uppercase tracking-widest mt-0.5">{product.category}</div>
-															<div className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 uppercase leading-none">{product.sku || 'N/A'}</div>
-															{product.serialNumber && <div className="text-[9px] text-orange-500 font-bold mt-1 uppercase tracking-widest leading-none">SN: {product.serialNumber}</div>}
-														</div>
-													</div>
-													<button onClick={(e) => { e.stopPropagation(); openEdit(product); }} className="size-8 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-400 flex items-center justify-center">
-														<span className="material-symbols-outlined text-sm">edit</span>
-													</button>
-												</div>
-												<div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-50 dark:border-slate-800">
-													<div>
-														<p className="text-[10px] uppercase text-gray-400 font-bold">Giá bán</p>
-														<p className="text-[#1A237E] dark:text-indigo-400 font-black text-sm">{formatPrice(product.priceSell)}</p>
-													</div>
-													<div className="text-right">
-														<p className="text-[10px] uppercase text-gray-400 font-bold">Tồn kho</p>
-														<p className={`font-black text-sm ${product.stock <= 5 ? 'text-red-500' : 'text-slate-700 dark:text-slate-200'}`}>{product.stock} {product.unit}</p>
-													</div>
-												</div>
-											</div>
-										))
-									) : (
-										paginatedProducts.map((product) => (
-											<React.Fragment key={product.groupKey || product.id}>
-												<div className={`bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-slate-800 flex flex-col justify-between ${expandedSkus.has(product.groupKey) ? 'ring-2 ring-indigo-500/20' : ''}`} onClick={() => openDetail(product)}>
-													<div className="flex justify-between items-start mb-4">
-														<div className="flex items-center gap-3">
-															<div className="size-14 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 text-[#1A237E] dark:text-indigo-400 flex items-center justify-center overflow-hidden border border-gray-100 dark:border-slate-700 shrink-0">
-																{product.imageUrl ? <img src={getImageUrl(product.imageUrl)} alt="" className="size-full object-cover" /> : <span className="material-symbols-outlined text-2xl">inventory_2</span>}
-															</div>
-															<div>
-																<h3 className="font-bold text-slate-900 dark:text-indigo-300 leading-tight uppercase text-xs">{product.name} (Gộp)</h3>
-																<div className="text-[9px] text-slate-400 font-black uppercase tracking-widest mt-0.5">SKU: {product.sku || 'N/A'}</div>
-															</div>
-														</div>
-														{product.isGrouped && (
-															<button
-																onClick={(e) => {
-																	e.stopPropagation();
-																	setExpandedSkus(prev => {
-																		const next = new Set(prev);
-																		if (next.has(product.groupKey)) next.delete(product.groupKey);
-																		else next.add(product.groupKey);
-																		return next;
-																	});
-																}}
-																className={`size-8 rounded-lg flex items-center justify-center transition-all ${expandedSkus.has(product.groupKey) ? 'bg-indigo-500 text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-400'}`}
-															>
-																<span className="material-symbols-outlined text-[18px]">
-																	{expandedSkus.has(product.groupKey) ? 'expand_less' : 'expand_more'}
-																</span>
-															</button>
-														)}
-													</div>
-													<div className="grid grid-cols-3 gap-2 pt-4 border-t border-gray-50 dark:border-slate-800 text-center">
-														<div><p className="text-[9px] text-gray-400 uppercase font-bold">Nhập</p><p className="text-xs font-bold text-slate-600">{product.skuImport}</p></div>
-														<div><p className="text-[9px] text-gray-400 uppercase font-bold">Xuất</p><p className="text-xs font-bold text-orange-500">{product.skuExport}</p></div>
-														<div><p className="text-[9px] text-gray-400 uppercase font-bold">Còn</p><p className="text-xs font-black text-[#1A237E] dark:text-indigo-400">{product.stock}</p></div>
-													</div>
-												</div>
-
-												{expandedSkus.has(product.groupKey) && (
-													<div className="ml-4 space-y-3 border-l-2 border-indigo-100 pl-4 py-2">
-														{product.memberIds.map((memberId: string) => {
-															const member = products.find(p => p.id === memberId);
-															if (!member) return null;
-															return (
-																<div key={member.id} className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 border border-slate-100 flex justify-between items-center" onClick={() => openDetail(member)}>
-																	<div>
-																		<p className="text-[10px] font-bold text-slate-700 dark:text-white leading-tight">{member.name}</p>
-																		<p className="text-[9px] text-blue-500 font-bold mt-0.5">{formatPrice(member.priceSell)}</p>
-																	</div>
-																	<div className="text-right">
-																		<p className="text-[10px] font-black text-slate-900 dark:text-indigo-400">{member.stock} {member.unit}</p>
-																		<button onClick={(e) => { e.stopPropagation(); openEdit(member); }} className="text-slate-400 hover:text-indigo-500"><span className="material-symbols-outlined text-xs">edit</span></button>
-																	</div>
-																</div>
-															);
-														})}
-													</div>
-												)}
-											</React.Fragment>
-										))
-									)}
-								</div>
-							)}
-						</div>
+						<InventoryMobileGrid
+							loading={loading}
+							paginatedProducts={paginatedProducts}
+							activeTab={activeTab}
+							expandedSkus={expandedSkus}
+							openDetail={openDetail}
+							openEdit={openEdit}
+							getImageUrl={getImageUrl}
+							formatPrice={formatPrice}
+							setExpandedSkus={setExpandedSkus}
+							products={products}
+							handleDeleteProduct={handleDeleteProduct}
+							getProductInventoryStats={getProductInventoryStats}
+							hasManagePermission={hasManagePermission}
+						/>
 						<div className="mt-8 mb-4">
 
 							{/* Pagination Controls */}
@@ -1800,483 +1395,45 @@ const ProductList = () => {
 					</>
 				) : (
 					/* LOGS VIEW */
-					<div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-800 overflow-hidden">
-						<div className="overflow-x-auto">
-							<table className="w-full text-left">
-								<thead>
-									<tr className="bg-slate-100/50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
-										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Thời gian</th>
-										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Loại</th>
-										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Sản phẩm</th>
-										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Số lượng</th>
-										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Chi tiết</th>
-										<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Người thực hiện</th>
-									</tr>
-								</thead>
-								<tbody className="divide-y divide-gray-100 dark:divide-slate-800">
-									{inventoryLogs.length === 0 ? (
-										<tr><td colSpan={6} className="py-12 text-center text-slate-400">Chưa có lịch sử giao dịch kho</td></tr>
-									) : (
-										inventoryLogs.map((log) => (
-											<tr key={log.id} className="text-sm">
-												<td className="py-4 px-6 font-medium text-slate-500">
-													{log.createdAt ? new Date(log.createdAt.seconds * 1000).toLocaleString('vi-VN') : '...'}
-												</td>
-												<td className="py-4 px-6">
-													<span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${log.type === 'in' ? 'bg-green-50 text-green-600' :
-														log.type === 'out' ? 'bg-orange-50 text-orange-600' :
-															log.type === 'transfer' ? 'bg-blue-50 text-blue-600' :
-																log.type === 'audit' ? 'bg-purple-50 text-purple-600' :
-																	'bg-slate-50 text-slate-600'
-														}`}>
-														{log.type === 'in' ? 'Nhập kho' :
-															log.type === 'out' ? 'Xuất đơn' :
-																log.type === 'audit' ? (log.diffType === 'increase' ? 'Nhập thêm' : 'Điều chỉnh giảm') : 'Khởi tạo'}
-													</span>
-												</td>
-												<td className="py-4 px-6 font-bold text-slate-900 dark:text-white">
-													{log.productName}
-												</td>
-												<td className={`py-4 px-6 font-black ${log.type === 'in' || (log.type === 'audit' && log.diffType === 'increase') ? 'text-green-600' : 'text-orange-600'
-													}`}>
-													{log.type === 'in' || (log.type === 'audit' && log.diffType === 'increase') ? '+' : '-'}{log.qty}
-												</td>
-												<td className="py-4 px-6 text-slate-500 italic max-w-xs truncate">{log.note}</td>
-												<td className="py-4 px-6 font-bold text-[#1A237E] dark:text-indigo-400">{log.user}</td>
-											</tr>
-										))
-									)}
-								</tbody>
-							</table>
-						</div>
-					</div>
+					<InventoryLogsTable inventoryLogs={inventoryLogs} />
 				)}
 			</div>
 
-			{/* ADD/EDIT MODAL */}
-			{
-				(showAddForm || showEditForm) && (
-					<div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/80 backdrop-blur-md transition-all duration-500" style={{ WebkitBackdropFilter: 'blur(12px)' }}>
-						<div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] md:max-h-[85vh] border border-white/20 dark:border-slate-800 transition-all duration-300">
-							<div className="px-6 py-4 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between sticky top-0 z-10 transition-colors duration-300">
-								<h3 className="text-xl font-black text-[#1A237E] dark:text-indigo-400">
-									{showEditForm ? 'Cập Nhật Sản Phẩm' : 'Thêm Sản Phẩm Mới'}
-								</h3>
-								<button
-									onClick={() => { setShowAddForm(false); setShowEditForm(false); resetForm(); }}
-									className="size-8 rounded-full bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-500 transition-colors"
-								>
-									<span className="material-symbols-outlined">close</span>
-								</button>
-							</div>
-
-							<form onSubmit={showEditForm ? handleUpdateProduct : handleAddProduct} className="flex-1 overflow-y-auto p-6 space-y-6 text-left pb-10 custom-scrollbar">
-								<div className="space-y-6">
-									{/* Image Upload Area */}
-									<div className="flex flex-col items-center">
-										<div className="relative size-32 bg-slate-50 dark:bg-slate-800 rounded-2xl border-2 border-dashed border-gray-200 dark:border-slate-700 flex items-center justify-center overflow-hidden group">
-											{formData.imageUrl ? (
-												<img
-													src={getImageUrl(formData.imageUrl)}
-													className="size-full object-cover"
-													referrerPolicy="no-referrer"
-												/>
-											) : (
-												<div className="text-center p-2">
-													<span className="material-symbols-outlined text-gray-300 dark:text-slate-600 text-3xl group-hover:text-[#FF6D00] transition-colors">cloud_upload</span>
-													<p className="text-[10px] text-gray-400 dark:text-slate-500 font-bold mt-1 group-hover:text-[#FF6D00] transition-colors">Tải ảnh lên Drive</p>
-												</div>
-											)}
-											{uploading && (
-												<div className="absolute inset-0 bg-white/80 dark:bg-slate-900/80 flex items-center justify-center z-10">
-													<div className="size-8 border-2 border-[#FF6D00] border-t-transparent rounded-full animate-spin"></div>
-												</div>
-											)}
-											<input
-												type="file"
-												accept="image/*"
-												onChange={handleImageUpload}
-												className="absolute inset-0 opacity-0 cursor-pointer z-20"
-												disabled={uploading}
-											/>
-										</div>
-										<p className="text-[10px] text-gray-400 dark:text-slate-500 mt-2 italic text-center">
-											* Tải ảnh lên Google Drive<br />
-											(Tự động lấy link)
-										</p>
-
-										{/* Manual Link Input (Still available as backup) */}
-										<div className="w-full mt-4 pt-4 border-t border-gray-100 dark:border-slate-800">
-											<input
-												type="text"
-												placeholder="Hoặc dán link ảnh trực tiếp..."
-												className="w-full bg-slate-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 rounded-lg py-2 px-3 text-xs text-slate-600 dark:text-slate-300 focus:bg-white dark:focus:bg-slate-900 focus:ring-1 focus:ring-orange-500/20"
-												onChange={(e) => {
-													let url = e.target.value;
-													setFormData({ ...formData, imageUrl: getImageUrl(url) });
-												}}
-											/>
-										</div>
-									</div>
-
-									<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-										<div className="md:col-span-2">
-											<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Tên sản phẩm *</label>
-											<input
-												required
-												type="text"
-												placeholder="VD: Tôn lạnh màu xanh ngọc 0.45"
-												className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-slate-900 dark:text-white font-bold placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
-												value={formData.name}
-												onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-											/>
-										</div>
-										<div>
-											<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Mã SKU / Code</label>
-											<div className="relative">
-												<input
-													type="text"
-													placeholder="Tự động tạo..."
-													className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 pl-4 pr-12 text-slate-900 dark:text-white font-bold placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
-													value={formData.sku}
-													onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-												/>
-												<div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-													<button
-														type="button"
-														className="p-2 rounded-full text-slate-400 hover:text-blue-500 transition-all"
-														title="Copy mã SKU"
-														onClick={() => copyToClipboard(formData.sku, 'mã SKU')}
-													>
-														<span className="material-symbols-outlined text-xl">content_copy</span>
-													</button>
-													<button
-														type="button"
-														className="p-2 rounded-full text-slate-400 hover:text-orange-500 transition-all"
-														title="Tạo mã mới"
-														onClick={async () => {
-															const newSku = await generateSKU();
-															setFormData(prev => ({ ...prev, sku: newSku }));
-														}}
-													>
-														<span className="material-symbols-outlined text-xl">autorenew</span>
-													</button>
-												</div>
-											</div>
-										</div>
-										<div>
-											<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Số Seri (Serial Number)</label>
-											<input
-												type="text"
-												placeholder="Nhập số seri..."
-												className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-slate-900 dark:text-white font-bold placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
-												value={formData.serialNumber}
-												onChange={(e) => setFormData({ ...formData, serialNumber: e.target.value })}
-											/>
-										</div>
-										<div>
-											<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Đơn vị tính</label>
-											<input
-												list="product-units"
-												placeholder="Chọn hoặc nhập mới..."
-												className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-slate-900 dark:text-white font-bold placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
-												value={formData.unit}
-												onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-											/>
-											<datalist id="product-units">
-												{units.map(u => <option key={u} value={u} />)}
-											</datalist>
-										</div>
-									</div>
-
-									<div className="grid grid-cols-2 gap-4">
-										{hasManagePermission && (
-											<div>
-												<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Giá nhập</label>
-												<input
-													type="number"
-													className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-slate-900 dark:text-white font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
-													value={formData.priceImport === 0 ? '' : formData.priceImport}
-													onChange={(e) => setFormData({ ...formData, priceImport: e.target.value === '' ? 0 : Number(e.target.value) })}
-												/>
-											</div>
-										)}
-										<div>
-											<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Giá bán</label>
-											<input
-												type="number"
-												className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-blue-600 dark:text-blue-400 font-black focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
-												value={formData.priceSell === 0 ? '' : formData.priceSell}
-												onChange={(e) => setFormData({ ...formData, priceSell: e.target.value === '' ? 0 : Number(e.target.value) })}
-											/>
-										</div>
-									</div>
-
-									<div className="grid grid-cols-2 gap-4">
-										<div>
-											<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Số lượng tồn</label>
-											<input
-												type="number"
-												className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-slate-900 dark:text-white font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
-												value={formData.stock === 0 ? '' : formData.stock}
-												onChange={(e) => setFormData({ ...formData, stock: e.target.value === '' ? 0 : Number(e.target.value) })}
-											/>
-										</div>
-										<div>
-											<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Danh mục</label>
-											<input
-												list="product-categories"
-												className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-slate-900 dark:text-white font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
-												value={formData.category}
-												onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-											/>
-											<datalist id="product-categories">
-												{categories.map(cat => <option key={cat} value={cat} />)}
-											</datalist>
-										</div>
-									</div>
-									<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-										<div>
-											<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Quy cách</label>
-											<input
-												list="product-specs"
-												placeholder="VD: 1.2 x 2.4m"
-												className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-slate-900 dark:text-white font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
-												value={formData.specification}
-												onChange={(e) => setFormData({ ...formData, specification: e.target.value })}
-											/>
-											<datalist id="product-specs">
-												{specifications.map(s => <option key={s} value={s} />)}
-											</datalist>
-										</div>
-										<div>
-											<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Đóng gói</label>
-											<input
-												list="product-packs"
-												placeholder="VD: Kiện 50 tấm"
-												className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-slate-900 dark:text-white font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
-												value={formData.packaging}
-												onChange={(e) => setFormData({ ...formData, packaging: e.target.value })}
-											/>
-											<datalist id="product-packs">
-												{packagings.map(p => <option key={p} value={p} />)}
-											</datalist>
-										</div>
-										<div>
-											<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Trọng lượng</label>
-											<input
-												list="product-weights"
-												placeholder="VD: 25kg/tấm"
-												className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-slate-900 dark:text-white font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
-												value={formData.density}
-												onChange={(e) => setFormData({ ...formData, density: e.target.value })}
-											/>
-											<datalist id="product-weights">
-												{densities.map(d => <option key={d} value={d} />)}
-											</datalist>
-										</div>
-									</div>
-
-									<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-										<div>
-											<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Ghi chú sản phẩm</label>
-											<textarea
-												rows={3}
-												placeholder="..."
-												className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-slate-900 dark:text-white font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
-												value={formData.note}
-												onChange={(e) => setFormData({ ...formData, note: e.target.value })}
-											></textarea>
-										</div>
-										<div>
-											<label className="block text-[10px] font-black text-[#FF6D00] uppercase mb-2 tracking-widest flex items-center gap-1">
-												<span className="material-symbols-outlined text-[12px]">calendar_month</span> Ngày hết hạn (Tự động xóa)
-											</label>
-											<input
-												type="date"
-												className="w-full bg-orange-50/50 dark:bg-slate-800/80 border border-orange-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-slate-900 dark:text-white font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
-												value={formData.expiryDate}
-												onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })}
-											/>
-											<p className="text-[9px] text-gray-400 dark:text-slate-500 mt-2 italic">* Nếu chọn ngày, hệ thống sẽ tự động xóa sản phẩm này khi qua ngày đã chọn. Bỏ trống nếu không dùng.</p>
-										</div>
-									</div>
-								</div>
-
-								<div className="pt-4 sticky bottom-0 bg-white dark:bg-slate-900">
-									<button
-										type="submit"
-										className="w-full bg-[#FF6D00] text-white py-4 rounded-2xl font-black text-lg shadow-xl shadow-orange-500/30 active:scale-[0.98] transition-all hover:bg-orange-600 disabled:opacity-50"
-									>
-										{showEditForm ? 'CẬP NHẬT SẢN PHẨM' : 'LƯU SẢN PHẨM'}
-									</button>
-								</div>
-							</form>
-						</div>
-					</div>
-				)
-			}
+			<InventoryFormModal
+				show={showAddForm || showEditForm}
+				onClose={() => { setShowAddForm(false); setShowEditForm(false); resetForm(); }}
+				isEdit={showEditForm}
+				formData={formData}
+				setFormData={setFormData}
+				onSubmit={showEditForm ? handleUpdateProduct : handleAddProduct}
+				categories={categories}
+				units={units}
+				specifications={specifications}
+				packagings={packagings}
+				densities={densities}
+				uploading={uploading}
+				handleImageUpload={handleImageUpload}
+				generateSKU={generateSKU}
+				copyToClipboard={copyToClipboard}
+				hasManagePermission={hasManagePermission}
+				getImageUrl={getImageUrl}
+			/>
 
 			{/* DETAIL MODAL */}
-			{
-				showDetail && selectedProduct && (
-					<div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-[#1A237E]/80 dark:bg-black/80 backdrop-blur-sm">
-						<div className="bg-white dark:bg-slate-900 w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] md:max-h-[85vh] transition-colors duration-300">
-							<div className="px-6 py-4 bg-[#1A237E] dark:bg-indigo-900 text-white flex items-center justify-between sticky top-0 z-10">
-								<h3 className="text-xl font-black">Chi Tiết Sản Phẩm</h3>
-								<button onClick={() => setShowDetail(false)} className="size-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors">
-									<span className="material-symbols-outlined">close</span>
-								</button>
-							</div>
-
-							<div className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
-								<div className="flex items-center gap-4 border-b border-slate-100 dark:border-slate-800 pb-6">
-									<div className="size-24 rounded-2xl bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 flex items-center justify-center overflow-hidden border border-gray-100 dark:border-slate-700 shadow-inner shrink-0 leading-none">
-										{selectedProduct.imageUrl ? (
-											<img
-												src={getImageUrl(selectedProduct.imageUrl)}
-												alt={selectedProduct.name}
-												className="size-full object-cover"
-												referrerPolicy="no-referrer"
-											/>
-										) : (
-											<span className="material-symbols-outlined text-4xl">inventory_2</span>
-										)}
-									</div>
-									<div className="flex-1 min-w-0">
-										<p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider mb-1">{selectedProduct.category}</p>
-										<h2 className="text-xl font-black text-[#1A237E] dark:text-indigo-400 leading-tight break-words">{selectedProduct.name}</h2>
-										<div className="flex flex-wrap items-center gap-2 mt-2">
-											<div
-												className="flex items-center gap-2 cursor-pointer group/copy bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded-lg border border-slate-100 dark:border-slate-700"
-												onClick={() => copyToClipboard(selectedProduct.sku || selectedProduct.id, 'mã SKU')}
-												title="Copy mã SKU"
-											>
-												<p className="text-xs font-bold text-slate-500 dark:text-slate-400">SKU: {selectedProduct.sku || '---'}</p>
-												{(selectedProduct.sku || selectedProduct.id) && (
-													<span className="material-symbols-outlined text-[14px] text-gray-300 group-hover/copy:text-blue-500 transition-colors">content_copy</span>
-												)}
-											</div>
-											{selectedProduct.serialNumber && (
-												<div
-													className="flex items-center gap-1.5 bg-orange-50 dark:bg-orange-900/30 px-2 py-1 rounded-lg border border-orange-100 dark:border-orange-800/50 cursor-pointer group/copy hover:bg-orange-100/50 transition-all active:scale-95"
-													onClick={() => copyToClipboard(selectedProduct.serialNumber, 'số Seri')}
-													title="Copy số Seri"
-												>
-													<span className="material-symbols-outlined text-[14px] text-orange-500">fingerprint</span>
-													<span className="text-xs font-bold text-orange-600 dark:text-orange-300">SN: {selectedProduct.serialNumber}</span>
-													<span className="material-symbols-outlined text-[12px] text-orange-400 opacity-0 group-hover/copy:opacity-100 transition-opacity">content_copy</span>
-												</div>
-											)}
-											<div className="flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-1 rounded-lg border border-indigo-100 dark:border-indigo-800/50">
-												<span className="material-symbols-outlined text-[14px] text-indigo-500">category</span>
-												<span className="text-xs font-bold text-indigo-600 dark:text-indigo-300">{selectedProduct.category}</span>
-											</div>
-										</div>
-									</div>
-								</div>
-
-								<div className="grid grid-cols-2 gap-4">
-									<div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl">
-										<p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase mb-1">Giá bán công bố</p>
-										<p className="text-blue-600 dark:text-blue-400 font-black text-lg">{formatPrice(selectedProduct.priceSell)}</p>
-									</div>
-									<div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl">
-										<p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase mb-1">Tồn kho hiện tại</p>
-										<p className="text-[#1A237E] dark:text-indigo-400 font-black text-lg">
-											{selectedProduct.sku ? products.filter(p => p.sku === selectedProduct.sku).reduce((sum, p) => sum + (Number(p.stock) || 0), 0) : selectedProduct.stock}
-											<span className="text-xs"> {selectedProduct.unit}</span>
-										</p>
-										{selectedProduct.sku && products.filter(p => p.sku === selectedProduct.sku).length > 1 && (
-											<p className="text-[9px] text-slate-400 italic">Tổng gộp từ {products.filter(p => p.sku === selectedProduct.sku).length} bản ghi SKU</p>
-										)}
-									</div>
-								</div>
-
-								{hasManagePermission && (
-									<div className="grid grid-cols-2 gap-4">
-										<div className="bg-orange-50 dark:bg-slate-800 p-4 rounded-2xl border border-orange-100 dark:border-orange-500/20">
-											<p className="text-[10px] font-bold text-orange-500 uppercase mb-1">Giá nhập kho</p>
-											<p className="text-orange-600 dark:text-orange-400 font-black text-xl">{formatPrice(selectedProduct.priceImport)}</p>
-										</div>
-										<div className="bg-emerald-50 dark:bg-slate-800 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-500/20">
-											<p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-500 uppercase mb-1">Lợi nhuận ước tính</p>
-											<p className="text-emerald-600 dark:text-emerald-400 font-black text-xl">{formatPrice(selectedProduct.priceSell - selectedProduct.priceImport)}</p>
-										</div>
-									</div>
-								)}
-
-								<div className="grid grid-cols-2 gap-3">
-									<div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
-										<p className="text-[9px] font-bold text-gray-400 dark:text-slate-500 uppercase mb-1">Quy cách</p>
-										<p className="text-xs font-black text-[#1A237E] dark:text-indigo-300">{selectedProduct.specification || '---'}</p>
-									</div>
-									<div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
-										<p className="text-[9px] font-bold text-gray-400 dark:text-slate-500 uppercase mb-1">Đóng gói</p>
-										<p className="text-xs font-black text-[#1A237E] dark:text-indigo-300">{selectedProduct.packaging || '---'}</p>
-									</div>
-									<div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
-										<p className="text-[9px] font-bold text-gray-400 dark:text-slate-500 uppercase mb-1">Trọng lượng</p>
-										<p className="text-xs font-black text-[#1A237E] dark:text-indigo-300">{selectedProduct.density || '---'}</p>
-									</div>
-									<div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
-										<p className="text-[9px] font-bold text-orange-500 uppercase mb-1">Ngày hết hạn (Auto-Delete)</p>
-										<p className="text-xs font-black text-orange-600 dark:text-orange-400">
-											{selectedProduct.expiryDate ? new Date(selectedProduct.expiryDate).toLocaleDateString('vi-VN') : 'Không giới hạn'}
-										</p>
-									</div>
-								</div>
-
-								<div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-6">
-									<div className="flex-1">
-										<p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase mb-1">Mô tả / Ghi chú</p>
-										<p className="text-slate-600 dark:text-slate-300 italic whitespace-pre-wrap">{selectedProduct.note || 'Không có ghi chú'}</p>
-										<div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
-											<p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase mb-1">Người tạo</p>
-											<p className="text-[10px] text-blue-500 font-bold truncate max-w-[200px]">{selectedProduct.createdByEmail || 'N/A'}</p>
-										</div>
-									</div>
-									<div className="flex flex-col items-center p-4 bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-700 shrink-0">
-										<QRCodeCanvas
-											ref={qrRef}
-											value={selectedProduct.id}
-											size={300}
-											level="H"
-											includeMargin={false}
-											className="rounded-lg"
-											style={{ width: 120, height: 120 }}
-										/>
-										<p className="text-[9px] font-black text-slate-400 uppercase mt-3 tracking-widest">QR ID Sản phẩm</p>
-										<button
-											onClick={() => printQRLabel(selectedProduct)}
-											className="mt-3 flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 rounded-lg text-[10px] font-black uppercase hover:bg-orange-100 transition-all border border-orange-100 dark:border-orange-800"
-										>
-											<span className="material-symbols-outlined text-sm">print</span>
-											In Tem QR
-										</button>
-									</div>
-								</div>
-
-								<div className="flex gap-3 pt-2 pb-6">
-									<button
-										onClick={() => { setShowDetail(false); openEdit(selectedProduct); }}
-										className="flex-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
-									>
-										<span className="material-symbols-outlined text-lg">edit</span> Chỉnh sửa
-									</button>
-									<button
-										onClick={() => { setShowDetail(false); handleDeleteProduct(selectedProduct.id); }}
-										className="flex-1 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
-									>
-										<span className="material-symbols-outlined text-lg">delete</span> Xóa sản phẩm
-									</button>
-								</div>
-							</div>
-						</div>
-					</div>
-				)
-			}
+			<InventoryDetailModal
+				show={showDetail}
+				onClose={() => setShowDetail(false)}
+				selectedProduct={selectedProduct}
+				products={products}
+				hasManagePermission={hasManagePermission}
+				qrRef={qrRef}
+				openEdit={openEdit}
+				handleDeleteProduct={handleDeleteProduct}
+				copyToClipboard={copyToClipboard}
+				getImageUrl={getImageUrl}
+				formatPrice={formatPrice}
+				printQRLabel={printQRLabel}
+			/>
 
 			{
 				showScanner && (

@@ -13,7 +13,7 @@ interface InventoryDetailModalProps {
 	openEdit: (product: any) => void;
 	handleDeleteProduct: (id: string) => void;
 	printQRLabel: (product: any) => void;
-	qrRef: React.RefObject<HTMLCanvasElement>;
+	qrRef: React.RefObject<HTMLCanvasElement | null>;
 }
 
 const InventoryDetailModal: React.FC<InventoryDetailModalProps> = ({

@@ -198,44 +198,34 @@ const AdminSettings = () => {
 
 	const handleAddUser = async () => {
 		if (!newUser.email) return showToast("Vui lòng nhập email", "warning");
-		setLoading(true);
 		try {
-			await setDoc(doc(db, 'permissions', newUser.email), {
+			setLoading(true);
+			const tempId = newUser.email.replace(/\W/g, '_');
+			await setDoc(doc(db, 'permissions', tempId), {
 				email: newUser.email,
+				displayName: newUser.displayName || newUser.email,
 				role: newUser.role,
 				ownerId: owner.ownerId,
 				ownerEmail: owner.ownerEmail,
-				createdAt: serverTimestamp(),
-				inviterName: auth.currentUser?.displayName || auth.currentUser?.email,
+				status: 'pending',
 				accessRights: {
 					dashboard: true,
 					orders_view: true,
 					orders_create: true,
-					checkin_create: true,
 					inventory_view: true,
-					inventory_manage: true,
 					customers_manage: true,
-					debts_manage: true,
-					finance_view: true,
-					users_manage: true,
-					admin: false
-				}
-			});
-
-			await addDoc(collection(db, 'audit_logs'), {
-				action: 'Mời nhân viên mới',
-				user: auth.currentUser?.displayName || auth.currentUser?.email,
-				userId: auth.currentUser?.uid,
-				ownerId: owner.ownerId,
-				details: `Đã cấp quyền cho email ${newUser.email} - Quyền: ${newUser.role}`,
+					finance_view: false,
+					users_manage: false,
+					admin: false,
+					system_manage: false
+				},
 				createdAt: serverTimestamp()
 			});
-
+			showToast("Đã gửi lời mời thành công!", "success");
 			setShowAddUser(false);
 			setNewUser({ email: '', role: 'sale', displayName: '' });
-			showToast(`Đã thêm quyền truy cập cho ${newUser.email}`, "success");
-		} catch (error) {
-			showToast("Lỗi khi thêm nhân viên", "error");
+		} catch (error: any) {
+			showToast("Lỗi: " + error.message, "error");
 		} finally {
 			setLoading(false);
 		}
@@ -583,7 +573,17 @@ const AdminSettings = () => {
 	};
 
 	const handleTogglePermission = async (user: any, resource: string) => {
-		const currentVal = user.accessRights?.[resource] ?? true;
+		// Protection: Cannot edit owner or self
+		if (user.uid === owner.ownerId || user.id === auth.currentUser?.uid) {
+			showToast("Bạn không thể thay đổi quyền của tài khoản này.", "error");
+			return;
+		}
+
+		// Simplified default logic: staff can access basic tools but sensitive ones are locked
+		const sensitiveKeys = ['admin', 'users_manage', 'finance_view', 'system_manage'];
+		const defaultVal = sensitiveKeys.includes(resource) ? false : true;
+		
+		const currentVal = user.accessRights?.[resource] ?? defaultVal;
 		const newVal = !currentVal;
 		const collectionName = user.status === 'pending' ? 'permissions' : 'users';
 		try {
@@ -601,39 +601,59 @@ const AdminSettings = () => {
 		}
 	}, [isAttendanceViewer, activeTab]);
 
+	// Access Control based on Toggles
+	const canManageUsers = !owner.isEmployee || owner.accessRights?.users_manage === true;
+	const canManageSystem = !owner.isEmployee || owner.accessRights?.system_manage === true;
+
+	// Filter user list based on hierarchy:
+	// - Staff Admin can only see Sales/Warehouse/etc. 
+	// - Owner (Super Admin) sees everyone.
+	const filteredUserList = useMemo(() => {
+		if (!owner.isEmployee) return userList; // Super Admin sees all
+
+		// Staff Admin: Hide other Admins or anyone with users_manage/system_manage to prevent escalation
+		return userList.filter(u => {
+			if (u.uid === owner.ownerId) return false; // Hide owner
+			if (u.id === auth.currentUser?.uid) return false; // Hide self
+
+			const isHighLevel = u.accessRights?.admin === true || 
+							   u.accessRights?.users_manage === true || 
+							   u.accessRights?.system_manage === true ||
+							   u.role === 'admin';
+			
+			return !isHighLevel;
+		});
+	}, [userList, owner.isEmployee, owner.ownerId]);
+
 	if (owner.loading) return null;
-	if (owner.role !== 'admin' && !isAttendanceViewer) return <div className="p-10 text-center uppercase font-black">Truy cập bị từ chối</div>;
+	if (owner.role !== 'admin' && !isAttendanceViewer && !canManageSystem && !canManageUsers) return <div className="p-10 text-center uppercase font-black">Truy cập bị từ chối</div>;
 
 	const isSyncLocked = (systemConfig.lock_free_sheets && !owner.isPro) || companyInfo.manualLockSheets;
 
 	return (
-		<div className="flex flex-col h-full bg-[#f8f9fb] dark:bg-slate-950 transition-colors duration-300">
+		<div className="min-h-screen bg-[#f8f9fb] dark:bg-slate-950 p-4 md:p-8 pb-32">
 			<style>{scrollbarHideStyle}</style>
-			<header className="min-h-[4rem] md:h-20 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row items-center justify-between px-4 md:px-8 shrink-0 py-2 md:py-0">
-				<div className="flex items-center gap-4 py-1 md:py-0">
-					<h2 className="text-[#1A237E] dark:text-indigo-400 text-lg md:text-2xl font-black uppercase tracking-tight">Quản Trị Hệ Thống</h2>
-				</div>
-				<nav className="flex items-center gap-1 md:gap-2 overflow-x-auto no-scrollbar py-2 w-full md:w-auto">
-					{owner.role === 'admin' && (
-						<>
-							<TabItem active={activeTab === 'general'} onClick={() => setActiveTab('general')} icon={<Settings size={18} />} label="Cấu hình" />
-							<TabItem active={activeTab === 'users'} onClick={() => setActiveTab('users')} icon={<Users size={18} />} label="Nhân sự" />
-						</>
-					)}
-					<TabItem active={activeTab === 'attendance'} onClick={() => setActiveTab('attendance')} icon={<Calendar size={18} />} label="Chấm công" />
-					{owner.role === 'admin' && (
-						<>
-							<TabItem active={activeTab === 'permissions'} onClick={() => setActiveTab('permissions')} icon={<Shield size={18} />} label="Phân quyền" />
-							<TabItem active={activeTab === 'audit'} onClick={() => setActiveTab('audit')} icon={<Activity size={18} />} label="Nhật ký" />
-						</>
-					)}
-				</nav>
-			</header>
 
-			<div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
-				<div className="max-w-6xl mx-auto">
-					{activeTab === 'general' && (
-						<div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+			<div className="max-w-[1400px] mx-auto">
+				{/* Header */}
+				<div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+					<div>
+						<h1 className="text-2xl md:text-3xl font-black text-slate-800 dark:text-white uppercase tracking-tight">Quản Trị Hệ Thống</h1>
+						<p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Cài đặt doanh nghiệp & Phân quyền nhân sự</p>
+					</div>
+
+					<div className="flex bg-white dark:bg-slate-900 p-1.5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-x-auto no-scrollbar">
+						{canManageSystem && <TabItem active={activeTab === 'general'} onClick={() => setActiveTab('general')} icon={<Settings size={18} />} label="Hệ thống" />}
+						{canManageUsers && <TabItem active={activeTab === 'users'} onClick={() => setActiveTab('users')} icon={<Users size={18} />} label="Nhân sự" />}
+						{canManageUsers && <TabItem active={activeTab === 'permissions'} onClick={() => setActiveTab('permissions')} icon={<Shield size={18} />} label="Phân quyền" />}
+						{(canManageSystem || isAttendanceViewer) && <TabItem active={activeTab === 'attendance'} onClick={() => setActiveTab('attendance')} icon={<Clock size={18} />} label="Bảng công" />}
+						<TabItem active={activeTab === 'audit'} onClick={() => setActiveTab('audit')} icon={<Activity size={18} />} label="Nhật ký" />
+					</div>
+				</div>
+
+				<div className="space-y-8 animate-in fade-in duration-500">
+					{activeTab === 'general' && canManageSystem && (
+						<div className="space-y-6">
 							<div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800">
 								<div className="flex items-center gap-4 mb-6">
 									<div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-xl text-blue-600 dark:text-blue-400">
@@ -763,11 +783,6 @@ const AdminSettings = () => {
 											)}
 										</button>
 									</div>
-									{(exportCount >= 5 || isSyncLocked) && (
-										<div className="mt-4 p-3 bg-rose-50 dark:bg-rose-900/10 rounded-xl flex items-center gap-2 text-rose-600 dark:text-rose-400 text-[10px] font-bold">
-											<Lock size={14} /> {isSyncLocked ? "Vui lòng nâng cấp lên gói PRO để sử dụng tính năng trích xuất dữ liệu." : `Bạn đã đạt giới hạn tải về trong tháng này. Lượt dùng: ${exportCount}/5.`}
-										</div>
-									)}
 								</div>
 							</div>
 
@@ -812,9 +827,9 @@ const AdminSettings = () => {
 						</div>
 					)}
 
-					{activeTab === 'users' && (
+					{activeTab === 'users' && canManageUsers && (
 						<UserManagement
-							userList={userList}
+							userList={filteredUserList}
 							onAdd={() => setShowAddUser(true)}
 							onUpdateRole={updateUserRole}
 							onDelete={deleteUser}
@@ -831,27 +846,34 @@ const AdminSettings = () => {
 
 					{activeTab === 'attendance' && <AttendanceAdmin logs={attendanceLogs} fieldLogs={fieldCheckins} companyInfo={companyInfo} setCompanyInfo={setCompanyInfo} onSave={handleSaveSettings} />}
 
-					{activeTab === 'permissions' && (
+					{activeTab === 'permissions' && canManageUsers && (
 						<div className="space-y-6">
 							<div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-x-auto">
 								<table className="w-full text-left min-w-[1000px]">
 									<thead>
 										<tr className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-400">
 											<th className="px-6 py-4">Nhân viên</th>
-											{['Dashboard', 'Xem Đơn', 'Lên Đơn', 'Check-in', 'Xem Kho', 'Quản SP', 'Khách hàng', 'Thu Nợ', 'Tài chính', 'Nhân sự', 'Hệ thống'].map(h => <th key={h} className="px-2 py-4 text-center">{h}</th>)}
+											{['Dashboard', 'Xem Đơn', 'Lên Đơn', 'Check-in', 'Xem Kho', 'Quản SP', 'Khách hàng', 'Thu Nợ', 'Tài chính', 'Nhân sự', 'Hệ thống Admin', 'Nâng cao'].map(h => <th key={h} className="px-2 py-4 text-center">{h}</th>)}
 										</tr>
 									</thead>
 									<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-										{userList.map(u => (
+										{filteredUserList.map(u => (
 											<tr key={u.id}>
 												<td className="px-6 py-4 font-bold text-sm text-slate-700 dark:text-white">{u.displayName || u.email}</td>
-												{['dashboard', 'orders_view', 'orders_create', 'checkin_create', 'inventory_view', 'inventory_manage', 'customers_manage', 'debts_manage', 'finance_view', 'users_manage', 'admin'].map(p => (
-													<td key={p} className="px-2 py-4">
-														<div onClick={() => handleTogglePermission(u, p)} className={`w-10 h-5 rounded-full p-0.5 cursor-pointer mx-auto transition-colors ${u.accessRights?.[p] ?? (p === 'admin' ? false : true) ? 'bg-blue-600' : 'bg-slate-200 dark:bg-slate-700'}`}>
-															<div className={`w-4 h-4 rounded-full bg-white transform transition-transform ${u.accessRights?.[p] ?? (p === 'admin' ? false : true) ? 'translate-x-5' : 'translate-x-0'}`} />
-														</div>
-													</td>
-												))}
+												{['dashboard', 'orders_view', 'orders_create', 'checkin_create', 'inventory_view', 'inventory_manage', 'customers_manage', 'debts_manage', 'finance_view', 'users_manage', 'admin', 'system_manage'].map(p => {
+													// Determine visual state
+													const sensitiveKeys = ['admin', 'users_manage', 'finance_view', 'system_manage'];
+													const defaultBtnVal = sensitiveKeys.includes(p) ? false : true;
+													const isActive = u.accessRights?.[p] ?? defaultBtnVal;
+													
+													return (
+														<td key={p} className="px-2 py-4">
+															<div onClick={() => handleTogglePermission(u, p)} className={`w-10 h-5 rounded-full p-0.5 cursor-pointer mx-auto transition-colors ${isActive ? 'bg-blue-600' : 'bg-slate-200 dark:bg-slate-700'}`}>
+																<div className={`w-4 h-4 rounded-full bg-white transform transition-transform ${isActive ? 'translate-x-5' : 'translate-x-0'}`} />
+															</div>
+														</td>
+													);
+												})}
 											</tr>
 										))}
 									</tbody>

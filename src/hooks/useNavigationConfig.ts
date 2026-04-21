@@ -22,12 +22,17 @@ export const useNavigationConfig = () => {
 
 	const hasPermission = (key?: string) => {
 		if (!key) return true;
-		if (owner.role === 'admin' && !owner.isEmployee) return true;
-		// If it's an employee, they MUST have the explicit right
+		
+		// Grant full access to Owners and Staff Admins
+		// role === 'admin' is for both owner and staff who are given admin role
+		if (owner.role === 'admin') return true;
+
+		// If it's an employee (non-admin), they MUST have the explicit right
 		if (owner.isEmployee) {
 			return owner.accessRights?.[key] === true;
 		}
-		// For other owners/admins, default to true if not explicitly denied
+		
+		// For other owners, default to true if not explicitly denied
 		return owner.accessRights?.[key] ?? true;
 	};
 
@@ -134,153 +139,166 @@ export const useNavigationConfig = () => {
 				icon: 'confirmation_number',
 				label: 'Tạo mã mới',
 				path: '/coupons?action=new',
-				permissionKey: 'admin' // Only admins can create coupons usually
+				permissionKey: 'admin'
 			};
 		}
 
-
-		// Mặc định cho các trang khác (checkin...)
+		// Mặc định cho các trang khác
 		return {
 			icon: 'add',
 			label: 'Checkin',
 			path: '/checkin?new=true',
 			permissionKey: 'checkin_create'
 		};
-
 	};
 
-	// 2. Toàn bộ danh sách Menu trong hệ thống
+	// 2. Toàn bộ danh sách Menu trong hệ thống (Đã chuẩn hóa Index)
 	const allItems: NavItem[] = [
-		{ icon: 'home', label: 'Trang chủ', path: '/' },
-		{ icon: 'receipt_long', label: 'Đơn hàng', path: '/orders', permissionKey: 'orders_view' },
-		{ ...getCenterItem(), isCenter: true },
-		{ icon: 'account_balance_wallet', label: 'Công nợ', path: '/debts', permissionKey: 'debts_manage' },
-		{ icon: 'account_balance', label: 'Tài chính', path: '/finance', permissionKey: 'finance_view' },
-		{ icon: 'group', label: 'Khách hàng', path: '/customers', desktopOnly: true, permissionKey: 'customers_manage' },
-		{ icon: 'inventory_2', label: 'Sản phẩm', path: '/inventory', desktopOnly: true, permissionKey: 'inventory_view' },
-		{ icon: 'request_quote', label: 'Báo giá', path: '/price-list' },
-		{ icon: 'history', label: 'Hoạt động', path: '/checkin?action=history', permissionKey: 'checkin_create' },
-		{ icon: 'confirmation_number', label: 'Ưu đãi', path: '/coupons' },
-		{ icon: 'timer', label: 'Chấm công', path: '/attendance' },
-		{ icon: 'school', label: 'Đào tạo', path: '/khoa-dao-tao' },
-		{ icon: 'admin_panel_settings', label: 'Quản trị hệ thống', path: '/admin', permissionKey: 'admin' },
-		{ icon: 'settings', label: 'Cài đặt', path: '/settings' },
+		{ icon: 'home', label: 'Trang chủ', path: '/' },                                      // 0
+		{ icon: 'receipt_long', label: 'Đơn hàng', path: '/orders', permissionKey: 'orders_view' }, // 1
+		{ ...getCenterItem(), isCenter: true },                                              // 2
+		{ icon: 'account_balance_wallet', label: 'Công nợ', path: '/debts', permissionKey: 'debts_manage' }, // 3
+		{ icon: 'account_balance', label: 'Tài chính', path: '/finance', permissionKey: 'finance_view' },    // 4
+		{ icon: 'group', label: 'Khách hàng', path: '/customers', permissionKey: 'customers_manage' },       // 5
+		{ icon: 'inventory_2', label: 'Sản phẩm', path: '/inventory', permissionKey: 'inventory_view' },     // 6
+		{ icon: 'request_quote', label: 'Báo giá', path: '/price-list' },                                     // 7
+		{ icon: 'history', label: 'Hoạt động', path: '/checkin?action=history', permissionKey: 'checkin_create' }, // 8
+		{ icon: 'confirmation_number', label: 'Ưu đãi', path: '/coupons' },                                    // 9
+		{ icon: 'timer', label: 'Chấm công', path: '/attendance' },                                           // 10
+		{ icon: 'school', label: 'Đào tạo', path: '/khoa-dao-tao' },                                          // 11
+		{ icon: 'admin_panel_settings', label: 'Quản trị', path: '/admin', permissionKey: 'admin' },          // 12
+		{ icon: 'settings', label: 'Cài đặt', path: '/settings' },                                            // 13
 	];
 
-	// Logic xử lý slot 5: "Báo giá" hay "Hoạt động"
+	// Logic xử lý slot 5: Linh hoạt tùy trang
 	const getSlot5 = () => {
 		if (path === '/debts' || path === '/orders' || path === '/inventory' || path === '/') {
-			return allItems[7]; // Báo giá (index 7 sau khi dời Hoạt động xuống)
+			return allItems[7]; // Báo giá
 		}
-		return allItems[8]; // Hoạt động (index 8)
+		return allItems[8]; // Hoạt động
 	};
 
 	// Xử lý Dynamic Menu cho Mobile
 	const getMobileItems = () => {
 		let items: NavItem[] = [];
+		const home = allItems[0];
+		const orders = allItems[1];
+		const center = allItems[2];
+		const debts = allItems[3];
+		const finance = allItems[4];
+		const customers = allItems[5];
+		const products = allItems[6];
+		const priceList = allItems[7];
+		const history = allItems[8];
+		const coupons = allItems[9];
+		const attendance = allItems[10];
+		const training = allItems[11];
+		const admin = allItems[12];
+		const settings = allItems[13];
+
 		if (path === '/orders') {
 			items = [
-				allItems[0], // Trang chủ
-				allItems[6], // Khách hàng (Thay cho Đơn hàng)
-				allItems[2], // Center (Lên đơn)
-				allItems[7], // Sản phẩm (Thay cho Công nợ)
-				{ icon: 'search', label: 'Tìm đơn', path: '/orders?search=focus' }, // Thay Báo giá bằng Tìm đơn hàng
+				home,
+				customers,
+				center,
+				products,
+				{ icon: 'search', label: 'Tìm đơn', path: '/orders?search=focus' },
 			];
 		} else if (path === '/inventory') {
 			items = [
-				allItems[0], // Trang chủ
-				{ icon: 'search', label: 'Tìm kiếm', path: '/inventory?search=focus' }, // Thay Sản phẩm bằng Tìm kiếm
-				allItems[2], // Center (Thêm SP)
-				{ icon: 'inventory', label: 'Tồn kho gộp', path: '/inventory?tab=inventory' }, // Thay Khách hàng bằng Tồn kho gộp
-				{ icon: 'upload_file', label: 'Nhập Excel', path: '/inventory?import=true' }, // Thay Báo giá bằng Nhập Excel
+				home,
+				{ icon: 'search', label: 'Tìm kiếm', path: '/inventory?search=focus' },
+				center,
+				{ icon: 'inventory', label: 'Tồn kho gộp', path: '/inventory?tab=inventory' },
+				{ icon: 'upload_file', label: 'Nhập Excel', path: '/inventory?import=true' },
 			];
 		} else if (path === '/debts') {
 			items = [
-				allItems[0], // Trang chủ
-				allItems[1], // Đơn hàng
-				allItems[2], // Center (Thu nợ)
-				{ icon: 'history', label: 'Lịch sử thu nợ', path: '/debts?tab=history' },
-				getSlot5(),  // Slot động (Báo giá)
+				home,
+				orders,
+				center,
+				{ icon: 'history', label: 'Lịch sử', path: '/debts?tab=history' },
+				priceList,
 			];
 		} else if (path === '/') {
 			items = [
-				allItems[0], // Trang chủ
-				allItems[1], // Đơn hàng
-				allItems[2], // Center (Thu nợ)
-				allItems[7], // Ưu đãi (Thay cho Tài chính/Hoạt động)
-				allItems[8], // Báo giá
+				home,
+				orders,
+				center,
+				coupons,
+				priceList,
 			];
 		} else if (path === '/admin') {
 			items = [
-				allItems[0], // Trang chủ
+				home,
 				{ icon: 'timer', label: 'Chấm công', path: '/admin?tab=attendance' },
-				allItems[2], // Center (Thêm NV)
+				center,
 				{ icon: 'people', label: 'Nhân sự', path: '/admin?tab=users' },
 				{ icon: 'shield', label: 'Phân quyền', path: '/admin?tab=permissions' },
 			];
 		} else if (path.startsWith('/khoa-dao-tao')) {
 			items = [
-				allItems[0], // Trang chủ
-				{ icon: 'play_circle', label: 'Video hướng dẫn', path: '/khoa-dao-tao?tab=videos' },
-				allItems[2], // Center (Kết thúc Lab)
-				{ icon: 'sync', label: 'Vận hành & đồng bộ', path: '/khoa-dao-tao?tab=operations' },
-				{ icon: 'account_balance', label: 'Đối soát & tài chính', path: '/khoa-dao-tao?tab=finance' },
+				home,
+				{ icon: 'play_circle', label: 'Video', path: '/khoa-dao-tao?tab=videos' },
+				center,
+				{ icon: 'sync', label: 'Vận hành', path: '/khoa-dao-tao?tab=operations' },
+				{ icon: 'account_balance', label: 'Đối soát', path: '/khoa-dao-tao?tab=finance' },
 			];
 		} else if (path === '/attendance') {
 			items = [
-				allItems[0], // Trang chủ
-				allItems[1], // Đơn hàng
-				allItems[2], // Center (Chấm công vào)
-				{ icon: 'coffee', label: 'Đăng ký nghỉ/muộn', path: '/attendance?action=request' },
-				allItems[5], // Hoạt động
+				home,
+				orders,
+				center,
+				{ icon: 'coffee', label: 'Đăng ký', path: '/attendance?action=request' },
+				history,
 			];
 		} else if (path === '/settings') {
 			items = [
-				allItems[0], // Trang chủ
-				{ icon: 'payments', label: 'Gói & Chi phí', path: '/settings?section=pricing' },
-				allItems[2], // Center (Chế độ tối)
+				home,
+				{ icon: 'payments', label: 'Gói', path: '/settings?section=pricing' },
+				center,
 				{ icon: 'menu_book', label: 'Cẩm nang', path: '/settings?section=guide' },
 				{ icon: 'logout', label: 'Đăng xuất', path: '/settings?action=logout' },
 			];
 		} else if (path === '/customers') {
 			items = [
-				allItems[0], // Trang chủ
-				{ icon: 'map', label: 'Bản đồ', path: '/customers?map=true' }, // Thay Đơn hàng bằng Bản đồ
-				allItems[2], // Center (Thêm Khách)
-				{ icon: 'search', label: 'Tìm kiếm', path: '/customers?search=true' }, // Giữ Tìm kiếm
-				{ icon: 'upload_file', label: 'Nhập Excel', path: '/customers?import=true' }, // Thay Hoạt động bằng Nhập Excel
+				home,
+				{ icon: 'map', label: 'Bản đồ', path: '/customers?map=true' },
+				center,
+				{ icon: 'search', label: 'Tìm kiếm', path: '/customers?search=true' },
+				{ icon: 'upload_file', label: 'Nhập Excel', path: '/customers?import=true' },
 			];
 		} else if (path === '/price-list') {
 			items = [
-				allItems[0], // Trang chủ
-				allItems[6], // Khách hàng
-				allItems[2], // Center (Cập nhật Data)
-				allItems[7], // Sản phẩm
-				allItems[1], // Đơn hàng
+				home,
+				customers,
+				center,
+				products,
+				orders,
 			];
 		} else if (path === '/finance') {
 			items = [
-				allItems[0], // Trang chủ
+				home,
 				{ icon: 'history_toggle_off', label: 'Tuổi nợ', path: '/finance?tab=aging' },
-				allItems[2], // Center (Thu/Chi)
+				center,
 				{ icon: 'query_stats', label: 'Lợi nhuận', path: '/finance?tab=profit' },
 				{ icon: 'history', label: 'Lịch sử', path: '/finance?tab=history' },
 			];
 		} else if (path === '/coupons') {
 			items = [
-				allItems[0], // Trang chủ
-				allItems[1], // Đơn hàng
-				allItems[2], // Center (Tạo mã)
-				{ icon: 'history', label: 'Lịch sử', path: '/checkin?action=history' },
-				allItems[12], // Cài đặt
+				home,
+				orders,
+				center,
+				history,
+				settings,
 			];
 		} else {
 			items = [
-				allItems[0], // Trang chủ
-				allItems[1], // Đơn hàng
-				allItems[2], // Center
-				allItems[3], // Công nợ
-				getSlot5(),  // Slot động
+				home,
+				orders,
+				center,
+				debts,
+				getSlot5(),
 			];
 		}
 
@@ -289,12 +307,10 @@ export const useNavigationConfig = () => {
 	};
 
 	const mobileItems = getMobileItems();
-
-	// Filter cho Sidebar (Hiện tất cả trừ nút Center và filter theo quyền)
 	const sidebarItems = allItems.filter(item => !item.isCenter && hasPermission(item.permissionKey));
 
 	return {
-		navItems: mobileItems, // Mặc định cho MobileNav/BottomNav
+		navItems: mobileItems,
 		sidebarItems,
 		currentPath: location.pathname
 	};

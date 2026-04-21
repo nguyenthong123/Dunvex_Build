@@ -215,7 +215,10 @@ const AdminSettings = () => {
 					inventory_view: true,
 					inventory_manage: true,
 					customers_manage: true,
-					debts_manage: true
+					debts_manage: true,
+					finance_view: true,
+					users_manage: true,
+					admin: false
 				}
 			});
 
@@ -835,17 +838,17 @@ const AdminSettings = () => {
 									<thead>
 										<tr className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-400">
 											<th className="px-6 py-4">Nhân viên</th>
-											{['Dashboard', 'Xem Đơn', 'Lên Đơn', 'Check-in', 'Xem Kho', 'Quản SP', 'Khách hàng', 'Thu Nợ'].map(h => <th key={h} className="px-2 py-4 text-center">{h}</th>)}
+											{['Dashboard', 'Xem Đơn', 'Lên Đơn', 'Check-in', 'Xem Kho', 'Quản SP', 'Khách hàng', 'Thu Nợ', 'Tài chính', 'Nhân sự', 'Hệ thống'].map(h => <th key={h} className="px-2 py-4 text-center">{h}</th>)}
 										</tr>
 									</thead>
 									<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
 										{userList.map(u => (
 											<tr key={u.id}>
 												<td className="px-6 py-4 font-bold text-sm text-slate-700 dark:text-white">{u.displayName || u.email}</td>
-												{['dashboard', 'orders_view', 'orders_create', 'checkin_create', 'inventory_view', 'inventory_manage', 'customers_manage', 'debts_manage'].map(p => (
+												{['dashboard', 'orders_view', 'orders_create', 'checkin_create', 'inventory_view', 'inventory_manage', 'customers_manage', 'debts_manage', 'finance_view', 'users_manage', 'admin'].map(p => (
 													<td key={p} className="px-2 py-4">
-														<div onClick={() => handleTogglePermission(u, p)} className={`w-10 h-5 rounded-full p-0.5 cursor-pointer mx-auto transition-colors ${u.accessRights?.[p] ?? true ? 'bg-blue-600' : 'bg-slate-200 dark:bg-slate-700'}`}>
-															<div className={`w-4 h-4 rounded-full bg-white transform transition-transform ${u.accessRights?.[p] ?? true ? 'translate-x-5' : 'translate-x-0'}`} />
+														<div onClick={() => handleTogglePermission(u, p)} className={`w-10 h-5 rounded-full p-0.5 cursor-pointer mx-auto transition-colors ${u.accessRights?.[p] ?? (p === 'admin' ? false : true) ? 'bg-blue-600' : 'bg-slate-200 dark:bg-slate-700'}`}>
+															<div className={`w-4 h-4 rounded-full bg-white transform transition-transform ${u.accessRights?.[p] ?? (p === 'admin' ? false : true) ? 'translate-x-5' : 'translate-x-0'}`} />
 														</div>
 													</td>
 												))}

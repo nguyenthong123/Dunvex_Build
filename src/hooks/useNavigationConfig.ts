@@ -201,11 +201,12 @@ export const useNavigationConfig = () => {
 		let items: NavItem[] = [];
 
 		if (currentPath === '/' || currentPath === '/admin' || currentPath === '/settings') {
-			// Chiến lược cho Trang chủ: Chọn tối đa 4 mục quan trọng nhất dựa trên quyền
+			// Chiến lược cho Trang chủ: Chọn tối đa 5 mục quan trọng nhất dựa trên quyền (2 bên, 1 giữa)
 			const candidates = [
 				home,
 				orders,
 				center,
+				finance,
 				customers,
 				products,
 				coupons,
@@ -215,8 +216,8 @@ export const useNavigationConfig = () => {
 			// Lọc theo quyền
 			const permitted = candidates.filter(item => !item.permissionKey || hasPermission(item.permissionKey));
 			
-			// Lấy 4 mục đầu tiên (Giao diện cũ dùng 4 nút để đẹp hơn trên mobile)
-			items = permitted.slice(0, 4);
+			// Lấy 5 mục đầu tiên để cân bằng 2 bên
+			items = permitted.slice(0, 5);
 
 			// Đảm bảo nút Center luôn nằm ở vị trí số 3 (index 2) nếu có
 			if (!items.find(i => i.isCenter) && permitted.find(i => i.isCenter)) {
@@ -228,12 +229,14 @@ export const useNavigationConfig = () => {
 				{ icon: 'pending_actions', label: 'Đang xử lý', path: '/orders?status=pending' },
 				center,
 				{ icon: 'check_circle', label: 'Đã chốt', path: '/orders?status=closed' },
+				{ icon: 'history', label: 'Lịch sử', path: '/orders?tab=history' },
 			];
 		} else if (currentPath === '/finance') {
 			items = [
 				home,
 				{ icon: 'history_toggle_off', label: 'Tuổi nợ', path: '/finance?tab=aging' },
 				center,
+				{ icon: 'query_stats', label: 'Lợi nhuận', path: '/finance?tab=profit' },
 				{ icon: 'history', label: 'Lịch sử', path: '/finance?tab=history' },
 			];
 		} else if (currentPath === '/customers') {
@@ -242,6 +245,7 @@ export const useNavigationConfig = () => {
 				{ icon: 'person_add', label: 'Thêm mới', path: '/customers?new=true' },
 				center,
 				{ icon: 'map', label: 'Bản đồ', path: '/customers?view=map' },
+				{ icon: 'analytics', label: 'Phân tích', path: '/customers?tab=stats' },
 			];
 		} else if (currentPath === '/inventory') {
 			items = [
@@ -249,11 +253,12 @@ export const useNavigationConfig = () => {
 				{ icon: 'search', label: 'Tìm kiếm', path: '/inventory?search=focus' },
 				center,
 				{ icon: 'inventory', label: 'Tồn kho gộp', path: '/inventory?tab=inventory' },
+				{ icon: 'upload_file', label: 'Nhập Excel', path: '/inventory?import=true' },
 			];
 		} else {
-			// Mặc định: Lấy 4 mục đầu tiên từ candidates
-			const candidates = [home, orders, center, customers, products];
-			items = candidates.filter(item => !item.permissionKey || hasPermission(item.permissionKey)).slice(0, 4);
+			// Mặc định: Lấy 5 mục đầu tiên từ candidates
+			const candidates = [home, orders, center, finance, customers, products];
+			items = candidates.filter(item => !item.permissionKey || hasPermission(item.permissionKey)).slice(0, 5);
 		}
 
 		return items;

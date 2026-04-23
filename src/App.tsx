@@ -16,7 +16,6 @@ const OrderList = lazy(() => import('./views/OrderList'));
 const Checkin = lazy(() => import('./views/Checkin'));
 const Attendance = lazy(() => import('./views/Attendance'));
 const Pricing = lazy(() => import('./views/Pricing'));
-const NexusControl = lazy(() => import('./views/NexusControl'));
 const PriceList = lazy(() => import('./views/PriceList'));
 const TrainingCatalog = lazy(() => import('./views/TrainingCatalog'));
 const TrainingLab = lazy(() => import('./views/TrainingLab'));
@@ -29,12 +28,16 @@ import { ToastProvider } from './components/shared/Toast';
 import OfflineBanner from './components/shared/OfflineBanner';
 
 
-const LoadingSpinner = () => (
-	<div className="min-h-screen bg-[#F0F2F5] flex items-center justify-center">
-		<div className="flex flex-col items-center gap-4">
-			<div className="w-12 h-12 border-4 border-[#1A237E] border-t-transparent rounded-full animate-spin"></div>
-			<p className="text-[#1A237E] font-bold text-sm tracking-widest animate-pulse uppercase">Đang tải ứng dụng...</p>
-		</div>
+const LoadingBar = () => (
+	<div className="fixed top-0 left-0 right-0 h-1 z-[9999] overflow-hidden bg-white/10">
+		<div className="h-full bg-gradient-to-r from-[#FF6D00] to-[#FF9100] animate-[loading_2s_infinite_ease-in-out] shadow-[0_0_8px_rgba(255,109,0,0.5)]"></div>
+		<style>{`
+			@keyframes loading {
+				0% { transform: translateX(-100%); }
+				50% { transform: translateX(-30%); }
+				100% { transform: translateX(0); }
+			}
+		`}</style>
 	</div>
 );
 
@@ -56,7 +59,7 @@ function App() {
 
 	if (loading) {
 		return (
-			<div className="min-h-screen bg-[#F0F2F5] flex items-center justify-center">
+			<div className="min-h-screen bg-[#F0F2F5] dark:bg-slate-950 flex items-center justify-center">
 				<div className="flex flex-col items-center gap-4">
 					<div className="w-12 h-12 border-4 border-[#1A237E] border-t-transparent rounded-full animate-spin"></div>
 					<p className="text-[#1A237E] font-bold text-sm tracking-widest animate-pulse">DUNVEX BUILD</p>
@@ -68,7 +71,7 @@ function App() {
 	return (
 		<ToastProvider>
 			<div className="min-h-screen bg-[#f8f9fb] transition-colors duration-300 dark:bg-slate-950">
-				<Suspense fallback={<LoadingSpinner />}>
+				<Suspense fallback={<LoadingBar />}>
 					<Routes>
 						<Route
 							path="/login"
@@ -124,14 +127,10 @@ function App() {
 							element={currentUser ? <MainLayout><AppSettings /></MainLayout> : <Navigate to="/login" />}
 						/>
 
-						{/* NEXUS CONTROL & PRICING */}
+						{/* PRICING */}
 						<Route
 							path="/pricing"
 							element={currentUser ? <Pricing /> : <Navigate to="/login" />}
-						/>
-						<Route
-							path="/nexus-control"
-							element={currentUser ? <NexusControl /> : <Navigate to="/login" />}
 						/>
 						<Route
 							path="/price-list"

@@ -254,13 +254,11 @@ const SystemAlertManager: React.FC = () => {
 							lastSyncAt: serverTimestamp()
 						});
 
-						const aiNotif = await generateAiNotification('auto_sync', { schedule });
-
 						await addDoc(collection(db, 'notifications'), {
 							userId: auth.currentUser?.uid,
-							title: aiNotif?.title || '📊 Tự động đồng bộ',
-							message: aiNotif?.body || `Dữ liệu đã được tự động đồng bộ vào Google Sheets theo lịch (${schedule}).`,
-							body: aiNotif?.body || `Dữ liệu đã được tự động đồng bộ vào Google Sheets theo lịch (${schedule}).`,
+							title: '📊 Tự động đồng bộ',
+							message: `Dữ liệu đã được tự động đồng bộ vào Google Sheets theo lịch (${schedule}).`,
+							body: `Dữ liệu đã được tự động đồng bộ vào Google Sheets theo lịch (${schedule}).`,
 							type: 'auto_sync',
 							read: false,
 							createdAt: serverTimestamp()
@@ -272,39 +270,6 @@ const SystemAlertManager: React.FC = () => {
 			}
 		};
 
-		const generateAiNotification = async (type: string, details: any) => {
-			const apiKey = import.meta.env.VITE_GROQ_API_KEY;
-			if (!apiKey) return null;
-
-			try {
-				const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-						"Authorization": `Bearer ${apiKey}`
-					},
-					body: JSON.stringify({
-						model: "llama-3.3-70b-versatile",
-						messages: [
-							{
-								role: "system",
-								content: "Bạn là Nexus AI chuyên gia quản trị Dunvex Build. Hãy viết tiêu đề và nội dung thông báo hệ thống bằng NGÔN NGỮ TỰ NHIÊN, chuyên nghiệp nhưng thân thiện như một trợ lý thông minh. TRÌNH BÀY: Trả về JSON duy nhất với 2 trường 'title' và 'body'. KHÔNG dùng markdown. Ngôn ngữ: Tiếng Việt."
-							},
-							{
-								role: "user",
-								content: `Hãy viết thông báo cho loại: ${type}. Chi tiết sự kiện: ${JSON.stringify(details)}`
-							}
-						],
-						response_format: { type: 'json_object' }
-					})
-				});
-
-				const data = await response.json();
-				return JSON.parse(data.choices[0].message.content);
-			} catch (err) {
-				return null;
-			}
-		};
 
 		const createNotificationIfNew = async (type: 'low_stock' | 'debt_warning', refId: string, name: string, daysVal: number, velocity: number, unit: string, currentVal: number, isStatic = false) => {
 			const today = new Date();
@@ -324,22 +289,18 @@ const SystemAlertManager: React.FC = () => {
 			});
 
 			if (!isAlreadyAlertedToday) {
-				const aiNotif = await generateAiNotification(type, { name, daysVal, velocity, unit, currentVal, isStatic });
+				let title = type === 'low_stock' ? '⚡ Cảnh báo hết kho' : '💰 Nhắc thu công nợ';
+				let body = "";
 
-				let title = aiNotif?.title || (type === 'low_stock' ? '⚡ Cảnh báo hết kho' : '💰 Nhắc thu công nợ');
-				let body = aiNotif?.body || "";
-
-				if (!body) {
-					if (type === 'low_stock') {
-						if (isStatic) {
-							body = `Sản phẩm ${name} đang ở mức báo động (${currentVal} ${unit}). Vui lòng nhập thêm hàng.`;
-						} else {
-							const daysStr = Math.ceil(daysVal) === 0 ? "hết ngay hôm nay" : `đủ dùng trong khoảng ${Math.ceil(daysVal)} ngày`;
-							body = `Tốc độ bán (${velocity.toFixed(1)} ${unit}/ngày) cho thấy ${name} chỉ còn ${daysStr}. Hiện còn ${currentVal} ${unit}.`;
-						}
+				if (type === 'low_stock') {
+					if (isStatic) {
+						body = `Sản phẩm ${name} đang ở mức báo động (${currentVal} ${unit}). Vui lòng nhập thêm hàng.`;
 					} else {
-						body = `Đơn hàng của khách ${name} đã lên được 3 ngày. Tổng dư nợ hiện tại của khách là ${currentVal.toLocaleString('vi-VN')} đ. Đã đến lúc nhắc nợ!`;
+						const daysStr = Math.ceil(daysVal) === 0 ? "hết ngay hôm nay" : `đủ dùng trong khoảng ${Math.ceil(daysVal)} ngày`;
+						body = `Tốc độ bán (${velocity.toFixed(1)} ${unit}/ngày) cho thấy ${name} chỉ còn ${daysStr}. Hiện còn ${currentVal} ${unit}.`;
 					}
+				} else {
+					body = `Đơn hàng của khách ${name} đã lên được 3 ngày. Tổng dư nợ hiện tại của khách là ${currentVal.toLocaleString('vi-VN')} đ. Đã đến lúc nhắc nợ!`;
 				}
 
 				await addDoc(collection(db, 'notifications'), {

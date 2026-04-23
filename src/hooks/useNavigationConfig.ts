@@ -184,84 +184,29 @@ export const useNavigationConfig = () => {
 		{ icon: 'settings', label: 'Cài đặt', path: '/settings' },                                            // 13
 	];
 
-	// Xử lý Dynamic Menu cho Mobile
+	// Xử lý Dynamic Menu cho Mobile - Giờ đây đã được ổn định hóa và kiểm tra quyền
 	const getMobileItems = () => {
-		const currentPath = location.pathname;
-		
 		const home = allItems[0];
 		const orders = allItems[1];
-		const center = allItems[2];
-		const finance = allItems[4];
-		const customers = allItems[5];
 		const products = allItems[6];
-		const priceList = allItems[7];
-		const history = allItems[8];
-		const coupons = allItems[9];
+		const finance = allItems[4];
+		const center = { ...getCenterItem(), isCenter: true };
 
-		let items: NavItem[] = [];
-
-		if (currentPath === '/' || currentPath === '/admin' || currentPath === '/settings') {
-			// Chiến lược cho Trang chủ: Chọn tối đa 5 mục quan trọng nhất dựa trên quyền (2 bên, 1 giữa)
-			const candidates = [
-				home,
-				orders,
-				center,
-				finance,
-				customers,
-				products,
-				coupons,
-				priceList
-			];
-
-			// Lọc theo quyền
-			const permitted = candidates.filter(item => !item.permissionKey || hasPermission(item.permissionKey));
+		// Các vị trí 1, 2, 4, 5 (không tính center ở vị trí 3)
+		const slots = [home, orders, products, finance];
+		
+		// Kiểm tra quyền cho từng slot, nếu không có quyền thì thay thế bằng fallback hợp lệ
+		const validatedSlots = slots.map(item => {
+			if (hasPermission(item.permissionKey)) return item;
 			
-			// Lấy 5 mục đầu tiên để cân bằng 2 bên
-			items = permitted.slice(0, 5);
+			// Fallback sequence: Khách hàng -> Cài đặt -> Trang chủ
+			if (hasPermission('customers_manage')) return allItems[5]; // Khách hàng
+			if (hasPermission('settings')) return allItems[13]; // Cài đặt
+			return allItems[0]; // Trang chủ (luôn mở)
+		});
 
-			// Đảm bảo nút Center luôn nằm ở vị trí số 3 (index 2) nếu có
-			if (!items.find(i => i.isCenter) && permitted.find(i => i.isCenter)) {
-				items[2] = permitted.find(i => i.isCenter)!;
-			}
-		} else if (currentPath === '/orders') {
-			items = [
-				home,
-				{ icon: 'pending_actions', label: 'Đang xử lý', path: '/orders?status=pending' },
-				center,
-				{ icon: 'check_circle', label: 'Đã chốt', path: '/orders?status=closed' },
-				{ icon: 'history', label: 'Lịch sử', path: '/orders?tab=history' },
-			];
-		} else if (currentPath === '/finance') {
-			items = [
-				home,
-				{ icon: 'history_toggle_off', label: 'Tuổi nợ', path: '/finance?tab=aging' },
-				center,
-				{ icon: 'query_stats', label: 'Lợi nhuận', path: '/finance?tab=profit' },
-				{ icon: 'history', label: 'Lịch sử', path: '/finance?tab=history' },
-			];
-		} else if (currentPath === '/customers') {
-			items = [
-				home,
-				{ icon: 'person_add', label: 'Thêm mới', path: '/customers?new=true' },
-				center,
-				{ icon: 'map', label: 'Bản đồ', path: '/customers?view=map' },
-				{ icon: 'analytics', label: 'Phân tích', path: '/customers?tab=stats' },
-			];
-		} else if (currentPath === '/inventory') {
-			items = [
-				home,
-				{ icon: 'search', label: 'Tìm kiếm', path: '/inventory?search=focus' },
-				center,
-				{ icon: 'inventory', label: 'Tồn kho gộp', path: '/inventory?tab=inventory' },
-				{ icon: 'upload_file', label: 'Nhập Excel', path: '/inventory?import=true' },
-			];
-		} else {
-			// Mặc định: Lấy 5 mục đầu tiên từ candidates
-			const candidates = [home, orders, center, finance, customers, products];
-			items = candidates.filter(item => !item.permissionKey || hasPermission(item.permissionKey)).slice(0, 5);
-		}
-
-		return items;
+		// Trả về đúng 5 vị trí cố định (Center ở giữa) để đảm bảo giao diện không bị nhảy
+		return [validatedSlots[0], validatedSlots[1], center, validatedSlots[2], validatedSlots[3]];
 	};
 
 	const mobileItems = getMobileItems();

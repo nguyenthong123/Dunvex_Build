@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Search, Plus, Minus, Trash2, ShoppingCart, User, Package, MapPin, Truck, FileText, ChevronDown, X, Layers, CheckCircle, Mail, RotateCcw, QrCode, Ticket, Tag, Lock, Crown, Sparkles, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, Search, Plus, Minus, Trash2, ShoppingCart, User, Package, MapPin, Truck, FileText, ChevronDown, X, Layers, CheckCircle, Mail, RotateCcw, QrCode, Ticket, Tag, Lock, Crown, Eye, EyeOff } from 'lucide-react';
 import QRScanner from '../components/shared/QRScanner';
 import { useNavigate, useParams } from 'react-router-dom';
 import { db, auth } from '../services/firebase';
@@ -170,12 +170,11 @@ const QuickOrder = () => {
 		}
 	}, [id, owner.ownerId, customers.length, products.length]);
 	
-	// AI Smart Packaging Auditor & Sync
+	// Smart Packaging Sync (Local Only)
 	useEffect(() => {
 		if (loading || products.length === 0 || fetchingOrder) return;
 		
-		let isCancelled = false;
-		const smartAudit = async () => {
+		const syncPackaging = () => {
 			let hasLocalChange = false;
 			const updatedItems = lineItems.map(item => {
 				if (!item.name && !item.productId) return item;
@@ -188,86 +187,34 @@ const QuickOrder = () => {
 				};
 				const currentPkg = parseVNNumber(item.packaging);
 				
-				// 1. Local Weighted Matching (Logic AI Cục bộ)
 				const candidates = products.filter(p => 
 					p.id === item.productId || 
 					(p.sku && item.sku && normalizeText(p.sku) === normalizeText(item.sku)) ||
 					(normalizeSmart(p.name) === normalizeSmart(item.name))
 				);
 				
-				// Ưu tiên sản phẩm trùng cả Danh mục hoặc có Packaging hợp lý
 				const bestMatch = candidates.find(p => normalizeSmart(p.category) === normalizeSmart(item.category)) || candidates[0];
 				
 				if (bestMatch && bestMatch.packaging) {
 					const masterPkg = parseVNNumber(bestMatch.packaging);
 					if (masterPkg > 0 && Math.abs(masterPkg - currentPkg) > 0.001) {
 						hasLocalChange = true;
-						// ⚠️ FIX: Only update packaging, NEVER overwrite buyPrice (historical cost must be preserved)
-						return { ...item, packaging: bestMatch.packaging, aiValidated: true };
-					} else if (masterPkg > 0 && !item.aiValidated) {
+						return { ...item, packaging: bestMatch.packaging, validated: true };
+					} else if (masterPkg > 0 && !item.validated) {
 						hasLocalChange = true;
-						return { ...item, aiValidated: true };
+						return { ...item, validated: true };
 					}
 				}
 				return item;
 			});
 
-			if (hasLocalChange && !isCancelled) {
+			if (hasLocalChange) {
 				setLineItems(updatedItems);
-				return;
-			}
-
-			// 2. Deep Intelligence Audit (AI Groq rà soát nâng cao cho các trường hợp nghi ngờ)
-			const suspiciousItems = updatedItems.filter(it => {
-				const parseVNNumber = (val: any) => {
-					if (typeof val === 'number') return val;
-					if (!val) return 0;
-					const cleaned = String(val).replace(/[^0-9,.-]/g, '').replace(',', '.');
-					return parseFloat(cleaned) || 0;
-				};
-				const pkg = parseVNNumber(it.packaging);
-				const qty = parseFloat(String(it.qty)) || 0;
-				const name = (it.name || '').toLowerCase();
-				// Dấu hiệu nghi ngờ: Tấm Duraflex mà đóng gói < 10, hoặc số kiện quá lớn (> 50) cho 1 mặt hàng
-				const result = (qty / (pkg || 1));
-				return (name.includes('duraflex') && pkg < 10) || (result > 50 && qty > 0);
-			});
-
-			if (suspiciousItems.length > 0 && !isCancelled) {
-				const apiKey = import.meta.env.VITE_GROQ_API_KEY;
-				if (!apiKey) return;
-
-				try {
-					const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-						method: "POST",
-						headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-						body: JSON.stringify({
-							model: "llama-3.3-70b-versatile",
-							messages: [
-								{ role: "system", content: "Bạn là chuyên gia rà soát dữ liệu kho Dunvex. Hãy phân tích các sản phẩm trong đơn và trả về số lượng Đóng gói (packaging) chính xác nhất. Ví dụ: 'Tấm DURAFlex 15mm' thường là 40 tấm/kiện. Nếu data đang là 4, hãy sửa thành 40. Trả về JSON: { items: [{ name: '...', correctPackaging: 40 }] }" },
-								{ role: "user", content: `Rà soát các item nghi ngờ sau: ${JSON.stringify(suspiciousItems.map(i => ({ name: i.name, currentPkg: i.packaging, qty: i.qty })))}` }
-							],
-							response_format: { type: 'json_object' }
-						})
-					});
-					const resData = await response.json();
-					const findings = JSON.parse(resData.choices[0].message.content).items;
-
-					if (findings && findings.length > 0) {
-						const finalItems = updatedItems.map(it => {
-							const find = findings.find((f: any) => f.name === it.name);
-							// ⚠️ FIX: AI only overwrites packaging, never buyPrice (historical cost must be preserved)
-							if (find) return { ...it, packaging: String(find.correctPackaging), aiValidated: true, aiSmartFix: true };
-							return it;
-						});
-						if (!isCancelled) setLineItems(finalItems);
-					}
-				} catch (e) { console.error("AI Audit Error:", e); }
 			}
 		};
 
-		const timer = setTimeout(smartAudit, 1000); // Trì hoãn 1s để người dùng nhập xong
-		return () => { isCancelled = true; clearTimeout(timer); };
+		const timer = setTimeout(syncPackaging, 1000);
+		return () => clearTimeout(timer);
 	}, [lineItems.length, products, loading, fetchingOrder]);
 
 	const addLineItem = () => {
@@ -1163,7 +1110,7 @@ const QuickOrder = () => {
 													})()}
 												</span>
 												{item.aiValidated && (
-													<Sparkles size={10} className={`${item.aiSmartFix ? 'text-indigo-600' : 'text-indigo-400'} animate-pulse`} />
+													<Package size={10} className="text-slate-400" />
 												)}
 												{item.aiSmartFix && (
 													<div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-[8px] px-1.5 py-0.5 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
@@ -1192,7 +1139,7 @@ const QuickOrder = () => {
 														return (Number(item.qty) / pkg).toLocaleString('vi-VN', { maximumFractionDigits: 2 });
 													})()} KIỆN
 													{item.aiValidated && (
-														<Sparkles size={8} className="text-indigo-500 animate-pulse" />
+														<Package size={8} className="text-slate-400" />
 													)}
 												</span>
 											</div>

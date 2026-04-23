@@ -56,10 +56,6 @@ const Debts: React.FC = () => {
 	const [paymentCustomerSearchQuery, setPaymentCustomerSearchQuery] = useState('');
 	const paymentCustomerRef = React.useRef<HTMLDivElement>(null);
 	
-	// AI Analysis States
-	const [aiReport, setAiReport] = useState<string | null>(null);
-	const [analyzing, setAnalyzing] = useState(false);
-	const [showAiReport, setShowAiReport] = useState(false);
 
 	const normalizeText = (text: any) => text ? String(text).normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase() : '';
 	const removeAccents = (str: any) => {
@@ -137,7 +133,7 @@ const Debts: React.FC = () => {
 	const [statementFromDate, setStatementFromDate] = useState('');
 	const [statementToDate, setStatementToDate] = useState('');
 	const [statementScale, setStatementScale] = useState(1);
-	const [statementZoom, setStatementZoom] = useState(0.85);
+	const [statementZoom, setStatementZoom] = useState(1);
 
 	useEffect(() => {
 		const handleClickOutside = (event: MouseEvent) => {
@@ -461,66 +457,6 @@ const Debts: React.FC = () => {
 	}).sort((a: any, b: any) => b.currentDebt - a.currentDebt);
 
 
-	const handleAIDebtAnalysis = async () => {
-		const apiKey = import.meta.env.VITE_GROQ_API_KEY;
-		if (!apiKey) {
-			showToast("Chưa cấu hình Nexus AI Key.", "error");
-			return;
-		}
-
-		const debtors = aggregatedData.filter(d => d.currentDebt > 0);
-		if (debtors.length === 0) {
-			showToast("Không có công nợ để phân tích.", "warning");
-			return;
-		}
-
-		setAnalyzing(true);
-		setShowAiReport(true);
-		setAiReport(null);
-
-		try {
-			// Extract context for top debtors
-			const analysisData = debtors.slice(0, 15).map(d => ({
-				name: d.name,
-				debt: d.currentDebt,
-				lastPayment: formatDate(d.lastTx),
-				daysSinceActivity: d.turnoverDays,
-				health: d.debtHealth
-			}));
-
-			const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					"Authorization": `Bearer ${apiKey}`
-				},
-				body: JSON.stringify({
-					model: "llama-3.3-70b-versatile",
-					messages: [
-						{
-							role: "system",
-							content: "Bạn là Nexus AI chuyên gia tài chính và quản lý công nợ. Hãy phân tích danh sách nợ khách hàng, xác định rủi ro tài chính, và đưa ra chiến lược thu hồi nợ cụ thể. YÊU CẦU ĐẶC BIỆT CHÚ Ý TRÌNH BÀY: CHỈ ĐƯỢC dùng định dạng văn bản bình thường. TUYỆT ĐỐI KHÔNG dùng dấu sao (*), dấu thăng (#) hay in đậm của markdown. Sử dụng các dấu gạch ngang (-) hoặc chữ số (1, 2) đê làm danh sách. Hãy dùng dấu xuống dòng để chia đoạn. PHẢI TRẢ LỜI BẰNG TIẾNG VIỆT CÓ DẤU ĐẦY ĐỦ, súc tích, chuyên nghiệp."
-						},
-						{
-							role: "user",
-							content: `Dữ liệu công nợ khách hàng: ${JSON.stringify(analysisData)}. Tổng phải thu: ${totalReceivable.toLocaleString()}đ.`
-						}
-					],
-					stream: false
-				})
-			});
-
-			const result = await response.json();
-			let content = result.choices[0].message.content;
-			// Gỡ bỏ **in đậm**, và thay vì ghi dấu * thành dấu -
-			content = content.replace(/\*\*/g, '').replace(/\*/g, '-');
-			setAiReport(content);
-		} catch (error) {
-			showToast("Lỗi phân tích AI.", "error");
-		} finally {
-			setAnalyzing(false);
-		}
-	};
 
 	const totalPages = Math.ceil(aggregatedData.length / ITEMS_PER_PAGE);
 	const paginatedData = aggregatedData.slice(
@@ -777,21 +713,6 @@ const Debts: React.FC = () => {
 					</div>
 
 					<div className="flex items-center gap-2">
-						<button
-							onClick={handleAIDebtAnalysis}
-							disabled={analyzing}
-							className={`relative flex items-center justify-center gap-2 h-10 px-4 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all overflow-hidden group shadow-lg ${
-								analyzing 
-								? 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-wait' 
-								: 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800/50 hover:border-indigo-500 hover:shadow-indigo-500/20 active:scale-95'
-							}`}
-						>
-							<div className={`absolute inset-0 bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 opacity-50 group-hover:opacity-100 transition-opacity ${analyzing ? 'animate-pulse' : ''}`} />
-							<span className={`material-symbols-outlined text-xl transition-transform ${analyzing ? 'animate-spin' : 'group-hover:rotate-12'}`}>
-								{analyzing ? 'sync' : 'psychology'}
-							</span>
-							<span className="relative z-10">{analyzing ? 'Đang phân tích...' : 'Nexus AI Phân Tích'}</span>
-						</button>
 						<button
 							onClick={markAllAsRead}
 							className="p-2 relative text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors group"
@@ -1531,17 +1452,54 @@ const Debts: React.FC = () => {
 			{/* DEBT STATEMENT MODAL */}
 			{showStatement && selectedCustomer && (
 				((owner.isPro || !owner.systemConfig.lock_free_debts) && !owner.manualLockDebts) ? (
-					<div id="debt-statement-modal" className="fixed inset-0 z-[160] bg-slate-900/95 backdrop-blur-xl flex items-center justify-center p-0 md:p-8">
-						<div className="bg-white dark:bg-slate-900 w-full max-w-4xl max-h-[95vh] md:max-h-[90vh] md:rounded-[3rem] shadow-2xl relative flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 transaction-colors duration-300">
+					<div id="debt-statement-modal" className="fixed inset-0 z-[160] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-0 md:p-4">
+						<div className="bg-transparent w-full max-w-5xl max-h-screen md:max-h-[95vh] relative flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
 							{/* MODAL HEADER - STICKY FOR UI BUT HIDDEN FOR SCREENSHOT ONCE SCROLLED */}
-							<div className="flex-none bg-white dark:bg-slate-900 px-8 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between z-20 md:rounded-t-[3rem] print:hidden transition-colors duration-300">
-								<div className="flex items-center gap-3">
-									<div className="size-10 bg-indigo-50 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center">
-										<History size={20} />
+							<div className="flex-none bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-8 py-5 border-b border-white/10 flex items-center justify-between z-20 md:rounded-t-[2.5rem] print:hidden shadow-lg">
+								<div className="flex items-center gap-6">
+									<div className="flex items-center gap-2">
+										<div className="size-10 bg-indigo-50 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center">
+											<History size={20} />
+										</div>
+										<div>
+											<h3 className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white">Chi tiết công nợ</h3>
+											<p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest mt-0.5">{selectedCustomer.name}</p>
+										</div>
 									</div>
-									<div>
-										<h3 className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white">Chi tiết công nợ</h3>
-										<p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest mt-0.5">{selectedCustomer.name}</p>
+
+									{/* Zoom Controls */}
+									<div className="hidden lg:flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl px-2 py-1 gap-1">
+										<button 
+											onClick={() => setStatementZoom(prev => Math.max(0.5, prev - 0.1))}
+											className="size-8 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-500 transition-all"
+											title="Thu nhỏ"
+										>
+											<span className="material-symbols-outlined text-lg">zoom_out</span>
+										</button>
+										<span className="text-[10px] font-black w-12 text-center text-slate-500">{Math.round(statementZoom * 100)}%</span>
+										<button 
+											onClick={() => setStatementZoom(prev => Math.min(1.5, prev + 0.1))}
+											className="size-8 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-500 transition-all"
+											title="Phóng to"
+										>
+											<span className="material-symbols-outlined text-lg">zoom_in</span>
+										</button>
+										<div className="w-[1px] h-4 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+										<button 
+											onClick={() => {
+												const container = document.getElementById('debt-statement-container');
+												const paper = document.getElementById('debt-statement-paper');
+												if (container && paper) {
+													const availableHeight = container.clientHeight - 80;
+													const paperHeight = paper.clientHeight;
+													const zoomNeeded = availableHeight / paperHeight;
+													setStatementZoom(Math.min(1, zoomNeeded));
+												}
+											}}
+											className="px-3 py-1.5 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-500 text-[9px] font-black uppercase transition-all"
+										>
+											Vừa màn hình
+										</button>
 									</div>
 								</div>
 								<div className="flex items-center gap-2">
@@ -1557,7 +1515,7 @@ const Debts: React.FC = () => {
 							{/* DATE FILTER BAR FOR STATEMENT - REMOVED AS PER USER REQUEST */}
 
 							{/* SCROLLABLE DOCUMENT AREA */}
-							<div className="flex-1 overflow-y-auto bg-slate-100 dark:bg-slate-950/50 py-8 flex items-start justify-center scroll-smooth custom-scrollbar">
+							<div id="debt-statement-container" className="flex-1 overflow-y-auto bg-slate-900/20 py-12 flex items-start justify-center scroll-smooth custom-scrollbar">
 
 								{/* THE PAPER SHEET - Scalable Wrapper */}
 								<div
@@ -1571,7 +1529,7 @@ const Debts: React.FC = () => {
 								>
 									<div
 										id="debt-statement-paper"
-										className="bg-white w-[800px] shadow-[0_32px_96px_-12px_rgba(0,0,0,0.3)] min-h-[1141px] p-16 mb-20 flex flex-col font-['Inter', sans-serif] relative text-sm text-slate-900 border-2 border-slate-200"
+										className="bg-white w-[800px] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] min-h-[1141px] p-16 mb-20 flex flex-col font-['Inter', sans-serif] relative text-sm text-slate-900"
 									>
 
 										{/* 2. Customer & Cycle Info Grid */}
@@ -1877,64 +1835,6 @@ const Debts: React.FC = () => {
 							>
 								Đóng chi tiết
 							</button>
-						</div>
-					</div>
-				</div>
-			)}
-			{/* Nexus AI Analysis Report Modal */}
-			{showAiReport && (
-				<div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
-					<div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-[2.5rem] shadow-2xl border border-white/20 overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300">
-						<div className="p-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-gradient-to-r from-indigo-50 to-transparent dark:from-indigo-950/20">
-							<div className="flex items-center gap-4">
-								<div className="size-14 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-xl shadow-indigo-500/40">
-									<span className={`material-symbols-outlined text-3xl ${analyzing ? 'animate-spin' : ''}`}>psychology</span>
-								</div>
-								<div>
-									<h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Nexus AI Analysis</h2>
-									<p className="text-[10px] text-indigo-600 dark:text-indigo-400 font-black uppercase tracking-[0.2em]">Báo cáo công nợ đối tác</p>
-								</div>
-							</div>
-							<button onClick={() => setShowAiReport(false)} className="size-12 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400 transition-colors">
-								<span className="material-symbols-outlined">close</span>
-							</button>
-						</div>
-
-						<div className="flex-1 overflow-y-auto p-8 space-y-6">
-							{analyzing ? (
-								<div className="flex flex-col items-center justify-center py-20 space-y-6">
-									<div className="relative">
-										<div className="size-20 rounded-full border-4 border-indigo-100 dark:border-indigo-900/30 border-t-indigo-600 animate-spin" />
-										<div className="absolute inset-0 flex items-center justify-center">
-											<span className="material-symbols-outlined text-indigo-600 animate-pulse text-2xl">neurology</span>
-										</div>
-									</div>
-									<div className="text-center space-y-2">
-										<p className="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tight">Đang quét dữ liệu công nợ...</p>
-										<p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest animate-pulse">Nexus AI đang tính toán rủi ro & đề xuất chiến lược</p>
-									</div>
-								</div>
-							) : aiReport ? (
-								<div className="prose prose-slate dark:prose-invert max-w-none">
-									<div className="bg-indigo-50/50 dark:bg-indigo-900/10 p-6 rounded-3xl border border-indigo-100/50 dark:border-indigo-800/30 leading-relaxed text-slate-700 dark:text-slate-300 font-medium whitespace-pre-wrap">
-										{aiReport}
-									</div>
-									<div className="grid grid-cols-2 gap-4 mt-6">
-										<div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800/20">
-											<p className="text-[8px] font-black text-emerald-600 uppercase tracking-widest mb-1">Mức độ an toàn</p>
-											<p className="text-xs font-bold text-slate-600 dark:text-slate-400">Dựa trên tốc độ quay vòng vốn trung bình 15-30 ngày.</p>
-										</div>
-										<div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-900/10 border border-rose-100 dark:border-rose-800/20">
-											<p className="text-[8px] font-black text-rose-600 uppercase tracking-widest mb-1">Cảnh báo rủi ro</p>
-											<p className="text-xs font-bold text-slate-600 dark:text-slate-400">Các khoản nợ trên 90 ngày cần được xử lý pháp lý.</p>
-										</div>
-									</div>
-								</div>
-							) : null}
-						</div>
-
-						<div className="p-6 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 flex justify-center">
-							<p className="text-[9px] font-black text-slate-400 uppercase tracking-[3px]">Powered by Nexus AI Intelligence Engine</p>
 						</div>
 					</div>
 				</div>

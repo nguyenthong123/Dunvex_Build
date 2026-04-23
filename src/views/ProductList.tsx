@@ -33,9 +33,6 @@ const ProductList = () => {
 	const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 	const [activeTab, setActiveTab] = useState<'products' | 'inventory' | 'logs'>('products');
 	const [inventoryLogs, setInventoryLogs] = useState<any[]>([]);
-	const [aiReport, setAiReport] = useState<string | null>(null);
-	const [analyzing, setAnalyzing] = useState(false);
-	const [showAiReport, setShowAiReport] = useState(false);
 	const [orders, setOrders] = useState<any[]>([]);
 	const [expandedSkus, setExpandedSkus] = useState<Set<string>>(new Set());
 	const [currentPage, setCurrentPage] = useState(1);
@@ -196,35 +193,6 @@ const ProductList = () => {
 		return unsubscribe;
 	}, [owner.loading, owner.ownerId]);
 
-	// NEW: AI Inventory Auditor (Auto-Reconciler) - Runs 19:00 - 21:00
-	useEffect(() => {
-		const triggerAudit = async () => {
-			if (owner.loading || !owner.ownerId || owner.role !== 'admin' || products.length === 0) return;
-			
-			// Check Time Window: 19:00 - 21:00
-			const now = new Date();
-			const hour = now.getHours();
-			if (hour < 19 || hour >= 21) return;
-			
-			// Check if already run today
-			const todayStr = now.toISOString().split('T')[0];
-			try {
-				const settingsRef = doc(db, 'settings', owner.ownerId);
-				const settingsSnap = await getDoc(settingsRef);
-				const lastAudit = settingsSnap.exists() ? settingsSnap.data()?.lastInventoryAutoAuditDate : null;
-				
-				if (lastAudit === todayStr) return;
-				
-				console.log("[Nexus AI] Triggering scheduled inventory reconciliation audit...");
-				await runInventoryAutoReconcile(todayStr);
-			} catch (err) {
-				console.error("[Nexus AI Audit Error]", err);
-			}
-		};
-		
-		const timer = setTimeout(triggerAudit, 10000); // Wait 10s for initial data to be ready
-		return () => clearTimeout(timer);
-	}, [owner.loading, products.length, orders.length]);
 
 	// Fetch Orders (To filter inventory logs by status)
 	useEffect(() => {
@@ -716,217 +684,6 @@ const ProductList = () => {
 		setShowEditForm(true);
 	};
 
-	const runInventoryAutoReconcile = async (auditDay: string) => {
-		const apiKey = import.meta.env.VITE_GROQ_API_KEY;
-		if (!apiKey) return;
-
-		try {
-			// 1. Calculate Real-World Stats per SKU
-			const normalizeSku = (s: string) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').trim();
-			const auditMap: Record<string, any> = {};
-
-			// Process Current Products
-			products.forEach(p => {
-				const key = p.sku && p.sku.trim() !== '' ? normalizeSku(p.sku) : `ID-${p.id}`;
-				if (!auditMap[key]) {
-					auditMap[key] = {
-						sku: p.sku || 'N/A',
-						name: p.name,
-						currentSystemStock: 0,
-						realIn: 0,
-						realOut: 0,
-						memberIds: []
-					};
-				}
-				auditMap[key].currentSystemStock += (Number(p.stock) || 0);
-				auditMap[key].memberIds.push(p.id);
-			});
-
-			// Map orders for status check (We need full orders to be accurate)
-			const finishedOrdersSnap = await getDocs(query(
-				collection(db, 'orders'),
-				where('ownerId', '==', owner.ownerId),
-				where('status', '==', 'Đơn chốt')
-			));
-			const finishedOrders = finishedOrdersSnap.docs.map((d: any) => d.data());
-
-			// Aggregate Outbound from Orders
-			finishedOrders.forEach((order: any) => {
-				(order.items || []).forEach((item: any) => {
-					const key = item.sku && item.sku.trim() !== '' ? normalizeSku(item.sku) : (item.id ? normalizeSku(`ID-${item.id}`) : '');
-					if (key && auditMap[key]) {
-						auditMap[key].realOut += (Number(item.qty) || 0);
-					}
-				});
-			});
-
-			// Aggregate Inbound from Logs
-			inventoryLogs.forEach(l => {
-				// Match by productId (existing products)
-				const prod = products.find(p => p.id === l.productId);
-				if (prod) {
-					const key = prod.sku && prod.sku.trim() !== '' ? normalizeSku(prod.sku) : `ID-${prod.id}`;
-					if (auditMap[key]) {
-						if (l.type === 'init' || (l.type === 'audit' && l.diffType === 'increase')) {
-							auditMap[key].realIn += (Number(l.qty) || 0);
-						}
-					}
-				}
-			});
-
-			// 2. Identify Discrepancies
-			const discrepancies = Object.values(auditMap).filter((a: any) => {
-				const expected = a.realIn - a.realOut;
-				return Math.abs(expected - a.currentSystemStock) > 0.1;
-			});
-
-			if (discrepancies.length === 0) {
-				// No audit needed, just mark as done
-				await updateDoc(doc(db, 'settings', owner.ownerId), { lastInventoryAutoAuditDate: auditDay });
-				return;
-			}
-
-			// 3. Ask AI to Resolve & Generate Fixes
-			const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					"Authorization": `Bearer ${apiKey}`
-				},
-				body: JSON.stringify({
-					model: "llama-3.3-70b-versatile",
-					messages: [
-						{
-							role: "system",
-							content: "Bạn là AI Auditor chuyên gia kho hàng. Hãy phân tích chênh lệch giữa Tồn kho hiện tại và (Nhập - Xuất thực tế). Do người dùng có thể xóa sản phẩm/đơn cũ nên số liệu Logs có thể bị lệch. Hãy tính toán con số 'Tồn kho thật' hợp lý nhất cho từng SKU. Trả về JSON duy nhất: {\"fixes\": [{\"sku\": \"...\", \"newStock\": 123, \"explanation\": \"...\"}]}"
-						},
-						{
-							role: "user",
-							content: `Dữ liệu chênh lệch: ${JSON.stringify(discrepancies.slice(0, 30))}`
-						}
-					],
-					response_format: { type: 'json_object' }
-				})
-			});
-
-			const data = await response.json();
-			const result = JSON.parse(data.choices?.[0]?.message?.content || '{}');
-			
-			if (result.fixes && Array.isArray(result.fixes)) {
-				const batch = writeBatch(db);
-				let fixCount = 0;
-
-				result.fixes.forEach((fix: any) => {
-					const target = auditMap[normalizeSku(fix.sku)];
-					if (target && target.memberIds.length > 0) {
-						// Update the first product in the group (usually the main batch)
-						const mainProdId = target.memberIds[0];
-						batch.update(doc(db, 'products', mainProdId), {
-							stock: fix.newStock,
-							aiAuditVerified: true,
-							aiAuditAt: serverTimestamp(),
-							aiAuditNote: fix.explanation
-						});
-						
-						// Zero out other members if any to avoid double counting
-						target.memberIds.slice(1).forEach((extraId: string) => {
-							batch.update(doc(db, 'products', extraId), { stock: 0 });
-						});
-
-						fixCount++;
-					}
-				});
-
-				// Create Audit Log for the session
-				const auditRef = doc(collection(db, 'audit_logs'));
-				batch.set(auditRef, {
-					action: 'AI Tự Động Cân Bằng Kho',
-					user: 'Nexus AI Auditor',
-					ownerId: owner.ownerId,
-					details: `Hệ thống đã tự động rà soát và sửa lỗi tồn kho cho ${fixCount} mã SKU phát hiện sai lệch.`,
-					createdAt: serverTimestamp()
-				});
-
-				// Save last run date
-				batch.update(doc(db, 'settings', owner.ownerId), { lastInventoryAutoAuditDate: auditDay });
-
-				await batch.commit();
-				showToast(`[AI] Đã tự động cân bằng ${fixCount} mã SKU có sai lệch.`, "success");
-			}
-
-		} catch (error) {
-			console.error("[AI Audit Process Failed]", error);
-		}
-	};
-
-	const handleAIInventoryAnalysis = async () => {
-		const apiKey = import.meta.env.VITE_GROQ_API_KEY;
-		if (!apiKey) {
-			showToast("Chưa cấu hình Nexus AI Key trong hệ thống.", "error");
-			return;
-		}
-
-		if (groupedProducts.length === 0) {
-			showToast("Không có dữ liệu tồn kho để phân tích.", "warning");
-			return;
-		}
-
-		setAnalyzing(true);
-		setShowAiReport(true);
-		setAiReport(null);
-
-		try {
-			// Limit to top 40 items to avoid token limits and keep focus
-			const relevantData = [...groupedProducts]
-				.sort((a, b) => (b.stock || 0) - (a.stock || 0))
-				.slice(0, 40)
-				.map(p => ({
-					name: p.name,
-					sku: p.sku || 'N/A',
-					stock: p.stock,
-					in: p.skuImport || 0,
-					out: p.skuExport || 0,
-					unit: p.unit
-				}));
-
-			const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					"Authorization": `Bearer ${apiKey}`
-				},
-				body: JSON.stringify({
-					model: "llama-3.3-70b-versatile",
-					messages: [
-						{
-							role: "system",
-							content: "Bạn là Nexus AI chuyên gia quản lý kho thông minh của Dunvex Build. Hãy phân tích tồn kho gộp, chỉ ra các mặt hàng 'đọng vốn' (tồn quá nhiều so với xuất), các mặt hàng 'sắp cháy hàng', và gợi ý tối ưu. YÊU CẦU ĐẶC BIỆT CHÚ Ý TRÌNH BÀY: CHỈ ĐƯỢC dùng định dạng văn bản bình thường. TUYỆT ĐỐI KHÔNG dùng dấu sao (*), dấu thăng (#) hay in đậm của markdown. Sử dụng các dấu gạch ngang (-) hoặc chữ số (1, 2) đê làm danh sách. Hãy dùng dấu xuống dòng để chia đoạn. PHẢI TRẢ LỜI BẰNG TIẾNG VIỆT CÓ DẤU ĐẦY ĐỦ. Có thể dùng emoji sao cho đẹp mắt."
-						},
-						{
-							role: "user",
-							content: `Dữ liệu tồn kho gộp: ${JSON.stringify(relevantData)}`
-						}
-					],
-					stream: false
-				})
-			});
-
-			const data = await response.json();
-			if (data.choices?.[0]?.message?.content) {
-				let content = data.choices[0].message.content;
-				content = content.replace(/\*\*/g, '').replace(/\*/g, '-');
-				setAiReport(content);
-			} else {
-				throw new Error("Không nhận được phản hồi từ Nexus AI");
-			}
-		} catch (error: any) {
-			showToast("Lỗi phân tích Nexus AI: " + error.message, "error");
-			setShowAiReport(false);
-		} finally {
-			setAnalyzing(false);
-		}
-	};
-
 	const openDetail = (product: any) => {
 		setSelectedProduct(product);
 		setShowDetail(true);
@@ -1150,25 +907,6 @@ const ProductList = () => {
 
 					{hasManagePermission && (
 						<div className="flex items-center gap-2">
-							{activeTab === 'inventory' && (
-								<button
-									onClick={handleAIInventoryAnalysis}
-									disabled={analyzing}
-									className={`flex items-center gap-2 px-3 xl:px-4 py-2.5 rounded-xl font-bold transition-all border ${
-										analyzing 
-										? 'bg-slate-50 dark:bg-slate-800 text-slate-400 border-slate-200 cursor-not-allowed' 
-										: 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-800 hover:bg-indigo-100'
-									}`}
-								>
-									{analyzing ? (
-										<div className="size-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-									) : (
-										<span className="material-symbols-outlined text-[20px]">psychology</span>
-									)}
-									<span className="hidden xl:inline">{analyzing ? 'Đang phân tích...' : 'Nexus AI Phân Tích'}</span>
-									<span className="xl:hidden">{analyzing ? '...' : 'AI'}</span>
-								</button>
-							)}
 							{selectedIds.length > 0 && (
 								<button
 									onClick={handleBulkDelete}
@@ -1213,57 +951,6 @@ const ProductList = () => {
 			{/* CONTENT */}
 			<div className="flex-1 p-4 md:p-8 overflow-y-auto custom-scrollbar">
 
-				{/* Nexus AI Analysis Report Modal */}
-				{showAiReport && (
-					<div 
-						className="mb-8 bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-slate-900 dark:to-indigo-950/30 rounded-3xl border border-indigo-100 dark:border-indigo-900/50 p-6 shadow-sm overflow-hidden relative group animate-in slide-in-from-top duration-500"
-					>
-						<div className="absolute top-0 right-0 p-4">
-							<button 
-								onClick={() => setShowAiReport(false)}
-								className="size-8 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-rose-500 transition-colors shadow-sm"
-							>
-								<span className="material-symbols-outlined text-sm">close</span>
-							</button>
-						</div>
-
-						<div className="flex items-center gap-3 mb-6">
-							<div className="size-12 rounded-2xl bg-white dark:bg-slate-800 flex items-center justify-center text-indigo-500 shadow-sm">
-								<span className="material-symbols-outlined text-2xl">psychology</span>
-							</div>
-							<div>
-								<h3 className="text-lg font-black text-indigo-900 dark:text-indigo-300 uppercase tracking-tight">Nexus AI Smart Analysis</h3>
-								<p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest">Báo cáo tình hình tồn kho thực tế</p>
-							</div>
-						</div>
-
-						<div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm rounded-2xl p-6 border border-white dark:border-slate-800 min-h-[100px] flex flex-col justify-center">
-							{analyzing ? (
-								<div className="flex flex-col items-center gap-4 py-8">
-									<div className="size-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-									<div className="text-center">
-										<p className="text-sm font-black text-slate-600 dark:text-slate-300">Đang khởi chạy bộ não siêu việt của Nexus...</p>
-										<p className="text-[10px] text-slate-400 uppercase font-black tracking-widest mt-1 italic">Vui lòng chờ trong giây lát</p>
-									</div>
-								</div>
-							) : aiReport ? (
-								<div className="prose prose-sm dark:prose-invert max-w-none text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
-									{aiReport.split('\n').map((line, i) => (
-										<p key={i} className="mb-2 last:mb-0">{line}</p>
-									))}
-								</div>
-							) : (
-								<p className="text-center text-slate-400 italic">Không có dữ liệu phân tích.</p>
-							)}
-						</div>
-						
-						{!analyzing && aiReport && (
-							<div className="mt-4 flex justify-end">
-								<p className="text-[9px] text-indigo-400/60 font-black uppercase italic tracking-tighter">Báo cáo được tạo tự động bởi Nexus AI Engine v2.0</p>
-							</div>
-						)}
-					</div>
-				)}
 
 				{/* Mobile Search Bar - Conditional */}
 				{showMobileSearch && (activeTab === 'products' || activeTab === 'inventory') && (

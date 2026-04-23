@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { auth, db } from '../services/firebase';
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, Timestamp, doc, writeBatch, limit, orderBy, deleteDoc, setDoc, updateDoc } from 'firebase/firestore';
-import { Wallet, TrendingUp, TrendingDown, Receipt, Clock, BarChart3, Plus, ArrowUpRight, ArrowDownLeft, Filter, Search, Calendar, ChevronRight, Trash2, Settings2, Target, Award, Bot, Sparkles, Bell, BellOff, RefreshCcw } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, Receipt, Clock, BarChart3, Plus, ArrowUpRight, ArrowDownLeft, Filter, Search, Calendar, ChevronRight, Trash2, Settings2, Target, Award, Bell, BellOff, RefreshCcw, X, PlusCircle, Edit2, History, Download, FileText } from 'lucide-react';
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
 
@@ -48,10 +48,7 @@ const Finance = () => {
 		const now = new Date();
 		return new Date(now.getFullYear(), now.getMonth() + 12, 0).toISOString().split('T')[0];
 	});
-	const [isSendingReminders, setIsSendingReminders] = useState(false);
-	const [agingAiInsight, setAgingAiInsight] = useState<string | null>(null);
 	const [agingData, setAgingData] = useState<any>({ under30: [], between30_60: [], between60_90: [], over90: [] });
-	const [aiProfitInsight, setAiProfitInsight] = useState<{ id: string, insight: string, loading: boolean } | null>(null);
 
 	// Cashbook Form
 	const [showLogForm, setShowLogForm] = useState(searchParams.get('new') === 'true');
@@ -72,6 +69,7 @@ const Finance = () => {
 	const [isFetchingRate, setIsFetchingRate] = useState(false);
 	const interestRateManual = useRef(false);
 	const [selectedNote, setSelectedNote] = useState<string | null>(null);
+	const [isSendingReminders, setIsSendingReminders] = useState(false);
 	const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; log: any } | null>(null);
 
 	// Sync tab with URL
@@ -175,7 +173,7 @@ const Finance = () => {
 
 		if (loans.length > 0 && currentLogs.length > 1) {
 			for (const orphan of orphans) {
-				console.log(`Finance Bot: Cleaning orphan record: ${orphan.note} (ParentID: ${orphan.parentId})`);
+				console.log(`Auto-Calc: Cleaning orphan record: ${orphan.note} (ParentID: ${orphan.parentId})`);
 				batch.delete(doc(db, 'cash_book', orphan.id));
 				count++;
 			}
@@ -324,7 +322,7 @@ const Finance = () => {
 		if (count > 0) {
 			try {
 				await batch.commit();
-				console.log(`Finance Bot: Generated ${count} transactions.`);
+				console.log(`Auto-Calc: Generated ${count} transactions.`);
 				
 				// Tự động gửi email thông báo cho các bản ghi mới
 				for (const record of newAutoRecords) {
@@ -338,73 +336,16 @@ const Finance = () => {
 				}
 				if (isManual) showToast(`Hệ thống đả cập nhật ${count} chứng từ ngân hàng`, "success");
 			} catch (error) {
-				console.error("Finance Bot: Commit Error", error);
+				console.error("Auto-Calc: Commit Error", error);
 			}
 		} else if (isManual) {
 			showToast("Dữ liệu đã được cập nhật đầy đủ.", "info");
 		}
 	};
 
-	const handleAIInterestRate = async () => {
-		if (!logData.bankName || !logData.loanTerm) {
-			showToast("Vui lòng chọn ngân hàng và kỳ hạn", "info");
-			return;
-		}
 
-		if (!import.meta.env.VITE_GROQ_API_KEY) {
-			showToast("Chưa cấu hình VITE_GROQ_API_KEY", "error");
-			return;
-		}
 
-		setIsFetchingRate(true);
-		try {
-			const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					"Authorization": `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`
-				},
-				body: JSON.stringify({
-					model: "llama-3.3-70b-versatile",
-					messages: [
-						{
-							role: "system",
-							content: "Bạn là chuyên gia về thị trường tài chính Việt Nam. Hãy tra cứu và trả về lãi suất VAY KINH DOANH (Business Loan) chính xác cho từng kỳ hạn cụ thể của ngân hàng. Lưu ý: Lãi suất thường thay đổi theo kỳ hạn (3 tháng khác 6 tháng, 12 tháng). Chỉ trả về con số phần trăm."
-						},
-						{
-							role: "user",
-							content: `Cập nhật lãi suất VAY KINH DOANH của ngân hàng ${logData.bankName} với kỳ hạn chính xác là ${logData.loanTerm}. Phải trả về con số lãi suất thực tế đang áp dụng cho kỳ hạn này. Chỉ trả về duy nhất con số (ví dụ: 8.2).`
-						}
-					]
-				})
-			});
-
-			const data = await response.json();
-			const rateText = data.choices?.[0]?.message?.content?.trim() || "";
-			const match = rateText.match(/(\d+(\.\d+)?)/);
-			const rate = match ? parseFloat(match[0]) : NaN;
-
-			if (!isNaN(rate)) {
-				setLogData(prev => ({ ...prev, interestRate: rate }));
-				interestRateManual.current = false;
-				showToast(`Groq AI: Lãi suất ${logData.bankName} là ${rate}%`, "success");
-			}
-		} catch (error: any) {
-			console.error("Groq AI Error:", error);
-			showToast("Không thể tra cứu lãi suất. Vui lòng nhập thủ công.", "error");
-		} finally {
-			setIsFetchingRate(false);
-		}
-	};
-
-	// Auto-fetch interest rate when bank and term are selected (only if user hasn't manually entered a rate)
-	useEffect(() => {
-		if (logData.type === 'thu' && logData.category === 'Vay ngân hàng' && logData.bankName && logData.loanTerm && !isFetchingRate && logData.interestRate === 0 && !interestRateManual.current) {
-			handleAIInterestRate();
-		}
-	}, [logData.bankName, logData.loanTerm]);
-
-	// Auto-generate AI Loan Analysis note when all conditions are met
+	// Auto-generate Loan Analysis note when all conditions are met
 	useEffect(() => {
 		const hasCondition = logData.type === 'thu' && 
 						   (logData.category === 'Vay ngân hàng' || logData.category === 'Vay khác') &&
@@ -414,7 +355,7 @@ const Finance = () => {
 						   logData.interestRate > 0;
 
 		if (hasCondition && !isFetchingRate && !logData.note) {
-			handleAILoanAnalysis();
+			handleLoanCalc();
 		}
 	}, [logData.amount, logData.bankName, logData.loanTerm, logData.interestRate, logData.category]);
 
@@ -504,22 +445,22 @@ const Finance = () => {
 	}, [owner.loading, owner.ownerId]);
 
 	// BOT TỰ ĐỘNG CHẠY NGẦM
-	const isBotRunning = useRef(false);
+	const isAutoCalcRunning = useRef(false);
 	useEffect(() => {
 		const interval = setInterval(() => {
-			if (isBotRunning.current || loading) return;
-			isBotRunning.current = true;
+			if (isAutoCalcRunning.current || loading) return;
+			isAutoCalcRunning.current = true;
 			handleAutoGenerateBankTransactions(false).finally(() => {
-				isBotRunning.current = false;
+				isAutoCalcRunning.current = false;
 			});
 		}, 30000); 
 
 		return () => clearInterval(interval);
 	}, [owner.ownerId, loading]); 
 
-	const handleAILoanAnalysis = async () => {
+	const handleLoanCalc = async () => {
 		if (!logData.amount || !logData.bankName || !logData.loanTerm || !logData.interestRate) {
-			showToast("Vui lòng điền đủ Số tiền, Ngân hàng, Kỳ hạn và Lãi suất để AI phân tích", "info");
+			showToast("Vui lòng điền đủ Số tiền, Ngân hàng, Kỳ hạn và Lãi suất để hệ thống tính toán", "info");
 			return;
 		}
 
@@ -608,106 +549,7 @@ const Finance = () => {
 	};
 
 
-	const handleAIAgingAnalysis = async () => {
-		const totalDebt = Object.values(agingData).reduce((sum: number, list: any) => sum + list.reduce((s: number, c: any) => s + (Number(c.debt) || 0), 0), 0);
-		if (totalDebt === 0) {
-			showToast("Không có nợ quá hạn để phân tích", "info");
-			return;
-		}
 
-		setIsFetchingRate(true);
-		try {
-			const prompt = `Phân tích tình hình công nợ hiện tại:
-      - Tổng dư nợ: ${formatPrice(totalDebt)}
-      - Nhóm < 30 ngày: ${agingData.under30.length} khách, Nợ: ${formatPrice(agingData.under30.reduce((s: any, c: any) => s + c.debt, 0))}
-      - Nhóm 30-60 ngày: ${agingData.between30_60.length} khách, Nợ: ${formatPrice(agingData.between30_60.reduce((s: any, c: any) => s + c.debt, 0))}
-      - Nhóm 60-90 ngày: ${agingData.between60_90.length} khách, Nợ: ${formatPrice(agingData.between60_90.reduce((s: any, c: any) => s + c.debt, 0))}
-      - Nhóm > 90 ngày: ${agingData.over90.length} khách, Nợ: ${formatPrice(agingData.over90.reduce((s: any, c: any) => s + c.debt, 0))}
-
-      Yêu cầu: Đưa ra nhận xét ngắn gọn (3-4 dòng) về mức độ rủi ro dòng tiền và gợi ý hành động thu hồi nợ hiệu quả nhất cho từng nhóm.`;
-
-			const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					"Authorization": `Bearer ${import.meta.env.VITE_GROQ_API_KEY || ""}`
-				},
-				body: JSON.stringify({
-					model: "llama-3.3-70b-versatile",
-					messages: [
-						{
-							role: "system",
-							content: "Bạn là chuyên gia quản trị tài chính doanh nghiệp. Hãy cung cấp phân tích rủi ro công nợ sắc bén, ngắn gọn, đi thẳng vào vấn đề."
-						},
-						{
-							role: "user",
-							content: prompt
-						}
-					]
-				})
-			});
-
-			const data = await response.json();
-			const insight = data.choices?.[0]?.message?.content || "Không thể lấy thông tin từ AI";
-			setAgingAiInsight(insight);
-			showToast("AI đã hoàn tất phân tích công nợ", "success");
-		} catch (error) {
-			console.error("AI Aging Error:", error);
-			showToast("Lỗi khi gọi AI phân tích", "error");
-		} finally {
-			setIsFetchingRate(false);
-		}
-	};
-
-	const handleAICheckProfit = async (order: any) => {
-		setAiProfitInsight({ id: order.id, insight: '', loading: true });
-		try {
-			const itemDetails = (order.items || []).map((item: any) => {
-				const matches = products.filter(p => p.id === (item.productId || item.id) || (p.sku && item.sku && p.sku === item.sku) || (p.name && item.name && p.name.trim().toLowerCase() === item.name.trim().toLowerCase()));
-				const currentProd = item.category ? (matches.find(p => p.category === item.category) || matches[0]) : matches[0];
-				const activeBuyPrice = currentProd ? (Number(currentProd.priceImport) || 0) : (Number(item.buyPrice) || 0);
-				return `- Danh mục: ${item.category || 'N/A'} | SP: ${item.name} | SL: ${item.qty} | Giá bán: ${formatPrice(item.price)}/sp | Giá gốc tra cứu kết hợp AI: ${formatPrice(activeBuyPrice)}/sp`;
-			}).join('\n');
-
-			const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					"Authorization": `Bearer ${import.meta.env.VITE_GROQ_API_KEY || ""}`
-				},
-				body: JSON.stringify({
-					model: "llama-3.3-70b-versatile",
-					messages: [
-						{
-							role: "system",
-							content: "Bạn là trưởng phòng kế toán siêu việt. Hãy xem dữ liệu đơn hàng và đưa ra phân tích chi tiết về lợi nhuận.\nNhiệm vụ:\n1. Chỉ ra nguyên nhân nếu lợi nhuận sai lệch do lỗi đánh thiếu giá vốn = 0.\n2. Nếu có item Thiếu giá vốn (hoặc =0), hãy ước tính giá nhập vốn hợp lý dưạ theo tên SP, hoặc dùng 80%-85% giá bán làm giá vốn giả định.\n3. Tính toán lại cụ thể Tổng giá vốn thật và Tổng Lợi Nhuận thật.\nTRình bày sạch sẽ, CHÍNH XÁC TOÁN HỌC, dễ nhìn (khoảng 5-6 dòng)."
-						},
-						{
-							role: "user",
-							content: `Đơn hàng: ${order.invoiceId || order.id.slice(-6).toUpperCase()}
-Hệ thống hiện tại đang tính: 
-- Doanh thu: ${formatPrice(order.revenue)} 
-- Giá vốn: ${formatPrice(order.cost)} 
-- Lợi nhuận: ${formatPrice(order.profit)}
-- Tổng chiết khấu cho khách: ${formatPrice(order.discountValue || 0)}
-
-Chi tiết vật tư:
-${itemDetails}
-
-Yêu cầu tính toán chi tiết và kết luận:`
-						}
-					]
-				})
-			});
-
-			const data = await response.json();
-			const insight = data.choices?.[0]?.message?.content || "Không phản hồi được =(";
-			setAiProfitInsight({ id: order.id, insight, loading: false });
-		} catch (error) {
-			console.error("AI Profit Error:", error);
-			setAiProfitInsight({ id: order.id, insight: "Lỗi kết nối AI.", loading: false });
-		}
-	};
 
 	const handleSaveLog = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -985,7 +827,7 @@ Yêu cầu tính toán chi tiết và kết luận:`
 								<p className="text-[10px] font-black text-white/60 uppercase tracking-widest mb-2">Lợi nhuận ròng thực tế</p>
 								<div className="flex items-center justify-between">
 									<h3 className="text-2xl font-black tracking-tighter">{formatPrice(netBusinessProfit)}</h3>
-									<Sparkles size={24} className="text-white/40" />
+									<Award size={24} className="text-white/40" />
 								</div>
 								<p className="text-[9px] font-bold text-white/50 mt-2 uppercase tracking-tight italic">Lợi nhuận cuối cùng sau khi trừ mọi chi phí</p>
 							</div>
@@ -1047,7 +889,7 @@ Yêu cầu tính toán chi tiết và kết luận:`
 												{log.bankName && (
 													<div className="bg-slate-50 dark:bg-slate-800/50 p-2 rounded-xl border border-slate-100 dark:border-slate-700/50">
 														<p className="text-[9px] text-slate-500 font-black uppercase flex items-center gap-1">
-															<Sparkles size={10} className="text-indigo-400" /> {log.bankName}
+															<ArrowUpRight size={10} className="text-indigo-400" /> {log.bankName}
 														</p>
 														<p className="text-[8px] text-slate-400 font-medium">Lãi: {log.interestRate}% - {log.loanTerm}</p>
 													</div>
@@ -1131,7 +973,7 @@ Yêu cầu tính toán chi tiết và kết luận:`
 															<span className="font-medium text-slate-700 dark:text-slate-300 text-xs sm:text-sm line-clamp-1">{log.note}</span>
 															{log.bankName && (
 																<span className="text-[9px] text-slate-400 font-bold uppercase tracking-tight flex items-center gap-1 mt-0.5">
-																	<Sparkles size={10} className="text-indigo-400" /> {log.bankName}
+																	<ArrowUpRight size={10} className="text-indigo-400" /> {log.bankName}
 																</span>
 															)}
 														</div>
@@ -1234,14 +1076,6 @@ Yêu cầu tính toán chi tiết và kết luận:`
 								<h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tight">Tổng hợp tuổi nợ khách hàng</h3>
 								<p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Phân tích dòng tiền và rủi ro công nợ thực tế</p>
 							</div>
-							<button 
-								onClick={handleAIAgingAnalysis}
-								disabled={isFetchingRate}
-								className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-200 dark:shadow-none hover:scale-[1.02] transition-all active:scale-95 disabled:opacity-50"
-							>
-								{isFetchingRate ? <RefreshCcw size={14} className="animate-spin" /> : <Bot size={14} />}
-								AI Phân tích nợ & Thu hồi
-							</button>
 						</div>
 
 						<div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -1265,19 +1099,6 @@ Yêu cầu tính toán chi tiết và kết luận:`
 							))}
 						</div>
 
-						{agingAiInsight && (
-							<div className="bg-indigo-50 dark:bg-indigo-900/10 p-6 rounded-[2rem] border border-indigo-100 dark:border-indigo-800/50 animate-in fade-in zoom-in duration-500">
-								<div className="flex items-center gap-3 mb-3">
-									<div className="size-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-lg">
-										<Bot size={16} />
-									</div>
-									<h4 className="text-xs font-black text-indigo-800 dark:text-indigo-300 uppercase tracking-widest">AI Advisor: Chiến lược thu hồi nợ</h4>
-								</div>
-								<div className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
-									{agingAiInsight}
-								</div>
-							</div>
-						)}
 
 						<div className="bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">
 							<div className="p-6 border-b border-slate-50 dark:border-slate-800">
@@ -1368,22 +1189,7 @@ Yêu cầu tính toán chi tiết và kết luận:`
 													</div>
 												</td>
 											</tr>
-											{aiProfitInsight?.id === order.id && (
-												<tr className="bg-indigo-50/50 dark:bg-indigo-900/10 transition-all">
-													<td colSpan={5} className="px-6 py-5">
-														<div className="flex gap-3 animate-in fade-in slide-in-from-top-2">
-															<div className="shrink-0 pt-1 text-indigo-500"><Bot size={18} /></div>
-															<div className="text-xs text-indigo-900 dark:text-indigo-200 whitespace-pre-wrap leading-relaxed w-full font-medium">
-																{aiProfitInsight?.loading ? 'Hệ thống AI đang tính toán lại và rà soát các bất thường...' : aiProfitInsight?.insight}
-															</div>
-															{!aiProfitInsight?.loading && (
-																<button onClick={() => setAiProfitInsight(null)} className="shrink-0 text-slate-400 hover:text-slate-600 px-2 font-black">&times;</button>
-															)}
-														</div>
-													</td>
-												</tr>
-											)}
-										</React.Fragment>
+											</React.Fragment>
 										))}
 									</tbody>
 								</table>
@@ -1412,36 +1218,11 @@ Yêu cầu tính toán chi tiết và kết luận:`
 												<p className="text-xs font-bold text-slate-500 dark:text-slate-400 italic">{formatPrice(order.cost)}</p>
 											</div>
 											<div className={`p-3 rounded-2xl border shadow-sm ${order.profit > 0 ? 'bg-emerald-50 border-emerald-100 dark:bg-emerald-900/10 dark:border-emerald-800/30' : 'bg-rose-50 border-rose-100 dark:bg-rose-900/10 dark:border-rose-800/30'}`}>
-												<div className="flex items-center justify-between mb-1">
 													<p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Lợi nhuận</p>
-													{order.aiFixed && <Sparkles size={10} className="text-indigo-500 animate-pulse" />}
-												</div>
 												<p className={`text-xs font-black ${order.profit > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
 													{formatPrice(order.profit)}
 												</p>
 											</div>
-										</div>
-										<div className="pt-3">
-											<button 
-												onClick={() => handleAICheckProfit(order)}
-												disabled={aiProfitInsight?.loading && aiProfitInsight.id === order.id}
-												className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 font-bold text-xs hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors disabled:opacity-50 shadow-sm"
-											>
-												{aiProfitInsight?.id === order.id && aiProfitInsight?.loading ? <Sparkles className="animate-spin" size={14} /> : <Bot size={14} />}
-												{aiProfitInsight?.id === order.id && aiProfitInsight?.loading ? 'AI đang phân tích...' : 'AI Rà Soát Tính Toán'}
-											</button>
-											{aiProfitInsight?.id === order.id && !aiProfitInsight?.loading && (
-												<div className="relative mt-3 p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl border border-indigo-100 dark:border-indigo-800/40 text-[11px] text-indigo-900 dark:text-indigo-200 whitespace-pre-wrap leading-relaxed animate-in fade-in zoom-in-95 font-medium shadow-sm">
-													<div className="absolute top-2 right-2">
-														<button onClick={() => setAiProfitInsight(null)} className="text-slate-400 hover:text-slate-600 p-1 font-black">&times;</button>
-													</div>
-													<div className="flex items-center gap-2 mb-2 pb-2 border-b border-indigo-200 dark:border-indigo-800/50">
-														<Bot size={14} className="text-indigo-500" />
-														<span className="font-black uppercase tracking-widest text-indigo-700 dark:text-indigo-400">Kết luận từ AI</span>
-													</div>
-													{aiProfitInsight?.insight}
-												</div>
-											)}
 										</div>
 									</div>
 								))}
@@ -1495,7 +1276,7 @@ Yêu cầu tính toán chi tiết và kết luận:`
 				{!isAdmin && (
 					<div className="flex flex-col items-center justify-center py-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
 						<div className="size-24 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 mb-6">
-							<Bot size={48} />
+							<BarChart3 size={48} />
 						</div>
 						<h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tight mb-2">Truy cập bị hạn chế</h3>
 						<p className="text-sm font-bold text-slate-400 uppercase tracking-widest text-center max-w-xs">Bạn cần quyền Admin để xem các báo cáo tài chính này.</p>
@@ -1644,17 +1425,6 @@ Yêu cầu tính toán chi tiết và kết luận:`
 														}}
 													/>
 												</div>
-												{logData.category === 'Vay ngân hàng' && (
-													<button
-														type="button"
-														onClick={handleAIInterestRate}
-														disabled={isFetchingRate || !logData.bankName || !logData.loanTerm}
-														className="px-6 rounded-2xl bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 transition-all disabled:opacity-50 flex items-center gap-2 font-black text-[10px] uppercase shadow-sm border border-indigo-100 dark:border-indigo-800"
-													>
-														{isFetchingRate ? <Sparkles className="animate-spin text-indigo-400" size={14} /> : <Bot size={16} />}
-														Tra cứu
-													</button>
-												)}
 											</div>
 										</div>
 									</div>
@@ -1698,19 +1468,13 @@ Yêu cầu tính toán chi tiết và kết luận:`
 												);
 											})}
 										</select>
-										<p className="text-[8px] text-rose-400 font-bold uppercase ml-1 opacity-70">* Phải chọn đúng khoản vay để Bot tính lãi chính xác</p>
+										<p className="text-[8px] text-rose-400 font-bold uppercase ml-1 opacity-70">* Phải chọn đúng khoản vay để Hệ thống tính lãi chính xác</p>
 									</div>
 								)}
 
 								<div className="space-y-3">
 									<div className="flex items-center justify-between px-1">
 										<label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Ghi chú chi tiết</label>
-										{isFetchingRate && (
-											<div className="flex items-center gap-2 text-[9px] font-black text-indigo-500 animate-pulse uppercase tracking-widest">
-												<Sparkles size={10} className="animate-spin" />
-												Nexus AI đang lập biểu mẫu...
-											</div>
-										)}
 									</div>
 									<textarea
 										className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-3.5 text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 resize-none h-24"

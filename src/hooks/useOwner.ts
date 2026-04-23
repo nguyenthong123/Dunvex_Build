@@ -104,7 +104,7 @@ export const useOwner = () => {
 				manualLockSheets = settingsData.manualLockSheets ?? manualLockSheets;
 			}
 
-			// Info from Nexus (Must have defaults)
+			// Info from System Config (Must have defaults)
 			const systemConfig = configData || {
 				lock_free_orders: false,
 				lock_free_debts: false,

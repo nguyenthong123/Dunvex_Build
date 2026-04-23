@@ -29,6 +29,8 @@ const QuickOrder = () => {
 	const [customers, setCustomers] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [fetchingOrder, setFetchingOrder] = useState(false);
+	const [allOrders, setAllOrders] = useState<any[]>([]);
+	const [allPayments, setAllPayments] = useState<any[]>([]);
 
 	const [showSuccessModal, setShowSuccessModal] = useState(false);
 	const [showScanner, setShowScanner] = useState(false);
@@ -104,10 +106,22 @@ const QuickOrder = () => {
 			setCustomers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
 		});
 
+		const qOrders = query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId), where('status', '==', 'Đơn chốt'));
+		const unsubOrders = onSnapshot(qOrders, (snap) => {
+			setAllOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+		});
+
+		const qPayments = query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId));
+		const unsubPayments = onSnapshot(qPayments, (snap) => {
+			setAllPayments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+		});
+
 		setLoading(false);
 		return () => {
 			unsubProds();
 			unsubCusts();
+			unsubOrders();
+			unsubPayments();
 		};
 	}, [owner.loading, owner.ownerId, owner.role, owner.isEmployee]);
 
@@ -169,6 +183,22 @@ const QuickOrder = () => {
 			fetchOrder();
 		}
 	}, [id, owner.ownerId, customers.length, products.length]);
+
+	// Calculate Debt Map
+	const debtMap = React.useMemo(() => {
+		const map: Record<string, number> = {};
+		allOrders.forEach(o => {
+			if (o.customerId) {
+				map[o.customerId] = (map[o.customerId] || 0) + (o.totalAmount || 0);
+			}
+		});
+		allPayments.forEach(p => {
+			if (p.customerId) {
+				map[p.customerId] = (map[p.customerId] || 0) - (p.amount || 0);
+			}
+		});
+		return map;
+	}, [allOrders, allPayments]);
 	
 	// Smart Packaging Sync (Local Only)
 	useEffect(() => {
@@ -778,31 +808,53 @@ const QuickOrder = () => {
 							</div>
 							{showCustomerResults && searchCustomerQuery && (
 								<div className="absolute z-50 left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl shadow-2xl max-h-60 overflow-y-auto overscroll-contain custom-scrollbar">
-									{filteredCustomers.map(c => (
-										<button
-											key={c.id}
-											className="w-full px-6 py-4 text-left hover:bg-slate-50 dark:hover:bg-slate-700/50 flex items-center justify-between border-b border-slate-50 dark:border-slate-700 last:border-none group"
-											onClick={() => {
-												setSelectedCustomer(c);
-												setSearchCustomerQuery(c.businessName || c.name);
-												setShowCustomerResults(false);
-											}}
-										>
-											<div>
-												<p className="font-black text-sm uppercase text-slate-800 dark:text-slate-200 group-hover:text-[#f27121]">
-													{c.businessName || c.name}
-												</p>
-												{c.businessName && (
-													<p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1 uppercase">
-														<span className="material-symbols-outlined text-[12px]">person</span>
-														{c.name}
-													</p>
-												)}
-												<p className="text-xs text-slate-400 dark:text-slate-500 font-medium">{c.phone}</p>
-											</div>
-											<CheckCircle size={18} className="text-slate-100 dark:text-slate-700 group-hover:text-[#f27121]" />
-										</button>
-									))}
+									{filteredCustomers.map(c => {
+										const customerDebt = debtMap[c.id] || 0;
+										const hasLimit = typeof c.creditLimit === 'number' && c.creditLimit > 0;
+										const isOverLimit = hasLimit && (customerDebt >= c.creditLimit);
+
+										return (
+											<button
+												key={c.id}
+												className={`w-full px-6 py-4 text-left border-b border-slate-50 dark:border-slate-700 last:border-none flex items-center justify-between transition-colors ${isOverLimit ? 'opacity-40 grayscale cursor-not-allowed bg-slate-50/50' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50 group'}`}
+												onClick={() => {
+													if (isOverLimit) {
+														showToast(`Khách hàng ${c.name} đã vượt hạn mức nợ (${c.creditLimit.toLocaleString('vi-VN')} đ). Vui lòng thu nợ trước khi lên đơn mới.`, "warning");
+														return;
+													}
+													setSelectedCustomer(c);
+													setSearchCustomerQuery(c.businessName || c.name);
+													setShowCustomerResults(false);
+												}}
+											>
+												<div className="flex-1 min-w-0 pr-4">
+													<div className="flex items-center gap-2 mb-0.5">
+														<p className={`font-black text-sm uppercase truncate ${isOverLimit ? 'text-slate-500' : 'text-slate-800 dark:text-slate-200 group-hover:text-[#f27121]'}`}>
+															{c.businessName || c.name}
+														</p>
+														{isOverLimit && (
+															<span className="px-1.5 py-0.5 rounded-lg bg-rose-500 text-white text-[8px] font-black uppercase animate-pulse shrink-0">Vượt hạn mức</span>
+														)}
+													</div>
+													{c.businessName && (
+														<p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1 uppercase">
+															<span className="material-symbols-outlined text-[12px]">person</span>
+															{c.name}
+														</p>
+													)}
+													<div className="flex items-center gap-2 mt-1">
+														<p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">{c.phone}</p>
+														{customerDebt > 0 && (
+															<p className={`text-[10px] font-black uppercase ${isOverLimit ? 'text-rose-600' : 'text-rose-500'}`}>
+																Nợ: {formatPrice(customerDebt)} {hasLimit && `/ Hạn mức: ${formatPrice(c.creditLimit)}`}
+															</p>
+														)}
+													</div>
+												</div>
+												<CheckCircle size={18} className={`${isOverLimit ? 'text-rose-200' : 'text-slate-100 dark:text-slate-700 group-hover:text-[#f27121]'}`} />
+											</button>
+										);
+									})}
 									<button
 										className="w-full px-6 py-4 text-left hover:bg-slate-50 dark:hover:bg-slate-700/50 flex items-center gap-2 border-t border-slate-50 dark:border-slate-700 text-[#f27121]"
 										onClick={() => setShowCustomerResults(false)}

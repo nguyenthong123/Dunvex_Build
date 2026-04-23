@@ -45,6 +45,7 @@ export const CustomerSchema = z.object({
 	taxCode: z.string().max(50, "Mã số thuế quá dài").optional().transform(val => val?.trim() || ''),
 	taxAddress: z.string().max(500, "Địa chỉ xuất hóa đơn quá dài").optional().transform(val => val?.trim() || ''),
 	taxPhone: z.string().max(20, "SĐT hóa đơn quá dài").optional().transform(val => val?.trim() || ''),
+	creditLimit: z.number().nonnegative("Hạn mức không được âm").optional().default(0),
 	ownerId: z.string(),
 	createdByEmail: z.string(),
 	createdAt: z.any().optional(),

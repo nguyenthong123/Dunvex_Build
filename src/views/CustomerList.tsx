@@ -72,7 +72,8 @@ const CustomerList = () => {
 		taxName: '',
 		taxCode: '',
 		taxAddress: '',
-		taxPhone: ''
+		taxPhone: '',
+		creditLimit: 0
 	});
 	const [showTaxInfo, setShowTaxInfo] = useState(false);
 
@@ -395,7 +396,8 @@ const CustomerList = () => {
 			taxName: '',
 			taxCode: '',
 			taxAddress: '',
-			taxPhone: ''
+			taxPhone: '',
+			creditLimit: 0
 		});
 		setShowTaxInfo(false);
 	};
@@ -420,7 +422,8 @@ const CustomerList = () => {
 			taxName: customer.taxName || '',
 			taxCode: customer.taxCode || '',
 			taxAddress: customer.taxAddress || '',
-			taxPhone: customer.taxPhone || ''
+			taxPhone: customer.taxPhone || '',
+			creditLimit: customer.creditLimit || 0
 		});
 		setShowTaxInfo(!!(customer.taxName || customer.taxCode || customer.taxAddress || customer.taxPhone));
 		setShowEditForm(true);
@@ -929,15 +932,27 @@ const CustomerList = () => {
 										</div>
 									</div>
 
-									<div>
-										<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Nhân viên phụ trách (Email)</label>
-										<input
-											type="email"
-											className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
-											placeholder="Email nhân viên phụ trách khách hàng này..."
-											value={formData.createdByEmail}
-											onChange={(e) => setFormData({ ...formData, createdByEmail: e.target.value })}
-										/>
+									<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+										<div>
+											<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Nhân viên phụ trách (Email)</label>
+											<input
+												type="email"
+												className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
+												placeholder="Email nhân viên phụ trách..."
+												value={formData.createdByEmail}
+												onChange={(e) => setFormData({ ...formData, createdByEmail: e.target.value })}
+											/>
+										</div>
+										<div>
+											<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Hạn mức công nợ (VNĐ)</label>
+											<input
+												type="number"
+												className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-black text-[#FF6D00] focus:ring-2 focus:ring-[#FF6D00]/20"
+												placeholder="0"
+												value={formData.creditLimit === 0 ? '' : formData.creditLimit}
+												onChange={(e) => setFormData({ ...formData, creditLimit: parseFloat(e.target.value) || 0 })}
+											/>
+										</div>
 									</div>
 
 									<div>
@@ -1190,8 +1205,8 @@ const CustomerList = () => {
 								</div>
 								<div className="w-full grid grid-cols-2 gap-3 sm:gap-4 mb-6 text-center">
 									<div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-3xl border border-slate-100 dark:border-slate-800 flex flex-col items-center shadow-sm">
-										<p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest">Liên hệ</p>
-										<a href={`tel:${selectedCustomer.phone}`} className="font-black text-[#1A237E] dark:text-indigo-300 text-sm hover:underline">{selectedCustomer.phone}</a>
+										<p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest">Hạn mức công nợ</p>
+										<p className="font-black text-rose-500 text-sm uppercase">{(selectedCustomer.creditLimit && selectedCustomer.creditLimit > 0) ? `${selectedCustomer.creditLimit.toLocaleString('vi-VN')} đ` : 'Không giới hạn'}</p>
 									</div>
 									<div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-3xl border border-slate-100 dark:border-slate-800 flex flex-col items-center shadow-sm">
 										<p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest">Trạng thái</p>
@@ -1199,6 +1214,12 @@ const CustomerList = () => {
 											<div className={`size-1.5 rounded-full ${selectedCustomer.status === 'Hoạt động' ? 'bg-green-500 animate-pulse' : 'bg-slate-400'}`}></div>
 											<p className="font-black text-green-600 dark:text-green-400 text-sm uppercase">{selectedCustomer.status}</p>
 										</div>
+									</div>
+								</div>
+								<div className="w-full grid grid-cols-1 mb-6 text-center">
+									<div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-3xl border border-slate-100 dark:border-slate-800 flex flex-col items-center shadow-sm">
+										<p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest">Liên hệ (SĐT)</p>
+										<a href={`tel:${selectedCustomer.phone}`} className="font-black text-[#1A237E] dark:text-indigo-300 text-base hover:underline">{selectedCustomer.phone}</a>
 									</div>
 								</div>
 								<div className="w-full space-y-4 text-left">

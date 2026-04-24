@@ -176,7 +176,7 @@ export const useNavigationConfig = () => {
 		{ icon: 'group', label: 'Khách hàng', path: '/customers', permissionKey: 'customers_manage' },       // 5
 		{ icon: 'inventory_2', label: 'Sản phẩm', path: '/inventory', permissionKey: 'inventory_view' },     // 6
 		{ icon: 'request_quote', label: 'Báo giá', path: '/price-list' },                                     // 7
-		{ icon: 'history', label: 'Hoạt động', path: '/checkin?action=history', permissionKey: 'checkin_create' }, // 8
+		{ icon: 'location_on', label: 'Checkin', path: '/checkin?action=history', permissionKey: 'checkin_create' }, // 8
 		{ icon: 'confirmation_number', label: 'Ưu đãi', path: '/coupons' },                                    // 9
 		{ icon: 'timer', label: 'Chấm công', path: '/attendance' },                                           // 10
 		{ icon: 'school', label: 'Đào tạo', path: '/khoa-dao-tao' },                                          // 11

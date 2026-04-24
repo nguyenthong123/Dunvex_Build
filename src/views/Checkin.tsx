@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 import { collection, query, onSnapshot, addDoc, serverTimestamp, where, limit, orderBy, deleteDoc, doc } from 'firebase/firestore';
@@ -110,16 +111,49 @@ const Checkin = () => {
     const [showCheckinForm, setShowCheckinForm] = useState(false);
     const [sheetOpen, setSheetOpen] = useState(false);
     const [mapCenter, setMapCenter] = useState<[number, number]>([11.9931, 107.5257]);
+    const [activeTab, setActiveTab] = useState<'map' | 'list'>('map');
 
     // Pagination & Filter States
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 5;
     const [dateRange, setDateRange] = useState({
-        start: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0],
+        start: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
         end: new Date().toISOString().split('T')[0]
     });
     const [searchQuery, setSearchQuery] = useState('');
     const [currentTime, setCurrentTime] = useState(new Date());
+
+    const setDatePreset = (preset: 'today' | 'yesterday' | 'week' | 'month' | 'all') => {
+        const now = new Date();
+        let start = '';
+        let end = new Date().toISOString().split('T')[0];
+
+        switch (preset) {
+            case 'today':
+                start = end;
+                break;
+            case 'yesterday':
+                const yesterday = new Date(now);
+                yesterday.setDate(now.getDate() - 1);
+                start = yesterday.toISOString().split('T')[0];
+                end = start;
+                break;
+            case 'week':
+                const weekAgo = new Date(now);
+                weekAgo.setDate(now.getDate() - 7);
+                start = weekAgo.toISOString().split('T')[0];
+                break;
+            case 'month':
+                const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+                start = monthStart.toISOString().split('T')[0];
+                break;
+            case 'all':
+                start = '2020-01-01'; // Default far back
+                break;
+        }
+        setDateRange({ start, end });
+        setCurrentPage(1);
+    };
 
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -187,12 +221,12 @@ const Checkin = () => {
 
     const handleDeleteCheckin = async (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        if (window.confirm("Bạn có chắc chắn muốn xóa hoạt động này không?")) {
+        if (window.confirm("Bạn có chắc chắn muốn xóa check-in này không?")) {
             try {
                 await deleteDoc(doc(db, 'checkins', id));
             } catch (error) {
                 console.error("Error deleting checkin:", error);
-                showToast("Lỗi khi xóa hoạt động", "error");
+                showToast("Lỗi khi xóa check-in", "error");
             }
         }
     };
@@ -445,415 +479,460 @@ const Checkin = () => {
     }
 
     return (
-        <div className="flex-1 flex flex-col lg:flex-row relative overflow-hidden h-screen min-h-[600px] bg-slate-50 dark:bg-slate-950">
-            {/* Map Area */}
-            <div className="relative flex-1 h-[50vh] lg:h-screen w-full bg-slate-100 dark:bg-slate-800 z-[1] overflow-hidden transition-colors duration-300">
-                <MapContainer
-                    center={mapCenter}
-                    zoom={13}
-                    style={{ height: '100%', width: '100%', minHeight: '100%' }}
-                    zoomControl={false}
-                >
-                    <MapInstanceTracker setMapInstance={setMapInstance} />
-                    <TileLayer
-                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                    />
-                    <MapUpdater center={mapCenter} sidebarExpanded={sidebarExpanded} />
-
-
-                    {/* Current capturing location marker */}
-                    {formData.location && (
-                        <Marker
-                            position={[formData.location.lat, formData.location.lng]}
-                            icon={L.divIcon({
-                                className: 'current-location-icon',
-                                html: `
-                                        <div class="relative flex items-center justify-center">
-                                            <div class="absolute inset-0 size-8 bg-[#f27121]/30 rounded-full animate-ping"></div>
-                                            <div class="size-4 bg-[#f27121] rounded-full border-2 border-white shadow-lg relative z-10"></div>
-                                        </div>
-                                    `,
-                                iconSize: [32, 32],
-                                iconAnchor: [16, 16]
-                            })}
-                        >
-                            <Popup>
-                                <p className="text-[10px] font-black uppercase text-[#f27121]">Vị trí bạn đang chọn</p>
-                            </Popup>
-                        </Marker>
-                    )}
-
-                    {/* Filtered history markers */}
-                    {(() => {
-                        const filtered = recentCheckins.filter(item => {
-                            const itemDate = item.createdAt?.seconds ? new Date(item.createdAt.seconds * 1000).toISOString().split('T')[0] : '';
-                            const matchDate = itemDate >= dateRange.start && itemDate <= dateRange.end;
-                            const matchSearch = (item.customerBusinessName || item.customerName || '').toLowerCase().includes(searchQuery.toLowerCase());
-                            return matchDate && matchSearch;
-                        });
-
-                        return filtered.map((checkin) => {
-                            // Support both plain object and Firestore GeoPoint
-                            const lat = checkin.location?.lat ?? checkin.location?.latitude;
-                            const lng = checkin.location?.lng ?? checkin.location?.longitude;
-
-                            if (lat === undefined || lng === undefined) return null;
-
-                            return (
-                                <Marker
-                                    key={checkin.id}
-                                    position={[lat, lng]}
-                                    icon={createCustomIcon(checkin.purpose, !!checkin.imageUrl)}
-                                >
-                                    <Popup className="custom-popup">
-                                        <div className="p-2 min-w-[150px]">
-                                            <p className="font-black text-[#1A237E] uppercase text-[10px] mb-1">{checkin.customerBusinessName || checkin.customerName}</p>
-                                            {checkin.customerBusinessName && <p className="text-[8px] text-slate-400 uppercase font-bold mb-1">{checkin.customerName}</p>}
-                                            <p className="text-[9px] text-slate-500 mb-2">{checkin.purpose}</p>
-                                            {(checkin.imageUrls || (checkin.imageUrl ? [checkin.imageUrl] : [])).map((url: string, idx: number) => (
-                                                <img
-                                                    key={idx}
-                                                    src={getImageUrl(url)}
-                                                    className={`w-full ${idx === 0 ? 'h-24' : 'hidden'} object-cover rounded-lg mb-2 shadow-sm`}
-                                                    alt="Field"
-                                                    referrerPolicy="no-referrer"
-                                                />
-                                            ))}
-                                            <p className="text-[8px] text-slate-400 italic">"{checkin.note || 'Không có ghi chú'}"</p>
-                                            <p className="text-[7px] text-slate-300 mt-2">{checkin.address}</p>
-                                        </div>
-                                    </Popup>
-                                </Marker>
-                            );
-                        });
-                    })()}
-                </MapContainer>
-
-
-                {/* Map Overlay Controls */}
-                <div className="absolute top-6 left-6 flex flex-col gap-3 z-[1000]">
-                    <div className="flex flex-col gap-2 mb-4">
-                        <button
-                            onClick={() => navigate('/')}
-                            className="size-11 bg-[#1A237E] dark:bg-indigo-900 text-white rounded-2xl shadow-2xl flex items-center justify-center hover:bg-slate-900 dark:hover:bg-indigo-950 transition-all border border-white/20"
-                            title="Về Trang Chủ"
-                        >
-                            <span className="material-symbols-outlined">home</span>
-                        </button>
+        <div className="flex-1 flex flex-col relative overflow-hidden h-screen bg-slate-50 dark:bg-slate-950">
+            {/* Header & Tab Switcher */}
+            <header className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 z-[1000] shrink-0">
+                <div className="px-4 lg:px-8 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
                         <button
                             onClick={() => navigate(-1)}
-                            className="size-11 bg-white dark:bg-slate-900 text-slate-400 dark:text-slate-500 rounded-2xl shadow-2xl flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-800 transition-all border border-slate-100 dark:border-slate-800"
-                            title="Quay lại"
+                            className="size-10 flex items-center justify-center rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-400 transition-all"
                         >
-                            <span className="material-symbols-outlined">arrow_back</span>
+                            <ArrowLeft size={20} />
                         </button>
+                        <h1 className="text-xl lg:text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2">
+                            Checkin
+                            <span className="text-[10px] font-black uppercase px-2 py-1 bg-orange-50 dark:bg-orange-900/20 text-[#f27121] dark:text-orange-400 rounded-lg tracking-widest border border-orange-100 dark:border-orange-900/30">Sale</span>
+                        </h1>
                     </div>
 
-                    <button
-                        onClick={() => mapInstance?.zoomIn()}
-                        className="size-11 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-800 transition-all font-black text-[#1A237E] dark:text-indigo-400 border border-slate-100 dark:border-slate-800"
-                    >
-                        <span className="material-symbols-outlined">add</span>
-                    </button>
-                    <button
-                        onClick={() => mapInstance?.zoomOut()}
-                        className="size-11 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-800 transition-all font-black text-[#1A237E] dark:text-indigo-400 border border-slate-100 dark:border-slate-800"
-                    >
-                        <span className="material-symbols-outlined">remove</span>
-                    </button>
-                    <button
-                        onClick={handleGetLocation}
-                        className={`size-11 rounded-2xl shadow-2xl flex items-center justify-center transition-all border border-slate-100 dark:border-slate-800 ${gettingLocation ? 'bg-orange-50 text-orange-500 animate-pulse' : 'bg-white dark:bg-slate-900 text-[#f27121] hover:bg-orange-50 dark:hover:bg-slate-800'}`}
-                        title="Vị trí của tôi"
-                    >
-                        <span className="material-symbols-outlined">{gettingLocation ? 'sync' : 'my_location'}</span>
-                    </button>
-
-                    {/* Expand activities button (Only visible when collapsed on desktop) */}
-                    {!sidebarExpanded && (
+                    {/* Tab Switcher */}
+                    <div className="flex p-1.5 bg-slate-100 dark:bg-slate-800 rounded-2xl w-full sm:w-auto">
                         <button
-                            onClick={() => setSidebarExpanded(true)}
-                            className="hidden lg:flex size-11 bg-[#1A237E] dark:bg-indigo-900 text-white rounded-2xl shadow-2xl items-center justify-center hover:bg-indigo-900 dark:hover:bg-indigo-950 transition-all animate-in fade-in zoom-in"
-                            title="Mở danh sách hoạt động"
+                            onClick={() => setActiveTab('map')}
+                            className={`flex-1 sm:px-8 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'map'
+                                ? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm'
+                                : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                                }`}
                         >
-                            <span className="material-symbols-outlined">list_alt</span>
+                            <span className="material-symbols-outlined text-lg">map</span>
+                            Bản đồ
                         </button>
-                    )}
+                        <button
+                            onClick={() => setActiveTab('list')}
+                            className={`flex-1 sm:px-8 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'list'
+                                ? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm'
+                                : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                                }`}
+                        >
+                            <span className="material-symbols-outlined text-lg">list_alt</span>
+                            Danh sách
+                        </button>
+                    </div>
                 </div>
 
-
-
-                {/* Desktop Check-in Button Overlay */}
-                <div className="absolute bottom-10 left-1/2 -translate-x-1/2 hidden lg:block z-[999]">
-                    <button
-                        onClick={() => setShowCheckinForm(true)}
-                        className="flex items-center gap-4 bg-[#f27121] hover:bg-orange-600 text-white px-10 py-5 rounded-[2.5rem] shadow-[0_20px_40px_rgba(242,113,33,0.3)] transition-all transform hover:scale-105 active:scale-95 font-black text-sm uppercase tracking-[3px]"
-                    >
-                        <span className="material-symbols-outlined text-2xl">add_location_alt</span>
-                        Checkin Ngay
-                    </button>
-                </div>
-
-            </div>
-
-            {/* Sidebar / Bottom Sheet */}
-            <aside
-                className={`lg:h-full lg:relative absolute bottom-0 left-0 w-full bg-white dark:bg-slate-900 shadow-[0_-20px_50px_rgba(0,0,0,0.1)] lg:shadow-none ${sheetOpen ? 'z-[60]' : 'z-[5]'} overflow-hidden flex flex-col transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] 
-                        ${showCheckinForm ? 'translate-y-full opacity-0 pointer-events-none scale-95' : 'translate-y-0 opacity-100'}
-                        ${sheetOpen ? 'h-[92vh] rounded-t-[3rem]' : 'h-[14vh] lg:h-full rounded-t-[3rem] lg:rounded-none'} 
-                        ${sidebarExpanded ? 'lg:w-[30%] lg:min-w-[400px] lg:max-w-[460px] lg:border-l lg:border-[#e6dfdb] dark:lg:border-slate-800' : 'lg:w-0 lg:min-w-0 lg:max-w-0 lg:border-none'}`}
-            >
-
-                {/* Desktop Toggle Button */}
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        setSidebarExpanded(!sidebarExpanded);
-                    }}
-                    className={`hidden lg:flex absolute -left-6 top-10 size-12 bg-white dark:bg-slate-900 border border-[#e6dfdb] dark:border-slate-700 rounded-full items-center justify-center shadow-2xl text-[#FF6D00] hover:bg-orange-50 dark:hover:bg-slate-800 transition-all z-[100] group/toggle ${!sidebarExpanded ? 'rotate-180 translate-x-12' : ''}`}
-                >
-                    <span className="material-symbols-outlined font-black text-3xl">{sidebarExpanded ? 'chevron_right' : 'chevron_left'}</span>
-                    {/* Tooltip */}
-                    <div className={`absolute right-full mr-4 px-3 py-1.5 bg-[#1A237E] dark:bg-indigo-900 text-white text-[10px] font-black uppercase rounded-lg opacity-0 group-hover/toggle:opacity-100 pointer-events-none transition-all whitespace-nowrap shadow-xl ${!sidebarExpanded ? 'hidden' : ''}`}>
-                        Thu gọn danh sách
-                    </div>
-                </button>
-
-
-                <div className={`flex flex-col h-full transition-opacity duration-300 ${sidebarExpanded ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-
-
-                    {/* Drawer Handle / Header for Mobile */}
-                    <div
-                        className="w-full h-14 lg:hidden flex flex-col justify-center items-center cursor-pointer shrink-0 border-b border-slate-50 dark:border-slate-800"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            setSheetOpen(!sheetOpen);
-                        }}
-                    >
-                        <div className="w-12 h-1.5 bg-slate-200 dark:bg-slate-600 rounded-full mb-1"></div>
-                        <p className="text-[10px] font-black uppercase text-slate-400">Danh sách hoạt động</p>
-                    </div>
-
-
-                    {/* Header Contents */}
-                    <div className="px-7 pb-4 lg:pt-8 lg:pb-4 flex flex-col gap-5 shrink-0">
-                        <div className="flex items-center justify-between">
-                            <h1 className="text-[#181411] dark:text-white text-2xl font-black uppercase tracking-tight flex items-center gap-3">
-                                Hoạt động
-                                <span className="text-[10px] font-black uppercase px-2 py-1 bg-orange-50 dark:bg-orange-900/20 text-[#f27121] dark:text-orange-400 rounded-lg tracking-widest border border-orange-100 dark:border-orange-900/30">Sale</span>
-                            </h1>
-                        </div>
-
+                {/* Global Filters Bar */}
+                <div className="px-4 lg:px-8 pb-4 space-y-4">
+                    <div className="flex flex-col lg:flex-row gap-4 items-end">
                         {/* Search Input */}
-                        <div className="relative">
+                        <div className="flex-1 w-full relative">
                             <span className="absolute inset-y-0 left-4 flex items-center text-slate-400">
                                 <span className="material-symbols-outlined text-[20px]">search</span>
                             </span>
                             <input
-                                className="w-full pl-12 pr-4 py-4 bg-[#f8f7f5] dark:bg-slate-800 border-none rounded-[1.5rem] text-sm font-black focus:ring-2 focus:ring-[#f27121]/30 text-[#181411] dark:text-white placeholder-slate-400 transition-all border border-transparent focus:bg-white dark:focus:bg-slate-900 focus:border-slate-100 dark:focus:border-slate-700 shadow-inner dark:shadow-none"
-                                placeholder="Tìm khách hàng..."
+                                className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-xs font-black focus:ring-2 focus:ring-[#f27121]/30 text-slate-800 dark:text-white placeholder-slate-400 transition-all shadow-inner"
+                                placeholder="TÌM KIẾM THEO TÊN, MỤC ĐÍCH..."
                                 type="text"
                                 value={searchQuery}
                                 onChange={(e) => {
                                     setSearchQuery(e.target.value);
-                                    setCurrentPage(1); // Reset to page 1 on search
+                                    setCurrentPage(1);
                                 }}
                             />
                         </div>
 
-                        {/* Filter Tags & Date Range */}
-                        <div className="flex flex-col gap-4">
-                            <div className="flex gap-2 p-1 bg-[#f8f7f5] dark:bg-slate-800 rounded-2xl">
-                                <input
-                                    type="date"
-                                    className="flex-1 bg-transparent border-none text-[10px] font-black uppercase p-2 focus:ring-0 text-slate-700 dark:text-slate-300"
-                                    value={dateRange.start}
-                                    onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-                                />
-                                <div className="flex items-center text-slate-300 dark:text-slate-600">
-                                    <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                        {/* Date Range Inputs */}
+                        <div className="w-full lg:w-auto flex flex-col sm:flex-row gap-3">
+                            <div className="flex-1 sm:w-48 space-y-1">
+                                <label className="text-[9px] font-black uppercase text-slate-400 ml-2 tracking-widest">Từ ngày</label>
+                                <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 rounded-xl px-3 py-2.5 shadow-inner">
+                                    <span className="material-symbols-outlined text-sm text-slate-400">calendar_today</span>
+                                    <input
+                                        type="date"
+                                        className="bg-transparent border-none text-[10px] font-black uppercase p-0 focus:ring-0 text-slate-700 dark:text-slate-300 w-full"
+                                        value={dateRange.start}
+                                        onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                                    />
                                 </div>
-                                <input
-                                    type="date"
-                                    className="flex-1 bg-transparent border-none text-[10px] font-black uppercase p-2 focus:ring-0 text-slate-700 dark:text-slate-300"
-                                    value={dateRange.end}
-                                    onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-                                />
                             </div>
-
-                            <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-                                <button className="whitespace-nowrap px-6 py-2.5 bg-[#f27121] text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-orange-500/20 active:scale-95 transition-all">Tất cả</button>
-                                <button className="whitespace-nowrap px-6 py-2.5 bg-[#f8f7f5] dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-slate-700 active:scale-95 transition-all">Khách mới</button>
-                                <button className="whitespace-nowrap px-6 py-2.5 bg-[#f8f7f5] dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-slate-700 active:scale-95 transition-all">Viếng thăm</button>
-                                <button className="whitespace-nowrap px-6 py-2.5 bg-[#f8f7f5] dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-slate-700 active:scale-95 transition-all">Khiếu nại</button>
+                            <div className="flex-1 sm:w-48 space-y-1">
+                                <label className="text-[9px] font-black uppercase text-slate-400 ml-2 tracking-widest">Đến ngày</label>
+                                <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 rounded-xl px-3 py-2.5 shadow-inner">
+                                    <span className="material-symbols-outlined text-sm text-slate-400">event</span>
+                                    <input
+                                        type="date"
+                                        className="bg-transparent border-none text-[10px] font-black uppercase p-0 focus:ring-0 text-slate-700 dark:text-slate-300 w-full"
+                                        value={dateRange.end}
+                                        onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                                    />
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    {/* Activity Feed List with Client-side Filter & Pagination */}
-                    <div className="flex-1 overflow-y-auto custom-scrollbar px-4 lg:px-6 py-6 pb-32 space-y-6 bg-[#f8f7f5]/30 dark:bg-slate-900/50">
-                        {loading ? (
-                            <div className="py-20 flex flex-col items-center justify-center gap-4">
-                                <div className="size-10 border-4 border-[#f27121] border-t-transparent rounded-full animate-spin"></div>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-[#f27121] animate-pulse">Đang đồng bộ dữ liệu...</p>
-                            </div>
-                        ) : (() => {
-                            const filtered = recentCheckins.filter(item => {
-                                const itemDate = item.createdAt?.seconds ? new Date(item.createdAt.seconds * 1000).toISOString().split('T')[0] : '';
-                                const matchDate = itemDate >= dateRange.start && itemDate <= dateRange.end;
-                                const matchSearch = (item.customerBusinessName || item.customerName || '').toLowerCase().includes(searchQuery.toLowerCase());
-                                return matchDate && matchSearch;
-                            });
-
-                            const totalPages = Math.ceil(filtered.length / itemsPerPage);
-                            const paginated = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
-                            if (filtered.length === 0) {
-                                return (
-                                    <div className="py-24 flex flex-col items-center justify-center text-slate-200 dark:text-slate-700 gap-5 uppercase font-black text-xs tracking-[6px] opacity-50">
-                                        <span className="material-symbols-outlined text-7xl">explore_off</span>
-                                        <p>Dữ liệu trống</p>
-                                    </div>
-                                );
-                            }
-
-                            return (
-                                <>
-                                    {paginated.map((checkin) => (
-                                        <div key={checkin.id} className="flex gap-3 lg:gap-5 relative group">
-                                            <div className="flex-none pt-1 lg:pt-2 relative">
-                                                <div className="size-10 lg:size-14 rounded-xl lg:rounded-2xl bg-[#1A237E] dark:bg-indigo-900 flex items-center justify-center text-white font-black text-base lg:text-xl shadow-xl shadow-blue-900/10 border-2 border-white dark:border-slate-800 ring-4 ring-transparent group-hover:ring-blue-50 dark:group-hover:ring-indigo-900/30 transition-all uppercase">
-                                                    {(checkin.customerBusinessName || checkin.customerName)[0]}
-                                                </div>
-                                            </div>
-                                            <div className="flex-1 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-4 lg:p-5 rounded-[1.5rem] lg:rounded-[2rem] shadow-sm hover:shadow-2xl transition-all cursor-pointer group-hover:-translate-y-1 overflow-hidden">
-                                                <div className="flex justify-between items-start mb-3 gap-2">
-                                                    <div className="space-y-0.5 min-w-0">
-                                                        <h4 className="text-[13px] lg:text-sm font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight leading-tight truncate">{checkin.customerBusinessName || checkin.customerName}</h4>
-                                                        {checkin.customerBusinessName && <p className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-tight truncate">{checkin.customerName}</p>}
-                                                        <div className="flex flex-wrap items-center gap-1.5 lg:gap-2">
-                                                            <span className={`px-1.5 py-0.5 rounded text-[7px] lg:text-[8px] font-black uppercase tracking-widest ${checkin.purpose === 'Khiếu nại' ? 'bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400' :
-                                                                checkin.purpose === 'Khách mới' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 dark:text-emerald-400' :
-                                                                    checkin.purpose === 'Viếng thăm' ? 'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400' :
-                                                                        checkin.purpose === 'Thăm hỏi' ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' :
-                                                                            checkin.purpose === 'Giao hàng' ? 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400' :
-                                                                                checkin.purpose === 'Thu tiền' ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400' : 'bg-orange-50 dark:bg-orange-900/20 text-[#f27121] dark:text-orange-400'
-                                                                }`}>
-                                                                {checkin.purpose}
-                                                            </span>
-                                                            <span className="text-[8px] lg:text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase truncate">• {checkin.address.split(',')[0]}</span>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex flex-col items-end gap-2">
-                                                        <span className="shrink-0 text-[9px] lg:text-[10px] text-slate-300 dark:text-slate-600 font-black uppercase tracking-tighter bg-slate-50 dark:bg-slate-700/50 px-2 py-1 rounded-lg">
-                                                            {checkin.createdAt?.seconds ? new Date(checkin.createdAt.seconds * 1000).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : 'NOW'}
-                                                        </span>
-                                                        <button
-                                                            onClick={(e) => handleDeleteCheckin(checkin.id, e)}
-                                                            className="text-slate-300 hover:text-red-500 transition-colors p-1"
-                                                            title="Xóa"
-                                                        >
-                                                            <span className="material-symbols-outlined text-lg">delete</span>
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                {(() => {
-                                                    const imgs = checkin.imageUrls || (checkin.imageUrl ? [checkin.imageUrl] : []);
-                                                    if (imgs.length === 0) return null;
-                                                    return (
-                                                        <div className={`mb-3 lg:mb-4 grid ${imgs.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-2 rounded-xl lg:rounded-2xl overflow-hidden`}>
-                                                            {imgs.map((url: string, idx: number) => (
-                                                                <div key={idx} className={`rounded-xl overflow-hidden border border-slate-100 dark:border-slate-700 aspect-video relative group/img shadow-sm ${imgs.length === 3 && idx === 0 ? 'col-span-2' : ''}`}>
-                                                                    <img
-                                                                        src={getImageUrl(url)}
-                                                                        alt="Field"
-                                                                        className="size-full object-cover group-hover/img:scale-110 transition-transform duration-[1.5s]"
-                                                                        referrerPolicy="no-referrer"
-                                                                    />
-                                                                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-all scale-110 group-hover/img:scale-100">
-                                                                        <span className="material-symbols-outlined text-white text-3xl">zoom_in</span>
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    );
-                                                })()}
-
-                                                {checkin.note && (
-                                                    <div className="p-3 lg:p-4 bg-[#f8f7f5] dark:bg-slate-900/50 rounded-xl lg:rounded-2xl border-l-[4px] lg:border-l-[6px] border-[#1A237E] dark:border-indigo-500 mb-3 lg:mb-4 shadow-inner dark:shadow-none">
-                                                        <p className="text-[11px] lg:text-[12px] text-[#1A237E] dark:text-indigo-300 font-bold leading-relaxed line-clamp-3 italic">"{checkin.note}"</p>
-                                                    </div>
-                                                )}
-
-                                                <div className="flex items-center gap-2 text-[9px] lg:text-[10px] text-slate-400 dark:text-slate-500 font-bold leading-tight">
-                                                    <span className="material-symbols-outlined text-[14px] lg:text-[16px] text-orange-400 shrink-0">place</span>
-                                                    <span className="truncate opacity-70">{checkin.address}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-
-                                    {/* Pagination Controls */}
-                                    <div className="flex items-center justify-between pt-4 pb-8">
-                                        <button
-                                            disabled={currentPage === 1}
-                                            onClick={() => setCurrentPage(prev => prev - 1)}
-                                            className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700 transition-all text-slate-700 dark:text-slate-300"
-                                        >
-                                            Trang trước
-                                        </button>
-                                        <div className="text-[10px] font-black text-slate-400 dark:text-slate-500">
-                                            {currentPage} / {totalPages || 1}
-                                        </div>
-                                        <button
-                                            disabled={currentPage >= totalPages}
-                                            onClick={() => setCurrentPage(prev => prev + 1)}
-                                            className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700 transition-all text-slate-700 dark:text-slate-300"
-                                        >
-                                            Trang sau
-                                        </button>
-                                    </div>
-                                </>
-                            );
-                        })()}
+                        <div className="w-full lg:w-auto flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                            {[
+                                { id: 'today', label: 'Hôm nay' },
+                                { id: 'week', label: '7 ngày' },
+                                { id: 'month', label: 'Tháng này' },
+                                { id: 'all', label: 'Tất cả' }
+                            ].map(p => (
+                                <button
+                                    key={p.id}
+                                    onClick={() => setDatePreset(p.id as any)}
+                                    className={`whitespace-nowrap px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shadow-sm border ${
+                                        (p.id === 'today' && dateRange.start === dateRange.end && dateRange.start === new Date().toISOString().split('T')[0]) ||
+                                        (p.id === 'all' && dateRange.start === '2020-01-01')
+                                        ? 'bg-[#f27121] text-white border-[#f27121]'
+                                        : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-100 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+                                    }`}
+                                >
+                                    {p.label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </div>
-            </aside>
+            </header>
 
-            {/* Checkin Form Modal */}
-            {showCheckinForm && (
-                <div className="fixed inset-0 z-[2000] flex items-end md:items-center justify-center bg-[#1A237E]/80 dark:bg-black/80 backdrop-blur-sm p-0 md:p-4 font-['Manrope'] transition-colors duration-300">
+            <main className="flex-1 relative overflow-hidden">
+                <AnimatePresence mode="wait">
+                    {activeTab === 'map' ? (
+                        <motion.div
+                            key="map"
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: 20 }}
+                            className="absolute inset-0 flex flex-col"
+                        >
+                            <div className="relative flex-1 bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                                <MapContainer
+                                    center={mapCenter}
+                                    zoom={13}
+                                    style={{ height: '100%', width: '100%' }}
+                                    zoomControl={false}
+                                >
+                                    <MapInstanceTracker setMapInstance={setMapInstance} />
+                                    <TileLayer
+                                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                                    />
+                                    <MapUpdater center={mapCenter} sidebarExpanded={false} />
 
-                    <div className="bg-white dark:bg-slate-900 w-full max-w-xl rounded-t-[2.5rem] md:rounded-[2.5rem] shadow-2xl flex flex-col max-h-[95vh] md:max-h-[85vh] animate-in slide-in-from-bottom duration-300 overflow-hidden transition-colors duration-300">
-                        <div className="px-8 py-6 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between shrink-0">
-                            <div className="space-y-1">
-                                <h3 className="text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight">Thực hiện Checkin</h3>
-                                <p className="text-[10px] font-black text-[#f27121] dark:text-orange-400 uppercase tracking-[2px]">
-                                    {currentTime.toLocaleDateString('vi-VN')} — {currentTime.toLocaleTimeString('vi-VN')}
-                                </p>
+                                    {/* Current capturing location marker */}
+                                    {formData.location && (
+                                        <Marker
+                                            position={[formData.location.lat, formData.location.lng]}
+                                            icon={L.divIcon({
+                                                className: 'current-location-icon',
+                                                html: `
+                                                    <div class="relative flex items-center justify-center">
+                                                        <div class="absolute inset-0 size-8 bg-[#f27121]/30 rounded-full animate-ping"></div>
+                                                        <div class="size-4 bg-[#f27121] rounded-full border-2 border-white shadow-lg relative z-10"></div>
+                                                    </div>
+                                                `,
+                                                iconSize: [32, 32],
+                                                iconAnchor: [16, 16]
+                                            })}
+                                        >
+                                            <Popup>
+                                                <p className="text-[10px] font-black uppercase text-[#f27121]">Vị trí bạn đang chọn</p>
+                                            </Popup>
+                                        </Marker>
+                                    )}
+
+                                    {recentCheckins.filter(item => {
+                                        const itemDate = item.createdAt?.seconds 
+                                            ? new Date(item.createdAt.seconds * 1000).toISOString().split('T')[0] 
+                                            : new Date().toISOString().split('T')[0];
+                                        const matchDate = itemDate >= dateRange.start && itemDate <= dateRange.end;
+                                        const matchSearch = (item.customerBusinessName || item.customerName || '').toLowerCase().includes(searchQuery.toLowerCase());
+                                        return matchDate && matchSearch;
+                                    }).map((checkin) => {
+                                        const lat = checkin.location?.lat ?? checkin.location?.latitude;
+                                        const lng = checkin.location?.lng ?? checkin.location?.longitude;
+                                        if (lat === undefined || lng === undefined) return null;
+
+                                        return (
+                                            <Marker
+                                                key={checkin.id}
+                                                position={[lat, lng]}
+                                                icon={createCustomIcon(checkin.purpose, !!checkin.imageUrl)}
+                                            >
+                                                <Popup className="custom-popup">
+                                                    <div className="p-2 min-w-[150px]">
+                                                        <p className="font-black text-[#1A237E] uppercase text-[10px] mb-1">{checkin.customerBusinessName || checkin.customerName}</p>
+                                                        <p className="text-[9px] text-slate-500 mb-2">{checkin.purpose}</p>
+                                                        {(checkin.imageUrls || (checkin.imageUrl ? [checkin.imageUrl] : [])).map((url: string, idx: number) => (
+                                                            <img
+                                                                key={idx}
+                                                                src={getImageUrl(url)}
+                                                                className={`w-full ${idx === 0 ? 'h-24' : 'hidden'} object-cover rounded-lg mb-2 shadow-sm`}
+                                                                alt="Field"
+                                                                referrerPolicy="no-referrer"
+                                                            />
+                                                        ))}
+                                                        <p className="text-[8px] text-slate-400 italic">"{checkin.note || 'Không có ghi chú'}"</p>
+                                                    </div>
+                                                </Popup>
+                                            </Marker>
+                                        );
+                                    })}
+                                </MapContainer>
+
+                                {/* Map Overlay Controls */}
+                                <div className="absolute bottom-6 right-6 flex flex-col gap-3 z-[1000]">
+                                    <button
+                                        onClick={() => mapInstance?.zoomIn()}
+                                        className="size-11 bg-white dark:bg-slate-900 rounded-2xl shadow-xl flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-800 transition-all font-black text-[#1A237E] dark:text-indigo-400 border border-slate-100 dark:border-slate-800"
+                                    >
+                                        <span className="material-symbols-outlined">add</span>
+                                    </button>
+                                    <button
+                                        onClick={() => mapInstance?.zoomOut()}
+                                        className="size-11 bg-white dark:bg-slate-900 rounded-2xl shadow-xl flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-800 transition-all font-black text-[#1A237E] dark:text-indigo-400 border border-slate-100 dark:border-slate-800"
+                                    >
+                                        <span className="material-symbols-outlined">remove</span>
+                                    </button>
+                                    <button
+                                        onClick={handleGetLocation}
+                                        className={`size-11 rounded-2xl shadow-xl flex items-center justify-center transition-all border border-slate-100 dark:border-slate-800 ${gettingLocation ? 'bg-orange-50 text-orange-500 animate-pulse' : 'bg-white dark:bg-slate-900 text-[#f27121] hover:bg-orange-50 dark:hover:bg-slate-800'}`}
+                                        title="Vị trí của tôi"
+                                    >
+                                        <span className="material-symbols-outlined">{gettingLocation ? 'sync' : 'my_location'}</span>
+                                    </button>
+                                </div>
+
+                                {/* Floating Check-in Button */}
+                                <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-[1000]">
+                                    <button
+                                        onClick={() => setShowCheckinForm(true)}
+                                        className="flex items-center gap-3 bg-[#f27121] hover:bg-orange-600 text-white px-8 py-4 rounded-[2rem] shadow-[0_15px_30px_rgba(242,113,33,0.3)] transition-all transform hover:scale-105 active:scale-95 font-black text-xs uppercase tracking-[2px]"
+                                    >
+                                        <span className="material-symbols-outlined text-xl">add_location_alt</span>
+                                        Checkin Ngay
+                                    </button>
+                                </div>
                             </div>
-                            <button onClick={() => setShowCheckinForm(false)} className="size-10 rounded-full bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 transition-all">
-                                <span className="material-symbols-outlined">close</span>
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleSubmitCheckin} className="flex-1 overflow-y-auto p-8 space-y-6 pb-12 custom-scrollbar">
-                            <div className="space-y-6">
-                                <div>
-                                    <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px] pl-1 mb-2 text-center md:text-left">Chọn Khách Hàng Mục Tiêu *</label>
-                                    <div className="relative" ref={customerSearchRef}>
-                                        <div className="absolute left-5 top-1/2 -translate-y-1/2 text-[#f27121] dark:text-orange-400 z-10">
-                                            <span className="material-symbols-outlined">person</span>
+                        </motion.div>
+                    ) : (
+                        <motion.div
+                            key="list"
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -20 }}
+                            className="absolute inset-0 flex flex-col bg-[#f8f9fb] dark:bg-slate-950 overflow-y-auto custom-scrollbar"
+                        >
+                            <div className="max-w-4xl mx-auto w-full p-4 lg:p-8 space-y-6 pb-32">
+                                {/* Statistics Summary (Optional but looks premium) */}
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                    <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex items-center gap-3">
+                                        <div className="size-10 rounded-xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-[#1A237E] dark:text-indigo-400">
+                                            <span className="material-symbols-outlined text-lg">analytics</span>
                                         </div>
+                                        <div>
+                                            <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Tổng Check-in</p>
+                                            <p className="text-sm font-black text-slate-800 dark:text-white">{recentCheckins.length}</p>
+                                        </div>
+                                    </div>
+                                    <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex items-center gap-3">
+                                        <div className="size-10 rounded-xl bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center text-[#f27121]">
+                                            <span className="material-symbols-outlined text-lg">new_releases</span>
+                                        </div>
+                                        <div>
+                                            <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Mới (7 ngày)</p>
+                                            <p className="text-sm font-black text-slate-800 dark:text-white">
+                                                {recentCheckins.filter(c => {
+                                                    const d = c.createdAt?.seconds ? new Date(c.createdAt.seconds * 1000) : new Date();
+                                                    return (new Date().getTime() - d.getTime()) < 7 * 24 * 60 * 60 * 1000;
+                                                }).length}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* List Feed */}
+                                <div className="space-y-6">
+                                    {loading ? (
+                                        <div className="py-20 flex flex-col items-center justify-center gap-4">
+                                            <div className="size-10 border-4 border-[#f27121] border-t-transparent rounded-full animate-spin"></div>
+                                            <p className="text-[10px] font-black uppercase tracking-widest text-[#f27121] animate-pulse">Đang tải lịch sử...</p>
+                                        </div>
+                                    ) : (() => {
+                                        const filtered = recentCheckins.filter(item => {
+                                            const itemDate = item.createdAt?.seconds 
+                                                ? new Date(item.createdAt.seconds * 1000).toISOString().split('T')[0] 
+                                                : new Date().toISOString().split('T')[0];
+                                            const matchDate = itemDate >= dateRange.start && itemDate <= dateRange.end;
+                                            const matchSearch = (item.customerBusinessName || item.customerName || item.purpose || '').toLowerCase().includes(searchQuery.toLowerCase());
+                                            return matchDate && matchSearch;
+                                        });
+
+                                        const totalPages = Math.ceil(filtered.length / itemsPerPage);
+                                        const paginated = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+                                        if (filtered.length === 0) {
+                                            return (
+                                                <div className="py-24 flex flex-col items-center justify-center text-slate-200 dark:text-slate-800 gap-5 uppercase font-black text-xs tracking-[6px]">
+                                                    <span className="material-symbols-outlined text-7xl">history</span>
+                                                    <p>Không có dữ liệu checkin</p>
+                                                </div>
+                                            );
+                                        }
+
+                                        return (
+                                            <>
+                                                {paginated.map((checkin) => (
+                                                    <motion.div
+                                                        layout
+                                                        key={checkin.id}
+                                                        className="flex gap-4 lg:gap-6 relative group"
+                                                    >
+                                                        <div className="flex-none pt-2">
+                                                            <div className="size-12 lg:size-16 rounded-2xl bg-gradient-to-br from-[#1A237E] to-blue-900 text-white flex items-center justify-center text-xl lg:text-2xl font-black shadow-lg shadow-blue-900/20 uppercase border-2 border-white dark:border-slate-800">
+                                                                {(checkin.customerBusinessName || checkin.customerName)[0]}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex-1 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-5 lg:p-6 rounded-[2rem] shadow-sm hover:shadow-xl transition-all group-hover:-translate-y-1 relative overflow-hidden">
+                                                            <div className="flex justify-between items-start mb-4 gap-4">
+                                                                <div className="space-y-1">
+                                                                    <h4 className="text-base font-black text-slate-800 dark:text-white uppercase tracking-tight leading-tight">{checkin.customerBusinessName || checkin.customerName}</h4>
+                                                                    <div className="flex flex-wrap items-center gap-2">
+                                                                        <span className={`px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-widest ${
+                                                                            checkin.purpose === 'Khiếu nại' ? 'bg-red-50 dark:bg-red-900/20 text-red-500' :
+                                                                            checkin.purpose === 'Khách mới' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500' :
+                                                                            'bg-blue-50 dark:bg-blue-900/20 text-blue-500'
+                                                                        }`}>
+                                                                            {checkin.purpose}
+                                                                        </span>
+                                                                        <span className="text-[9px] text-slate-400 font-bold uppercase">• {checkin.address.split(',')[0]}</span>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex flex-col items-end gap-2 shrink-0">
+                                                                    <span className="text-[10px] text-slate-300 dark:text-slate-600 font-black uppercase tracking-tighter bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded-lg">
+                                                                        {checkin.createdAt?.seconds ? new Date(checkin.createdAt.seconds * 1000).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : 'Vừa xong'}
+                                                                    </span>
+                                                                    <button
+                                                                        onClick={(e) => handleDeleteCheckin(checkin.id, e)}
+                                                                        className="text-slate-200 hover:text-red-500 transition-colors p-1"
+                                                                    >
+                                                                        <span className="material-symbols-outlined text-lg">delete</span>
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Images */}
+                                                            {(() => {
+                                                                const imgs = checkin.imageUrls || (checkin.imageUrl ? [checkin.imageUrl] : []);
+                                                                if (imgs.length === 0) return null;
+                                                                return (
+                                                                    <div className="mb-4 grid grid-cols-3 gap-2 rounded-2xl overflow-hidden">
+                                                                        {imgs.map((url: string, idx: number) => (
+                                                                            <img
+                                                                                key={idx}
+                                                                                src={getImageUrl(url)}
+                                                                                className="aspect-video object-cover rounded-xl border border-slate-50 dark:border-slate-800"
+                                                                                alt="Field"
+                                                                                referrerPolicy="no-referrer"
+                                                                            />
+                                                                        ))}
+                                                                    </div>
+                                                                );
+                                                            })()}
+
+                                                            {checkin.note && (
+                                                                <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border-l-4 border-[#1A237E] dark:border-indigo-500 mb-4">
+                                                                    <p className="text-xs text-slate-600 dark:text-slate-300 font-bold leading-relaxed italic">"{checkin.note}"</p>
+                                                                </div>
+                                                            )}
+
+                                                            <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold">
+                                                                <span className="material-symbols-outlined text-sm text-[#f27121]">place</span>
+                                                                <span className="truncate">{checkin.address}</span>
+                                                            </div>
+                                                        </div>
+                                                    </motion.div>
+                                                ))}
+
+                                                {/* Pagination */}
+                                                <div className="flex items-center justify-between pt-6">
+                                                    <button
+                                                        disabled={currentPage === 1}
+                                                        onClick={() => setCurrentPage(prev => prev - 1)}
+                                                        className="px-6 py-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl text-[10px] font-black uppercase tracking-widest disabled:opacity-20 transition-all shadow-sm"
+                                                    >
+                                                        Trước
+                                                    </button>
+                                                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                                        {currentPage} / {totalPages || 1}
+                                                    </div>
+                                                    <button
+                                                        disabled={currentPage >= totalPages}
+                                                        onClick={() => setCurrentPage(prev => prev + 1)}
+                                                        className="px-6 py-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl text-[10px] font-black uppercase tracking-widest disabled:opacity-20 transition-all shadow-sm"
+                                                    >
+                                                        Sau
+                                                    </button>
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
+                                </div>
+                            </div>
+
+                            {/* Floating Action Button for List Tab - Hidden on Mobile */}
+                            <div className="fixed bottom-10 right-6 z-[1000] hidden sm:flex">
+                                <button
+                                    onClick={() => setShowCheckinForm(true)}
+                                    className="size-16 bg-[#f27121] text-white rounded-2xl shadow-2xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-orange-500/30"
+                                >
+                                    <span className="material-symbols-outlined text-3xl font-black">add_location_alt</span>
+                                </button>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </main>
+
+            {/* Checkin Form Modal - Stays shared */}
+            <AnimatePresence>
+                {showCheckinForm && (
+                    <div className="fixed inset-0 z-[2000] flex items-end md:items-center justify-center p-0 md:p-4">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setShowCheckinForm(false)}
+                            className="absolute inset-0 bg-[#1A237E]/80 dark:bg-black/90 backdrop-blur-md"
+                        />
+                        <motion.div
+                            initial={{ y: "100%", scale: 0.95 }}
+                            animate={{ y: 0, scale: 1 }}
+                            exit={{ y: "100%", scale: 0.95 }}
+                            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                            className="bg-white dark:bg-slate-900 w-full max-w-xl rounded-t-[3rem] md:rounded-[3rem] shadow-2xl flex flex-col max-h-[95vh] md:max-h-[85vh] overflow-hidden relative z-10"
+                        >
+                            <div className="px-8 py-6 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between shrink-0">
+                                <div className="space-y-1">
+                                    <h3 className="text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight">Checkin Hiện Trường</h3>
+                                    <p className="text-[10px] font-black text-[#f27121] dark:text-orange-400 uppercase tracking-[2px]">
+                                        {currentTime.toLocaleDateString('vi-VN')} — {currentTime.toLocaleTimeString('vi-VN')}
+                                    </p>
+                                </div>
+                                <button onClick={() => setShowCheckinForm(false)} className="size-10 rounded-full bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-500 transition-all">
+                                    <span className="material-symbols-outlined">close</span>
+                                </button>
+                            </div>
+
+                            <form onSubmit={handleSubmitCheckin} className="flex-1 overflow-y-auto p-8 space-y-6 pb-12 custom-scrollbar">
+                                {/* Form contents same as before but polished */}
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px] mb-3">Chọn Khách Hàng *</label>
+                                    <div className="relative" ref={customerSearchRef}>
                                         <input
                                             required
                                             type="text"
-                                            autoComplete="off"
-                                            placeholder="Tìm theo tên khách hàng, chi nhánh hoặc số điện thoại..."
-                                            className="w-full pl-14 pr-4 h-16 bg-[#f8f7f5] dark:bg-slate-800 border-none rounded-2xl text-sm font-black focus:ring-2 focus:ring-[#f27121]/50 text-[#181411] dark:text-white placeholder:text-slate-400 placeholder:font-bold"
+                                            placeholder="Tìm khách hàng..."
+                                            className="w-full pl-6 pr-4 h-16 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-sm font-black focus:ring-2 focus:ring-[#f27121]/50 text-slate-800 dark:text-white"
                                             value={searchCustomerQuery}
                                             onChange={(e) => {
                                                 setSearchCustomerQuery(e.target.value);
@@ -863,7 +942,6 @@ const Checkin = () => {
                                                     setFormData(prev => ({ ...prev, customerId: '' }));
                                                 }
                                             }}
-                                            onFocus={() => setShowCustomerResults(true)}
                                         />
                                         {showCustomerResults && searchCustomerQuery && (
                                             <div className="absolute z-[2100] left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl shadow-2xl max-h-60 overflow-y-auto custom-scrollbar">
@@ -883,107 +961,82 @@ const Checkin = () => {
                                                             <p className="font-black text-sm uppercase text-slate-800 dark:text-slate-200 group-hover:text-[#f27121]">
                                                                 {c.businessName || c.name}
                                                             </p>
-                                                            <div className="flex flex-col gap-0.5 mt-1">
-                                                                {c.businessName && (
-                                                                    <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1 uppercase">
-                                                                        <span className="material-symbols-outlined text-[12px]">person</span>
-                                                                        {c.name}
-                                                                    </p>
-                                                                )}
-                                                                <p className="text-[10px] text-slate-400 dark:text-slate-500 font-black uppercase tracking-widest">{c.phone}</p>
-                                                            </div>
+                                                            <p className="text-[10px] text-slate-400 font-black uppercase mt-1">{c.phone}</p>
                                                         </div>
                                                         {selectedCustomer?.id === c.id && <CheckCircle2 size={18} className="text-[#f27121]" />}
                                                     </button>
                                                 ))}
-                                                {filteredCustomersForCheckin.length === 0 && (
-                                                    <div className="px-6 py-8 text-center">
-                                                        <span className="material-symbols-outlined text-4xl text-slate-200 dark:text-slate-700 mb-2">person_search</span>
-                                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Không tìm thấy khách hàng</p>
-                                                    </div>
-                                                )}
                                             </div>
                                         )}
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="col-span-1 md:col-span-2">
-                                        <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px] pl-1 mb-2">Vị trí hiện tại *</label>
-                                        <div className="flex gap-2">
-                                            <div className="flex-1 min-h-16 bg-[#f8f7f5] dark:bg-slate-800 rounded-2xl px-5 py-4 text-xs font-bold text-slate-600 dark:text-slate-300 border-none flex items-center leading-relaxed">
-                                                {gettingLocation ? (
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="size-5 border-2 border-[#f27121] border-t-transparent rounded-full animate-spin"></div>
-                                                        <span className="text-[#f27121] uppercase tracking-widest text-[10px]">Đang định vị...</span>
-                                                    </div>
-                                                ) : formData.address || 'Vui lòng nhấn định vị bên cạnh'}
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={handleGetLocation}
-                                                className="size-16 bg-[#1A237E] dark:bg-indigo-600 text-white rounded-2xl flex items-center justify-center hover:bg-black dark:hover:bg-indigo-800 shadow-xl shadow-blue-500/20 active:scale-95 transition-all shrink-0"
-                                            >
-                                                <span className="material-symbols-outlined text-2xl">my_location</span>
-                                            </button>
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px] mb-3">Vị trí hiện tại *</label>
+                                    <div className="flex gap-2">
+                                        <div className="flex-1 min-h-16 bg-slate-50 dark:bg-slate-800 rounded-2xl px-5 py-4 text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center leading-relaxed">
+                                            {gettingLocation ? 'Đang xác định vị trí...' : formData.address || 'Chưa có vị trí'}
                                         </div>
-                                    </div>
-
-                                    <div className="col-span-1 md:col-span-2">
-                                        <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px] pl-1 mb-2">Trạng thái Checkin *</label>
-                                        <div className="grid grid-cols-3 gap-2">
-                                            {['Khách mới', 'Viếng thăm', 'Khiếu nại'].map((p) => (
-                                                <button
-                                                    key={p}
-                                                    type="button"
-                                                    onClick={() => setFormData(prev => ({ ...prev, purpose: p }))}
-                                                    className={`py-4 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all ${formData.purpose === p
-                                                        ? 'bg-[#1A237E] dark:bg-indigo-600 text-white shadow-xl shadow-blue-500/20'
-                                                        : 'bg-[#f8f7f5] dark:bg-slate-800 text-slate-400 dark:text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700'
-                                                        }`}
-                                                >
-                                                    {p}
-                                                </button>
-                                            ))}
-                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={handleGetLocation}
+                                            className="size-16 bg-[#1A237E] dark:bg-indigo-600 text-white rounded-2xl flex items-center justify-center hover:bg-black transition-all shadow-xl shadow-blue-500/20 active:scale-95 shrink-0"
+                                        >
+                                            <span className="material-symbols-outlined text-2xl">my_location</span>
+                                        </button>
                                     </div>
                                 </div>
 
                                 <div>
-                                    <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px] pl-1 mb-2">Nội dung trao đổi</label>
+                                    <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px] mb-3">Mục đích *</label>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {['Khách mới', 'Viếng thăm', 'Khiếu nại'].map((p) => (
+                                            <button
+                                                key={p}
+                                                type="button"
+                                                onClick={() => setFormData(prev => ({ ...prev, purpose: p }))}
+                                                className={`py-4 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all ${formData.purpose === p
+                                                    ? 'bg-[#1A237E] dark:bg-indigo-600 text-white shadow-xl shadow-blue-500/20'
+                                                    : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:bg-slate-200'
+                                                }`}
+                                            >
+                                                {p}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px] mb-3">Ghi chú</label>
                                     <textarea
-                                        rows={4}
-                                        placeholder="Ghi nhanh nội dung làm việc hoặc yêu cầu của khách..."
-                                        className="w-full bg-[#f8f7f5] dark:bg-slate-800 border-none rounded-2xl p-5 text-sm font-bold focus:ring-2 focus:ring-[#f27121]/50 resize-none placeholder-slate-300 dark:placeholder-slate-600 text-[#181411] dark:text-white"
+                                        rows={3}
+                                        placeholder="Nhập nội dung làm việc..."
+                                        className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl p-5 text-sm font-bold focus:ring-2 focus:ring-[#f27121]/50 resize-none text-slate-800 dark:text-white"
                                         value={formData.note}
                                         onChange={(e) => setFormData(prev => ({ ...prev, note: e.target.value }))}
                                     />
                                 </div>
 
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between px-1">
-                                        <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px]">Hình ảnh hiện trường</label>
-                                        <span className="text-[10px] text-slate-300 dark:text-slate-600 font-bold italic tracking-wider">AUTO TIMESTAMP</span>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px] mb-3">Ảnh hiện trường (Tối đa 3)</label>
+                                    <div className="grid grid-cols-4 gap-3">
                                         <button
                                             type="button"
-                                            onClick={() => document.getElementById('checkin-image-final')?.click()}
+                                            onClick={() => document.getElementById('checkin-image-v2')?.click()}
                                             disabled={uploading || formData.imageUrls.length >= 3}
-                                            className="h-24 bg-[#f8f7f5] dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500 rounded-2xl font-black text-[9px] uppercase tracking-[1px] flex flex-col items-center justify-center gap-1 transition-all border-2 border-dashed border-slate-200 dark:border-slate-700 disabled:opacity-30"
+                                            className="h-20 bg-slate-50 dark:bg-slate-800 hover:bg-slate-200 text-slate-400 rounded-2xl font-black text-[9px] uppercase tracking-[1px] flex flex-col items-center justify-center gap-1 border-2 border-dashed border-slate-200 transition-all disabled:opacity-30"
                                         >
                                             {uploading ? (
-                                                <div className="size-5 border-2 border-[#f27121] border-t-transparent rounded-full animate-spin"></div>
+                                                <div className="size-4 border-2 border-[#f27121] border-t-transparent rounded-full animate-spin"></div>
                                             ) : (
                                                 <>
-                                                    <span className="material-symbols-outlined text-2xl">photo_camera</span>
-                                                    <span>{formData.imageUrls.length}/3 Ảnh</span>
+                                                    <span className="material-symbols-outlined text-xl">camera</span>
+                                                    <span>{formData.imageUrls.length}/3</span>
                                                 </>
                                             )}
                                         </button>
                                         <input
-                                            id="checkin-image-final"
+                                            id="checkin-image-v2"
                                             type="file"
                                             accept="image/*"
                                             capture="environment"
@@ -991,34 +1044,33 @@ const Checkin = () => {
                                             className="hidden"
                                             onChange={handleImageUpload}
                                         />
-
                                         {formData.imageUrls.map((url, index) => (
-                                            <div key={index} className="relative group size-24">
-                                                <img src={url} alt="Preview" className="size-full object-cover rounded-2xl border-2 border-white dark:border-slate-800 shadow-lg" />
+                                            <div key={index} className="relative size-20">
+                                                <img src={url} alt="Preview" className="size-full object-cover rounded-2xl shadow-md border border-slate-100" />
                                                 <button
                                                     type="button"
                                                     onClick={() => removeImage(index)}
-                                                    className="absolute -top-2 -right-2 size-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    className="absolute -top-1.5 -right-1.5 size-5 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg"
                                                 >
-                                                    <span className="material-symbols-outlined text-sm">close</span>
+                                                    <span className="material-symbols-outlined text-[12px]">close</span>
                                                 </button>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
-                            </div>
 
-                            <button
-                                type="submit"
-                                disabled={gettingLocation || uploading || !formData.customerId}
-                                className="w-full h-18 bg-[#f27121] text-white rounded-2xl font-black text-sm uppercase tracking-[3px] shadow-2xl shadow-orange-500/40 hover:bg-orange-600 transition-all active:scale-95 mt-4 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:shadow-none py-5"
-                            >
-                                {uploading ? 'ĐANG ĐỒNG BỘ...' : 'GỬI DỮ LIỆU ĐIỂM ĐẾN'}
-                            </button>
-                        </form>
+                                <button
+                                    type="submit"
+                                    disabled={gettingLocation || uploading || !formData.customerId}
+                                    className="w-full h-16 bg-[#f27121] text-white rounded-2xl font-black text-sm uppercase tracking-[3px] shadow-2xl shadow-orange-500/40 hover:bg-orange-600 transition-all active:scale-95 disabled:bg-slate-300"
+                                >
+                                    {uploading ? 'Đang tải lên...' : 'Xác nhận Checkin'}
+                                </button>
+                            </form>
+                        </motion.div>
                     </div>
-                </div>
-            )}
+                )}
+            </AnimatePresence>
         </div>
     );
 };

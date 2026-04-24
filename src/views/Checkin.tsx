@@ -122,6 +122,7 @@ const Checkin = () => {
     });
     const [searchQuery, setSearchQuery] = useState('');
     const [currentTime, setCurrentTime] = useState(new Date());
+    const [isFilterExpanded, setIsFilterExpanded] = useState(false);
 
     const setDatePreset = (preset: 'today' | 'yesterday' | 'week' | 'month' | 'all') => {
         const now = new Date();
@@ -496,102 +497,124 @@ const Checkin = () => {
                         </h1>
                     </div>
 
-                    {/* Tab Switcher */}
-                    <div className="flex p-1.5 bg-slate-100 dark:bg-slate-800 rounded-2xl w-full sm:w-auto">
+                    <div className="flex items-center gap-2">
+                        {/* Mobile Filter Toggle */}
                         <button
-                            onClick={() => setActiveTab('map')}
-                            className={`flex-1 sm:px-8 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'map'
-                                ? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm'
-                                : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
-                                }`}
+                            onClick={() => setIsFilterExpanded(!isFilterExpanded)}
+                            className={`lg:hidden size-10 flex items-center justify-center rounded-xl transition-all ${isFilterExpanded ? 'bg-orange-50 text-[#f27121]' : 'bg-slate-50 dark:bg-slate-800 text-slate-400'}`}
                         >
-                            <span className="material-symbols-outlined text-lg">map</span>
-                            Bản đồ
+                            <span className="material-symbols-outlined text-lg">{isFilterExpanded ? 'expand_less' : 'filter_alt'}</span>
                         </button>
-                        <button
-                            onClick={() => setActiveTab('list')}
-                            className={`flex-1 sm:px-8 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'list'
-                                ? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm'
-                                : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
-                                }`}
-                        >
-                            <span className="material-symbols-outlined text-lg">list_alt</span>
-                            Danh sách
-                        </button>
+
+                        {/* Tab Switcher */}
+                        <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl">
+                            <button
+                                onClick={() => setActiveTab('map')}
+                                className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'map'
+                                    ? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm'
+                                    : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                                    }`}
+                            >
+                                <span className="material-symbols-outlined text-lg">map</span>
+                                <span className="hidden sm:inline">Bản đồ</span>
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('list')}
+                                className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'list'
+                                    ? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm'
+                                    : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                                    }`}
+                            >
+                                <span className="material-symbols-outlined text-lg">list_alt</span>
+                                <span className="hidden sm:inline">Danh sách</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
                 {/* Global Filters Bar */}
-                <div className="px-4 lg:px-8 pb-4 space-y-4">
-                    <div className="flex flex-col lg:flex-row gap-4 items-end">
-                        {/* Search Input */}
-                        <div className="flex-1 w-full relative">
-                            <span className="absolute inset-y-0 left-4 flex items-center text-slate-400">
-                                <span className="material-symbols-outlined text-[20px]">search</span>
-                            </span>
-                            <input
-                                className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-xs font-black focus:ring-2 focus:ring-[#f27121]/30 text-slate-800 dark:text-white placeholder-slate-400 transition-all shadow-inner"
-                                placeholder="TÌM KIẾM THEO TÊN, MỤC ĐÍCH..."
-                                type="text"
-                                value={searchQuery}
-                                onChange={(e) => {
-                                    setSearchQuery(e.target.value);
-                                    setCurrentPage(1);
-                                }}
-                            />
-                        </div>
+                <AnimatePresence>
+                    {(isFilterExpanded || activeTab === 'list') && (
+                        <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="overflow-hidden"
+                        >
+                            <div className="px-4 lg:px-8 pb-4 space-y-4">
+                                <div className="flex flex-col lg:flex-row gap-4 items-end">
+                                    {/* Search Input */}
+                                    <div className="flex-1 w-full relative">
+                                        <span className="absolute inset-y-0 left-4 flex items-center text-slate-400">
+                                            <span className="material-symbols-outlined text-[20px]">search</span>
+                                        </span>
+                                        <input
+                                            className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-xs font-black focus:ring-2 focus:ring-[#f27121]/30 text-slate-800 dark:text-white placeholder-slate-400 transition-all shadow-inner"
+                                            placeholder="TÌM KIẾM THEO TÊN, MỤC ĐÍCH..."
+                                            type="text"
+                                            value={searchQuery}
+                                            onChange={(e) => {
+                                                setSearchQuery(e.target.value);
+                                                setCurrentPage(1);
+                                            }}
+                                        />
+                                    </div>
 
-                        {/* Date Range Inputs */}
-                        <div className="w-full lg:w-auto flex flex-col sm:flex-row gap-3">
-                            <div className="flex-1 sm:w-48 space-y-1">
-                                <label className="text-[9px] font-black uppercase text-slate-400 ml-2 tracking-widest">Từ ngày</label>
-                                <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 rounded-xl px-3 py-2.5 shadow-inner">
-                                    <span className="material-symbols-outlined text-sm text-slate-400">calendar_today</span>
-                                    <input
-                                        type="date"
-                                        className="bg-transparent border-none text-[10px] font-black uppercase p-0 focus:ring-0 text-slate-700 dark:text-slate-300 w-full"
-                                        value={dateRange.start}
-                                        onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-                                    />
+                                    {/* Date Range Inputs */}
+                                    <div className="w-full lg:w-auto flex flex-col sm:flex-row gap-3">
+                                        <div className="flex-1 sm:w-48 space-y-1">
+                                            <label className="text-[9px] font-black uppercase text-slate-400 ml-2 tracking-widest">Từ ngày</label>
+                                            <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 rounded-xl px-3 py-2.5 shadow-inner">
+                                                <span className="material-symbols-outlined text-sm text-slate-400">calendar_today</span>
+                                                <input
+                                                    type="date"
+                                                    className="bg-transparent border-none text-[10px] font-black uppercase p-0 focus:ring-0 text-slate-700 dark:text-slate-300 w-full"
+                                                    value={dateRange.start}
+                                                    onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="flex-1 sm:w-48 space-y-1">
+                                            <label className="text-[9px] font-black uppercase text-slate-400 ml-2 tracking-widest">Đến ngày</label>
+                                            <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 rounded-xl px-3 py-2.5 shadow-inner">
+                                                <span className="material-symbols-outlined text-sm text-slate-400">event</span>
+                                                <input
+                                                    type="date"
+                                                    className="bg-transparent border-none text-[10px] font-black uppercase p-0 focus:ring-0 text-slate-700 dark:text-slate-300 w-full"
+                                                    value={dateRange.end}
+                                                    onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Quick Presets */}
+                                    <div className="w-full lg:w-auto flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                                        {[
+                                            { id: 'today', label: 'Hôm nay' },
+                                            { id: 'week', label: '7 ngày' },
+                                            { id: 'month', label: 'Tháng này' },
+                                            { id: 'all', label: 'Tất cả' }
+                                        ].map(p => (
+                                            <button
+                                                key={p.id}
+                                                onClick={() => setDatePreset(p.id as any)}
+                                                className={`whitespace-nowrap px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shadow-sm border ${
+                                                    (p.id === 'today' && dateRange.start === dateRange.end && dateRange.start === new Date().toISOString().split('T')[0]) ||
+                                                    (p.id === 'all' && dateRange.start === '2020-01-01')
+                                                    ? 'bg-[#f27121] text-white border-[#f27121]'
+                                                    : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-100 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+                                                }`}
+                                            >
+                                                {p.label}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
-                            <div className="flex-1 sm:w-48 space-y-1">
-                                <label className="text-[9px] font-black uppercase text-slate-400 ml-2 tracking-widest">Đến ngày</label>
-                                <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 rounded-xl px-3 py-2.5 shadow-inner">
-                                    <span className="material-symbols-outlined text-sm text-slate-400">event</span>
-                                    <input
-                                        type="date"
-                                        className="bg-transparent border-none text-[10px] font-black uppercase p-0 focus:ring-0 text-slate-700 dark:text-slate-300 w-full"
-                                        value={dateRange.end}
-                                        onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="w-full lg:w-auto flex gap-2 overflow-x-auto no-scrollbar pb-1">
-                            {[
-                                { id: 'today', label: 'Hôm nay' },
-                                { id: 'week', label: '7 ngày' },
-                                { id: 'month', label: 'Tháng này' },
-                                { id: 'all', label: 'Tất cả' }
-                            ].map(p => (
-                                <button
-                                    key={p.id}
-                                    onClick={() => setDatePreset(p.id as any)}
-                                    className={`whitespace-nowrap px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shadow-sm border ${
-                                        (p.id === 'today' && dateRange.start === dateRange.end && dateRange.start === new Date().toISOString().split('T')[0]) ||
-                                        (p.id === 'all' && dateRange.start === '2020-01-01')
-                                        ? 'bg-[#f27121] text-white border-[#f27121]'
-                                        : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-100 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
-                                    }`}
-                                >
-                                    {p.label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </header>
 
             <main className="flex-1 relative overflow-hidden">

@@ -33,6 +33,7 @@ const PriceList = () => {
 	// New states
 	const [viewMode, setViewMode] = useState<'list' | 'detail'>('list');
 	const [priceLists, setPriceLists] = useState<any[]>([]);
+	const [legacyList, setLegacyList] = useState<any>(null);
 	const [selectedList, setSelectedList] = useState<any>(null);
 	const [zoomScale, setZoomScale] = useState(1);
 	const [autoScale, setAutoScale] = useState(1);
@@ -61,49 +62,36 @@ const PriceList = () => {
 		};
 		fetchSettings();
 
-		// 2. Fetch Price Lists (Both Legacy ID-based and New Field-based)
+		// 2. Fetch Price Lists (Unified listener approach)
 		const q = query(
 			collection(db, 'price_lists'),
 			where('ownerId', '==', owner.ownerId)
 		);
 
 		// Listen to collection changes
-		const unsubscribe = onSnapshot(q, async (snapshot) => {
-			try {
-				const collectionLists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+		const unsubscribe = onSnapshot(q, (snapshot) => {
+			const collectionLists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+			setPriceLists(collectionLists);
+			setLoading(false);
+		}, (err) => {
+			console.error("Error fetching lists:", err);
+			setLoading(false);
+		});
 
-				// Also fetch legacy doc directly by ID
+		// 3. Check for Legacy Doc
+		const checkLegacy = async () => {
+			if (!owner.ownerId) return;
+			try {
 				const legacyRef = doc(db, 'price_lists', owner.ownerId);
 				const legacySnap = await getDoc(legacyRef);
-
-				let combined: any[] = [...collectionLists];
-
 				if (legacySnap.exists()) {
-					const legacyData = legacySnap.data();
-					// Unique check to avoid double showing
-					if (!combined.find(l => l.id === owner.ownerId || l.id === 'legacy')) {
-						combined.push({
-							id: 'legacy',
-							title: 'Báo giá cũ (Gốc)',
-							...legacyData
-						});
-					}
+					setLegacyList({ id: 'legacy', title: 'Báo giá cũ (Gốc)', ...legacySnap.data() });
 				}
-
-				// Sort by updatedAt descending
-				const sorted = combined.sort((a: any, b: any) => {
-					const dateA = a.updatedAt?.seconds || (a.updatedAt instanceof Date ? a.updatedAt.getTime() / 1000 : 0);
-					const dateB = b.updatedAt?.seconds || (b.updatedAt instanceof Date ? b.updatedAt.getTime() / 1000 : 0);
-					return dateB - dateA;
-				});
-
-				setPriceLists(sorted);
-				setLoading(false);
 			} catch (err) {
-				console.error("Error merging lists:", err);
-				setLoading(false);
+				console.error("Legacy fetch error:", err);
 			}
-		});
+		};
+		checkLegacy();
 
 		return () => unsubscribe();
 	}, [owner.loading, owner.ownerId]);
@@ -119,14 +107,17 @@ const PriceList = () => {
 		setViewMode('detail');
 
 		setIsDesktopLayout(true);
-		// Auto calculate zoom to fit screen width
-		const screenWidth = window.innerWidth;
-		const targetWidth = 1000;
-		const padding = 24;
-		const fitScale = (screenWidth - padding) / targetWidth;
-		const finalScale = Math.min(1, Math.max(0.2, fitScale));
-		setZoomScale(finalScale);
-		setAutoScale(finalScale);
+		
+		// Stable zoom calculation without timeout flickering
+		requestAnimationFrame(() => {
+			const screenWidth = window.innerWidth;
+			const targetWidth = 1000;
+			const padding = window.innerWidth < 768 ? 16 : 48;
+			const fitScale = (screenWidth - padding) / targetWidth;
+			const finalScale = Math.min(1, Math.max(0.2, fitScale));
+			setZoomScale(finalScale);
+			setAutoScale(finalScale);
+		});
 	};
 
 	const processRawData = (jsonData: any[][]) => {
@@ -163,12 +154,18 @@ const PriceList = () => {
 	const savePriceList = async (items: any[], headers: string[]) => {
 		if (!owner.ownerId) return;
 
-		const title = window.prompt("Nhập tên cho bản báo giá này:", `Báo giá cập nhật ${new Date().toLocaleDateString('vi-VN')}`);
-		if (title === null) return; // Cancelled
+		// If updating existing, we might not need a prompt if title already exists
+		let title = selectedList?.title;
+		const isNew = selectedList?.isUnsaved || !selectedList?.id;
+
+		if (isNew) {
+			title = window.prompt("Nhập tên cho bản báo giá này:", `Báo giá cập nhật ${new Date().toLocaleDateString('vi-VN')}`);
+			if (title === null) return; // Cancelled
+		}
 
 		setImporting(true);
 		try {
-			const newList = {
+			const dataToSave = {
 				ownerId: owner.ownerId,
 				items,
 				headers,
@@ -176,7 +173,15 @@ const PriceList = () => {
 				updatedBy: auth.currentUser?.email,
 				title: title || `Báo giá ${new Date().toLocaleString('vi-VN')}`
 			};
-			await addDoc(collection(db, 'price_lists'), newList);
+
+			if (isNew) {
+				await addDoc(collection(db, 'price_lists'), dataToSave);
+				showToast("Đã lưu báo giá mới thành công", "success");
+			} else {
+				const docId = selectedList.id === 'legacy' ? owner.ownerId : selectedList.id;
+				await setDoc(doc(db, 'price_lists', docId), dataToSave, { merge: true });
+				showToast("Đã cập nhật báo giá thành công", "success");
+			}
 
 			// Success - return to list view
 			setViewMode('list');
@@ -345,9 +350,22 @@ const PriceList = () => {
 		)
 	);
 
-	// Pagination for Price Lists (List View)
-	const totalPages = Math.ceil(priceLists.length / ITEMS_PER_PAGE);
-	const paginatedPriceLists = priceLists.slice(
+	// Sort and display price lists
+	const sortedPriceLists = React.useMemo(() => {
+		const combined = [...priceLists];
+		if (legacyList && !combined.find(l => l.id === owner.ownerId)) {
+			combined.push(legacyList);
+		}
+
+		return combined.sort((a: any, b: any) => {
+			const dateA = a.updatedAt?.seconds || (a.updatedAt instanceof Date ? a.updatedAt.getTime() / 1000 : 0);
+			const dateB = b.updatedAt?.seconds || (b.updatedAt instanceof Date ? b.updatedAt.getTime() / 1000 : 0);
+			return dateB - dateA;
+		});
+	}, [priceLists, legacyList, owner.ownerId]);
+
+	const totalPages = Math.ceil(sortedPriceLists.length / ITEMS_PER_PAGE);
+	const paginatedPriceLists = sortedPriceLists.slice(
 		(currentPage - 1) * ITEMS_PER_PAGE,
 		currentPage * ITEMS_PER_PAGE
 	);
@@ -460,15 +478,19 @@ const PriceList = () => {
 								<span className="hidden md:inline">In Báo Giá</span>
 							</button>
 
-							{selectedList?.isUnsaved ? (
+							{/* Show Save/Update button if data is unsaved OR if it's an existing list that we want to provide an update option for */}
+							{(selectedList?.isUnsaved || (selectedList?.id && priceData.length > 0)) && (
 								<button
 									onClick={() => savePriceList(priceData, headers)}
-									className="size-9 md:w-auto bg-indigo-600 text-white md:px-6 md:py-2.5 rounded-xl font-black text-[10px] md:text-sm shadow-lg shadow-blue-500/20 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2"
+									disabled={importing}
+									className="size-9 md:w-auto bg-indigo-600 text-white md:px-6 md:py-2.5 rounded-xl font-black text-[10px] md:text-sm shadow-lg shadow-blue-500/20 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
 								>
-									<Save size={16} />
-									<span className="hidden md:inline">Lưu</span>
+									{importing ? <RefreshCw className="animate-spin size-4" /> : <Save size={16} />}
+									<span className="hidden md:inline">{selectedList?.isUnsaved ? 'Lưu mới' : 'Cập nhật'}</span>
 								</button>
-							) : (
+							)}
+
+							{!selectedList?.isUnsaved && (
 								<button
 									className="size-9 md:w-auto bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl flex items-center justify-center transition-all md:px-4 md:hidden"
 									onClick={() => {

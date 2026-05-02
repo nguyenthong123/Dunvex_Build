@@ -19,6 +19,7 @@ const SystemAlertManager: React.FC = () => {
 		const runSystemChecks = async () => {
 			await checkInventory();
 			await checkDebts();
+			await checkBankLoanReminders();
 			// checkAutoSync is handled inside its own logic with internal notifications
 			await checkAutoSync();
 		};
@@ -124,6 +125,102 @@ const SystemAlertManager: React.FC = () => {
 				localStorage.setItem(`lastDebtCheck_${owner.ownerId}`, now.toString());
 			} catch (error) {
 				console.error("SystemAlertManager (Debt) Error:", error);
+			}
+		};
+
+		const checkBankLoanReminders = async () => {
+			const lastChecked = localStorage.getItem(`lastLoanReminderCheck_${owner.ownerId}`);
+			const now = Date.now();
+			if (lastChecked && now - parseInt(lastChecked) < 12 * 60 * 60 * 1000) return;
+
+			const today = new Date();
+			const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+			const daysUntilEndOfMonth = lastDayOfMonth - today.getDate();
+
+			// Only notify in the last 5 days of the month (0–4 days remaining)
+			if (daysUntilEndOfMonth >= 5) {
+				localStorage.setItem(`lastLoanReminderCheck_${owner.ownerId}`, now.toString());
+				return;
+			}
+
+			try {
+				const cashBookSnap = await getDocs(query(
+					collection(db, 'cash_book'),
+					where('ownerId', '==', owner.ownerId)
+				));
+
+				const allLogs = cashBookSnap.docs.map(d => ({ id: d.id, ...d.data() as any }));
+				const loans = allLogs.filter(l =>
+					l.type === 'thu' &&
+					(l.category === 'Vay ngân hàng' || l.category === 'Vay khác')
+				);
+
+				for (const loan of loans) {
+					const termMonthsStr = loan.loanTerm?.match(/\d+/)?.[0];
+					const termMonths = termMonthsStr ? parseInt(termMonthsStr) : 0;
+					if (termMonths === 0) continue;
+
+					// Skip settled loans (has a principal entry with monthIndex=999)
+					const isSettled = allLogs.some(l =>
+						l.parentId === loan.id && l.monthIndex === 999
+					);
+					if (isSettled) continue;
+
+					const startDate = new Date(loan.date);
+					const maturityDate = new Date(startDate);
+					maturityDate.setMonth(maturityDate.getMonth() + termMonths);
+
+					if (today >= maturityDate) continue; // Loan already matured
+
+					const monthlyInterest = Math.round((loan.amount * (loan.interestRate / 100)) / 12);
+					const monthsElapsed = Math.floor(
+						(today.getFullYear() - startDate.getFullYear()) * 12 +
+						(today.getMonth() - startDate.getMonth())
+					);
+					const nextMonthIndex = monthsElapsed + 1;
+
+					if (nextMonthIndex > termMonths) continue;
+
+					// Check if notification already sent this month for this loan
+					const existingSnap = await getDocs(query(
+						collection(db, 'notifications'),
+						where('userId', '==', auth.currentUser?.uid)
+					));
+
+					const isAlreadyAlertedThisMonth = existingSnap.docs.some(d => {
+						const data = d.data();
+						if (data.type !== 'loan_interest_reminder') return false;
+						if (data.loanId !== loan.id) return false;
+						const created = data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
+						return (
+							created.getFullYear() === today.getFullYear() &&
+							created.getMonth() === today.getMonth()
+						);
+					});
+
+					if (!isAlreadyAlertedThisMonth) {
+						const fmtVND = (v: number) =>
+							new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(v);
+						const bankName = loan.bankName || 'ngân hàng';
+						const title = `🏦 Nhắc lãi vay tháng ${nextMonthIndex}/${termMonths}`;
+						const body = `Khoản vay ${bankName} sắp đến kỳ trả lãi tháng ${nextMonthIndex}/${termMonths}. Số tiền lãi: ${fmtVND(monthlyInterest)}.`;
+
+						await addDoc(collection(db, 'notifications'), {
+							userId: auth.currentUser?.uid,
+							title,
+							message: body,
+							body,
+							type: 'loan_interest_reminder',
+							loanId: loan.id,
+							read: false,
+							createdAt: serverTimestamp()
+						});
+					}
+				}
+
+				localStorage.setItem(`lastLoanReminderCheck_${owner.ownerId}`, now.toString());
+			} catch (error) {
+				console.error("SystemAlertManager (BankLoan) Error:", error);
 			}
 		};
 

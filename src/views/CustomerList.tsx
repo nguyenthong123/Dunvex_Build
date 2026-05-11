@@ -506,18 +506,18 @@ const CustomerList = () => {
 			<header className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 h-16 md:h-20 flex items-center justify-between px-4 md:px-8 shrink-0 transition-colors duration-300 relative">
 				{!showMobileSearch ? (
 					<>
-						<div className="flex items-center gap-3">
+						<div className="flex items-center gap-3 min-w-0">
 							<button
 								onClick={() => navigate('/')}
-								className="size-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-[#1A237E] dark:hover:text-indigo-400 transition-all group"
+								className="size-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-[#1A237E] dark:hover:text-indigo-400 transition-all group flex-shrink-0"
 								title="Về Trang Chủ"
 							>
 								<span className="material-symbols-outlined text-xl group-hover:rotate-[-45deg] transition-transform">home</span>
 							</button>
-							<div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
-							<h2 className="text-lg md:text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight">Khách Hàng</h2>
+							<div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0"></div>
+							<h2 className="text-lg md:text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight truncate">Khách Hàng</h2>
 						</div>
-						<div className="flex items-center gap-2 md:gap-4">
+						<div className="flex items-center gap-2 md:gap-4 flex-shrink-0 ml-auto">
 							{/* Route & Search on Desktop */}
 							<div className="hidden md:flex items-center gap-2">
 								<div className="relative">
@@ -547,9 +547,9 @@ const CustomerList = () => {
 							{/* Search Trigger for Mobile */}
 							<button
 								onClick={() => setShowMobileSearch(true)}
-								className="md:hidden size-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400"
+								className="md:hidden size-10 rounded-xl bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center text-[#FF6D00] shadow-sm active:scale-95 transition-all"
 							>
-								<span className="material-symbols-outlined">search</span>
+								<span className="material-symbols-outlined text-xl">search</span>
 							</button>
 
 							<button
@@ -759,7 +759,7 @@ const CustomerList = () => {
 				)}
 
 				{/* Mobile List Virtualized */}
-				<div className="md:hidden h-[600px] pb-24 relative">
+				<div className="md:hidden flex-1 pb-24 relative min-h-[500px]">
 					{loading ? (
 						<div className="space-y-4">
 							{[1, 2, 3, 4, 5].map(i => (

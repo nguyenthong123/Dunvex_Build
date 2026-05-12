@@ -129,7 +129,13 @@ const PriceList = () => {
 		const mappedData = rawRows.map((row: any[]) => {
 			const obj: any = {};
 			rawHeaders.forEach((header, idx) => {
-				obj[header] = row[idx] !== undefined && row[idx] !== null ? row[idx] : '';
+				// Convert everything to string to preserve formatting (like 0.6)
+				let val = row[idx];
+				if (val === undefined || val === null) {
+					obj[header] = '';
+				} else {
+					obj[header] = String(val).trim();
+				}
 			});
 			return obj;
 		}).filter(row => Object.values(row).some(v => v !== '')); // Skip empty rows
@@ -725,14 +731,30 @@ const PriceList = () => {
 												{filteredData.map((row, rowIdx) => (
 													<tr key={rowIdx} className="hover:bg-orange-50/30 transition-colors">
 														<td className="py-4 px-4 text-[12px] font-black text-slate-500 text-center border border-slate-200 bg-slate-50/30">{rowIdx + 1}</td>
-														{headers.map((header, colIdx) => (
-															<td
-																key={colIdx}
-																className={`py-4 px-4 text-[13px] font-black whitespace-normal break-words border border-slate-200 ${colIdx === 0 ? 'text-[#E65100] leading-relaxed w-[350px] bg-orange-50/10' : 'text-slate-900'}`}
-															>
-																{row[header]?.toLocaleString() || '---'}
-															</td>
-														))}
+														{headers.map((header, colIdx) => {
+															const value = row[header];
+															const h = header.toLowerCase();
+															const isPrice = h.includes('giá') || h.includes('tiền');
+															
+															let displayValue = value || '---';
+															
+															if (isPrice && value) {
+																// Clean the value of any non-numeric characters for conversion
+																const cleanValue = String(value).replace(/[^0-9.-]+/g, "");
+																if (cleanValue && !isNaN(Number(cleanValue))) {
+																	displayValue = Number(cleanValue).toLocaleString('vi-VN') + ' đ';
+																}
+															}
+
+															return (
+																<td
+																	key={colIdx}
+																	className={`py-4 px-4 text-[13px] font-black whitespace-normal break-words border border-slate-200 ${colIdx === 0 ? 'text-[#E65100] leading-relaxed w-[350px] bg-orange-50/10' : 'text-slate-900'}`}
+																>
+																	{displayValue}
+																</td>
+															);
+														})}
 													</tr>
 												))}
 											</tbody>

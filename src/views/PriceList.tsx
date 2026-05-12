@@ -234,7 +234,7 @@ const PriceList = () => {
 				const wb = XLSX.read(bstr, { type: 'binary' });
 				const wsname = wb.SheetNames[0];
 				const ws = wb.Sheets[wsname];
-				const jsonData = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
+				const jsonData = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false }) as any[][];
 				processRawData(jsonData);
 			} catch (err) {
 				showToast("Lỗi khi đọc file Excel.", "error");
@@ -267,7 +267,7 @@ const PriceList = () => {
 			const wb = XLSX.read(csvText, { type: 'string' });
 			const wsname = wb.SheetNames[0];
 			const ws = wb.Sheets[wsname];
-			const jsonData = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
+			const jsonData = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false }) as any[][];
 			processRawData(jsonData);
 		} catch (err: any) {
 			showToast(err.message || "Lỗi khi lấy dữ liệu.", "error");
@@ -739,10 +739,23 @@ const PriceList = () => {
 															let displayValue = value || '---';
 															
 															if (isPrice && value) {
-																// Clean the value of any non-numeric characters for conversion
-																const cleanValue = String(value).replace(/[^0-9.-]+/g, "");
-																if (cleanValue && !isNaN(Number(cleanValue))) {
-																	displayValue = Number(cleanValue).toLocaleString('vi-VN') + ' đ';
+																const valStr = String(value).trim();
+																const hasCurrency = /[đđdD]|VND/i.test(valStr);
+																const hasFormatting = /[.,\s]/.test(valStr);
+																
+																if (hasCurrency) {
+																	displayValue = valStr;
+																} else if (hasFormatting) {
+																	displayValue = valStr + ' đ';
+																} else {
+																	// Try plain number formatting
+																	const cleanValue = valStr.replace(/[^0-9.-]+/g, "");
+																	const num = Number(cleanValue);
+																	if (cleanValue && !isNaN(num)) {
+																		displayValue = num.toLocaleString('vi-VN') + ' đ';
+																	} else {
+																		displayValue = valStr + ' đ';
+																	}
 																}
 															}
 

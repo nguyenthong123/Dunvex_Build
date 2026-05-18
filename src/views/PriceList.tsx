@@ -286,10 +286,31 @@ const PriceList = () => {
 			return;
 		}
 
-		// Collect current styles
+		// Compile active CSS rules directly to prevent black & white styling due to lazy-loaded CSS
 		let styles = '';
+		try {
+			for (const sheet of document.styleSheets) {
+				try {
+					if (sheet.cssRules) {
+						for (const rule of sheet.cssRules) {
+							styles += rule.cssText + '\n';
+						}
+					}
+				} catch (e) {
+					// Fallback for cross-origin styles
+					if (sheet.href) {
+						styles += `@import url("${sheet.href}");\n`;
+					}
+				}
+			}
+		} catch (err) {
+			console.warn("Could not inline all styles directly", err);
+		}
+
+		// Also collect current HTML style/link nodes as a fallback
+		let fallbackTags = '';
 		document.querySelectorAll('style, link[rel="stylesheet"]').forEach(node => {
-			styles += node.outerHTML;
+			fallbackTags += node.outerHTML;
 		});
 
 		printWindow.document.write(`
@@ -300,7 +321,8 @@ const PriceList = () => {
 					<link rel="preconnect" href="https://fonts.googleapis.com">
 					<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 					<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-					${styles}
+					<style>${styles}</style>
+					${fallbackTags}
 					<style>
 						body { 
 							background: white !important; 
@@ -403,14 +425,76 @@ const PriceList = () => {
 						${printContent.outerHTML}
 					</div>
 					<script>
-						window.onload = () => {
-							setTimeout(() => {
-								window.print();
-								if (!/Android|iPhone|iPad/i.test(navigator.userAgent)) {
-									window.close();
+						function checkStylesAndPrint() {
+							const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
+							let loadedCount = 0;
+							
+							const printAndClose = () => {
+								if (window.hasPrinted) return;
+								window.hasPrinted = true;
+								
+								if (document.fonts && document.fonts.ready) {
+									document.fonts.ready.then(() => {
+										setTimeout(() => {
+											window.print();
+											if (!/Android|iPhone|iPad/i.test(navigator.userAgent)) {
+												window.close();
+											}
+										}, 250);
+									}).catch(() => {
+										setTimeout(() => {
+											window.print();
+											if (!/Android|iPhone|iPad/i.test(navigator.userAgent)) {
+												window.close();
+											}
+										}, 250);
+									});
+								} else {
+									setTimeout(() => {
+										window.print();
+										if (!/Android|iPhone|iPad/i.test(navigator.userAgent)) {
+											window.close();
+										}
+									}, 250);
 								}
-							}, 800);
-						};
+							};
+
+							if (links.length === 0) {
+								printAndClose();
+								return;
+							}
+							
+							links.forEach(link => {
+								if (link.sheet) {
+									loadedCount++;
+									if (loadedCount === links.length) {
+										printAndClose();
+									}
+								} else {
+									link.onload = () => {
+										loadedCount++;
+										if (loadedCount === links.length) {
+											printAndClose();
+										}
+									};
+									link.onerror = () => {
+										loadedCount++;
+										if (loadedCount === links.length) {
+											printAndClose();
+										}
+									};
+								}
+							});
+							
+							// Backup timeout to make sure it prints even if a resource is blocked
+							setTimeout(printAndClose, 1200);
+						}
+						
+						if (document.readyState === 'complete') {
+							checkStylesAndPrint();
+						} else {
+							window.onload = checkStylesAndPrint;
+						}
 					</script>
 				</body>
 			</html>

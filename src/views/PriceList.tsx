@@ -297,36 +297,104 @@ const PriceList = () => {
 				<head>
 					<base href="${window.location.origin}/">
 					<title>In Báo Giá - ${selectedList?.title || ''}</title>
+					<link rel="preconnect" href="https://fonts.googleapis.com">
+					<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+					<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 					${styles}
 					<style>
 						body { 
-							background: #f8fafc; 
-							padding: 0; margin: 0; 
-							display: flex; justify-content: center;
+							background: white !important; 
+							padding: 0 !important; margin: 0 !important; 
+							display: flex !important; justify-content: center !important;
+							font-family: 'Inter', 'Manrope', sans-serif !important;
+							color: #1e293b !important;
 						}
 						#price-list-paper {
 							margin: 0 !important;
 							box-shadow: none !important;
-							border: 1px solid #e2e8f0 !important;
-							width: 210mm !important;
-							min-height: 297mm !important;
-							padding: 10mm !important;
+							border: none !important;
+							width: 100% !important;
+							max-width: 100% !important;
 							background: white !important;
 							visibility: visible !important;
 							display: block !important;
 							border-radius: 0 !important;
+							padding: 0 !important;
 						}
-						table { border-collapse: collapse !important; width: 100% !important; }
-						th, td { border: 1px solid #e2e8f0 !important; }
 						/* Force high fidelity colors */
 						* {
 							-webkit-print-color-adjust: exact !important;
 							print-color-adjust: exact !important;
 						}
+						
+						/* Table formatting for crisp printing */
+						table {
+							width: 100% !important;
+							border-collapse: collapse !important;
+							margin-top: 15px !important;
+							page-break-inside: auto !important;
+						}
+						tr {
+							page-break-inside: avoid !important;
+							page-break-after: auto !important;
+						}
+						thead {
+							display: table-header-group !important;
+						}
+						thead tr {
+							background-color: #fff7ed !important;
+						}
+						th {
+							background-color: #fff7ed !important;
+							color: #e65100 !important;
+							border: 1px solid #fed7aa !important;
+							font-weight: 800 !important;
+							font-size: 11px !important;
+							text-transform: uppercase !important;
+							letter-spacing: 0.5px !important;
+							padding: 12px 14px !important;
+						}
+						td {
+							border: 1px solid #e2e8f0 !important;
+							font-size: 11px !important;
+							padding: 10px 14px !important;
+							color: #1e293b !important;
+							line-height: 1.4 !important;
+						}
+						
+						/* Force typography and elements to print elegantly */
+						.text-\[\#E65100\], .text-\[\#FF6D00\] {
+							color: #e65100 !important;
+						}
+						
 						@media print {
-							body { background: white; margin: 0; padding: 0; }
-							#price-list-paper { margin: 0 !important; border: none !important; }
-							@page { size: A4; margin: 0; }
+							body { 
+								background: white !important; 
+								margin: 0 !important; 
+								padding: 0 !important;
+								-webkit-print-color-adjust: exact !important;
+								print-color-adjust: exact !important;
+							}
+							#price-list-paper { 
+								margin: 0 !important; 
+								padding: 0 !important; 
+								border: none !important;
+								box-shadow: none !important;
+							}
+							@page { 
+								size: A4; 
+								margin: 12mm 15mm 15mm 15mm; 
+							}
+							thead tr {
+								background-color: #fff7ed !important;
+							}
+							th {
+								background-color: #fff7ed !important;
+								color: #e65100 !important;
+								border: 1px solid #fed7aa !important;
+								-webkit-print-color-adjust: exact !important;
+								print-color-adjust: exact !important;
+							}
 						}
 					</style>
 				</head>

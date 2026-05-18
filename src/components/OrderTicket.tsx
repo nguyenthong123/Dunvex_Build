@@ -73,33 +73,106 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 				<head>
 					<base href="${window.location.origin}/">
 					<title>In Phiếu Giao Hàng - ${order.orderId || ''}</title>
+					<link rel="preconnect" href="https://fonts.googleapis.com">
+					<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+					<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 					${styles}
 					<style>
 						body { 
-							background: #f1f5f9; 
-							padding: 0; margin: 0; 
-							display: flex; justify-content: center;
+							background: white !important; 
+							padding: 0 !important; margin: 0 !important; 
+							display: flex !important; justify-content: center !important;
+							font-family: 'Inter', 'Manrope', sans-serif !important;
+							color: #1e293b !important;
 						}
 						#order-ticket-paper {
 							margin: 0 !important;
 							box-shadow: none !important;
 							border: none !important;
-							width: 210mm !important;
-							min-height: 297mm !important;
-							padding: 15mm !important;
+							width: 100% !important;
+							max-width: 100% !important;
 							background: white !important;
 							visibility: visible !important;
 							display: block !important;
+							padding: 0 !important;
 						}
 						/* Force high fidelity colors */
 						* {
 							-webkit-print-color-adjust: exact !important;
 							print-color-adjust: exact !important;
 						}
+						
+						/* Table formatting for crisp printing */
+						table {
+							width: 100% !important;
+							border-collapse: collapse !important;
+							margin-top: 15px !important;
+							page-break-inside: auto !important;
+						}
+						tr {
+							page-break-inside: avoid !important;
+							page-break-after: auto !important;
+						}
+						thead {
+							display: table-header-group !important;
+						}
+						thead tr {
+							background-color: #1c130d !important;
+							color: #ffffff !important;
+						}
+						th {
+							background-color: #1c130d !important;
+							color: #ffffff !important;
+							border: 1px solid #2d251e !important;
+							font-weight: 800 !important;
+							font-size: 11px !important;
+							text-transform: uppercase !important;
+							letter-spacing: 0.5px !important;
+							padding: 10px 12px !important;
+						}
+						td {
+							border: 1px solid #cbd5e1 !important;
+							font-size: 11px !important;
+							padding: 10px 12px !important;
+							color: #1e293b !important;
+						}
+						
+						/* Force typography and elements to print elegantly */
+						.text-\[\#1A237E\], .text-indigo-600 {
+							color: #1a237e !important;
+						}
+						.text-orange-500, .text-\[\#f27121\] {
+							color: #e65100 !important;
+						}
+						
 						@media print {
-							body { background: white; margin: 0; padding: 0; }
-							#order-ticket-paper { margin: 0 !important; }
-							@page { size: A4; margin: 0; }
+							body { 
+								background: white !important; 
+								margin: 0 !important; 
+								padding: 0 !important;
+								-webkit-print-color-adjust: exact !important;
+								print-color-adjust: exact !important;
+							}
+							#order-ticket-paper { 
+								margin: 0 !important; 
+								padding: 0 !important; 
+								border: none !important;
+								box-shadow: none !important;
+							}
+							@page { 
+								size: A4; 
+								margin: 12mm 15mm 15mm 15mm; 
+							}
+							thead tr {
+								background-color: #1c130d !important;
+								color: #ffffff !important;
+							}
+							th {
+								background-color: #1c130d !important;
+								color: #ffffff !important;
+								-webkit-print-color-adjust: exact !important;
+								print-color-adjust: exact !important;
+							}
 						}
 					</style>
 				</head>

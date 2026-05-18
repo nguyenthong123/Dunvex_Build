@@ -21,6 +21,7 @@ const TrainingCatalog = lazy(() => import('./views/TrainingCatalog'));
 const TrainingLab = lazy(() => import('./views/TrainingLab'));
 const Finance = lazy(() => import('./views/Finance'));
 const Coupons = lazy(() => import('./views/Coupons'));
+const NexusControl = lazy(() => import('./views/NexusControl'));
 
 import MainLayout from './components/layout/MainLayout';
 import ReloadPrompt from './components/ReloadPrompt';
@@ -151,6 +152,10 @@ function App() {
 						<Route
 							path="/khoa-dao-tao/:id"
 							element={currentUser ? <TrainingLab /> : <Navigate to="/login" />}
+						/>
+						<Route
+							path="/nexus-control"
+							element={currentUser ? <NexusControl /> : <Navigate to="/login" />}
 						/>
 
 						{/* Catch all */}

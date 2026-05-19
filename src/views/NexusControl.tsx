@@ -24,7 +24,8 @@ import {
 	Zap,
 	AlertTriangle,
 	Eye,
-	Shield
+	Shield,
+	Trash2
 } from 'lucide-react';
 import { useToast } from '../components/shared/Toast';
 import { auth, db } from '../services/firebase';
@@ -101,10 +102,38 @@ const NexusControl = () => {
 			setStats(prev => ({ ...prev, pendingPayments: data.filter((r: any) => r.status === 'pending').length }));
 		});
 
-		// 2. Listen to Users & Settings to merge data
+		// 2. Listen to Users & Settings & Permissions to merge data
 		const unsubUsers = onSnapshot(collection(db, 'users'), (userSnap) => {
-			const usersData = userSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-			setAllUsers(usersData);
+			const usersData = userSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+
+			// Listen to Permissions as well
+			const unsubPerms = onSnapshot(collection(db, 'permissions'), (permsSnap) => {
+				const permsData = permsSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+				
+				// Combine users and permissions into allUsers
+				const combined: any[] = [...usersData];
+				permsData.forEach((p: any) => {
+					const email = (p.email || p.id || '').toLowerCase().trim();
+					if (email) {
+						const exists = combined.some((u: any) => (u.email || '').toLowerCase().trim() === email);
+						if (!exists) {
+							combined.push({
+								id: p.id,
+								uid: p.uid || p.id,
+								email: email,
+								displayName: p.displayName || email.split('@')[0] || 'Chưa kích hoạt',
+								role: p.role || 'staff',
+								ownerId: p.ownerId || '',
+								ownerEmail: p.ownerEmail || 'Không rõ',
+								status: 'pending',
+								isPendingInvite: true
+							});
+						}
+					}
+				});
+				setAllUsers(combined);
+			});
+
 			const owners = usersData.filter((u: any) => u.uid === u.ownerId || !u.ownerId);
 
 			// Listen to Settings as well for real-time lock updates
@@ -136,7 +165,10 @@ const NexusControl = () => {
 				}));
 			});
 
-			return () => unsubSettings();
+			return () => {
+				unsubPerms();
+				unsubSettings();
+			};
 		});
 
 		// 3. System Config
@@ -501,12 +533,18 @@ const NexusControl = () => {
 	};
 
 	const handleDeleteUserRecord = async (user: any) => {
-		if (!window.confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn tài khoản của ${user.displayName || user.email} khỏi Firestore? Hành động này sẽ giải phóng email này.`)) return;
+		if (!window.confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn tài khoản/thư mời của ${user.displayName || user.email} khỏi Firestore? Hành động này sẽ giải phóng email này.`)) return;
 		try {
-			await deleteDoc(doc(db, 'users', user.uid));
+			if (user.uid) {
+				await deleteDoc(doc(db, 'users', user.uid));
+			}
 			// Clean lingering permissions too
-			const tempId = user.email.replace(/\W/g, '_');
-			await deleteDoc(doc(db, 'permissions', tempId));
+			const emailClean = (user.email || '').toLowerCase().trim();
+			if (emailClean) {
+				await deleteDoc(doc(db, 'permissions', emailClean));
+				const tempId = emailClean.replace(/\W/g, '_');
+				await deleteDoc(doc(db, 'permissions', tempId));
+			}
 			showToast(`Đã xóa tài khoản ${user.email} khỏi Firestore thành công!`, "success");
 		} catch (error: any) {
 			showToast("Lỗi khi xóa tài khoản: " + error.message, "error");
@@ -524,6 +562,43 @@ const NexusControl = () => {
 			showToast(`Đã hủy liên kết và reset tài khoản ${user.email} về mặc định độc lập!`, "success");
 		} catch (error: any) {
 			showToast("Lỗi khi hủy liên kết: " + error.message, "error");
+		}
+	};
+
+	const handleDeleteOwnerAccount = async (customer: any) => {
+		const ownerUid = customer.uid;
+		const displayName = customer.displayName || customer.email || 'No Name';
+		const email = customer.email || 'No Email';
+
+		if (!window.confirm(`⚠️ CẢNH BÁO NGUY HIỂM: Bạn có chắc chắn muốn XÓA HOÀN TOÀN Doanh nghiệp "${displayName}" (${email})? \n\nTẤT CẢ cài đặt, tài khoản, và dữ liệu cấu hình của doanh nghiệp này sẽ bị xóa khỏi hệ thống! Thao tác này không thể khôi phục!`)) {
+			return;
+		}
+
+		try {
+			// 1. Delete settings/{ownerUid}
+			await deleteDoc(doc(db, 'settings', ownerUid));
+
+			// 2. Delete users/{ownerUid}
+			await deleteDoc(doc(db, 'users', ownerUid));
+
+			// 3. Find and delete all staff members of this owner from users and permissions
+			const staffToClean = allUsers.filter((u: any) => u.ownerId === ownerUid);
+			for (const staff of staffToClean) {
+				if (staff.uid) {
+					await deleteDoc(doc(db, 'users', staff.uid));
+				}
+				if (staff.email) {
+					const emailClean = staff.email.toLowerCase().trim();
+					await deleteDoc(doc(db, 'permissions', emailClean));
+					const tempId = emailClean.replace(/\W/g, '_');
+					await deleteDoc(doc(db, 'permissions', tempId));
+				}
+			}
+
+			showToast(`Đã xóa thành công doanh nghiệp "${displayName}" và dọn dẹp các tài khoản liên quan!`, "success");
+		} catch (error: any) {
+			console.error("Error deleting owner account:", error);
+			showToast(`Lỗi khi xóa doanh nghiệp: ${error.message}`, "error");
 		}
 	};
 
@@ -1122,7 +1197,13 @@ const NexusControl = () => {
 														</button>
 													</td>
 													<td className="px-6 py-6 text-right">
-														<ExternalLink size={16} className="text-slate-600 cursor-not-allowed mx-auto" />
+														<button
+															onClick={() => handleDeleteOwnerAccount(c)}
+															className="size-8 rounded-lg flex items-center justify-center mx-auto text-rose-500 hover:bg-rose-500/10 transition-colors animate-pulse hover:animate-none"
+															title="Xóa vĩnh viễn Doanh nghiệp & Mọi dữ liệu"
+														>
+															<Trash2 size={16} />
+														</button>
 													</td>
 												</tr>
 											);
@@ -1195,6 +1276,16 @@ const NexusControl = () => {
 														className={`size-10 rounded-xl flex items-center justify-center transition-all ${c.manualLockSheets ? 'bg-rose-500 text-white' : 'bg-slate-800 text-slate-500'}`}
 													>
 														{c.manualLockSheets ? <Lock size={16} /> : <Unlock size={16} />}
+													</button>
+												</div>
+												<div className="flex flex-col items-center gap-1.5">
+													<p className="text-[8px] font-black text-rose-500/80 uppercase tracking-widest">Xóa</p>
+													<button
+														onClick={() => handleDeleteOwnerAccount(c)}
+														className="size-10 rounded-xl flex items-center justify-center bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition-all border border-rose-500/20"
+														title="Xóa vĩnh viễn Doanh nghiệp & Mọi dữ liệu"
+													>
+														<Trash2 size={16} />
 													</button>
 												</div>
 											</div>
@@ -1271,6 +1362,11 @@ const NexusControl = () => {
 																	<span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${isOwner ? 'bg-indigo-500/10 text-indigo-400' : 'bg-amber-500/10 text-amber-400'}`}>
 																		{isOwner ? 'Doanh Nghiệp (Owner)' : `Nhân Viên (${user.role || 'sale'})`}
 																	</span>
+																	{user.isPendingInvite && (
+																		<span className="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-rose-500/10 text-rose-500 border border-rose-500/20 animate-pulse">
+																			Thư mời chờ duyệt (Pending)
+																		</span>
+																	)}
 																</div>
 																<p className="text-xs text-slate-400 font-medium mb-2">{user.email}</p>
 																<div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[10px] font-bold text-slate-500 uppercase tracking-tight">

@@ -80,9 +80,10 @@ const NexusControl = () => {
 		
 		const name = (c.displayName || '').toLowerCase();
 		const email = (c.email || '').toLowerCase();
+		const ownerEmail = (c.ownerEmail || '').toLowerCase();
 		const uid = (c.uid || '').toLowerCase();
 		
-		return name.includes(queryStr) || email.includes(queryStr) || uid.includes(queryStr);
+		return name.includes(queryStr) || email.includes(queryStr) || ownerEmail.includes(queryStr) || uid.includes(queryStr);
 	});
 
 	useEffect(() => {
@@ -1231,7 +1232,7 @@ const NexusControl = () => {
 									</div>
 									<input
 										type="text"
-										placeholder="Nhập chính xác Email của nhân viên cần xử lý..."
+										placeholder="Nhập Tên, Email hoặc UID của nhân viên cần xử lý..."
 										value={staffSearchEmail}
 										onChange={(e) => setStaffSearchEmail(e.target.value)}
 										className="w-full pl-10 pr-10 py-3 bg-slate-950 border border-slate-800 rounded-2xl text-xs text-white placeholder-slate-500 outline-none focus:border-indigo-500 transition-all font-medium"
@@ -1241,8 +1242,14 @@ const NexusControl = () => {
 								{/* Search Results */}
 								{staffSearchEmail.trim() ? (
 									(() => {
-										const emailQuery = staffSearchEmail.toLowerCase().trim();
-										const foundUsers = allUsers.filter(u => (u.email || '').toLowerCase().includes(emailQuery));
+										const searchQueryLower = staffSearchEmail.toLowerCase().trim();
+										const foundUsers = allUsers.filter(u => {
+											const name = (u.displayName || '').toLowerCase();
+											const email = (u.email || '').toLowerCase();
+											const ownerEmail = (u.ownerEmail || '').toLowerCase();
+											const uid = (u.uid || '').toLowerCase();
+											return name.includes(searchQueryLower) || email.includes(searchQueryLower) || ownerEmail.includes(searchQueryLower) || uid.includes(searchQueryLower);
+										});
 										
 										if (foundUsers.length === 0) {
 											return (

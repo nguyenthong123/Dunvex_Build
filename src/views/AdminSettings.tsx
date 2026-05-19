@@ -264,11 +264,24 @@ const AdminSettings = () => {
 	const deleteUser = async (user: any) => {
 		if (!window.confirm(`Bạn có chắc muốn xóa nhân viên ${user.displayName || user.email}?`)) return;
 		try {
-			if (user.status === 'pending') {
-				await deleteDoc(doc(db, 'permissions', user.id));
-			} else {
-				await deleteDoc(doc(db, 'users', user.id));
+			const docId = user.id;
+			const emailClean = (user.email || '').toLowerCase().trim();
+			const tempId = emailClean.replace(/\W/g, '_');
+
+			// Delete from permissions (invitations) in all possible formats
+			await deleteDoc(doc(db, 'permissions', docId));
+			if (tempId !== docId) {
+				await deleteDoc(doc(db, 'permissions', tempId));
 			}
+			await deleteDoc(doc(db, 'permissions', tempId.toUpperCase()));
+			await deleteDoc(doc(db, 'permissions', emailClean));
+
+			// Delete from active users collection
+			await deleteDoc(doc(db, 'users', docId));
+			if (user.uid) {
+				await deleteDoc(doc(db, 'users', user.uid));
+			}
+
 			showToast("Đã xóa nhân viên thành công", "success");
 		} catch (error) {
 			showToast("Lỗi khi xóa: " + (error as any).message, "error");

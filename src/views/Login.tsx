@@ -25,14 +25,38 @@ const Login = () => {
 		try {
 			setLoginStatus('Đang đồng bộ dữ liệu hệ thống...');
 			const userRef = doc(db, 'users', user.uid);
-			const inviteRef = doc(db, 'permissions', user.email || 'unknown');
+			
+			// Match invitation case-insensitively using direct email AND underscore formats
+			const emailClean = (user.email || '').toLowerCase().trim();
+			const tempId = emailClean.replace(/\W/g, '_');
+			
+			const inviteRefDirect = doc(db, 'permissions', emailClean);
+			const inviteRefUnderscore = doc(db, 'permissions', tempId);
+			const inviteRefUpperUnderscore = doc(db, 'permissions', tempId.toUpperCase());
 
-			const [userSnap, inviteSnap] = await Promise.all([
+			const [userSnap, inviteSnapDirect, inviteSnapUnderscore, inviteSnapUpperUnderscore] = await Promise.all([
 				getDoc(userRef),
-				getDoc(inviteRef)
+				getDoc(inviteRefDirect),
+				getDoc(inviteRefUnderscore),
+				getDoc(inviteRefUpperUnderscore)
 			]);
 
-			if (inviteSnap.exists()) {
+			let inviteSnap = null;
+			let inviteRef = null;
+
+			if (inviteSnapDirect.exists()) {
+				inviteSnap = inviteSnapDirect;
+				inviteRef = inviteRefDirect;
+			} else if (inviteSnapUnderscore.exists()) {
+				inviteSnap = inviteSnapUnderscore;
+				inviteRef = inviteRefUnderscore;
+			} else if (inviteSnapUpperUnderscore.exists()) {
+				inviteSnap = inviteSnapUpperUnderscore;
+				inviteRef = inviteRefUpperUnderscore;
+			}
+
+			// If there is a pending invite (even if the user already logged in and created a blank admin profile)
+			if (inviteSnap && inviteRef) {
 				setLoginStatus('Phát hiện lời mời tham gia...');
 				const inviteData = inviteSnap.data();
 				await setDoc(userRef, {
@@ -44,7 +68,9 @@ const Login = () => {
 					ownerId: inviteData.ownerId,
 					ownerEmail: inviteData.ownerEmail,
 					lastLogin: serverTimestamp(),
-					createdAt: userSnap.exists() ? userSnap.data().createdAt : new Date().toISOString()
+					createdAt: userSnap.exists() && userSnap.data()?.ownerId !== user.uid 
+						? userSnap.data().createdAt 
+						: new Date().toISOString()
 				}, { merge: true });
 				await deleteDoc(inviteRef);
 			} else if (!userSnap.exists()) {

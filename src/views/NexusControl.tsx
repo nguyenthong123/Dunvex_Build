@@ -23,7 +23,8 @@ import {
 	Bot,
 	Zap,
 	AlertTriangle,
-	Eye
+	Eye,
+	Shield
 } from 'lucide-react';
 import { useToast } from '../components/shared/Toast';
 import { auth, db } from '../services/firebase';
@@ -38,7 +39,8 @@ import {
 	limit,
 	getDoc,
 	setDoc,
-	addDoc
+	addDoc,
+	deleteDoc
 } from 'firebase/firestore';
 
 const NEXUS_ADMIN_EMAIL = 'dunvex.green@gmail.com'; // User's email
@@ -69,6 +71,8 @@ const NexusControl = () => {
 	});
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 	const [searchQuery, setSearchQuery] = useState('');
+	const [allUsers, setAllUsers] = useState<any[]>([]);
+	const [staffSearchEmail, setStaffSearchEmail] = useState('');
 
 	const filteredCustomers = customers.filter(c => {
 		const queryStr = searchQuery.toLowerCase().trim();
@@ -99,6 +103,7 @@ const NexusControl = () => {
 		// 2. Listen to Users & Settings to merge data
 		const unsubUsers = onSnapshot(collection(db, 'users'), (userSnap) => {
 			const usersData = userSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+			setAllUsers(usersData);
 			const owners = usersData.filter((u: any) => u.uid === u.ownerId || !u.ownerId);
 
 			// Listen to Settings as well for real-time lock updates
@@ -491,6 +496,33 @@ const NexusControl = () => {
 		} catch (error) {
 			console.error("Plan Update Error:", error);
 			showToast("Lỗi khi cập nhật gói", "error");
+		}
+	};
+
+	const handleDeleteUserRecord = async (user: any) => {
+		if (!window.confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn tài khoản của ${user.displayName || user.email} khỏi Firestore? Hành động này sẽ giải phóng email này.`)) return;
+		try {
+			await deleteDoc(doc(db, 'users', user.uid));
+			// Clean lingering permissions too
+			const tempId = user.email.replace(/\W/g, '_');
+			await deleteDoc(doc(db, 'permissions', tempId));
+			showToast(`Đã xóa tài khoản ${user.email} khỏi Firestore thành công!`, "success");
+		} catch (error: any) {
+			showToast("Lỗi khi xóa tài khoản: " + error.message, "error");
+		}
+	};
+
+	const handleResetUserOwnership = async (user: any) => {
+		if (!window.confirm(`Bạn có chắc chắn muốn hủy liên kết tài khoản ${user.email} với chủ sở hữu hiện tại (${user.ownerEmail || 'N/A'})? Nhân sự sẽ trở thành Admin độc lập.`)) return;
+		try {
+			await updateDoc(doc(db, 'users', user.uid), {
+				ownerId: user.uid,
+				ownerEmail: user.email,
+				role: 'admin'
+			});
+			showToast(`Đã hủy liên kết và reset tài khoản ${user.email} về mặc định độc lập!`, "success");
+		} catch (error: any) {
+			showToast("Lỗi khi hủy liên kết: " + error.message, "error");
 		}
 	};
 
@@ -981,7 +1013,8 @@ const NexusControl = () => {
 					)}
 
 					{activeTab === 'customers' && (
-						<div className="bg-slate-900 rounded-3xl lg:rounded-[2rem] border border-slate-800 overflow-hidden shadow-2xl">
+						<div className="space-y-6">
+							<div className="bg-slate-900 rounded-3xl lg:rounded-[2rem] border border-slate-800 overflow-hidden shadow-2xl">
 							<div className="px-6 lg:px-8 py-6 border-b border-slate-800 flex flex-col md:flex-row md:justify-between md:items-center gap-4 bg-slate-800/20">
 								<div>
 									<h4 className="text-[10px] lg:text-xs font-black text-indigo-400 uppercase tracking-[4px] mb-1">Doanh nghiệp & Thành viên</h4>
@@ -1170,6 +1203,100 @@ const NexusControl = () => {
 								{filteredCustomers.length === 0 && (
 									<div className="py-20 text-center text-slate-600 font-black uppercase tracking-widest text-xs opacity-40">
 										{searchQuery ? 'Không tìm thấy kết quả phù hợp' : 'Chưa có doanh nghiệp nào'}
+									</div>
+								)}
+							</div>
+						</div>
+
+							{/* Staff Reset & Management */}
+							<div className="bg-slate-900 rounded-3xl lg:rounded-[2rem] border border-slate-800 p-6 lg:p-8 shadow-2xl">
+								<div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-6">
+									<div>
+										<h4 className="text-[10px] lg:text-xs font-black text-indigo-400 uppercase tracking-[4px] mb-1">
+											Công cụ Quản lý & Đồng bộ Nhân sự
+										</h4>
+										<p className="text-[9px] lg:text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+											Tìm kiếm, hủy liên kết, xóa tài khoản lỗi/chuyển nơi công tác
+										</p>
+									</div>
+									<div className="size-10 shrink-0 rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-400">
+										<Shield size={20} />
+									</div>
+								</div>
+
+								{/* Search Box */}
+								<div className="relative w-full mb-6">
+									<div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+										<Search size={16} />
+									</div>
+									<input
+										type="text"
+										placeholder="Nhập chính xác Email của nhân viên cần xử lý..."
+										value={staffSearchEmail}
+										onChange={(e) => setStaffSearchEmail(e.target.value)}
+										className="w-full pl-10 pr-10 py-3 bg-slate-950 border border-slate-800 rounded-2xl text-xs text-white placeholder-slate-500 outline-none focus:border-indigo-500 transition-all font-medium"
+									/>
+								</div>
+
+								{/* Search Results */}
+								{staffSearchEmail.trim() ? (
+									(() => {
+										const emailQuery = staffSearchEmail.toLowerCase().trim();
+										const foundUsers = allUsers.filter(u => (u.email || '').toLowerCase().includes(emailQuery));
+										
+										if (foundUsers.length === 0) {
+											return (
+												<div className="p-8 text-center text-slate-500 text-xs font-black uppercase tracking-widest opacity-60">
+													Không tìm thấy nhân viên nào với email này
+												</div>
+											);
+										}
+
+										return (
+											<div className="space-y-4">
+												{foundUsers.map((user) => {
+													const isOwner = user.uid === user.ownerId || !user.ownerId;
+													return (
+														<div key={user.uid} className="bg-slate-950 p-6 rounded-2xl border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+															<div>
+																<div className="flex items-center gap-2 mb-1">
+																	<span className="font-black text-white text-sm uppercase">{user.displayName || 'Chưa đặt tên'}</span>
+																	<span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${isOwner ? 'bg-indigo-500/10 text-indigo-400' : 'bg-amber-500/10 text-amber-400'}`}>
+																		{isOwner ? 'Doanh Nghiệp (Owner)' : `Nhân Viên (${user.role || 'sale'})`}
+																	</span>
+																</div>
+																<p className="text-xs text-slate-400 font-medium mb-2">{user.email}</p>
+																<div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[10px] font-bold text-slate-500 uppercase tracking-tight">
+																	<div>UID: <span className="text-slate-300 font-mono select-all">{user.uid}</span></div>
+																	<div>Chủ sở hữu hiện tại: <span className="text-slate-300">{user.ownerEmail || 'Không có'}</span></div>
+																	<div>ID Chủ sở hữu: <span className="text-indigo-400 font-mono select-all">{user.ownerId || 'Không có'}</span></div>
+																	<div>Ngày tham gia: <span className="text-slate-300">{user.createdAt ? new Date(user.createdAt).toLocaleDateString('vi-VN') : '---'}</span></div>
+																</div>
+															</div>
+
+															<div className="flex gap-2">
+																<button
+																	onClick={() => handleDeleteUserRecord(user)}
+																	className="bg-rose-500/10 text-rose-500 border border-rose-500/20 hover:bg-rose-500 hover:text-white px-4 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
+																>
+																	Xóa tài khoản khỏi hệ thống
+																</button>
+																<button
+																	onClick={() => handleResetUserOwnership(user)}
+																	className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500 hover:text-white px-4 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
+																>
+																	Hủy liên kết (Reset Owner)
+																</button>
+															</div>
+														</div>
+													);
+												})}
+											</div>
+										);
+									})()
+								) : (
+									<div className="p-8 text-center text-slate-600 text-xs font-black uppercase tracking-widest opacity-40">
+										Vui lòng nhập email phía trên để kiểm tra tài khoản nhân viên
 									</div>
 								)}
 							</div>

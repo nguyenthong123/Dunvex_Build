@@ -262,6 +262,7 @@ const AdminSettings = () => {
 	};
 
 	const deleteUser = async (user: any) => {
+		alert("Đang thực hiện xóa nhân sự: " + (user.email || 'không có email') + " (ID: " + user.id + ")");
 		if (!window.confirm(`Bạn có chắc muốn xóa nhân viên ${user.displayName || user.email}?`)) return;
 		try {
 			const docId = user.id;
@@ -282,9 +283,11 @@ const AdminSettings = () => {
 				await deleteDoc(doc(db, 'users', user.uid));
 			}
 
+			alert("Đã hoàn tất xóa trên Firestore thành công!");
 			showToast("Đã xóa nhân viên thành công", "success");
-		} catch (error) {
-			showToast("Lỗi khi xóa: " + (error as any).message, "error");
+		} catch (error: any) {
+			alert("Lỗi khi xóa: " + error.message);
+			showToast("Lỗi khi xóa: " + error.message, "error");
 		}
 	};
 

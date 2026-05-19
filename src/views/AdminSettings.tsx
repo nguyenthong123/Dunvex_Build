@@ -221,6 +221,26 @@ const AdminSettings = () => {
 				},
 				createdAt: serverTimestamp()
 			});
+
+			// Trigger Apps Script to send email invitation
+			try {
+				await fetch('https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec', {
+					method: 'POST',
+					mode: 'no-cors',
+					headers: {
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify({
+						action: 'invite_user',
+						email: newUser.email,
+						role: newUser.role,
+						inviterName: owner.ownerEmail?.split('@')[0] || 'Quản trị viên'
+					})
+				});
+			} catch (e) {
+				console.error("Apps Script invite email trigger failed:", e);
+			}
+
 			showToast("Đã gửi lời mời thành công!", "success");
 			setShowAddUser(false);
 			setNewUser({ email: '', role: 'sale', displayName: '' });

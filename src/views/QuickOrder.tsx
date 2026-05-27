@@ -137,19 +137,22 @@ const QuickOrder = () => {
 						const data = orderSnap.data();
 
 						setLineItems((data.items || []).map((item: any) => {
-							// ✅ FIX: Look up current product to get accurate buyPrice per category
-							// This fixes the case where saved buyPrice was an incorrect FIFO average
+							// 🔒 SNAPSHOT: BẢO TOÀN DỮ LIỆU LỊCH SỬ
+							// Luôn ưu tiên dữ liệu đã lưu trong item để khi sửa đơn hàng không bị lệch giá/tên
 							const currentProduct = products.find(p => p.id === (item.id || item.productId));
-							const accurateBuyPrice = currentProduct?.priceImport || item.buyPrice || 0;
+							
+							const historicalBuyPrice = item.buyPrice !== undefined && item.buyPrice !== null 
+								? Number(item.buyPrice) 
+								: Number(currentProduct?.priceImport || 0);
 
 							return {
 								id: Math.random(),
 								productId: item.id || '',
-								name: item.name || '',
+								name: item.name || currentProduct?.name || 'Sản phẩm đã xóa',
 								category: item.category || '',
 								qty: item.qty || 0,
-								price: item.price || 0,
-								buyPrice: accurateBuyPrice, // Use current product's buyPrice for accurate profit preview
+								price: item.price !== undefined ? Number(item.price) : 0,
+								buyPrice: historicalBuyPrice,
 								unit: item.unit || '',
 								packaging: item.packaging || '',
 								density: item.density || '',
@@ -469,9 +472,11 @@ const QuickOrder = () => {
 					stockCandidates = [sourceProduct];
 				}
 
-				// ✅ COST/PROFIT: Exact priceImport from the selected product's category ONLY
-				// Giá vốn lấy đúng theo sản phẩm đã chọn, không pha trộn category
-				const exactBuyPrice = Number(sourceProduct?.priceImport) || 0;
+				// 🔒 SNAPSHOT: BẢO TOÀN DỮ LIỆU LỊCH SỬ KHI LƯU
+				// Sử dụng đúng item.buyPrice từ form thay vì đè bằng sourceProduct?.priceImport
+				const exactBuyPrice = item.buyPrice !== undefined && item.buyPrice !== null
+					? Number(item.buyPrice)
+					: Number(sourceProduct?.priceImport || 0);
 
 				// Build stockDeletions for inventory (SKU-based)
 				for (const cand of stockCandidates) {
@@ -507,9 +512,9 @@ const QuickOrder = () => {
 				processedItems.push({
 					id: item.productId,
 					sku: item.sku || '',
-					name: item.name,
-					price: Number(item.price) || 0,
-					buyPrice: exactBuyPrice, // Giá vốn đúng theo category đã chọn
+					name: item.name || sourceProduct?.name || 'Sản phẩm đã xóa',
+					price: item.price !== undefined ? Number(item.price) : 0,
+					buyPrice: exactBuyPrice,
 					qty: Number(item.qty) || 0,
 					unit: item.unit || '',
 					category: item.category || '',

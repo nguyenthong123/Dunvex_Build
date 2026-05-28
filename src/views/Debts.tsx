@@ -45,6 +45,17 @@ const Debts: React.FC = () => {
 
 	// Filters
 	const [searchTerm, setSearchTerm] = useState('');
+	const [showMobileSearch, setShowMobileSearch] = useState(false);
+	const searchRef = React.useRef<HTMLInputElement>(null);
+
+	useEffect(() => {
+		const handleOpenSearch = () => {
+			setShowMobileSearch(true);
+			setTimeout(() => searchRef.current?.focus(), 200);
+		};
+		window.addEventListener('open-mobile-search', handleOpenSearch);
+		return () => window.removeEventListener('open-mobile-search', handleOpenSearch);
+	}, []);
 	const [fromDate, setFromDate] = useState('');
 	const [toDate, setToDate] = useState('');
 	const [statusFilter, setStatusFilter] = useState('Đơn chốt');
@@ -825,6 +836,32 @@ const Debts: React.FC = () => {
 
 			{/* Content Area */}
 			<div className="flex-1 p-4 md:p-8 print:hidden">
+				{showMobileSearch && (
+					<div className="md:hidden mb-6 animate-in slide-in-from-top duration-300">
+						<div className="flex items-center gap-3 bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-200 dark:border-slate-800">
+							<span className="material-symbols-outlined text-slate-400">search</span>
+							<input
+								ref={searchRef}
+								type="text"
+								placeholder="Tìm kiếm đối tác..."
+								className="flex-1 bg-transparent border-none outline-none text-sm font-bold text-slate-900 dark:text-white"
+								value={searchTerm}
+								onChange={(e) => setSearchTerm(e.target.value)}
+							/>
+							{searchTerm && (
+								<button onClick={() => setSearchTerm('')} className="text-slate-300">
+									<span className="material-symbols-outlined text-lg">cancel</span>
+								</button>
+							)}
+							<button
+								onClick={() => setShowMobileSearch(false)}
+								className="text-blue-500 font-bold text-xs"
+							>
+								Đóng
+							</button>
+						</div>
+					</div>
+				)}
 				<div className="max-w-7xl mx-auto flex flex-col gap-6 md:gap-8">
 					{/* KPI Cards Section */}
 					<div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 mb-0 transition-colors duration-300">

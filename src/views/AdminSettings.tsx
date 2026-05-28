@@ -66,6 +66,7 @@ const AdminSettings = () => {
 	const [systemConfig, setSystemConfig] = useState<any>({ lock_free_sheets: false });
 	const [exportLoading, setExportLoading] = useState(false);
 	const [exportCount, setExportCount] = useState(0);
+	const [extraExportLimit, setExtraExportLimit] = useState(0);
 	const [logoUploading, setLogoUploading] = useState(false);
 
 	// User Management
@@ -151,8 +152,10 @@ const AdminSettings = () => {
 		const unsubUsage = onSnapshot(doc(db, 'usage_limits', `${owner.ownerId}_${currentMonth}`), (snap) => {
 			if (snap.exists()) {
 				setExportCount(snap.data().count || 0);
+				setExtraExportLimit(snap.data().extraExportLimit || 0);
 			} else {
 				setExportCount(0);
+				setExtraExportLimit(0);
 			}
 		});
 
@@ -439,9 +442,12 @@ const AdminSettings = () => {
 			return;
 		}
 
-		if (exportCount >= 5) {
-			showToast("Bạn đã hết lượt tải về trong tháng này.", "error");
-			return;
+		if (!owner.isPro) {
+			const limit = 5 + extraExportLimit;
+			if (exportCount >= limit) {
+				showToast("Bạn đã hết lượt tải về trong tháng này.", "error");
+				return;
+			}
 		}
 
 		setExportLoading(true);
@@ -458,7 +464,7 @@ const AdminSettings = () => {
 			const orderDetails: any[] = [];
 
 			for (const colName of collections) {
-				const q = query(collection(db, colName), where('ownerId', '==', owner.ownerId), limit(5000));
+				const q = query(collection(db, colName), where('ownerId', '==', owner.ownerId));
 				const snap = await getDocs(q);
 
 				let data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -759,8 +765,8 @@ const AdminSettings = () => {
 										<p className="text-sm text-slate-500 dark:text-slate-400">Trích xuất dữ liệu tùy chọn theo mốc thời gian ra file Excel.</p>
 									</div>
 									<div className="ml-auto flex flex-col items-end">
-										<span className={`text-[10px] font-black px-2 py-1 rounded-lg ${exportCount >= 5 ? 'bg-rose-100 text-rose-600' : 'bg-blue-100 text-blue-600'}`}>
-											SỬ DỤNG: {exportCount}/5 LẦN/THÁNG
+										<span className={`text-[10px] font-black px-2 py-1 rounded-lg ${!owner.isPro && exportCount >= (5 + extraExportLimit) ? 'bg-rose-100 text-rose-600' : 'bg-blue-100 text-blue-600'}`}>
+											SỬ DỤNG: {exportCount}/{owner.isPro ? 'Không giới hạn' : (5 + extraExportLimit + ' LẦN/THÁNG')}
 										</span>
 									</div>
 									{isSyncLocked && (
@@ -803,7 +809,7 @@ const AdminSettings = () => {
 										</div>
 										<button
 											onClick={handleExportData}
-											disabled={exportLoading || exportCount >= 5 || isSyncLocked}
+											disabled={exportLoading || (!owner.isPro && exportCount >= (5 + extraExportLimit)) || isSyncLocked}
 											className="w-full md:w-auto bg-[#1A237E] dark:bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center gap-3 shadow-xl shadow-indigo-500/10"
 										>
 											{exportLoading ? (

@@ -39,7 +39,15 @@ const MobileNav = () => {
 				return (
 					<button
 						key={`nav-${idx}`}
-						onClick={() => navigate(item.path)}
+						onClick={() => {
+							const isSearchBtn = item.path.includes('search=focus');
+							const targetBase = item.path.split('?')[0];
+							if (isSearchBtn && currentPath === targetBase) {
+								window.dispatchEvent(new CustomEvent('open-mobile-search'));
+							} else {
+								navigate(item.path);
+							}
+						}}
 						className={`flex-1 flex flex-col items-center justify-center gap-1 h-full transition-all duration-300 ${isActive ? 'text-[#1A237E] dark:text-indigo-400' : 'text-slate-400'}`}
 					>
 						<div className={`relative flex items-center justify-center transition-transform duration-300 ${isActive ? 'scale-110' : 'hover:scale-105'}`}>

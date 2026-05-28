@@ -327,24 +327,43 @@ const NexusControl = () => {
 					handledBy: 'Nexus_AI_Bot'
 				});
 
-				const isYearly = req.planId === 'premium_yearly';
-				const expireDate = new Date();
-				if (isYearly) {
-					expireDate.setFullYear(expireDate.getFullYear() + 1);
+				if (req.planId === 'addon_export_5') {
+					// Handle addon purchase
+					const currentMonth = new Date().toISOString().slice(0, 7);
+					const limitRef = doc(db, 'usage_limits', `${req.ownerId}_${currentMonth}`);
+					const limitSnap = await getDoc(limitRef);
+					if (limitSnap.exists()) {
+						const currentExtra = limitSnap.data().extraExportLimit || 0;
+						await updateDoc(limitRef, {
+							extraExportLimit: currentExtra + 5
+						});
+					} else {
+						await setDoc(limitRef, {
+							ownerId: req.ownerId,
+							count: 0,
+							extraExportLimit: 5
+						});
+					}
 				} else {
-					expireDate.setMonth(expireDate.getMonth() + 1);
-				}
+					const isYearly = req.planId === 'premium_yearly';
+					const expireDate = new Date();
+					if (isYearly) {
+						expireDate.setFullYear(expireDate.getFullYear() + 1);
+					} else {
+						expireDate.setMonth(expireDate.getMonth() + 1);
+					}
 
-				await setDoc(doc(db, 'settings', req.ownerId), {
-					subscriptionStatus: 'active',
-					isPro: true,
-					planId: req.planId,
-					paymentConfirmedAt: serverTimestamp(),
-					subscriptionExpiresAt: expireDate,
-					manualLockOrders: false,
-					manualLockDebts: false,
-					manualLockSheets: false
-				}, { merge: true });
+					await setDoc(doc(db, 'settings', req.ownerId), {
+						subscriptionStatus: 'active',
+						isPro: true,
+						planId: req.planId,
+						paymentConfirmedAt: serverTimestamp(),
+						subscriptionExpiresAt: expireDate,
+						manualLockOrders: false,
+						manualLockDebts: false,
+						manualLockSheets: false
+					}, { merge: true });
+				}
 
 				await addDoc(collection(db, 'ai_actions'), {
 					type: 'provisioning',
@@ -658,25 +677,44 @@ const NexusControl = () => {
 				handledBy: auth.currentUser?.email
 			});
 
-			const isYearly = request.planId === 'premium_yearly';
-			const expireDate = new Date();
-			if (isYearly) {
-				expireDate.setFullYear(expireDate.getFullYear() + 1);
+			if (request.planId === 'addon_export_5') {
+				// Handle addon purchase
+				const currentMonth = new Date().toISOString().slice(0, 7);
+				const limitRef = doc(db, 'usage_limits', `${request.ownerId}_${currentMonth}`);
+				const limitSnap = await getDoc(limitRef);
+				if (limitSnap.exists()) {
+					const currentExtra = limitSnap.data().extraExportLimit || 0;
+					await updateDoc(limitRef, {
+						extraExportLimit: currentExtra + 5
+					});
+				} else {
+					await setDoc(limitRef, {
+						ownerId: request.ownerId,
+						count: 0,
+						extraExportLimit: 5
+					});
+				}
 			} else {
-				expireDate.setMonth(expireDate.getMonth() + 1);
-			}
+				const isYearly = request.planId === 'premium_yearly';
+				const expireDate = new Date();
+				if (isYearly) {
+					expireDate.setFullYear(expireDate.getFullYear() + 1);
+				} else {
+					expireDate.setMonth(expireDate.getMonth() + 1);
+				}
 
-			await setDoc(doc(db, 'settings', request.ownerId), {
-				subscriptionStatus: 'active',
-				isPro: true,
-				planId: request.planId,
-				paymentConfirmedAt: serverTimestamp(),
-				subscriptionExpiresAt: expireDate,
-				// Auto-unlock features upon approval
-				manualLockOrders: false,
-				manualLockDebts: false,
-				manualLockSheets: false
-			}, { merge: true });
+				await setDoc(doc(db, 'settings', request.ownerId), {
+					subscriptionStatus: 'active',
+					isPro: true,
+					planId: request.planId,
+					paymentConfirmedAt: serverTimestamp(),
+					subscriptionExpiresAt: expireDate,
+					// Auto-unlock features upon approval
+					manualLockOrders: false,
+					manualLockDebts: false,
+					manualLockSheets: false
+				}, { merge: true });
+			}
 
 			// Notify User via AI
 			await addDoc(collection(db, 'notifications'), {

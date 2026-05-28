@@ -99,18 +99,11 @@ export const useNavigationConfig = () => {
 			};
 		}
 
-		if (path.startsWith('/khoa-dao-tao')) {
-			if (path === '/khoa-dao-tao') {
-				return {
-					icon: 'settings',
-					label: 'Cập nhật Video',
-					path: '/khoa-dao-tao?action=update_video',
-				};
-			}
+		if (path.startsWith('/services')) {
 			return {
-				icon: 'stop_circle',
-				label: 'Kết thúc Lab',
-				path: '/khoa-dao-tao',
+				icon: 'shopping_cart',
+				label: 'Mua gói',
+				path: '/services?action=buy',
 			};
 		}
 
@@ -179,7 +172,7 @@ export const useNavigationConfig = () => {
 		{ icon: 'location_on', label: 'Checkin', path: '/checkin?action=history', permissionKey: 'checkin_create' }, // 8
 		{ icon: 'confirmation_number', label: 'Ưu đãi', path: '/coupons' },                                    // 9
 		{ icon: 'timer', label: 'Chấm công', path: '/attendance' },                                           // 10
-		{ icon: 'school', label: 'Đào tạo', path: '/khoa-dao-tao' },                                          // 11
+		{ icon: 'workspace_premium', label: 'Dịch vụ', path: '/services' },                                          // 11
 		{ icon: 'admin_panel_settings', label: 'Quản trị', path: '/admin', permissionKey: 'admin' },          // 12
 		{ icon: 'settings', label: 'Cài đặt', path: '/settings' },                                            // 13
 	];
@@ -189,11 +182,12 @@ export const useNavigationConfig = () => {
 		const home = allItems[0];
 		const orders = allItems[1];
 		const products = allItems[6];
-		const finance = allItems[4];
+		const currentBase = location.pathname;
+		const search: NavItem = { icon: 'search', label: 'Tìm kiếm', path: `${currentBase}?search=focus`, permissionKey: undefined };
 		const center = { ...getCenterItem(), isCenter: true };
 
 		// Các vị trí 1, 2, 4, 5 (không tính center ở vị trí 3)
-		const slots = [home, orders, products, finance];
+		const slots = [home, orders, products, search];
 		
 		// Kiểm tra quyền cho từng slot, nếu không có quyền thì thay thế bằng fallback hợp lệ
 		const validatedSlots = slots.map(item => {

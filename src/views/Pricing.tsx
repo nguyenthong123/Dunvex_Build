@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Check, Zap, Crown, Rocket, ShieldCheck, ArrowLeft, CreditCard, QrCode, Lock, Settings, Mail, X, Save } from 'lucide-react';
 import { auth, db } from '../services/firebase';
 import { collection, addDoc, serverTimestamp, query, where, limit, getDocs, doc, updateDoc, increment, onSnapshot } from 'firebase/firestore';
@@ -11,6 +11,7 @@ import NotificationBell from '../components/NotificationBell';
 
 const Pricing = () => {
 	const navigate = useNavigate();
+	const location = useLocation();
 	const owner = useOwner();
 	const { showToast } = useToast();
 	const [selectedPlan, setSelectedPlan] = useState<any>(null);
@@ -61,6 +62,18 @@ const Pricing = () => {
 		});
 		return () => unsub();
 	}, []);
+
+	useEffect(() => {
+		if (location.state && location.state.selectedPlan) {
+			setSelectedPlan(location.state.selectedPlan);
+			if (auth.currentUser?.email) {
+				setTransferCode(generateTransferCode(auth.currentUser.email));
+			}
+			setStep(2);
+			// Clean up state so refresh doesn't auto trigger checkout again
+			window.history.replaceState({}, document.title);
+		}
+	}, [location.state]);
 
 	const generateTransferCode = (email: string) => {
 		const prefix = email.split('@')[0].toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);

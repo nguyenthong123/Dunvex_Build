@@ -38,6 +38,15 @@ const CustomerList = () => {
 	const [currentPage, setCurrentPage] = useState(1);
 	const ITEMS_PER_PAGE = 20;
 
+	useEffect(() => {
+		const handleOpenSearch = () => {
+			setShowMobileSearch(true);
+			setTimeout(() => searchInputRef.current?.focus(), 200);
+		};
+		window.addEventListener('open-mobile-search', handleOpenSearch);
+		return () => window.removeEventListener('open-mobile-search', handleOpenSearch);
+	}, []);
+
 	// Enhanced Search Functions
 	const normalizeText = (text: any) => text ? String(text).normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase() : '';
 	const removeAccents = (str: any) => {
@@ -235,8 +244,10 @@ const CustomerList = () => {
 			setShowAddForm(true);
 			navigate('/customers', { replace: true });
 		}
-		if (params.get('search') === 'true') {
+		if (params.get('search') === 'true' || params.get('search') === 'focus') {
 			setShowMobileSearch(true);
+			setTimeout(() => searchInputRef.current?.focus(), 200);
+			navigate('/customers', { replace: true });
 		}
 		if (params.get('map') === 'true') {
 			setShowMap(true);

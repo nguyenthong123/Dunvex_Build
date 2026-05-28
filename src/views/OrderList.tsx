@@ -71,6 +71,15 @@ const OrderList = () => {
 		setCurrentPage(1);
 	}, [searchTerm]);
 
+	useEffect(() => {
+		const handleOpenSearch = () => {
+			setShowMobileSearch(true);
+			setTimeout(() => searchRef.current?.focus(), 200);
+		};
+		window.addEventListener('open-mobile-search', handleOpenSearch);
+		return () => window.removeEventListener('open-mobile-search', handleOpenSearch);
+	}, []);
+
 	const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
 	const paginatedOrders = filteredOrders.slice(
 		(currentPage - 1) * itemsPerPage,

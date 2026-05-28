@@ -17,8 +17,7 @@ const Checkin = lazy(() => import('./views/Checkin'));
 const Attendance = lazy(() => import('./views/Attendance'));
 const Pricing = lazy(() => import('./views/Pricing'));
 const PriceList = lazy(() => import('./views/PriceList'));
-const TrainingCatalog = lazy(() => import('./views/TrainingCatalog'));
-const TrainingLab = lazy(() => import('./views/TrainingLab'));
+const SubscriptionServices = lazy(() => import('./views/SubscriptionServices'));
 const Finance = lazy(() => import('./views/Finance'));
 const Coupons = lazy(() => import('./views/Coupons'));
 const NexusControl = lazy(() => import('./views/NexusControl'));
@@ -146,12 +145,8 @@ function App() {
 							element={currentUser ? <MainLayout><Coupons /></MainLayout> : <Navigate to="/login" />}
 						/>
 						<Route
-							path="/khoa-dao-tao"
-							element={currentUser ? <MainLayout><TrainingCatalog /></MainLayout> : <Navigate to="/login" />}
-						/>
-						<Route
-							path="/khoa-dao-tao/:id"
-							element={currentUser ? <TrainingLab /> : <Navigate to="/login" />}
+							path="/services"
+							element={currentUser ? <MainLayout><SubscriptionServices /></MainLayout> : <Navigate to="/login" />}
 						/>
 						<Route
 							path="/nexus-control"

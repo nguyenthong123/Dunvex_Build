@@ -241,6 +241,16 @@ const ProductList = () => {
 		setCurrentPage(1);
 	}, [searchTerm]);
 
+	useEffect(() => {
+		const handleOpenSearch = () => {
+			setShowMobileSearch(true);
+			setActiveTab('products');
+			setTimeout(() => searchRef.current?.focus(), 200);
+		};
+		window.addEventListener('open-mobile-search', handleOpenSearch);
+		return () => window.removeEventListener('open-mobile-search', handleOpenSearch);
+	}, []);
+
 	const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
 		if (!file) return;

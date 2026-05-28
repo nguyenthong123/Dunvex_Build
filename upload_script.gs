@@ -55,7 +55,7 @@ function handleAffiliateRegistration(data) {
   var referralCode = data.referralCode;
   var userId = data.userId; 
 
-  var baseUrl = "https://dunvex-build.vercel.app/affiliate";
+  var baseUrl = "https://dunvex.com/affiliate";
   var approveUrl = baseUrl + "?action=APPROVE&uid=" + userId;
   var rejectUrl = baseUrl + "?action=REJECT&uid=" + userId;
 
@@ -145,7 +145,7 @@ function handleAffiliateStatusNotify(data) {
       "</div>" +
       "<p><b>Hướng dẫn sử dụng:</b> Hãy gửi mã này cho khách hàng của bạn. Khi họ nhập mã tại phần thanh toán, họ sẽ được giảm giá theo chính sách và hệ thống sẽ tự động ghi nhận hoa hồng cho bạn.</p>" +
       "<div style='text-align: center; margin-top: 30px;'>" +
-      "<a href='https://dunvex-build.vercel.app/affiliate' style='display: inline-block; background: #1A237E; color: white; padding: 14px 30px; text-decoration: none; border-radius: 8px; font-weight: bold;'>Mở Hub Đối Tác</a>" +
+      "<a href='https://dunvex.com/affiliate' style='display: inline-block; background: #1A237E; color: white; padding: 14px 30px; text-decoration: none; border-radius: 8px; font-weight: bold;'>Mở Hub Đối Tác</a>" +
       "</div>";
   } else {
     body += 
@@ -228,7 +228,7 @@ function handleInviteUser(data) {
   var email = data.email;
   var role = data.role;
   var inviterName = data.inviterName || 'Quản trị viên';
-  var appUrl = "https://dunvex-build.vercel.app";
+  var appUrl = "https://dunvex.com";
 
   var subject = "INVITATION: Lời mời tham gia hệ thống Dunvex Build";
   var body = 
@@ -267,7 +267,7 @@ function handlePaymentRequest(data) {
   var planName = data.planName;
   var amount = data.amount;
   var transferCode = data.transferCode || 'N/A';
-  var appUrl = "https://dunvex-build.vercel.app/nexus-control";
+  var appUrl = "https://dunvex.com/nexus-control";
 
   var subject = "PAYMENT: Yêu cầu kích hoạt gói " + planName + " - " + userEmail;
   var body = 

@@ -427,7 +427,7 @@ const OrderList = () => {
 									</div>
 									<div>
 										<div className="flex items-center gap-2">
-											<div className="font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight">{order.customerBusinessName || order.customerName || 'Khách vãng lai'}</div>
+											<div className="font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight line-clamp-2 break-words">{order.customerBusinessName || order.customerName || 'Khách vãng lai'}</div>
 										</div>
 										<div className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">#{order.id.slice(0, 8).toUpperCase()}</div>
 									</div>

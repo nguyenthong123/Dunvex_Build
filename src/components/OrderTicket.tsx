@@ -433,7 +433,7 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 
 						<section className="px-8 pb-6">
 							<div className="rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
-								<table className="w-full text-left text-sm border-collapse">
+								<table className="w-full text-left text-sm border-collapse table-fixed">
 									<thead className="bg-[#1c130d] text-white uppercase font-black text-[10px] tracking-widest">
 										<tr>
 											<th className="px-3 py-4 text-center w-14 border-r border-white/10">ẢNH</th>
@@ -464,10 +464,10 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 														)}
 													</div>
 												</td>
-												<td className="px-5 py-4 border-r border-gray-50 font-black text-[#1A237E] uppercase tracking-tight leading-tight">
+												<td className="px-5 py-4 border-r border-gray-50 font-black text-[#1A237E] uppercase tracking-tight leading-tight break-words whitespace-normal">
 													<div>{item.name}</div>
 													{item.serialNumber && (
-														<div className="text-[10px] text-[#B48C00] mt-0.5 font-bold">SN: {item.serialNumber}</div>
+														<div className="text-[10px] text-[#B48C00] mt-0.5 font-bold break-words">SN: {item.serialNumber}</div>
 													)}
 												</td>
 												<td className="px-3 py-4 text-center border-r border-gray-50 text-gray-500 font-bold text-xs uppercase">{item.unit || '---'}</td>
@@ -485,9 +485,9 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 							{/* Ghi chú on the left */}
 							<div className="flex-1 pr-10">
 								{order.note && (
-									<div className="mt-2 p-5 bg-orange-50 rounded-2xl border border-orange-100/50 text-left">
+									<div className="mt-2 p-5 bg-orange-50 rounded-2xl border border-orange-100/50 text-left overflow-hidden">
 										<p className="text-[10px] font-black text-[#9c6949] uppercase tracking-widest mb-2">Ghi chú đơn hàng:</p>
-										<p className="text-sm font-bold text-[#1c130d] italic leading-relaxed">"{order.note}"</p>
+										<p className="text-sm font-bold text-[#1c130d] italic leading-relaxed break-words whitespace-pre-wrap">"{order.note}"</p>
 									</div>
 								)}
 							</div>

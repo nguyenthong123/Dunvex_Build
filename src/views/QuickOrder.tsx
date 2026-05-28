@@ -29,6 +29,7 @@ const QuickOrder = () => {
 	const [customers, setCustomers] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [fetchingOrder, setFetchingOrder] = useState(false);
+	const [originalOrder, setOriginalOrder] = useState<any>(null);
 	const [allOrders, setAllOrders] = useState<any[]>([]);
 	const [allPayments, setAllPayments] = useState<any[]>([]);
 
@@ -135,6 +136,7 @@ const QuickOrder = () => {
 					const orderSnap = await getDoc(orderRef);
 					if (orderSnap.exists()) {
 						const data = orderSnap.data();
+						setOriginalOrder(data);
 
 						setLineItems((data.items || []).map((item: any) => {
 							// 🔒 SNAPSHOT: BẢO TOÀN DỮ LIỆU LỊCH SỬ
@@ -562,6 +564,16 @@ const QuickOrder = () => {
 					updatedAt: serverTimestamp()
 				});
 
+				// 1.5 Update Debt if status is Đơn chốt or was Đơn chốt
+				const oldTotal = originalOrder?.status === 'Đơn chốt' ? Number(originalOrder.totalAmount || 0) : 0;
+				const newTotal = orderStatus === 'Đơn chốt' ? Number(finalTotal || 0) : 0;
+				const diffDebt = newTotal - oldTotal;
+				if (diffDebt !== 0 && orderData.customerId) {
+					batch.update(doc(db, 'customers', orderData.customerId), {
+						debt: increment(diffDebt)
+					});
+				}
+
 				// 2. Sync Inventory: Revert old logs and apply new ones
 				const existingLogsQ = query(
 					collection(db, 'inventory_logs'),
@@ -632,6 +644,13 @@ const QuickOrder = () => {
 				// 1. Create Order
 				const newOrderRef = doc(collection(db, 'orders'));
 				batch.set(newOrderRef, orderData);
+
+				// 1.5 Add Debt to Customer
+				if (orderStatus === 'Đơn chốt' && orderData.customerId) {
+					batch.update(doc(db, 'customers', orderData.customerId), {
+						debt: increment(Number(finalTotal || 0))
+					});
+				}
 
 				// 2. Create Notification
 				const notifRef = doc(collection(db, 'notifications'));

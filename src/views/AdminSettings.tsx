@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import * as XLSX from 'xlsx';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
 	Settings, User, Bell, Shield, Database, Globe, Moon, Sun, Users, Activity,
@@ -11,7 +10,7 @@ import { useTheme } from '../context/ThemeContext';
 import { auth, db, functions } from '../services/firebase';
 import {
 	collection, query, onSnapshot, doc, updateDoc, addDoc, serverTimestamp,
-	orderBy, limit, deleteDoc, getDoc, setDoc, where, getDocs
+	orderBy, limit, deleteDoc, getDoc, setDoc, where, getDocs, writeBatch
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 
@@ -199,6 +198,55 @@ const AdminSettings = () => {
 		}
 	};
 
+	const handleMigrateDebt = async () => {
+		if (!owner.ownerId) return;
+		if (!window.confirm("CẢNH BÁO: Việc này sẽ quét toàn bộ Đơn hàng và Phiếu thu để tính lại Công nợ cho TẤT CẢ khách hàng. Tiếp tục?")) return;
+		
+		setLoading(true);
+		try {
+			const customersSnap = await getDocs(query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId)));
+			const ordersSnap = await getDocs(query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId)));
+			const paymentsSnap = await getDocs(query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId)));
+			
+			const chunks = [];
+			let currentBatch = writeBatch(db);
+			let operationCount = 0;
+			let updateCount = 0;
+
+			customersSnap.docs.forEach((customerDoc) => {
+				const customerId = customerDoc.id;
+				const custOrders = ordersSnap.docs.filter(o => o.data().customerId === customerId && o.data().status === 'Đơn chốt');
+				const custPayments = paymentsSnap.docs.filter(p => p.data().customerId === customerId);
+				
+				const totalBuy = custOrders.reduce((sum, o) => sum + (Number(o.data().totalAmount) || 0), 0);
+				const totalPay = custPayments.reduce((sum, p) => sum + (Number(p.data().amount) || 0), 0);
+				const finalDebt = totalBuy - totalPay;
+				
+				currentBatch.update(customerDoc.ref, { debt: finalDebt });
+				operationCount++;
+				updateCount++;
+
+				if (operationCount === 400) {
+					chunks.push(currentBatch.commit());
+					currentBatch = writeBatch(db);
+					operationCount = 0;
+				}
+			});
+
+			if (operationCount > 0) {
+				chunks.push(currentBatch.commit());
+			}
+
+			await Promise.all(chunks);
+			showToast(`Đã đồng bộ công nợ cho ${updateCount} khách hàng thành công!`, "success");
+		} catch (error: any) {
+			console.error("Migration Error:", error);
+			showToast("Lỗi đồng bộ công nợ: " + error.message, "error");
+		} finally {
+			setLoading(false);
+		}
+	};
+
 	const handleAddUser = async () => {
 		if (!newUser.email) return showToast("Vui lòng nhập email", "warning");
 		try {
@@ -217,7 +265,7 @@ const AdminSettings = () => {
 					orders_create: true,
 					inventory_view: true,
 					customers_manage: true,
-					finance_view: false,
+					debts_manage: false,
 					users_manage: false,
 					admin: false,
 					system_manage: false
@@ -453,7 +501,8 @@ const AdminSettings = () => {
 		setExportLoading(true);
 		try {
 			// 1. Prepare data containers
-			const collections = ['products', 'customers', 'orders', 'debts', 'finance_transactions', 'checkins'];
+			const collections = ['products', 'customers', 'orders', 'debts', 'checkins'];
+			const XLSX = await import('xlsx');
 			const workbook = XLSX.utils.book_new();
 
 			// 2. Prepare Time Range
@@ -470,7 +519,7 @@ const AdminSettings = () => {
 				let data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
 				// Apply date filtering client-side for transactional data
-				if (['orders', 'debts', 'finance_transactions', 'checkins'].includes(colName) && startTS && endTS) {
+				if (['orders', 'debts', 'checkins'].includes(colName) && startTS && endTS) {
 					data = data.filter((item: any) => {
 						if (!item.createdAt) return false;
 						const itemDate = item.createdAt.seconds ? new Date(item.createdAt.seconds * 1000) : new Date(item.createdAt);
@@ -528,8 +577,7 @@ const AdminSettings = () => {
 						case 'customers': sheetName = 'khach_hang'; break;
 						case 'orders': sheetName = 'don_hang'; break;
 						case 'debts': sheetName = 'cong_no'; break;
-						case 'finance_transactions': sheetName = 'tai_chinh'; break;
-						case 'checkins': sheetName = 'cham_cong'; break;
+						case 'checkins': sheetName = 'checkin'; break;
 					}
 
 					XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
@@ -618,7 +666,7 @@ const AdminSettings = () => {
 		}
 
 		// Simplified default logic: staff can access basic tools but sensitive ones are locked
-		const sensitiveKeys = ['admin', 'users_manage', 'finance_view', 'system_manage'];
+		const sensitiveKeys = ['admin', 'users_manage', 'system_manage'];
 		const defaultVal = sensitiveKeys.includes(resource) ? false : true;
 		
 		const currentVal = user.accessRights?.[resource] ?? defaultVal;
@@ -748,7 +796,10 @@ const AdminSettings = () => {
 										</div>
 									</div>
 								</div>
-								<div className="mt-8 flex justify-end">
+								<div className="mt-8 flex justify-between items-center">
+									<button onClick={handleMigrateDebt} disabled={loading} className="flex items-center gap-2 bg-rose-500/10 text-rose-600 px-4 py-2 rounded-xl font-bold hover:bg-rose-500/20 transition-all disabled:opacity-50 text-xs">
+										<RefreshCcw size={16} /> Đồng bộ Công Nợ Toàn Hệ Thống
+									</button>
 									<button onClick={handleSaveSettings} disabled={loading} className="flex items-center gap-2 bg-[#1A237E] dark:bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:opacity-90 transition-all disabled:opacity-50">
 										<Save size={20} /> {loading ? 'Đang lưu...' : 'Lưu Thay Đổi'}
 									</button>
@@ -898,9 +949,9 @@ const AdminSettings = () => {
 										{filteredUserList.map(u => (
 											<tr key={u.id}>
 												<td className="px-6 py-4 font-bold text-sm text-slate-700 dark:text-white">{u.displayName || u.email}</td>
-												{['dashboard', 'orders_view', 'orders_create', 'checkin_create', 'inventory_view', 'inventory_manage', 'customers_manage', 'debts_manage', 'finance_view', 'users_manage', 'admin', 'system_manage'].map(p => {
+												{['dashboard', 'orders_view', 'orders_create', 'checkin_create', 'inventory_view', 'inventory_manage', 'customers_manage', 'debts_manage', 'users_manage', 'admin', 'system_manage'].map(p => {
 													// Determine visual state
-													const sensitiveKeys = ['admin', 'users_manage', 'finance_view', 'system_manage'];
+													const sensitiveKeys = ['admin', 'users_manage', 'system_manage'];
 													const defaultBtnVal = sensitiveKeys.includes(p) ? false : true;
 													const isActive = u.accessRights?.[p] ?? defaultBtnVal;
 													

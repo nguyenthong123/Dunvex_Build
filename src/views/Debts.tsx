@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 import { signOut } from 'firebase/auth';
-import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, deleteDoc, doc, writeBatch, getDocs } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, deleteDoc, doc, writeBatch, getDocs, limit, orderBy, increment } from 'firebase/firestore';
 import { Filter, Download, PlusCircle, Printer, X, History, FileText, Edit2, Trash2, MapPin, Phone, Camera, Image, Lock, Crown } from 'lucide-react';
 import UpgradeModal from '../components/UpgradeModal';
 
@@ -363,8 +363,8 @@ const Debts: React.FC = () => {
 		const isAdmin = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
 
 		let qOrders, qPayments, qCustomers;
-		qOrders = query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId));
-		qPayments = query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId));
+		qOrders = query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId), orderBy('createdAt', 'desc'), limit(500));
+		qPayments = query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId), orderBy('createdAt', 'desc'), limit(500));
 		qCustomers = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
 
 		const unsubOrders = onSnapshot(qOrders, (snapshot) => {
@@ -458,27 +458,31 @@ const Debts: React.FC = () => {
 	const allEntities = [...customers, ...guestEntities];
 
 	// 2. Aggregate data by entity
-	const aggregatedData = allEntities.map((customer: any) => {
+	const aggregatedData = allEntities.map((c: any) => {
 		const customerOrders = orders.filter((o: any) => {
-			if (customer.isGuest) {
-				return (!o.customerId || !registeredMap.has(o.customerId)) && (o.customerName === customer.name || (!o.customerName && customer.name === 'Khách vãng lai'));
+			if (c.isGuest) {
+				return (!o.customerId || !registeredMap.has(o.customerId)) && (o.customerName === c.name || (!o.customerName && c.name === 'Khách vãng lai'));
 			}
-			return o.customerId === customer.id;
+			return o.customerId === c.id;
 		});
 
 		const customerPayments = payments.filter((p: any) => {
-			if (customer.isGuest) {
-				return (!p.customerId || !registeredMap.has(p.customerId)) && (p.customerName === customer.name || (!p.customerName && customer.name === 'Khách vãng lai'));
+			if (c.isGuest) {
+				return (!p.customerId || !registeredMap.has(p.customerId)) && (p.customerName === c.name || (!p.customerName && c.name === 'Khách vãng lai'));
 			}
-			return p.customerId === customer.id;
+			return p.customerId === c.id;
 		});
 
 		// Inclusion of 'Đơn chốt' as current debt
 		const confirmedStatuses = ['Đơn chốt'];
 		const debtOrders = customerOrders.filter(o => confirmedStatuses.includes(o.status));
+		// USE CACHED DEBT INSTEAD OF CALCULATING FROM SCRATCH
+		const debt = typeof c.debt === 'number' ? c.debt : 0;
+		// WE STILL KEEP WAITED FOR DISPLAY, BUT DEBT IS EXACT
 		const totalWaited = debtOrders.reduce((sum: any, o: any) => sum + (o.totalAmount || 0), 0);
 		const totalPaid = customerPayments.reduce((sum: any, p: any) => sum + (p.amount || 0), 0);
-		const currentDebt = totalWaited - totalPaid;
+		// Note: waited calculation is approximate based on limit(500) now, but debt is exact from DB.
+		const currentDebt = debt;
 
 		// Column display values based on status filter
 		let displayTotalOrders = 0;
@@ -510,7 +514,7 @@ const Debts: React.FC = () => {
 		else if (currentDebt > 10000000 || turnoverDays > 15) debtHealth = 'slow';
 
 		return {
-			...customer,
+			...c,
 			totalOrdersAmount: displayTotalOrders,
 			totalPaymentsAmount: totalPaid,
 			currentDebt,
@@ -518,7 +522,7 @@ const Debts: React.FC = () => {
 			debtHealth,
 			turnoverDays,
 			hasStatusOrders: statusFilter === 'Tất cả' ? (customerOrders.length > 0 || customerPayments.length > 0) : customerOrders.some(o => o.status === statusFilter),
-			initials: String(customer.name || '').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || 'KH'
+			initials: String(c.name || '').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || 'KH'
 		};
 	}).filter((item: any) => {
 		const matchesName = !searchTerm ||
@@ -688,13 +692,20 @@ const Debts: React.FC = () => {
 		}
 
 		try {
+			const batch = writeBatch(db);
+			const diffAmount = editingPaymentId 
+				? Number(paymentData.amount) - (Number(payments.find(p => p.id === editingPaymentId)?.amount) || 0)
+				: Number(paymentData.amount);
+
 			if (editingPaymentId) {
-				await updateDoc(doc(db, 'payments', editingPaymentId), {
+				batch.update(doc(db, 'payments', editingPaymentId), {
 					...paymentData,
 					updatedAt: serverTimestamp()
 				});
+				
 				// Log Update Payment
-				await addDoc(collection(db, 'audit_logs'), {
+				const auditRef = doc(collection(db, 'audit_logs'));
+				batch.set(auditRef, {
 					action: 'Cập nhật phiếu thu',
 					user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
 					userId: auth.currentUser?.uid,
@@ -702,9 +713,9 @@ const Debts: React.FC = () => {
 					details: `Đã cập nhật thu ${paymentData.amount.toLocaleString('vi-VN')} đ từ ${paymentData.customerName}`,
 					createdAt: serverTimestamp()
 				});
-				showToast("Cập nhật phiếu thu thành công", "success");
 			} else {
-				await addDoc(collection(db, 'payments'), {
+				const paymentRef = doc(collection(db, 'payments'));
+				batch.set(paymentRef, {
 					...paymentData,
 					createdAt: serverTimestamp(),
 					ownerId: owner.ownerId,
@@ -712,8 +723,10 @@ const Debts: React.FC = () => {
 					createdBy: auth.currentUser?.uid,
 					createdByEmail: auth.currentUser?.email
 				});
+				
 				// Log New Payment
-				await addDoc(collection(db, 'audit_logs'), {
+				const auditRef = doc(collection(db, 'audit_logs'));
+				batch.set(auditRef, {
 					action: 'Ghi nhận thu nợ',
 					user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
 					userId: auth.currentUser?.uid,
@@ -721,8 +734,17 @@ const Debts: React.FC = () => {
 					details: `Đã thu ${paymentData.amount.toLocaleString('vi-VN')} đ từ ${paymentData.customerName}`,
 					createdAt: serverTimestamp()
 				});
-				showToast("Ghi nhận thu nợ thành công", "success");
 			}
+
+			// Update Debt
+			if (paymentData.customerId && diffAmount !== 0) {
+				batch.update(doc(db, 'customers', paymentData.customerId), {
+					debt: increment(-diffAmount)
+				});
+			}
+
+			await batch.commit();
+			showToast(editingPaymentId ? "Cập nhật phiếu thu thành công" : "Ghi nhận thu nợ thành công", "success");
 			setShowPaymentForm(false);
 			setEditingPaymentId(null);
 			setPaymentData({

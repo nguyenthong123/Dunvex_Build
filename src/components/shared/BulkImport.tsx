@@ -1,5 +1,4 @@
 import React, { useState, useRef } from 'react';
-import * as XLSX from 'xlsx';
 import { db, auth } from '../../services/firebase';
 import { collection, writeBatch, doc, serverTimestamp, addDoc, getDocs, query, where } from 'firebase/firestore';
 import { X, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Download, Link as LinkIcon, Globe } from 'lucide-react';
@@ -297,9 +296,10 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 		setError(null);
 
 		const reader = new FileReader();
-		reader.onload = (event) => {
+		reader.onload = async (event) => {
 			try {
 				const bstr = event.target?.result;
+				const XLSX = await import('xlsx');
 				const wb = XLSX.read(bstr, { type: 'binary' });
 				const wsname = wb.SheetNames[0];
 				const ws = wb.Sheets[wsname];
@@ -378,6 +378,7 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 
 			if (!csvText) throw new Error('Dữ liệu trống hoặc không hợp lệ.');
 
+			const XLSX = await import('xlsx');
 			const wb = XLSX.read(csvText, { type: 'string' });
 			const wsname = wb.SheetNames[0];
 			const ws = wb.Sheets[wsname];

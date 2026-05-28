@@ -18,9 +18,7 @@ const Attendance = lazy(() => import('./views/Attendance'));
 const Pricing = lazy(() => import('./views/Pricing'));
 const PriceList = lazy(() => import('./views/PriceList'));
 const SubscriptionServices = lazy(() => import('./views/SubscriptionServices'));
-const Finance = lazy(() => import('./views/Finance'));
 const Coupons = lazy(() => import('./views/Coupons'));
-const NexusControl = lazy(() => import('./views/NexusControl'));
 
 import MainLayout from './components/layout/MainLayout';
 import ReloadPrompt from './components/ReloadPrompt';
@@ -137,20 +135,12 @@ function App() {
 							element={currentUser ? <MainLayout><PriceList /></MainLayout> : <Navigate to="/login" />}
 						/>
 						<Route
-							path="/finance"
-							element={currentUser ? <MainLayout><Finance /></MainLayout> : <Navigate to="/login" />}
-						/>
-						<Route
 							path="/coupons"
 							element={currentUser ? <MainLayout><Coupons /></MainLayout> : <Navigate to="/login" />}
 						/>
 						<Route
 							path="/services"
 							element={currentUser ? <MainLayout><SubscriptionServices /></MainLayout> : <Navigate to="/login" />}
-						/>
-						<Route
-							path="/nexus-control"
-							element={currentUser ? <NexusControl /> : <Navigate to="/login" />}
 						/>
 
 						{/* Catch all */}

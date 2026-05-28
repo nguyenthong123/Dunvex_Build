@@ -19,8 +19,7 @@ export const googleProvider = new GoogleAuthProvider();
 // Optimize Firestore connection and Enable Offline Persistence correctly
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
 export const db = initializeFirestore(app, {
-	localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-	experimentalForceLongPolling: true,
+	localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
 });
 
 export const storage = getStorage(app);

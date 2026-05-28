@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
-import { collection, query, orderBy, onSnapshot, updateDoc, doc, getDoc, deleteDoc, serverTimestamp, where, addDoc, getDocs, writeBatch, increment } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, updateDoc, doc, getDoc, deleteDoc, serverTimestamp, where, addDoc, getDocs, writeBatch, increment, limit } from 'firebase/firestore';
 import OrderTicket from '../components/OrderTicket';
 import UpgradeModal from '../components/UpgradeModal';
 import { Lock, Crown } from 'lucide-react';
@@ -33,7 +33,9 @@ const OrderList = () => {
 		let q;
 		q = query(
 			collection(db, 'orders'),
-			where('ownerId', '==', owner.ownerId)
+			where('ownerId', '==', owner.ownerId),
+			orderBy('createdAt', 'desc'),
+			limit(300)
 		);
 
 		const unsubscribe = onSnapshot(q, (snapshot: any) => {
@@ -177,6 +179,13 @@ const OrderList = () => {
 
 				// 2. Delete Order
 				batch.delete(doc(db, 'orders', id));
+
+				// 2.5 Revert Debt
+				if (order?.status === 'Đơn chốt' && order?.customerId) {
+					batch.update(doc(db, 'customers', order.customerId), {
+						debt: increment(-Number(order.totalAmount || 0))
+					});
+				}
 
 				// 3. Log Audit
 				const auditRef = doc(collection(db, 'audit_logs'));

@@ -211,7 +211,7 @@ const CustomerList = () => {
 				collection(db, 'customers'),
 				where('ownerId', '==', owner.ownerId),
 				orderBy('createdAt', 'desc'),
-				limit(1000)
+				limit(300)
 			);
 		} else {
 			q = query(
@@ -219,7 +219,7 @@ const CustomerList = () => {
 				where('ownerId', '==', owner.ownerId),
 				where('createdByEmail', '==', auth.currentUser?.email),
 				orderBy('createdAt', 'desc'),
-				limit(1000)
+				limit(300)
 			);
 		}
 

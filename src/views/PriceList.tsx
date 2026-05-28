@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import * as XLSX from 'xlsx';
 import {
 	FileSpreadsheet, Upload, Link as LinkIcon, Download,
 	Printer, Search, Trash2, Globe, ArrowLeft, Building2,
@@ -228,9 +227,10 @@ const PriceList = () => {
 
 		setImporting(true);
 		const reader = new FileReader();
-		reader.onload = (event) => {
+		reader.onload = async (event) => {
 			try {
 				const bstr = event.target?.result;
+				const XLSX = await import('xlsx');
 				const wb = XLSX.read(bstr, { type: 'binary' });
 				const wsname = wb.SheetNames[0];
 				const ws = wb.Sheets[wsname];
@@ -264,6 +264,7 @@ const PriceList = () => {
 			if (!response.ok) throw new Error("Không thể truy cập trang tính. Hãy chắc chắn bạn đã bật quyền 'Bất kỳ ai có liên kết đều có thể xem'.");
 
 			const csvText = await response.text();
+			const XLSX = await import('xlsx');
 			const wb = XLSX.read(csvText, { type: 'string' });
 			const wsname = wb.SheetNames[0];
 			const ws = wb.Sheets[wsname];

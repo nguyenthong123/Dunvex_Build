@@ -42,17 +42,17 @@ const Home = () => {
 		let qOrders, qAudit, qCust, qPay;
 
 		if (isAdmin) {
-			qOrders = query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId));
-			qAudit = query(collection(db, 'audit_logs'), where('ownerId', '==', owner.ownerId), limit(50));
+			qOrders = query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId), orderBy('createdAt', 'desc'), limit(300));
+			qAudit = query(collection(db, 'audit_logs'), where('ownerId', '==', owner.ownerId), orderBy('createdAt', 'desc'), limit(50));
 			qCust = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
-			qPay = query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId));
+			qPay = query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId), orderBy('createdAt', 'desc'), limit(300));
 		} else {
 			// For employees, we still query by ownerId but filter by user email/id client-side 
 			// to avoid needing composite indexes (Firestore requires indexes for multiple equality filters sometimes)
-			qOrders = query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId));
-			qAudit = query(collection(db, 'audit_logs'), where('ownerId', '==', owner.ownerId), limit(50));
+			qOrders = query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId), orderBy('createdAt', 'desc'), limit(300));
+			qAudit = query(collection(db, 'audit_logs'), where('ownerId', '==', owner.ownerId), orderBy('createdAt', 'desc'), limit(50));
 			qCust = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
-			qPay = query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId));
+			qPay = query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId), orderBy('createdAt', 'desc'), limit(300));
 		}
 
 		// ... inside onSnapshot or effects, apply filtering if not admin
@@ -264,23 +264,7 @@ const Home = () => {
 
 	const maxCustRevenue = Math.max(...customerSalesData.map(d => d.value), 1);
 
-	// 2. Debt Warnings
-	// Calculate debt for each customer
-	const debtList = customers.map(c => {
-		const custOrders = orders.filter(o => o.customerId === c.id && o.status === 'Đơn chốt');
-		const custPayments = payments.filter(p => p.customerId === c.id);
-		const totalBuy = custOrders.reduce((s, o) => s + (o.totalAmount || 0), 0);
-		const totalPay = custPayments.reduce((s, p) => s + (p.amount || 0), 0);
-		const debt = totalBuy - totalPay;
-
-		// Check last payment/order date for "Aging"
-		// If debt > 0 and last transaction > 30 days
-		return { ...c, debt };
-	}).filter(c => c.debt > 0);
-
-	const highRiskDebts = debtList.filter(c => c.debt > 50000000); // Example threshold 50M
-
-	// 3. Stock Warnings
+	// 2. Stock Warnings
 	const lowStockProducts = products.filter(p => p.stock !== undefined && p.stock <= 10); // Warning threshold
 
 	// --- PERMISSION CHECK ---

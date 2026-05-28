@@ -43,7 +43,7 @@ export const useNavigationConfig = () => {
 
 		// Nếu chưa được set (mới thêm tính năng hoặc chưa từng click toggle):
 		// Các mục nhạy cảm/quản lý sẽ KHÓA mặc định
-		const sensitiveKeys = ['admin', 'users_manage', 'finance_view', 'system_manage'];
+		const sensitiveKeys = ['admin', 'users_manage', 'system_manage'];
 		if (sensitiveKeys.includes(key)) return false;
 
 		// Các mục nghiệp vụ (Đơn hàng, Kho, Khách hàng...) sẽ MỞ mặc định
@@ -132,15 +132,6 @@ export const useNavigationConfig = () => {
 			};
 		}
 
-		if (path === '/finance') {
-			return {
-				icon: 'add_card',
-				label: 'Thu/Chi',
-				path: '/finance?new=true',
-				permissionKey: 'finance_view'
-			};
-		}
-
 		if (path === '/coupons') {
 			return {
 				icon: 'confirmation_number',
@@ -165,23 +156,22 @@ export const useNavigationConfig = () => {
 		{ icon: 'receipt_long', label: 'Đơn hàng', path: '/orders', permissionKey: 'orders_view' }, // 1
 		{ ...getCenterItem(), isCenter: true },                                              // 2
 		{ icon: 'account_balance_wallet', label: 'Công nợ', path: '/debts', permissionKey: 'debts_manage' }, // 3
-		{ icon: 'account_balance', label: 'Tài chính', path: '/finance', permissionKey: 'finance_view' },    // 4
-		{ icon: 'group', label: 'Khách hàng', path: '/customers', permissionKey: 'customers_manage' },       // 5
-		{ icon: 'inventory_2', label: 'Sản phẩm', path: '/inventory', permissionKey: 'inventory_view' },     // 6
-		{ icon: 'request_quote', label: 'Báo giá', path: '/price-list' },                                     // 7
-		{ icon: 'location_on', label: 'Checkin', path: '/checkin?action=history', permissionKey: 'checkin_create' }, // 8
-		{ icon: 'confirmation_number', label: 'Ưu đãi', path: '/coupons' },                                    // 9
-		{ icon: 'timer', label: 'Chấm công', path: '/attendance' },                                           // 10
-		{ icon: 'workspace_premium', label: 'Dịch vụ', path: '/services' },                                          // 11
-		{ icon: 'admin_panel_settings', label: 'Quản trị', path: '/admin', permissionKey: 'admin' },          // 12
-		{ icon: 'settings', label: 'Cài đặt', path: '/settings' },                                            // 13
+		{ icon: 'group', label: 'Khách hàng', path: '/customers', permissionKey: 'customers_manage' },       // 4
+		{ icon: 'inventory_2', label: 'Sản phẩm', path: '/inventory', permissionKey: 'inventory_view' },     // 5
+		{ icon: 'request_quote', label: 'Báo giá', path: '/price-list' },                                     // 6
+		{ icon: 'location_on', label: 'Checkin', path: '/checkin?action=history', permissionKey: 'checkin_create' }, // 7
+		{ icon: 'confirmation_number', label: 'Ưu đãi', path: '/coupons' },                                    // 8
+		{ icon: 'timer', label: 'Chấm công', path: '/attendance' },                                           // 9
+		{ icon: 'workspace_premium', label: 'Dịch vụ', path: '/services' },                                          // 10
+		{ icon: 'admin_panel_settings', label: 'Quản trị', path: '/admin', permissionKey: 'admin' },          // 11
+		{ icon: 'settings', label: 'Cài đặt', path: '/settings' },                                            // 12
 	];
 
 	// Xử lý Dynamic Menu cho Mobile - Giờ đây đã được ổn định hóa và kiểm tra quyền
 	const getMobileItems = () => {
 		const home = allItems[0];
 		const orders = allItems[1];
-		const products = allItems[6];
+		const products = allItems[5];
 		const currentBase = location.pathname;
 		const search: NavItem = { icon: 'search', label: 'Tìm kiếm', path: `${currentBase}?search=focus`, permissionKey: undefined };
 		const center = { ...getCenterItem(), isCenter: true };
@@ -194,8 +184,8 @@ export const useNavigationConfig = () => {
 			if (hasPermission(item.permissionKey)) return item;
 			
 			// Fallback sequence: Khách hàng -> Cài đặt -> Trang chủ
-			if (hasPermission('customers_manage')) return allItems[5]; // Khách hàng
-			if (hasPermission('settings')) return allItems[13]; // Cài đặt
+			if (hasPermission('customers_manage')) return allItems[4]; // Khách hàng
+			if (hasPermission('settings')) return allItems[12]; // Cài đặt
 			return allItems[0]; // Trang chủ (luôn mở)
 		});
 

@@ -141,6 +141,9 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 
 					// Common Synonyms for 'name'
 					if (field.key === 'name') {
+						// Exclude columns that are clearly IDs or Codes
+						if (cleanH.includes('id') || cleanH.includes('mã') || cleanH.includes('ma')) return false;
+						
 						const nameSynonyms = ['họvàtên', 'fullname', 'têncơsở', 'tênkháchhàng', 'kháchhàng'];
 						if (nameSynonyms.some(s => cleanH.includes(s) || s.includes(cleanH))) return true;
 					}
@@ -406,7 +409,16 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 				if (item.sku) assignedInThisBatch.add(String(item.sku).trim());
 			});
 			
-			const generateUniqueSku = async () => {
+			// OPTIMIZATION: Fetch existing SKUs for this owner ONCE to avoid making hundreds of sequential Firestore queries
+			// This prevents the UI from hanging/spinning endlessly when generating SKUs for many products
+			const q = query(collection(db, 'products'), where('ownerId', '==', ownerId));
+			const snapshot = await getDocs(q);
+			snapshot.docs.forEach(doc => {
+				const existingSku = doc.data().sku;
+				if (existingSku) assignedInThisBatch.add(String(existingSku).trim());
+			});
+			
+			const generateUniqueSku = () => {
 				// Try 6 digits first (standard), then expand to 10 if collisions found
 				const lengths = [6, 8, 10];
 				
@@ -415,19 +427,12 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 					const max = Math.pow(10, len) - 1;
 					
 					// Multiple random attempts per length
-					for (let attempt = 0; attempt < 5; attempt++) {
+					for (let attempt = 0; attempt < 50; attempt++) {
 						const randomNum = Math.floor(min + Math.random() * (max - min + 1)).toString();
 						const candidate = `${prefix}-${randomNum}`;
 						
-						// 1. Check if already assigned in this import batch
-						if (assignedInThisBatch.has(candidate)) continue;
-						
-						// 2. GLOBAL UNIQUENESS CHECK: Query entire Firestore products collection
-						// This ensures the SKU is unique across ALL owners in the system
-						const q = query(collection(db, 'products'), where('sku', '==', candidate));
-						const snap = await getDocs(q);
-						
-						if (snap.empty) {
+						// Local uniqueness check (O(1) lookup in Set)
+						if (!assignedInThisBatch.has(candidate)) {
 							assignedInThisBatch.add(candidate);
 							return candidate;
 						}
@@ -440,14 +445,14 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 			let poolIdx = 0;
 			for (const item of newData) {
 				if (!item.sku || String(item.sku).trim() === '') {
-					item.sku = await generateUniqueSku();
+					item.sku = generateUniqueSku();
 					poolIdx++;
 				}
 			}
 
 			setData(newData);
 			setMissingSkuCount(0);
-			showToast(`Đã tự động tạo ${poolIdx} mã SKU duy nhất trên toàn hệ thống`, "success");
+			showToast(`Đã tự động tạo ${poolIdx} mã SKU mới`, "success");
 		} catch (err) {
 			console.error("SKU Gen Error:", err);
 			showToast("Lỗi khi tạo mã SKU", "error");

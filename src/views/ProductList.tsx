@@ -437,7 +437,7 @@ const ProductList = () => {
 			await addDoc(collection(db, 'audit_logs'), {
 				action: 'Thêm sản phẩm mới',
 				user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
-				userId: auth.currentUser?.uid,
+				userId: auth.currentUser?.uid || "",
 				ownerId: owner.ownerId,
 				details: `Đã thêm sản phẩm: ${formData.name} ${formData.linkedProductId ? '(Liên kết kho)' : ''}`,
 				createdAt: serverTimestamp()
@@ -463,7 +463,7 @@ const ProductList = () => {
 					qty: formData.stock,
 					note: formData.linkedProductId ? `Khởi tạo & Cộng vào kho nguồn` : 'Khởi tạo số dư đầu kỳ',
 					ownerId: owner.ownerId,
-					user: auth.currentUser?.displayName || auth.currentUser?.email,
+					user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
 					createdAt: serverTimestamp()
 				});
 			}
@@ -517,7 +517,7 @@ const ProductList = () => {
 					qty: Math.abs(stockDiff),
 					note: `Chỉnh sửa thủ công: ${oldStock} -> ${newStock}`,
 					ownerId: owner.ownerId,
-					user: auth.currentUser?.displayName || auth.currentUser?.email,
+					user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
 					createdAt: serverTimestamp()
 				});
 			}
@@ -527,7 +527,7 @@ const ProductList = () => {
 			batch.set(auditTrailRef, {
 				action: 'Cập nhật sản phẩm',
 				user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
-				userId: auth.currentUser?.uid,
+				userId: auth.currentUser?.uid || "",
 				ownerId: owner.ownerId,
 				details: `Đã cập nhật sản phẩm: ${formData.name}${stockDiff !== 0 ? ` (Điều chỉnh kho: ${stockDiff})` : ''}`,
 				createdAt: serverTimestamp()
@@ -567,7 +567,7 @@ const ProductList = () => {
 			await addDoc(collection(db, 'audit_logs'), {
 				action: 'Xóa hàng loạt sản phẩm',
 				user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
-				userId: auth.currentUser?.uid,
+				userId: auth.currentUser?.uid || "",
 				ownerId: owner.ownerId,
 				details: `Đã xóa ${selectedIds.length} sản phẩm`,
 				createdAt: serverTimestamp()

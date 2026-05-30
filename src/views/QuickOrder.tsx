@@ -617,8 +617,8 @@ const QuickOrder = () => {
 							type: 'out',
 							qty: del.qty,
 							note: `Cập nhật đơn hàng (FIFO) cho ${orderData.customerName}`,
-							ownerId: owner.ownerId,
-							user: auth.currentUser?.displayName || auth.currentUser?.email,
+							ownerId: owner.ownerId || '',
+							user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
 							createdAt: serverTimestamp()
 						});
 					});
@@ -629,8 +629,8 @@ const QuickOrder = () => {
 				batch.set(auditRef, {
 					action: 'Cập nhật đơn hàng',
 					user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
-					userId: auth.currentUser?.uid,
-					ownerId: owner.ownerId,
+					userId: auth.currentUser?.uid || '',
+					ownerId: owner.ownerId || '',
 					details: `Đã cập nhật đơn hàng: ${orderData.customerName} - Tổng: ${finalTotal.toLocaleString('vi-VN')} đ`,
 					createdAt: serverTimestamp()
 				});
@@ -685,8 +685,8 @@ const QuickOrder = () => {
 							type: 'out',
 							qty: del.qty,
 							note: `Xuất đơn hàng (FIFO) cho ${orderData.customerName}`,
-							ownerId: owner.ownerId,
-							user: auth.currentUser?.displayName || auth.currentUser?.email,
+							ownerId: owner.ownerId || '',
+							user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
 							createdAt: serverTimestamp()
 						});
 					});
@@ -713,8 +713,8 @@ const QuickOrder = () => {
 				batch.set(logRef, {
 					action: 'Lên đơn hàng mới',
 					user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
-					userId: auth.currentUser?.uid,
-					ownerId: owner.ownerId,
+					userId: auth.currentUser?.uid || '',
+					ownerId: owner.ownerId || '',
 					details: `Đã tạo đơn hàng cho ${orderData.customerName} - Tổng tiền: ${finalTotal.toLocaleString('vi-VN')} đ${couponCode ? ` (Mã: ${couponCode})` : ''}`,
 					createdAt: serverTimestamp()
 				});

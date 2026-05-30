@@ -708,7 +708,7 @@ const Debts: React.FC = () => {
 				batch.set(auditRef, {
 					action: 'Cập nhật phiếu thu',
 					user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
-					userId: auth.currentUser?.uid,
+					userId: auth.currentUser?.uid || "",
 					ownerId: owner.ownerId,
 					details: `Đã cập nhật thu ${paymentData.amount.toLocaleString('vi-VN')} đ từ ${paymentData.customerName}`,
 					createdAt: serverTimestamp()
@@ -729,7 +729,7 @@ const Debts: React.FC = () => {
 				batch.set(auditRef, {
 					action: 'Ghi nhận thu nợ',
 					user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
-					userId: auth.currentUser?.uid,
+					userId: auth.currentUser?.uid || "",
 					ownerId: owner.ownerId,
 					details: `Đã thu ${paymentData.amount.toLocaleString('vi-VN')} đ từ ${paymentData.customerName}`,
 					createdAt: serverTimestamp()

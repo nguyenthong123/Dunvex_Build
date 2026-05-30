@@ -171,7 +171,7 @@ const Attendance = () => {
 			const today = new Date().toISOString().split('T')[0];
 			await addDoc(collection(db, 'attendance_logs'), {
 				ownerId: owner.ownerId,
-				userId: auth.currentUser?.uid,
+				userId: auth.currentUser?.uid || "",
 				userName: auth.currentUser?.displayName || auth.currentUser?.email,
 				userEmail: auth.currentUser?.email,
 				date: today,

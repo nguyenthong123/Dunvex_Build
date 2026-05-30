@@ -423,7 +423,7 @@ const Checkin = () => {
                 imageUrl: formData.imageUrls[0] || '', // Compatibility for old views
                 customerName: customer?.name || 'Vãng lai',
                 customerBusinessName: customer?.businessName || '',
-                userId: auth.currentUser?.uid,
+                userId: auth.currentUser?.uid || "",
                 userEmail: auth.currentUser?.email,
                 ownerId: owner.ownerId,
                 ownerEmail: owner.ownerEmail,
@@ -434,7 +434,7 @@ const Checkin = () => {
             await addDoc(collection(db, 'audit_logs'), {
                 action: 'Check-in khách hàng',
                 user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
-                userId: auth.currentUser?.uid,
+                userId: auth.currentUser?.uid || "",
                 ownerId: owner.ownerId,
                 details: `Đã check-in tại ${customer?.name || 'Vãng lai'} - Mục đích: ${formData.purpose}`,
                 createdAt: serverTimestamp()

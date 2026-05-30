@@ -588,7 +588,7 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 			await addDoc(collection(db, 'audit_logs'), {
 				action: `Nhập liệu hàng loạt ${config.title}`,
 				user: auth.currentUser?.displayName || auth.currentUser?.email || 'Hệ thống',
-				userId: auth.currentUser?.uid,
+				userId: auth.currentUser?.uid || "",
 				ownerId,
 				details: `Đã xử lý ${data.length} ${config.title}: Cập nhật ${totalUpdated}, Thêm mới ${totalCreated}`,
 				createdAt: serverTimestamp()

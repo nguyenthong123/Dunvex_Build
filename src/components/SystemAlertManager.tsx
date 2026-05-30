@@ -255,7 +255,7 @@ const SystemAlertManager: React.FC = () => {
 						});
 
 						await addDoc(collection(db, 'notifications'), {
-							userId: auth.currentUser?.uid,
+							userId: auth.currentUser?.uid || "",
 							title: '📊 Tự động đồng bộ',
 							message: `Dữ liệu đã được tự động đồng bộ vào Google Sheets theo lịch (${schedule}).`,
 							body: `Dữ liệu đã được tự động đồng bộ vào Google Sheets theo lịch (${schedule}).`,
@@ -304,7 +304,7 @@ const SystemAlertManager: React.FC = () => {
 				}
 
 				await addDoc(collection(db, 'notifications'), {
-					userId: auth.currentUser?.uid,
+					userId: auth.currentUser?.uid || "",
 					title,
 					message: body,
 					body: body,

@@ -298,7 +298,7 @@ const CustomerList = () => {
 			await addDoc(collection(db, 'audit_logs'), {
 				action: 'Thêm khách hàng mới',
 				user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
-				userId: auth.currentUser?.uid,
+				userId: auth.currentUser?.uid || "",
 				ownerId: owner.ownerId,
 				details: `Đã thêm khách hàng: ${formData.name} - SĐT: ${formData.phone}`,
 				createdAt: serverTimestamp()
@@ -349,7 +349,7 @@ const CustomerList = () => {
 			await addDoc(collection(db, 'audit_logs'), {
 				action: 'Cập nhật khách hàng',
 				user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
-				userId: auth.currentUser?.uid,
+				userId: auth.currentUser?.uid || "",
 				ownerId: owner.ownerId,
 				details: `Đã cập nhật thông tin khách hàng: ${formData.name}`,
 				createdAt: serverTimestamp()
@@ -374,7 +374,7 @@ const CustomerList = () => {
 				await addDoc(collection(db, 'audit_logs'), {
 					action: 'Xóa khách hàng',
 					user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
-					userId: auth.currentUser?.uid,
+					userId: auth.currentUser?.uid || "",
 					ownerId: owner.ownerId,
 					details: `Đã xóa khách hàng: ${customerName}`,
 					createdAt: serverTimestamp()

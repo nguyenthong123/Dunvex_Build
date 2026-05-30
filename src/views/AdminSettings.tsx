@@ -470,7 +470,7 @@ const AdminSettings = () => {
 				}));
 
 				await addDoc(collection(db, 'notifications'), {
-					userId: auth.currentUser?.uid,
+					userId: auth.currentUser?.uid || "",
 					title: '📊 Đồng bộ thành công',
 					message: `Toàn bộ dữ liệu từ ${syncRange.start} đến ${syncRange.end} đã được đẩy lên Google Sheets.`,
 					body: `Toàn bộ dữ liệu từ ${syncRange.start} đến ${syncRange.end} đã được đẩy lên Google Sheets.`,
@@ -616,7 +616,7 @@ const AdminSettings = () => {
 			await addDoc(collection(db, 'audit_logs'), {
 				action: 'Bộ lưu dữ liệu (Export - Client)',
 				user: auth.currentUser?.email || 'Admin',
-				userId: auth.currentUser?.uid,
+				userId: auth.currentUser?.uid || "",
 				ownerId: owner.ownerId,
 				details: `Đã xuất dữ liệu ra Excel (Lần thứ ${exportCount + 1} trong tháng)`,
 				createdAt: serverTimestamp()

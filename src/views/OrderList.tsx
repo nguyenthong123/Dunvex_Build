@@ -142,7 +142,7 @@ const OrderList = () => {
 			await addDoc(collection(db, 'audit_logs'), {
 				action: 'Cập nhật trạng thái đơn',
 				user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
-				userId: auth.currentUser?.uid,
+				userId: auth.currentUser?.uid || "",
 				ownerId: owner.ownerId,
 				details: `Đã đổi đơn hàng của ${order?.customerName || 'Khách'} sang: ${newStatus}`,
 				createdAt: serverTimestamp()
@@ -192,8 +192,8 @@ const OrderList = () => {
 				batch.set(auditRef, {
 					action: 'Xóa đơn hàng',
 					user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
-					userId: auth.currentUser?.uid,
-					ownerId: owner.ownerId,
+					userId: auth.currentUser?.uid || '',
+					ownerId: owner.ownerId || '',
 					details: `Đã xóa đơn hàng của ${order?.customerName || 'Khách'} - Trị giá: ${formatPrice(order?.totalAmount || 0)}`,
 					createdAt: serverTimestamp()
 				});

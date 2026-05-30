@@ -185,14 +185,23 @@ const AdminSettings = () => {
 		if (!owner.ownerId) return;
 		setLoading(true);
 		try {
+			// Clean undefined values to prevent Firestore error
+			const cleanCompanyInfo = Object.entries(companyInfo).reduce((acc: any, [key, value]) => {
+				if (value !== undefined) {
+					acc[key] = value;
+				}
+				return acc;
+			}, {});
+
 			await setDoc(doc(db, 'settings', owner.ownerId), {
-				...companyInfo,
+				...cleanCompanyInfo,
 				updatedAt: serverTimestamp(),
 				updatedBy: auth.currentUser?.uid
 			}, { merge: true });
 			showToast("Đã lưu cấu hình thành công!", "success");
-		} catch (error) {
-			showToast("Lỗi khi lưu cấu hình", "error");
+		} catch (error: any) {
+			console.error("Save config error:", error);
+			showToast(`Lỗi khi lưu cấu: ${error.message || 'Lỗi không xác định'}`, "error");
 		} finally {
 			setLoading(false);
 		}

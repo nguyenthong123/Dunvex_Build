@@ -24,6 +24,8 @@ const PriceList = () => {
 	const [priceData, setPriceData] = useState<any[]>([]);
 	const [headers, setHeaders] = useState<string[]>([]);
 	const [searchTerm, setSearchTerm] = useState('');
+	const [selectedGroup, setSelectedGroup] = useState('');
+	const [priceSubtitle, setPriceSubtitle] = useState('Bảng giá tại kho');
 	const [showImportModal, setShowImportModal] = useState(false);
 	const [importMethod, setImportMethod] = useState<'file' | 'link'>('file');
 	const [sheetUrl, setSheetUrl] = useState('');
@@ -104,6 +106,8 @@ const PriceList = () => {
 		setPriceData(list.items || []);
 		setHeaders(list.headers || []);
 		setViewMode('detail');
+		setSelectedGroup('');
+		setPriceSubtitle(list.subtitle || 'Bảng giá tại kho');
 
 		setIsDesktopLayout(true);
 		
@@ -143,6 +147,8 @@ const PriceList = () => {
 		setHeaders(rawHeaders);
 		setSelectedList({ items: mappedData, headers: rawHeaders, isUnsaved: true });
 		setViewMode('detail');
+		setSelectedGroup('');
+		setPriceSubtitle('Bảng giá tại kho');
 
 		setIsDesktopLayout(true);
 		const screenWidth = window.innerWidth;
@@ -174,6 +180,7 @@ const PriceList = () => {
 				ownerId: owner.ownerId,
 				items,
 				headers,
+				subtitle: priceSubtitle,
 				updatedAt: serverTimestamp(),
 				updatedBy: auth.currentUser?.email,
 				title: title || `Báo giá ${new Date().toLocaleString('vi-VN')}`
@@ -503,11 +510,43 @@ const PriceList = () => {
 		printWindow.document.close();
 	};
 
-	const filteredData = priceData.filter(item =>
-		Object.values(item).some(val =>
+	const groupColumn = React.useMemo(() => {
+		return headers.find(h => {
+			const lower = h.toLowerCase();
+			return lower.includes('nhóm') || lower.includes('danh mục') || lower.includes('loại');
+		});
+	}, [headers]);
+
+	const uniqueGroups = React.useMemo(() => {
+		if (!groupColumn) return [];
+		const groups = new Set<string>();
+		priceData.forEach(item => {
+			if (item[groupColumn]) {
+				groups.add(String(item[groupColumn]).trim());
+			}
+		});
+		return Array.from(groups).sort();
+	}, [priceData, groupColumn]);
+
+	const displayHeaders = React.useMemo(() => {
+		return headers.filter(h => {
+			if (h === groupColumn) return false;
+			const lower = h.toLowerCase();
+			if (lower.includes('nhập') || lower.includes('vốn') || lower.includes('gốc')) return false;
+			return lower.includes('tên') || lower.includes('sản phẩm') || lower.includes('hàng') || 
+				   lower.includes('quy cách') || 
+				   lower.includes('đơn vị') || lower.includes('đvt') || 
+				   lower.includes('giá') || lower.includes('tiền');
+		});
+	}, [headers, groupColumn]);
+
+	const filteredData = priceData.filter(item => {
+		const matchSearch = Object.values(item).some(val =>
 			String(val).toLowerCase().includes(searchTerm.toLowerCase())
-		)
-	);
+		);
+		const matchGroup = !selectedGroup || (groupColumn && item[groupColumn] === selectedGroup);
+		return matchSearch && matchGroup;
+	});
 
 	// Sort and display price lists
 	const sortedPriceLists = React.useMemo(() => {
@@ -602,15 +641,29 @@ const PriceList = () => {
 
 				<div className="flex items-center gap-2">
 					{viewMode === 'detail' && (
-						<div className="hidden lg:relative lg:block">
-							<Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
-							<input
-								type="text"
-								placeholder="Tìm kiếm sản phẩm..."
-								className="pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border-none rounded-xl text-sm w-64 focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white"
-								value={searchTerm}
-								onChange={(e) => setSearchTerm(e.target.value)}
-							/>
+						<div className="hidden lg:flex items-center gap-2">
+							{uniqueGroups.length > 0 && (
+								<select
+									className="px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border-none rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white outline-none cursor-pointer font-medium"
+									value={selectedGroup}
+									onChange={(e) => setSelectedGroup(e.target.value)}
+								>
+									<option value="">Tất cả nhóm hàng</option>
+									{uniqueGroups.map(group => (
+										<option key={group} value={group}>{group}</option>
+									))}
+								</select>
+							)}
+							<div className="relative block">
+								<Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
+								<input
+									type="text"
+									placeholder="Tìm kiếm sản phẩm..."
+									className="pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border-none rounded-xl text-sm w-64 focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white"
+									value={searchTerm}
+									onChange={(e) => setSearchTerm(e.target.value)}
+								/>
+							</div>
 						</div>
 					)}
 
@@ -853,7 +906,13 @@ const PriceList = () => {
 
 										<div className="text-right">
 											<h2 className="text-6xl font-black text-[#E65100] uppercase tracking-[0.2em] mb-1">Báo Giá</h2>
-											<p className="text-[12px] font-black text-[#FF6D00] uppercase tracking-[0.4em] mb-8">Niêm Yết Hệ Thống</p>
+											<input 
+												type="text" 
+												value={priceSubtitle} 
+												onChange={(e) => setPriceSubtitle(e.target.value)}
+												className="text-[12px] font-black text-[#FF6D00] uppercase tracking-[0.4em] mb-8 bg-transparent text-right outline-none w-full border-b border-transparent focus:border-orange-500/30 transition-all placeholder:text-orange-500/50 print:border-none print:p-0"
+												placeholder="VD: BẢNG GIÁ TẠI KHO, BẢNG GIÁ GIAO..."
+											/>
 
 											<div className="w-32 h-1 bg-[#FF6D00]/20 ml-auto mb-4"></div>
 											<p className="text-[11px] font-black text-slate-900 uppercase tracking-widest bg-orange-50 px-3 py-1 rounded-lg w-fit ml-auto">
@@ -870,7 +929,7 @@ const PriceList = () => {
 											<thead>
 												<tr className="bg-orange-50/50">
 													<th className="py-5 px-4 text-[11px] font-black text-[#E65100] uppercase tracking-[0.1em] border border-slate-200 text-center w-12">STT</th>
-													{headers.map((header, idx) => (
+													{displayHeaders.map((header, idx) => (
 														<th
 															key={idx}
 															className="py-5 px-4 text-[12px] font-black text-slate-950 uppercase tracking-[0.05em] border border-slate-200 whitespace-normal break-words"
@@ -884,7 +943,7 @@ const PriceList = () => {
 												{filteredData.map((row, rowIdx) => (
 													<tr key={rowIdx} className="hover:bg-orange-50/30 transition-colors">
 														<td className="py-4 px-4 text-[12px] font-black text-slate-500 text-center border border-slate-200 bg-slate-50/30">{rowIdx + 1}</td>
-														{headers.map((header, colIdx) => {
+														{displayHeaders.map((header, colIdx) => {
 															const value = row[header];
 															const h = header.toLowerCase();
 															const isPrice = h.includes('giá') || h.includes('tiền');

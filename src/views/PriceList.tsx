@@ -744,6 +744,33 @@ const PriceList = () => {
 
 			{/* PAGE CONTENT */}
 			<main className={`flex-1 ${viewMode === 'detail' ? 'p-4 md:p-8' : 'p-4 md:p-12'} print:p-0 overflow-x-hidden transition-all duration-300`}>
+				{viewMode === 'detail' && (
+					<div className="lg:hidden flex flex-col sm:flex-row gap-2 mb-4 print:hidden">
+						{uniqueGroups.length > 0 && (
+							<select
+								className="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white outline-none cursor-pointer font-medium w-full sm:w-auto flex-1 shadow-sm"
+								value={selectedGroup}
+								onChange={(e) => setSelectedGroup(e.target.value)}
+							>
+								<option value="">Tất cả nhóm hàng</option>
+								{uniqueGroups.map(group => (
+									<option key={group} value={group}>{group}</option>
+								))}
+							</select>
+						)}
+						<div className="relative block flex-1">
+							<Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
+							<input
+								type="text"
+								placeholder="Tìm kiếm sản phẩm..."
+								className="pl-10 pr-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm w-full focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white shadow-sm"
+								value={searchTerm}
+								onChange={(e) => setSearchTerm(e.target.value)}
+							/>
+						</div>
+					</div>
+				)}
+
 				{viewMode === 'list' ? (
 					<div className="max-w-4xl mx-auto space-y-6">
 						<div className="flex flex-col md:flex-row md:items-center justify-between gap-3 px-1">
@@ -853,7 +880,7 @@ const PriceList = () => {
 						)}
 					</div>
 				) : (
-					<div className="relative min-h-[800px] flex justify-center">
+					<div className="relative min-h-[800px] flex justify-center w-full overflow-x-auto overflow-y-hidden md:overflow-visible">
 						{/* ZOOM CONTROLS - Floating Pill (Moved higher on mobile) */}
 						<div className="fixed bottom-28 md:bottom-8 left-1/2 -translate-x-1/2 z-[60] bg-slate-900/90 backdrop-blur-xl border border-white/10 rounded-full p-1.5 flex items-center gap-1 shadow-[0_20px_50px_rgba(0,0,0,0.5)] print:hidden scale-90 sm:scale-100 transition-all duration-500 overflow-hidden">
 							<button
@@ -881,18 +908,25 @@ const PriceList = () => {
 							</button>
 						</div>
 
-						<div
-							className="origin-top transition-all duration-500 ease-out pb-40 md:pb-20 flex justify-center print:p-0"
-							style={{
-								transform: `scale(${zoomScale})`,
-								width: '1000px',
-								minWidth: '1000px'
+						{/* Proper scaling wrapper to prevent flexbox clipping on mobile */}
+						<div 
+							className="pb-40 md:pb-20 transition-all duration-500 ease-out print:p-0 flex-shrink-0"
+							style={{ 
+								width: `${1000 * zoomScale}px`,
+								height: 'fit-content'
 							}}
 						>
 							<div
-								id="price-list-paper"
-								className="bg-white dark:bg-slate-900 shadow-2xl rounded-[3rem] overflow-hidden border border-slate-200 dark:border-slate-800 print:shadow-none print:rounded-none print:border-none w-full"
+								className="origin-top-left transition-all duration-500"
+								style={{
+									transform: `scale(${zoomScale})`,
+									width: '1000px'
+								}}
 							>
+								<div
+									id="price-list-paper"
+									className="bg-white dark:bg-slate-900 shadow-2xl rounded-[3rem] overflow-hidden border border-slate-200 dark:border-slate-800 print:shadow-none print:rounded-none print:border-none w-full"
+								>
 								{/* Báo giá Header */}
 								<div className="p-12 bg-white border-b border-slate-50 relative">
 									<div className="flex justify-between items-start gap-8">
@@ -1032,6 +1066,7 @@ const PriceList = () => {
 								</div>
 							</div>
 						</div>
+					</div>
 					</div>
 				)}
 			</main>

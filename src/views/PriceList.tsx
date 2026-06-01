@@ -531,20 +531,40 @@ const PriceList = () => {
 	const displayHeaders = React.useMemo(() => {
 		return headers.filter(h => {
 			if (h === groupColumn) return false;
+			
 			const lower = h.toLowerCase();
-			if (lower.includes('nhập') || lower.includes('vốn') || lower.includes('gốc')) return false;
-			return lower.includes('tên') || lower.includes('sản phẩm') || lower.includes('hàng') || 
-				   lower.includes('quy cách') || 
-				   lower.includes('đơn vị') || lower.includes('đvt') || 
-				   lower.includes('giá') || lower.includes('tiền');
+			// Chuyển sang phương pháp Blacklist: Chỉ ẩn những cột giá vốn/nội bộ
+			// Các cột còn lại sẽ tự động được hiển thị. Cách này hiệu quả và linh hoạt hơn nhiều.
+			if (lower.includes('nhập') || lower.includes('vốn') || lower.includes('gốc') || lower.includes('stt')) return false;
+			
+			return true;
 		});
 	}, [headers, groupColumn]);
 
+	// Hàm hỗ trợ loại bỏ dấu tiếng Việt để tìm kiếm thông minh hơn
+	const normalizeString = (str: string) => {
+		return String(str)
+			.normalize("NFD")
+			.replace(/[\u0300-\u036f]/g, "")
+			.replace(/đ/g, "d")
+			.replace(/Đ/g, "D")
+			.toLowerCase();
+	};
+
 	const filteredData = priceData.filter(item => {
-		const matchSearch = Object.values(item).some(val =>
-			String(val).toLowerCase().includes(searchTerm.toLowerCase())
-		);
 		const matchGroup = !selectedGroup || (groupColumn && item[groupColumn] === selectedGroup);
+		
+		if (!searchTerm) {
+			return matchGroup;
+		}
+
+		// Chia nhỏ từ khóa tìm kiếm và bỏ dấu (VD: "keo xu ly" sẽ tìm được "Keo xử lý")
+		const searchKeywords = normalizeString(searchTerm).split(/\s+/).filter(Boolean);
+		const itemString = normalizeString(Object.values(item).join(' '));
+
+		// Đảm bảo tất cả các từ khóa đều xuất hiện (không phân biệt thứ tự)
+		const matchSearch = searchKeywords.every(keyword => itemString.includes(keyword));
+
 		return matchSearch && matchGroup;
 	});
 

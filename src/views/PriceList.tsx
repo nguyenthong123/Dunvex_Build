@@ -983,14 +983,16 @@ const PriceList = () => {
 											<thead>
 												<tr className="bg-orange-50/50">
 													<th className="py-5 px-4 text-[11px] font-black text-[#E65100] uppercase tracking-[0.1em] border border-slate-200 text-center w-12">STT</th>
-													{displayHeaders.map((header, idx) => (
+													{displayHeaders.map((header, idx) => {
+														const isPriceHeader = header.toLowerCase().includes('giá') || header.toLowerCase().includes('tiền');
+														return (
 														<th
 															key={idx}
-															className="py-5 px-4 text-[12px] font-black text-slate-950 uppercase tracking-[0.05em] border border-slate-200 whitespace-normal break-words"
+															className={`py-5 px-4 text-[12px] font-black text-slate-950 uppercase tracking-[0.05em] border border-slate-200 ${isPriceHeader ? 'whitespace-nowrap min-w-[110px]' : 'whitespace-normal break-words'}`}
 														>
 															{header}
 														</th>
-													))}
+													)})}
 												</tr>
 											</thead>
 											<tbody className="divide-y divide-slate-200">
@@ -1028,7 +1030,7 @@ const PriceList = () => {
 															return (
 																<td
 																	key={colIdx}
-																	className={`py-4 px-4 text-[13px] font-black whitespace-normal break-words border border-slate-200 ${colIdx === 0 ? 'text-[#E65100] leading-relaxed w-[350px] bg-orange-50/10' : 'text-slate-900'}`}
+																	className={`py-4 px-4 text-[13px] font-black border border-slate-200 ${colIdx === 0 ? 'text-[#E65100] leading-relaxed w-[350px] bg-orange-50/10 whitespace-normal break-words' : (isPrice ? 'text-slate-900 whitespace-nowrap min-w-[110px]' : 'text-slate-900 whitespace-normal break-words')}`}
 																>
 																	{displayValue}
 																</td>

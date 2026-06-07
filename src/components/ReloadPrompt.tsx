@@ -21,21 +21,42 @@ const ReloadPrompt: React.FC = () => {
 		},
 	})
 
-	// Tự động cập nhật vào 12h đêm nếu có bản mới
+	// Tự động cập nhật thông minh (Smart Auto-Update)
 	useEffect(() => {
 		if (needRefresh) {
+			const handleVisibilityChange = () => {
+				// Nếu người dùng tắt màn hình, hoặc chuyển tab, app vào chế độ ngủ (hidden)
+				if (document.visibilityState === 'hidden') {
+					// Đợi 5 giây để chắc chắn không phải họ lỡ tay vuốt ra rồi vuốt lại
+					setTimeout(() => {
+						if (document.visibilityState === 'hidden') {
+							console.log('App is hidden, silently updating...');
+							updateServiceWorker(true);
+						}
+					}, 5000);
+				}
+			};
+
+			document.addEventListener('visibilitychange', handleVisibilityChange);
+
+			// Vẫn giữ cơ chế 12h đêm: Nếu tới 12h đêm mà người dùng ĐANG mở màn hình, 
+			// thì nó không F5 ngang. Nếu họ tắt màn hình, nó sẽ F5 ngay.
 			const now = new Date();
 			const midnight = new Date();
-			midnight.setHours(24, 0, 0, 0); // 12h đêm nay (00:00 ngày mai)
+			midnight.setHours(24, 0, 0, 0); 
 			
 			let timeToMidnight = midnight.getTime() - now.getTime();
 			
-			// Hẹn giờ tự động click cập nhật
 			const timer = setTimeout(() => {
-				updateServiceWorker(true);
+				if (document.visibilityState === 'hidden') {
+					updateServiceWorker(true);
+				}
 			}, timeToMidnight);
 
-			return () => clearTimeout(timer);
+			return () => {
+				document.removeEventListener('visibilitychange', handleVisibilityChange);
+				clearTimeout(timer);
+			};
 		}
 	}, [needRefresh, updateServiceWorker]);
 

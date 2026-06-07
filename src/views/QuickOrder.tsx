@@ -3,7 +3,7 @@ import { ArrowLeft, Search, Plus, Minus, Trash2, ShoppingCart, User, Package, Ma
 import QRScanner from '../components/shared/QRScanner';
 import { useNavigate, useParams } from 'react-router-dom';
 import { db, auth } from '../services/firebase';
-import { collection, query, onSnapshot, addDoc, updateDoc, doc, getDoc, serverTimestamp, where, increment, writeBatch, getDocs, limit } from 'firebase/firestore';
+import { collection, query, onSnapshot, addDoc, updateDoc, doc, getDoc, serverTimestamp, where, increment, writeBatch, getDocs, limit, Timestamp } from 'firebase/firestore';
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
 
@@ -34,6 +34,7 @@ const QuickOrder = () => {
 	const [allPayments, setAllPayments] = useState<any[]>([]);
 
 	const [showSuccessModal, setShowSuccessModal] = useState(false);
+	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [showScanner, setShowScanner] = useState(false);
 
 	// Form state
@@ -448,6 +449,7 @@ const QuickOrder = () => {
 			return;
 		}
 
+		setIsSubmitting(true);
 		try {
 			// PRE-CALCULATE FIFO DEPLETION & COST
 			const processedItems: any[] = [];
@@ -638,7 +640,7 @@ const QuickOrder = () => {
 				await batch.commit();
 			}
 			else {
-				orderData.createdAt = serverTimestamp();
+				orderData.createdAt = Timestamp.now();
 				const batch = writeBatch(db);
 
 				// 1. Create Order
@@ -725,6 +727,8 @@ const QuickOrder = () => {
 			setShowSuccessModal(true);
 		} catch (error) {
 			showToast("Lỗi khi lưu đơn hàng: " + error, "error");
+		} finally {
+			setIsSubmitting(false);
 		}
 	};
 
@@ -1379,9 +1383,10 @@ const QuickOrder = () => {
 								)}
 								<button
 									onClick={handleConfirmOrder}
-									className="hidden md:flex items-center justify-center w-[350px] ml-auto h-16 bg-[#ffcc00] text-slate-900 rounded-2xl font-black text-sm uppercase tracking-[2px] shadow-xl shadow-yellow-500/10 hover:bg-[#fbc02d] transition-all active:scale-[0.98]"
+									disabled={isSubmitting}
+									className="hidden md:flex items-center justify-center w-[350px] ml-auto h-16 bg-[#ffcc00] text-slate-900 rounded-2xl font-black text-sm uppercase tracking-[2px] shadow-xl shadow-yellow-500/10 hover:bg-[#fbc02d] transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
 								>
-									XÁC NHẬN LÊN ĐƠN
+									{isSubmitting ? 'ĐANG XỬ LÝ...' : 'XÁC NHẬN LÊN ĐƠN'}
 								</button>
 							</div>
 						</div>
@@ -1397,9 +1402,10 @@ const QuickOrder = () => {
 				</div>
 				<button
 					onClick={handleConfirmOrder}
-					className="bg-[#ffcc00] text-slate-900 h-14 px-8 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-yellow-500/20 active:scale-95 transition-all"
+					disabled={isSubmitting}
+					className="bg-[#ffcc00] text-slate-900 h-14 px-8 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-yellow-500/20 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
 				>
-					LÊN ĐƠN
+					{isSubmitting ? 'ĐANG LÊN ĐƠN...' : 'LÊN ĐƠN'}
 				</button>
 			</div>
 

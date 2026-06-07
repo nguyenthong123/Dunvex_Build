@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 import { signOut } from 'firebase/auth';
-import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, deleteDoc, doc, writeBatch, getDocs, limit, orderBy, increment } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, deleteDoc, doc, writeBatch, getDocs, limit, orderBy, increment, Timestamp } from 'firebase/firestore';
 import { Filter, Download, PlusCircle, Printer, X, History, FileText, Edit2, Trash2, MapPin, Phone, Camera, Image, Lock, Crown } from 'lucide-react';
 import UpgradeModal from '../components/UpgradeModal';
 
@@ -350,6 +350,7 @@ const Debts: React.FC = () => {
 	});
 
 	const [uploadingPaymentImage, setUploadingPaymentImage] = useState(false);
+	const [isSubmitting, setIsSubmitting] = useState(false);
 
 
 	useEffect(() => {
@@ -691,6 +692,7 @@ const Debts: React.FC = () => {
 			return;
 		}
 
+		setIsSubmitting(true);
 		try {
 			const batch = writeBatch(db);
 			const diffAmount = editingPaymentId 
@@ -700,7 +702,7 @@ const Debts: React.FC = () => {
 			if (editingPaymentId) {
 				batch.update(doc(db, 'payments', editingPaymentId), {
 					...paymentData,
-					updatedAt: serverTimestamp()
+					updatedAt: Timestamp.now()
 				});
 				
 				// Log Update Payment
@@ -717,7 +719,7 @@ const Debts: React.FC = () => {
 				const paymentRef = doc(collection(db, 'payments'));
 				batch.set(paymentRef, {
 					...paymentData,
-					createdAt: serverTimestamp(),
+					createdAt: Timestamp.now(), // Fixed optimistic drop
 					ownerId: owner.ownerId,
 					ownerEmail: owner.ownerEmail,
 					createdBy: auth.currentUser?.uid,
@@ -758,6 +760,8 @@ const Debts: React.FC = () => {
 			});
 		} catch (error) {
 			showToast("Lỗi khi lưu phiếu thu", "error");
+		} finally {
+			setIsSubmitting(false);
 		}
 	};
 
@@ -1584,10 +1588,10 @@ const Debts: React.FC = () => {
 
 							<button
 								type="submit"
-								disabled={uploadingPaymentImage}
+								disabled={uploadingPaymentImage || isSubmitting}
 								className="w-full h-16 bg-[#FF6D00] text-white rounded-2xl font-black uppercase tracking-[3px] shadow-xl shadow-orange-500/30 hover:bg-orange-600 transition-all active:scale-[0.98] disabled:bg-slate-300 disabled:shadow-none"
 							>
-								{editingPaymentId ? 'CẬP NHẬT PHIẾU THU' : 'XÁC NHẬN PHIẾU THU'}
+								{isSubmitting ? 'ĐANG XỬ LÝ...' : (editingPaymentId ? 'CẬP NHẬT PHIẾU THU' : 'XÁC NHẬN PHIẾU THU')}
 							</button>
 
 

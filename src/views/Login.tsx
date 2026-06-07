@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, googleProvider, db } from '../services/firebase';
-import { signInWithPopup, signInWithRedirect, getRedirectResult, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import { signInWithPopup, signInWithRedirect, getRedirectResult, setPersistence, browserLocalPersistence, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import {
 	Building2,
@@ -18,6 +18,10 @@ const Login = () => {
 	const navigate = useNavigate();
 	const [isLoggingIn, setIsLoggingIn] = useState(false);
 	const [loginStatus, setLoginStatus] = useState('');
+	const [isEmailLogin, setIsEmailLogin] = useState(false);
+	const [email, setEmail] = useState('');
+	const [password, setPassword] = useState('');
+	const [isRegistering, setIsRegistering] = useState(false);
 	const { showToast } = useToast();
 
 	// Tách logic xử lý User vào một hàm dùng chung
@@ -156,6 +160,40 @@ const Login = () => {
 		}
 	};
 
+	const handleEmailLogin = async (e: React.FormEvent) => {
+		e.preventDefault();
+		if (!email || !password) {
+			showToast("Vui lòng nhập đầy đủ email và mật khẩu", "error");
+			return;
+		}
+		if (password.length < 6) {
+			showToast("Mật khẩu phải có ít nhất 6 ký tự", "error");
+			return;
+		}
+		try {
+			setIsLoggingIn(true);
+			if (isRegistering) {
+				setLoginStatus('Đang tạo tài khoản mới...');
+				const result = await createUserWithEmailAndPassword(auth, email, password);
+				if (result.user) await processUserLogin(result.user);
+			} else {
+				setLoginStatus('Đang đăng nhập bằng Email...');
+				const result = await signInWithEmailAndPassword(auth, email, password);
+				if (result.user) await processUserLogin(result.user);
+			}
+		} catch (error: any) {
+			setIsLoggingIn(false);
+			setLoginStatus('');
+			if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+				showToast("Email hoặc mật khẩu không chính xác", "error");
+			} else if (error.code === 'auth/email-already-in-use') {
+				showToast("Email này đã được sử dụng", "error");
+			} else {
+				showToast(`Lỗi: ${error.message || error.code}`, "error");
+			}
+		}
+	};
+
 	return (
 		<div className="min-h-screen w-full bg-white dark:bg-slate-950 flex font-['Manrope'] overflow-hidden">
 			{/* Left Side - Hero Section */}
@@ -247,11 +285,70 @@ const Login = () => {
 								<div className="flex-1 h-px bg-slate-100 dark:bg-slate-800"></div>
 							</div>
 
-							{/* Email Button */}
-							<button className="w-full h-16 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-bold text-sm flex items-center justify-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
-								<Mail size={18} />
-								<span>Đăng nhập bằng Email</span>
-							</button>
+							{/* Email Button/Form */}
+							{!isEmailLogin ? (
+								<button 
+									onClick={() => setIsEmailLogin(true)}
+									className="w-full h-16 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-bold text-sm flex items-center justify-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+								>
+									<Mail size={18} />
+									<span>Đăng nhập bằng Email</span>
+								</button>
+							) : (
+								<form onSubmit={handleEmailLogin} className="space-y-4 animate-in fade-in slide-in-from-top-2">
+									<div className="space-y-3">
+										<input
+											type="email"
+											placeholder="Nhập email của bạn"
+											value={email}
+											onChange={(e) => setEmail(e.target.value)}
+											className="w-full h-14 px-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+											disabled={isLoggingIn}
+										/>
+										<input
+											type="password"
+											placeholder="Nhập mật khẩu (tối thiểu 6 ký tự)"
+											value={password}
+											onChange={(e) => setPassword(e.target.value)}
+											className="w-full h-14 px-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+											disabled={isLoggingIn}
+										/>
+									</div>
+									<div className="flex gap-3">
+										<button
+											type="button"
+											onClick={() => {
+												setIsEmailLogin(false);
+												setIsRegistering(false);
+											}}
+											className="h-14 px-6 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
+											disabled={isLoggingIn}
+										>
+											Hủy
+										</button>
+										<button
+											type="submit"
+											disabled={isLoggingIn || !email || !password}
+											className="flex-1 h-14 rounded-xl bg-[#1A237E] hover:bg-[#283593] text-white font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/20"
+										>
+											{isRegistering ? 'Đăng ký ngay' : 'Đăng nhập'}
+										</button>
+									</div>
+									<div className="text-center mt-4">
+										<p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
+											{isRegistering ? 'Đã có tài khoản?' : 'Chưa có tài khoản?'}
+											<button 
+												type="button" 
+												onClick={() => setIsRegistering(!isRegistering)}
+												className="ml-1 text-[#1A237E] dark:text-indigo-400 font-bold hover:underline focus:outline-none"
+												disabled={isLoggingIn}
+											>
+												{isRegistering ? 'Đăng nhập' : 'Tạo tài khoản mới'}
+											</button>
+										</p>
+									</div>
+								</form>
+							)}
 						</div>
 
 						{loginStatus && (

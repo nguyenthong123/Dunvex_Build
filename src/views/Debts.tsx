@@ -599,6 +599,11 @@ const Debts: React.FC = () => {
 	const filteredHistory = [...payments].sort((a, b) => {
 		const da = a.date ? new Date(a.date).getTime() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0);
 		const db = b.date ? new Date(b.date).getTime() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0);
+		if (db === da) {
+			const ca = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0;
+			const cb = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0;
+			return cb - ca;
+		}
 		return db - da;
 	}).filter(p => {
 		const matchesName = !searchTerm ||
@@ -746,9 +751,29 @@ const Debts: React.FC = () => {
 			}
 
 			await batch.commit();
+			
+			// Optimistic local state update for immediate feedback
+			const updatedPayment = {
+				id: editingPaymentId || paymentRef.id,
+				...paymentData,
+				createdAt: editingPaymentId ? (payments.find(p => p.id === editingPaymentId)?.createdAt || Timestamp.now()) : Timestamp.now(),
+				updatedAt: Timestamp.now(),
+				ownerId: owner.ownerId,
+				ownerEmail: owner.ownerEmail,
+				createdBy: auth.currentUser?.uid,
+				createdByEmail: auth.currentUser?.email
+			};
+			setPayments(prev => {
+				if (editingPaymentId) {
+					return prev.map(p => p.id === editingPaymentId ? updatedPayment : p);
+				}
+				return [updatedPayment, ...prev];
+			});
+
 			showToast(editingPaymentId ? "Cập nhật phiếu thu thành công" : "Ghi nhận thu nợ thành công", "success");
 			setShowPaymentForm(false);
 			setEditingPaymentId(null);
+			setHistoryCurrentPage(1);
 			setPaymentData({
 				customerId: '',
 				customerName: '',
@@ -769,10 +794,36 @@ const Debts: React.FC = () => {
 	const handleDeletePayment = async (id: string) => {
 		if (!window.confirm("Bạn có chắc chắn muốn xóa phiếu thu này? Hành động này sẽ cập nhật lại dư nợ của khách hàng.")) return;
 		try {
-			await deleteDoc(doc(db, 'payments', id));
+			const paymentToDelete = payments.find(p => p.id === id);
+			
+			// Optimistic local state update for immediate feedback
+			setPayments(prev => prev.filter(p => p.id !== id));
+
+			if (paymentToDelete && paymentToDelete.customerId) {
+				const batch = writeBatch(db);
+				batch.delete(doc(db, 'payments', id));
+				batch.update(doc(db, 'customers', paymentToDelete.customerId), {
+					debt: increment(paymentToDelete.amount)
+				});
+				// Log Delete Payment
+				const auditRef = doc(collection(db, 'audit_logs'));
+				batch.set(auditRef, {
+					action: 'Xóa phiếu thu',
+					user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
+					userId: auth.currentUser?.uid || "",
+					ownerId: owner.ownerId,
+					details: `Đã xóa phiếu thu ${paymentToDelete.amount.toLocaleString('vi-VN')} đ của ${paymentToDelete.customerName}`,
+					createdAt: serverTimestamp()
+				});
+				await batch.commit();
+			} else {
+				await deleteDoc(doc(db, 'payments', id));
+			}
+			
 			showToast("Đã xóa phiếu thu", "success");
 		} catch (error) {
 			showToast("Lỗi khi xóa phiếu thu", "error");
+			// Optional: revert optimistic update on error by fetching again or re-adding
 		}
 	};
 	const hasPermission = owner.role === 'admin' || (owner.accessRights?.debts_manage ?? true);

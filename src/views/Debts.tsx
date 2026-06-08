@@ -704,6 +704,8 @@ const Debts: React.FC = () => {
 				? Number(paymentData.amount) - (Number(payments.find(p => p.id === editingPaymentId)?.amount) || 0)
 				: Number(paymentData.amount);
 
+			let newPaymentId = editingPaymentId;
+
 			if (editingPaymentId) {
 				batch.update(doc(db, 'payments', editingPaymentId), {
 					...paymentData,
@@ -722,6 +724,7 @@ const Debts: React.FC = () => {
 				});
 			} else {
 				const paymentRef = doc(collection(db, 'payments'));
+				newPaymentId = paymentRef.id;
 				batch.set(paymentRef, {
 					...paymentData,
 					createdAt: Timestamp.now(), // Fixed optimistic drop
@@ -754,7 +757,7 @@ const Debts: React.FC = () => {
 			
 			// Optimistic local state update for immediate feedback
 			const updatedPayment = {
-				id: editingPaymentId || paymentRef.id,
+				id: newPaymentId as string,
 				...paymentData,
 				createdAt: editingPaymentId ? (payments.find(p => p.id === editingPaymentId)?.createdAt || Timestamp.now()) : Timestamp.now(),
 				updatedAt: Timestamp.now(),

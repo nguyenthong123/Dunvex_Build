@@ -786,6 +786,11 @@ const Debts: React.FC = () => {
 				paymentMethod: 'Tiền mặt',
 				proofImage: ''
 			});
+			
+			// Reload trang sau 800ms để data hiển thị mới nhất theo yêu cầu
+			setTimeout(() => {
+				window.location.reload();
+			}, 800);
 		} catch (error) {
 			showToast("Lỗi khi lưu phiếu thu", "error");
 		} finally {

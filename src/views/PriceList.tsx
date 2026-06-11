@@ -898,7 +898,7 @@ const PriceList = () => {
 						)}
 					</div>
 				) : (
-					<div className="relative min-h-[800px] flex justify-center w-full overflow-x-auto overflow-y-hidden md:overflow-visible">
+					<div className="relative min-h-[800px] flex justify-center w-full overflow-x-auto overflow-y-auto md:overflow-visible">
 						{/* ZOOM CONTROLS - Floating Pill (Moved higher on mobile) */}
 						<div className="fixed bottom-28 md:bottom-8 left-1/2 -translate-x-1/2 z-[60] bg-slate-900/90 backdrop-blur-xl border border-white/10 rounded-full p-1.5 flex items-center gap-1 shadow-[0_20px_50px_rgba(0,0,0,0.5)] print:hidden scale-90 sm:scale-100 transition-all duration-500 overflow-hidden">
 							<button

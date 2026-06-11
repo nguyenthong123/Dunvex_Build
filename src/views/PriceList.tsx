@@ -551,6 +551,18 @@ const PriceList = () => {
 			.toLowerCase();
 	};
 
+	const searchColumns = React.useMemo(() => {
+		return headers.filter(h => {
+			const lower = h.toLowerCase();
+			// Bỏ qua các cột chứa mô tả dài dễ gây nhiễu kết quả tìm kiếm
+			return !lower.includes('kích thước') && 
+			       !lower.includes('mô tả') && 
+			       !lower.includes('ghi chú') && 
+			       !lower.includes('quy cách') && 
+			       !lower.includes('thành phần');
+		});
+	}, [headers]);
+
 	const filteredData = priceData.filter(item => {
 		const matchGroup = !selectedGroup || (groupColumn && item[groupColumn] === selectedGroup);
 		
@@ -560,7 +572,13 @@ const PriceList = () => {
 
 		// Chia nhỏ từ khóa tìm kiếm và bỏ dấu (VD: "keo xu ly" sẽ tìm được "Keo xử lý")
 		const searchKeywords = normalizeString(searchTerm).split(/\s+/).filter(Boolean);
-		const itemString = normalizeString(Object.values(item).join(' '));
+		
+		// Chỉ tìm kiếm trong các cột đã lọc (bỏ qua mô tả, kích thước, ghi chú)
+		const searchValues = searchColumns.length > 0 
+			? searchColumns.map(col => item[col]) 
+			: Object.values(item);
+			
+		const itemString = normalizeString(searchValues.join(' '));
 
 		// Đảm bảo tất cả các từ khóa đều xuất hiện (không phân biệt thứ tự)
 		const matchSearch = searchKeywords.every(keyword => itemString.includes(keyword));

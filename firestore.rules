@@ -1,9 +1,69 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Ultimate fix for all "Insufficient Permissions" errors for logged-in users
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+    
+    function isAuthed() {
+      return request.auth != null;
     }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function hasAccess(docOwnerId) {
+      return isAuthed() && (
+        request.auth.uid == docOwnerId || 
+        getUserData().ownerId == docOwnerId
+      );
+    }
+
+    function hasAccessToResource() {
+      let existingOwnerId = resource != null ? resource.data.ownerId : request.resource.data.ownerId;
+      let newOwnerId = request.resource != null ? request.resource.data.ownerId : existingOwnerId;
+      return hasAccess(existingOwnerId) && hasAccess(newOwnerId);
+    }
+
+    match /users/{userId} {
+      allow read, write: if isAuthed() && (
+        request.auth.uid == userId || 
+        (resource != null && resource.data.ownerId == request.auth.uid) ||
+        (request.resource != null && request.resource.data.ownerId == request.auth.uid)
+      );
+    }
+    
+    match /permissions/{docId} {
+      allow read, write: if isAuthed();
+    }
+
+    match /payment_requests/{docId} {
+      allow read, write: if isAuthed();
+    }
+    
+    match /system_config/{docId} {
+      allow read: if isAuthed();
+    }
+
+    match /coupons/{docId} {
+      allow read, write: if isAuthed();
+    }
+    
+    match /settings/{docId} {
+      allow read, write: if isAuthed() && (request.auth.uid == docId || hasAccess(docId));
+    }
+
+    match /usage_limits/{docId} {
+      allow read, write: if isAuthed();
+    }
+
+    // Business Collections
+    match /products/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
+    match /customers/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
+    match /orders/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
+    match /inventory_logs/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
+    match /audit_logs/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
+    match /payments/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
+    match /debts/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
+    match /finance_transactions/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
+    match /checkins/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
   }
 }

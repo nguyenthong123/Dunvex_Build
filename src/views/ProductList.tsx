@@ -130,9 +130,8 @@ const ProductList = () => {
 					const parts = String(p.expiryDate).split('-');
 					const expDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
 					expDate.setHours(0, 0, 0, 0);
-					if (today > expDate) {
-						deleteDoc(doc(db, 'products', p.id)).catch(console.error);
-						continue; // Skip expired product
+					if (today > expDate && p.status !== 'Hết hạn') {
+						updateDoc(doc(db, 'products', p.id), { status: 'Hết hạn' }).catch(console.error);
 					}
 				}
 				validDocs.push(p);

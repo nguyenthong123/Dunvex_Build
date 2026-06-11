@@ -33,8 +33,8 @@ export const useOwner = () => {
 		role: 'admin',
 		isEmployee: false,
 		loading: true,
-		isPro: true,
-		subscriptionStatus: 'active',
+		isPro: false,
+		subscriptionStatus: 'trial',
 		systemConfig: {
 			lock_free_orders: false,
 			lock_free_debts: false,
@@ -69,7 +69,7 @@ export const useOwner = () => {
 
 			// Info from Settings (Optional/Defaults)
 			let isPro = userIsPro;
-			let subscriptionStatus: 'trial' | 'active' | 'expired' = 'active';
+			let subscriptionStatus: 'trial' | 'active' | 'expired' = userIsPro ? 'active' : 'trial';
 			let trialEndsAt = null;
 			let subscriptionExpiresAt = null;
 			let planId = userData.planId || null;

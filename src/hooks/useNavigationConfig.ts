@@ -1,5 +1,6 @@
 import { useLocation } from 'react-router-dom';
 import { useOwner } from './useOwner';
+import { auth } from '../services/firebase';
 
 export interface NavItem {
 	icon: string;
@@ -24,7 +25,11 @@ export const useNavigationConfig = () => {
 		if (!key) return true;
 		
 		// Chủ sở hữu (Owner) luôn có toàn quyền
-		if (!owner.isEmployee) return true;
+		if (!owner.isEmployee && key !== 'nexus_control') return true;
+
+		if (key === 'nexus_control') {
+			return auth.currentUser?.email === 'dunvex.green@gmail.com';
+		}
 
 		// Nếu kiểm tra quyền Truy cập Admin, cho phép nếu có bất kỳ quyền quản lý nào
 		if (key === 'admin') {
@@ -165,6 +170,7 @@ export const useNavigationConfig = () => {
 		{ icon: 'workspace_premium', label: 'Dịch vụ', path: '/services' },                                          // 10
 		{ icon: 'admin_panel_settings', label: 'Quản trị', path: '/admin', permissionKey: 'admin' },          // 11
 		{ icon: 'settings', label: 'Cài đặt', path: '/settings' },                                            // 12
+		{ icon: 'security', label: 'Nexus Control', path: '/nexus-control', permissionKey: 'nexus_control' }, // 13
 	];
 
 	// Xử lý Dynamic Menu cho Mobile - Giờ đây đã được ổn định hóa và kiểm tra quyền

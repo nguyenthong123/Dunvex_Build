@@ -65,5 +65,11 @@ service cloud.firestore {
     match /debts/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
     match /finance_transactions/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
     match /checkins/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
+    
+    // Additional Missing Collections
+    match /price_lists/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
+    match /attendance_logs/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
+    match /notifications/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
+    match /ai_actions/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
   }
 }

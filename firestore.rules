@@ -17,11 +17,7 @@ service cloud.firestore {
       );
     }
 
-    function hasAccessToResource() {
-      let existingOwnerId = resource == null ? 'UNKNOWN' : resource.data.ownerId;
-      let newOwnerId = request.resource == null ? 'UNKNOWN' : request.resource.data.ownerId;
-      return request.resource == null ? hasAccess(existingOwnerId) : (resource == null ? hasAccess(newOwnerId) : (hasAccess(existingOwnerId) && hasAccess(newOwnerId)));
-    }
+
 
     match /users/{userId} {
       allow read, write: if isAuthed() && (
@@ -55,26 +51,33 @@ service cloud.firestore {
       allow read, write: if isAuthed();
     }
 
+    function canWriteResource() {
+      let isUpdate = resource != null;
+      let existingValid = !isUpdate || hasAccess(resource.data.ownerId);
+      let newValid = request.resource == null || hasAccess(request.resource.data.ownerId);
+      return existingValid && newValid;
+    }
+
     // Business Collections
-    match /products/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
-    match /customers/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
-    match /orders/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
-    match /inventory_logs/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
-    match /audit_logs/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
-    match /payments/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
-    match /debts/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
-    match /finance_transactions/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
-    match /checkins/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
+    match /products/{docId} { allow read: if isAuthed() && (resource == null || resource.data.ownerId == request.auth.uid || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().ownerId == resource.data.ownerId)); allow write: if isAuthed() && canWriteResource(); }
+    match /customers/{docId} { allow read: if isAuthed() && (resource == null || resource.data.ownerId == request.auth.uid || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().ownerId == resource.data.ownerId)); allow write: if isAuthed() && canWriteResource(); }
+    match /orders/{docId} { allow read: if isAuthed() && (resource == null || resource.data.ownerId == request.auth.uid || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().ownerId == resource.data.ownerId)); allow write: if isAuthed() && canWriteResource(); }
+    match /inventory_logs/{docId} { allow read: if isAuthed() && (resource == null || resource.data.ownerId == request.auth.uid || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().ownerId == resource.data.ownerId)); allow write: if isAuthed() && canWriteResource(); }
+    match /audit_logs/{docId} { allow read: if isAuthed() && (resource == null || resource.data.ownerId == request.auth.uid || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().ownerId == resource.data.ownerId)); allow write: if isAuthed() && canWriteResource(); }
+    match /payments/{docId} { allow read: if isAuthed() && (resource == null || resource.data.ownerId == request.auth.uid || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().ownerId == resource.data.ownerId)); allow write: if isAuthed() && canWriteResource(); }
+    match /debts/{docId} { allow read: if isAuthed() && (resource == null || resource.data.ownerId == request.auth.uid || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().ownerId == resource.data.ownerId)); allow write: if isAuthed() && canWriteResource(); }
+    match /finance_transactions/{docId} { allow read: if isAuthed() && (resource == null || resource.data.ownerId == request.auth.uid || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().ownerId == resource.data.ownerId)); allow write: if isAuthed() && canWriteResource(); }
+    match /checkins/{docId} { allow read: if isAuthed() && (resource == null || resource.data.ownerId == request.auth.uid || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().ownerId == resource.data.ownerId)); allow write: if isAuthed() && canWriteResource(); }
     
     // Additional Missing Collections
-    match /price_lists/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
-    match /attendance_logs/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
+    match /price_lists/{docId} { allow read: if isAuthed() && (resource == null || resource.data.ownerId == request.auth.uid || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().ownerId == resource.data.ownerId)); allow write: if isAuthed() && canWriteResource(); }
+    match /attendance_logs/{docId} { allow read: if isAuthed() && (resource == null || resource.data.ownerId == request.auth.uid || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().ownerId == resource.data.ownerId)); allow write: if isAuthed() && canWriteResource(); }
     match /notifications/{docId} { 
       allow read, write: if isAuthed() && (
         (resource != null && resource.data.userId == request.auth.uid) ||
         (request.resource != null && request.resource.data.userId == request.auth.uid)
       ); 
     }
-    match /ai_actions/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
+    match /ai_actions/{docId} { allow read: if isAuthed() && canReadResource(); allow write: if isAuthed() && canWriteResource(); }
   }
 }

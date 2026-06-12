@@ -35,6 +35,7 @@ const SaleBot = () => {
     }, [messages]);
 
     useEffect(() => {
+        if (!owner.ownerId) return; // Đợi load xong ownerId mới query
         const fetchContextData = async () => {
             try {
                 // Lấy sản phẩm

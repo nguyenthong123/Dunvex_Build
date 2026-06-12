@@ -524,7 +524,7 @@ const SaleBot = () => {
     };
 
     return (
-        <div className="flex flex-col h-[calc(100vh-64px)] md:h-[calc(100vh-80px)] bg-white dark:bg-slate-900 overflow-hidden relative">
+        <div className="absolute inset-0 pt-14 lg:pt-0 pb-20 lg:pb-0 z-40 bg-white dark:bg-slate-900 flex flex-col">
             <div className="w-full flex flex-col h-full overflow-hidden relative">
                 
                 {/* Header */}

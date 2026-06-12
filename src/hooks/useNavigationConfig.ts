@@ -178,7 +178,7 @@ export const useNavigationConfig = () => {
 	const getMobileItems = () => {
 		const home = allItems[0];
 		const orders = allItems[1];
-		const searchBtn = { icon: 'search', label: 'Tìm kiếm', path: '/orders?search=focus' };
+		const searchBtn: NavItem = { icon: 'search', label: 'Tìm kiếm', path: '/orders?search=focus' };
 		const aiBot = allItems.find(i => i.path === '/sale-bot') || allItems[13];
 		const center = { ...getCenterItem(), isCenter: true };
 

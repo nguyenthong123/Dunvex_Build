@@ -57,6 +57,10 @@ const OrderList = () => {
 			});
 			setOrders(sortedDocs);
 			setLoading(false);
+		}, (error: any) => {
+			console.error("Lỗi khi tải đơn hàng:", error);
+			showToast("Lỗi tải đơn hàng: " + error.message, "error");
+			setLoading(false);
 		});
 		return unsubscribe;
 	}, [owner.loading, owner.ownerId, owner.role, owner.isEmployee]);

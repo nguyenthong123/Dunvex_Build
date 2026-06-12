@@ -322,14 +322,17 @@ const QuickOrder = () => {
 				const queryWords = queryName.split(' ').filter(Boolean);
 				const foundCust = customers.find(c => {
 					const cName = normalizeSmart(c.name);
+					const cBusiness = normalizeSmart(c.businessName || '');
 					return cName.includes(queryName) || 
 						   queryName.includes(cName) || 
-						   queryWords.every(w => cName.includes(w)) ||
+						   cBusiness.includes(queryName) ||
+						   queryName.includes(cBusiness) ||
+						   queryWords.every(w => cName.includes(w) || cBusiness.includes(w)) ||
 						   (data.customer.phone && c.phone === data.customer.phone);
 				});
 				if (foundCust) {
 					setSelectedCustomer(foundCust);
-					setSearchCustomerQuery(foundCust.name);
+					setSearchCustomerQuery(foundCust.businessName || foundCust.name);
 					isCustomerFound = true;
 				} else {
 					setSearchCustomerQuery(data.customer.name);
@@ -649,16 +652,28 @@ const QuickOrder = () => {
 				});
 			});
 
+			// Auto-resolve customer if they typed the exact name but didn't click dropdown
+			let finalCustomer = selectedCustomer;
+			if (!finalCustomer && searchCustomerQuery) {
+				const queryNorm = normalizeSmart(searchCustomerQuery);
+				const matched = customers.find(c => 
+					normalizeSmart(c.name) === queryNorm || 
+					normalizeSmart(c.businessName || '') === queryNorm ||
+					c.phone === searchCustomerQuery
+				);
+				if (matched) finalCustomer = matched;
+			}
+
 		// ✅ FIX: Calculate accurate cost & profit from FIFO-processed items
 		const totalCostFinal = processedItems.reduce((sum, it) => sum + (Number(it.buyPrice) || 0) * (Number(it.qty) || 0), 0);
 		// Profit = subTotal (gross revenue) - cost - discount (shipping is pass-through, not profit)
 		const totalProfitFinal = subTotal - totalCostFinal - Number(discountAmt);
 
 			const orderData: any = {
-				customerName: selectedCustomer?.name || searchCustomerQuery || 'Khách vãng lai',
-				customerId: selectedCustomer?.id || null,
-				customerPhone: selectedCustomer?.phone || '',
-				customerBusinessName: selectedCustomer?.businessName || '',
+				customerName: finalCustomer?.name || searchCustomerQuery || 'Khách vãng lai',
+				customerId: finalCustomer?.id || null,
+				customerPhone: finalCustomer?.phone || '',
+				customerBusinessName: finalCustomer?.businessName || '',
 				orderDate: orderDate,
 				items: processedItems,
 				subTotal: Number(subTotal) || 0,

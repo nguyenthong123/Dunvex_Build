@@ -59,25 +59,63 @@ service cloud.firestore {
     }
 
     // Business Collections
-    match /products/{docId} { allow read, write: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId); }
-    match /customers/{docId} { allow read, write: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId); }
-    match /orders/{docId} { allow read, write: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId); }
-    match /inventory_logs/{docId} { allow read, write: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId); }
-    match /audit_logs/{docId} { allow read, write: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId); }
-    match /payments/{docId} { allow read, write: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId); }
-    match /debts/{docId} { allow read, write: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId); }
-    match /finance_transactions/{docId} { allow read, write: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId); }
-    match /checkins/{docId} { allow read, write: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId); }
+    match /products/{docId} {
+      allow read, update, delete: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
+      allow create: if isAuthed() && (request.resource.data.ownerId == request.auth.uid || getUserData().ownerId == request.resource.data.ownerId);
+    }
+    match /customers/{docId} {
+      allow read, update, delete: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
+      allow create: if isAuthed() && (request.resource.data.ownerId == request.auth.uid || getUserData().ownerId == request.resource.data.ownerId);
+    }
+    match /orders/{docId} {
+      allow read, update, delete: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
+      allow create: if isAuthed() && (request.resource.data.ownerId == request.auth.uid || getUserData().ownerId == request.resource.data.ownerId);
+    }
+    match /inventory_logs/{docId} {
+      allow read, update, delete: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
+      allow create: if isAuthed() && (request.resource.data.ownerId == request.auth.uid || getUserData().ownerId == request.resource.data.ownerId);
+    }
+    match /audit_logs/{docId} {
+      allow read, update, delete: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
+      allow create: if isAuthed() && (request.resource.data.ownerId == request.auth.uid || getUserData().ownerId == request.resource.data.ownerId);
+    }
+    match /payments/{docId} {
+      allow read, update, delete: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
+      allow create: if isAuthed() && (request.resource.data.ownerId == request.auth.uid || getUserData().ownerId == request.resource.data.ownerId);
+    }
+    match /debts/{docId} {
+      allow read, update, delete: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
+      allow create: if isAuthed() && (request.resource.data.ownerId == request.auth.uid || getUserData().ownerId == request.resource.data.ownerId);
+    }
+    match /finance_transactions/{docId} {
+      allow read, update, delete: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
+      allow create: if isAuthed() && (request.resource.data.ownerId == request.auth.uid || getUserData().ownerId == request.resource.data.ownerId);
+    }
+    match /checkins/{docId} {
+      allow read, update, delete: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
+      allow create: if isAuthed() && (request.resource.data.ownerId == request.auth.uid || getUserData().ownerId == request.resource.data.ownerId);
+    }
     
     // Additional Missing Collections
-    match /price_lists/{docId} { allow read, write: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId); }
-    match /attendance_logs/{docId} { allow read, write: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId); }
-    match /notifications/{docId} { 
-      allow read, write: if isAuthed() && (
-        (resource != null && resource.data.userId == request.auth.uid) ||
-        (request.resource != null && request.resource.data.userId == request.auth.uid)
-      ); 
+    match /price_lists/{docId} {
+      allow read, update, delete: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
+      allow create: if isAuthed() && (request.resource.data.ownerId == request.auth.uid || getUserData().ownerId == request.resource.data.ownerId);
     }
-    match /ai_actions/{docId} { allow read, write: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId); }
+    match /attendance_logs/{docId} {
+      allow read, update, delete: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
+      allow create: if isAuthed() && (request.resource.data.ownerId == request.auth.uid || getUserData().ownerId == request.resource.data.ownerId);
+    }
+    match /notifications/{docId} { 
+      allow read, update, delete: if isAuthed() && (
+        (resource != null && resource.data.userId == request.auth.uid)
+      );
+      allow create: if isAuthed() && (
+        (request.resource != null && request.resource.data.userId == request.auth.uid)
+      );
+    }
+    match /ai_actions/{docId} {
+      allow read, update, delete: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
+      allow create: if isAuthed() && (request.resource.data.ownerId == request.auth.uid || getUserData().ownerId == request.resource.data.ownerId);
+    }
   }
 }

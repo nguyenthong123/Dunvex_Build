@@ -3,7 +3,7 @@ import { parseSaleMessage } from '../services/geminiService';
 import { BotMessageSquare, Send, Sparkles, User, AlertCircle, CheckCircle2, Package } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { db, auth } from '../services/firebase';
-import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, updateDoc, setDoc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, serverTimestamp, updateDoc, doc, Timestamp, increment, setDoc, getDoc } from 'firebase/firestore';
 import { useOwner } from '../hooks/useOwner';
 
 interface ChatMessage {
@@ -104,10 +104,7 @@ const SaleBot = () => {
                 const snapCust = await getDocs(qCust);
                 const custs = snapCust.docs.map(d => {
                     const data = d.data();
-                    let nameStr = data.name || '';
-                    if (data.businessName) nameStr += ` (Tên cơ sở: ${data.businessName})`;
-                    if (data.phone) nameStr += ` - SĐT: ${data.phone}`;
-                    return nameStr;
+                    return `- Tên: ${data.name || 'Khách vãng lai'} | SĐT: ${data.phone || 'Không có'} | Nợ: ${data.debt || 0}đ | Nhóm: ${data.type || 'Không có'}`;
                 }).filter(Boolean);
 
                 let contextData = "";
@@ -459,6 +456,93 @@ const SaleBot = () => {
             } finally {
                 setIsLoading(false);
             }
+        } else if (data.intent === 'CREATE_PAYMENT') {
+            try {
+                if (!owner.ownerId) {
+                    alert("Không thể xác thực quyền truy cập. Vui lòng thử lại sau.");
+                    return;
+                }
+                setIsLoading(true);
+
+                let targetId = data.customer?.id;
+                let targetName = data.customer?.name;
+
+                // Tự tìm ID khách hàng bằng tên nếu chưa có
+                if (!targetId && targetName) {
+                    const q = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
+                    const snap = await getDocs(q);
+                    const queryName = targetName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                    
+                    const found = snap.docs.find(d => {
+                        const dbName = (d.data().name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                        return dbName.includes(queryName) || queryName.includes(dbName);
+                    });
+                    
+                    if (found) {
+                        targetId = found.id;
+                        targetName = found.data().name;
+                    }
+                }
+
+                if (!targetId) {
+                    setIsLoading(false);
+                    alert(`Không tìm thấy dữ liệu khách hàng "${data.customer?.name || ''}" trong hệ thống.`);
+                    return;
+                }
+
+                const amount = data.payment_info?.amount;
+                if (!amount || amount <= 0) {
+                    setIsLoading(false);
+                    alert("Số tiền thu không hợp lệ.");
+                    return;
+                }
+
+                const paymentData = {
+                    amount: amount,
+                    customerId: targetId,
+                    customerName: targetName,
+                    date: serverTimestamp(),
+                    note: data.payment_info?.note || 'Thu công nợ qua Bot',
+                    ownerId: owner.ownerId,
+                    ownerEmail: owner.ownerEmail,
+                    createdBy: auth.currentUser?.uid || "",
+                    createdByEmail: auth.currentUser?.email || "",
+                    createdAt: serverTimestamp(),
+                };
+
+                // Add payment document
+                await addDoc(collection(db, 'payments'), paymentData);
+
+                // Update customer debt
+                await updateDoc(doc(db, 'customers', targetId), {
+                    debt: increment(-amount)
+                });
+
+                // Add audit log
+                try {
+                    await addDoc(collection(db, 'audit_logs'), {
+                        action: 'Ghi nhận thu nợ (Qua Bot)',
+                        user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
+                        userId: auth.currentUser?.uid || "",
+                        ownerId: owner.ownerId,
+                        details: `AI Bot đã thu ${amount.toLocaleString('vi-VN')} đ từ ${targetName}`,
+                        createdAt: serverTimestamp()
+                    });
+                } catch (auditErr) {
+                    console.error("Lỗi lưu audit_logs:", auditErr);
+                }
+
+                setMessages(prev => [...prev, {
+                    id: Date.now().toString(),
+                    role: 'bot',
+                    content: `🎉 Tự động hóa thành công! Đã ghi nhận thu **${amount.toLocaleString('vi-VN')} đ** cho khách hàng **${targetName}**.`
+                }]);
+            } catch (error: any) {
+                console.error("Lỗi thu tiền:", error);
+                alert(`Lỗi khi tự động thu tiền: ${error?.message || JSON.stringify(error)}`);
+            } finally {
+                setIsLoading(false);
+            }
         } else {
             alert('Hành động chưa được hỗ trợ.');
         }
@@ -505,7 +589,10 @@ const SaleBot = () => {
                                         <div className="flex items-center gap-2 mb-3 pb-3 border-b border-slate-100 dark:border-slate-700">
                                             <CheckCircle2 size={18} className="text-green-500" />
                                             <span className="text-xs font-black uppercase text-slate-800 dark:text-white">
-                                                {msg.parsedData.intent === 'CREATE_ORDER' ? 'Thông tin Lên Đơn' : msg.parsedData.intent === 'CREATE_PRODUCT' ? 'Thông tin Sản Phẩm' : 'Thông tin Khách Hàng'}
+                                                {msg.parsedData.intent === 'CREATE_ORDER' ? 'Thông tin Lên Đơn' : 
+                                                 msg.parsedData.intent === 'CREATE_PRODUCT' ? 'Thông tin Sản Phẩm' : 
+                                                 msg.parsedData.intent === 'CREATE_PAYMENT' ? 'Thông tin Thu Công Nợ' :
+                                                 'Thông tin Khách Hàng'}
                                             </span>
                                         </div>
                                         
@@ -585,6 +672,19 @@ const SaleBot = () => {
                                             </div>
                                         )}
 
+                                        {msg.parsedData.payment_info && msg.parsedData.intent === 'CREATE_PAYMENT' && (
+                                            <div className="mb-3 p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-100 dark:border-emerald-800/50">
+                                                <div className="flex items-center gap-2 mb-2 text-emerald-700 dark:text-emerald-400">
+                                                    <span className="material-symbols-outlined text-[16px]">payments</span>
+                                                    <span className="text-xs font-bold uppercase">CHI TIẾT THU NỢ</span>
+                                                </div>
+                                                <div className="grid grid-cols-1 gap-2 text-xs">
+                                                    <div className="text-slate-500">Số tiền thu: <span className="text-emerald-600 font-bold text-sm">{(msg.parsedData.payment_info.amount || 0).toLocaleString('vi-VN')} đ</span></div>
+                                                    {msg.parsedData.payment_info.note && <div className="text-slate-500">Nội dung: <span className="text-slate-800 dark:text-slate-200">{msg.parsedData.payment_info.note}</span></div>}
+                                                </div>
+                                            </div>
+                                        )}
+
                                         {msg.parsedData.product_info && msg.parsedData.intent === 'CREATE_PRODUCT' && (
                                             <div className="mb-3 p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-100 dark:border-indigo-800/50">
                                                 <div className="flex items-center gap-2 mb-2 text-indigo-700 dark:text-indigo-400">
@@ -603,7 +703,7 @@ const SaleBot = () => {
                                             </div>
                                         )}
 
-                                        {['CREATE_ORDER', 'CREATE_CUSTOMER', 'UPDATE_CUSTOMER', 'CREATE_PRODUCT'].includes(msg.parsedData.intent) && 
+                                        {['CREATE_ORDER', 'CREATE_CUSTOMER', 'UPDATE_CUSTOMER', 'CREATE_PRODUCT', 'CREATE_PAYMENT'].includes(msg.parsedData.intent) && 
                                         (!msg.parsedData.missing_info || msg.parsedData.missing_info.length === 0) && (
                                             <button 
                                                 onClick={() => handleAction(msg.parsedData)}
@@ -612,6 +712,7 @@ const SaleBot = () => {
                                                 {msg.parsedData.intent === 'CREATE_CUSTOMER' ? 'Lưu Khách Hàng Mới' : 
                                                  msg.parsedData.intent === 'UPDATE_CUSTOMER' ? 'Xác Nhận Cập Nhật' : 
                                                  msg.parsedData.intent === 'CREATE_PRODUCT' ? 'Tạo Sản Phẩm Mới' :
+                                                 msg.parsedData.intent === 'CREATE_PAYMENT' ? 'Xác Nhận Thu Tiền' :
                                                  'Tiếp Tục Lên Đơn'}
                                             </button>
                                         )}

@@ -51,23 +51,34 @@ const SubscriptionServices = () => {
 			shadowClass: 'shadow-blue-500/20'
 		},
 		{
-			id: 'addon_sms_zalo',
-			name: 'Gói 500 SMS & Zalo ZNS',
+			id: 'addon_monthly',
+			name: 'Gói Tháng',
 			price: 250000,
-			description: 'Tự động gửi tin nhắn thông báo tình trạng đơn hàng và nhắc nợ khách hàng.',
+			description: 'Trải nghiệm toàn bộ tính năng quản lý ưu việt của Dunvex Build trong 1 tháng.',
 			icon: <Zap size={28} className="text-amber-500" />,
-			features: ['Tỷ lệ mở tin nhắn 98%', 'Cá nhân hóa nội dung', 'Tích hợp tự động vào hệ thống'],
+			features: ['Mở khóa tất cả tính năng', 'Không giới hạn dung lượng', 'Hỗ trợ kỹ thuật ưu tiên'],
 			bgClass: 'bg-amber-50 dark:bg-amber-900/10',
 			textClass: 'text-amber-500',
 			shadowClass: 'shadow-amber-500/20'
 		},
 		{
+			id: 'addon_yearly',
+			name: 'Gói Năm',
+			price: 2500000,
+			description: 'Gói siêu tiết kiệm dành cho doanh nghiệp, sử dụng liên tục trong 12 tháng.',
+			icon: <Crown size={28} className="text-rose-500" />,
+			features: ['Tiết kiệm 2 tháng sử dụng', 'Ưu tiên cập nhật tính năng mới', 'Hỗ trợ trực tiếp 1-1'],
+			bgClass: 'bg-rose-50 dark:bg-rose-900/10',
+			textClass: 'text-rose-500',
+			shadowClass: 'shadow-rose-500/20'
+		},
+		{
 			id: 'addon_ai_assistant',
-			name: 'Trợ lý AI Phân tích',
+			name: 'Gói Trợ lý AI',
 			price: 500000,
-			description: 'Sử dụng AI để phân tích dữ liệu bán hàng, dự báo tồn kho và tối ưu vận hành.',
+			description: 'Sử dụng SaleBot AI để lên đơn hàng nhanh chóng bằng giọng nói hoặc tin nhắn.',
 			icon: <Rocket size={28} className="text-purple-500" />,
-			features: ['Báo cáo tự động hóa', 'Cảnh báo rủi ro tồn kho', 'Đề xuất chiến lược giá'],
+			features: ['Lên đơn siêu tốc', 'Phân tích tin nhắn tự động', 'Hỗ trợ trả lời khách hàng'],
 			bgClass: 'bg-purple-50 dark:bg-purple-900/10',
 			textClass: 'text-purple-500',
 			shadowClass: 'shadow-purple-500/20'

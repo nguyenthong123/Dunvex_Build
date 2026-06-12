@@ -5,12 +5,14 @@ import { signOut } from 'firebase/auth';
 import { useTheme } from '../context/ThemeContext';
 import { Moon, Sun, Globe, Bell, LogOut, User, ShieldCheck, Key, HelpCircle, ChevronRight, BookOpen, CheckCircle2, Info } from 'lucide-react';
 import { useToast } from '../components/shared/Toast';
+import { useOwner } from '../hooks/useOwner';
 
 const AppSettings = () => {
 	const navigate = useNavigate();
 	const location = useLocation();
 	const { theme, toggleTheme } = useTheme();
 	const { showToast } = useToast();
+	const owner = useOwner();
 	const [showConfirmLogout, setShowConfirmLogout] = React.useState(false);
 	const [activeGuide, setActiveGuide] = React.useState<string | null>(null);
 
@@ -144,16 +146,25 @@ const AppSettings = () => {
 							<p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Tìm và tự động liên kết các đơn hàng cũ chưa có mã khách hàng vào danh sách khách hàng dựa trên tên. Tự động tính toán lại công nợ.</p>
 							<button
 								onClick={async () => {
-									const { collection, getDocs, writeBatch, doc, increment } = await import('firebase/firestore');
+									const { collection, getDocs, writeBatch, doc, increment, query, where } = await import('firebase/firestore');
 									const { db } = await import('../services/firebase');
 									if (!confirm('Hệ thống sẽ quét và liên kết lại toàn bộ đơn hàng. Bạn đã thêm lại các Khách hàng bị thiếu chưa?')) return;
 									
 									try {
+										if (!owner.ownerId) {
+											showToast('Chưa tải xong dữ liệu cửa hàng, vui lòng thử lại.', 'warning');
+											return;
+										}
+
 										showToast('Đang quét dữ liệu...', 'info');
-										const customersSnap = await getDocs(collection(db, 'customers'));
+										
+										// Thêm query bắt buộc ownerId để không bị lỗi permissions
+										const qCust = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
+										const customersSnap = await getDocs(qCust);
 										const customersList = customersSnap.docs.map(d => ({ id: d.id, ...d.data() as any }));
 										
-										const ordersSnap = await getDocs(collection(db, 'orders'));
+										const qOrd = query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId));
+										const ordersSnap = await getDocs(qOrd);
 										const batch = writeBatch(db);
 										let count = 0;
 

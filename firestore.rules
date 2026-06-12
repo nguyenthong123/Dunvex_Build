@@ -32,7 +32,8 @@ service cloud.firestore {
     }
 
     match /payment_requests/{docId} {
-      allow read, write: if isAuthed();
+      allow read, update, delete: if isAuthed() && (resource == null || resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
+      allow create: if isAuthed() && (request.resource.data.ownerId == request.auth.uid || getUserData().ownerId == request.resource.data.ownerId);
     }
     
     match /system_config/{docId} {
@@ -40,7 +41,8 @@ service cloud.firestore {
     }
 
     match /coupons/{docId} {
-      allow read, write: if isAuthed();
+      allow read, update, delete: if isAuthed() && (resource == null || resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
+      allow create: if isAuthed() && (request.resource.data.ownerId == request.auth.uid || getUserData().ownerId == request.resource.data.ownerId);
     }
     
     match /settings/{docId} {
@@ -48,7 +50,8 @@ service cloud.firestore {
     }
 
     match /usage_limits/{docId} {
-      allow read, write: if isAuthed();
+      allow read, update, delete: if isAuthed() && (resource == null || resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
+      allow create: if isAuthed() && (request.resource.data.ownerId == request.auth.uid || getUserData().ownerId == request.resource.data.ownerId);
     }
 
     function canWriteResource() {

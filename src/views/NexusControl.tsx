@@ -502,9 +502,9 @@ const NexusControl = () => {
 
 	// Run cycle when customers change or AI is toggled
 	useEffect(() => {
-		const timeout = setTimeout(runAutonomousCycle, 5000); // Wait 5s for data to settle
+		const timeout = setTimeout(() => runAutonomousCycle(customers, requests), 5000); // Wait 5s for data to settle
 		return () => clearTimeout(timeout);
-	}, [customers.length, isAiActive]);
+	}, [customers.length, isAiActive, requests.length]);
 
 	const handleUpdatePlan = async (ownerId: string, newPlan: string) => {
 		if (!window.confirm(`Xác nhận hành động: ${newPlan === 'cancel_payment' ? 'HUỶ ĐĂNG KÝ VÀ KHÓA' : newPlan}?`)) return;

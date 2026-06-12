@@ -398,7 +398,6 @@ const NexusControl = () => {
 					createdAt: serverTimestamp()
 				});
 				
-				console.log(`Nexus AI: Auto-approved payment for ${req.userEmail}`);
 			} catch (e) {
 				console.error("AI Auto Approve Error:", e);
 			}
@@ -437,7 +436,6 @@ const NexusControl = () => {
 						details: 'Tự động kích hoạt gói dùng thử (FREE 60 ngày) cho người dùng mới.',
 						timestamp: serverTimestamp()
 					});
-					console.log(`Nexus AI: Auto-provisioned trial for ${customer.email}`);
 				} catch (e) { console.error("Auto Provision Error:", e); }
 			}
 
@@ -488,7 +486,6 @@ const NexusControl = () => {
 						read: false,
 						createdAt: serverTimestamp()
 					});
-					console.log(`Nexus AI: Auto-locked expired account ${customer.email}`);
 				} catch (e) {
 					console.error("Auto Enforcement Error:", e);
 				}

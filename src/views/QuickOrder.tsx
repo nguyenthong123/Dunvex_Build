@@ -323,12 +323,14 @@ const QuickOrder = () => {
 				const foundCust = customers.find(c => {
 					const cName = normalizeSmart(c.name);
 					const cBusiness = normalizeSmart(c.businessName || '');
-					return cName.includes(queryName) || 
-						   queryName.includes(cName) || 
-						   cBusiness.includes(queryName) ||
-						   queryName.includes(cBusiness) ||
-						   queryWords.every(w => cName.includes(w) || cBusiness.includes(w)) ||
-						   (data.customer.phone && c.phone === data.customer.phone);
+					
+					if (data.customer.phone && c.phone === data.customer.phone) return true;
+					
+					const matchName = cName && (cName.includes(queryName) || queryName.includes(cName));
+					const matchBusiness = cBusiness && (cBusiness.includes(queryName) || queryName.includes(cBusiness));
+					const matchWords = queryWords.length > 0 && queryWords.every(w => (cName && cName.includes(w)) || (cBusiness && cBusiness.includes(w)));
+					
+					return matchName || matchBusiness || matchWords;
 				});
 				if (foundCust) {
 					setSelectedCustomer(foundCust);

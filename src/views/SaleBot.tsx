@@ -476,7 +476,12 @@ const SaleBot = () => {
                     
                     const found = snap.docs.find(d => {
                         const dbName = (d.data().name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-                        return dbName.includes(queryName) || queryName.includes(dbName);
+                        const dbBusiness = (d.data().businessName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                        
+                        const matchName = dbName && (dbName.includes(queryName) || queryName.includes(dbName));
+                        const matchBusiness = dbBusiness && (dbBusiness.includes(queryName) || queryName.includes(dbBusiness));
+                        
+                        return matchName || matchBusiness;
                     });
                     
                     if (found) {

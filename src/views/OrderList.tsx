@@ -31,12 +31,20 @@ const OrderList = () => {
 		const isAdmin = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
 
 		let q;
-		q = query(
-			collection(db, 'orders'),
-			where('ownerId', '==', owner.ownerId),
-			orderBy('createdAt', 'desc'),
-			limit(300)
-		);
+		if (isAdmin) {
+			q = query(
+				collection(db, 'orders'),
+				where('ownerId', '==', owner.ownerId),
+				limit(500)
+			);
+		} else {
+			q = query(
+				collection(db, 'orders'),
+				where('ownerId', '==', owner.ownerId),
+				where('createdByEmail', '==', auth.currentUser?.email),
+				limit(500)
+			);
+		}
 
 		const unsubscribe = onSnapshot(q, (snapshot: any) => {
 			const docs = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));

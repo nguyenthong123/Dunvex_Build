@@ -42,17 +42,17 @@ const Home = () => {
 		let qOrders, qAudit, qCust, qPay;
 
 		if (isAdmin) {
-			qOrders = query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId), orderBy('createdAt', 'desc'), limit(300));
-			qAudit = query(collection(db, 'audit_logs'), where('ownerId', '==', owner.ownerId), orderBy('createdAt', 'desc'), limit(50));
+			qOrders = query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId), limit(500));
+			qAudit = query(collection(db, 'audit_logs'), where('ownerId', '==', owner.ownerId), limit(100));
 			qCust = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
-			qPay = query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId), orderBy('createdAt', 'desc'), limit(300));
+			qPay = query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId), limit(500));
 		} else {
 			// For employees, we still query by ownerId but filter by user email/id client-side 
 			// to avoid needing composite indexes (Firestore requires indexes for multiple equality filters sometimes)
-			qOrders = query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId), orderBy('createdAt', 'desc'), limit(300));
-			qAudit = query(collection(db, 'audit_logs'), where('ownerId', '==', owner.ownerId), orderBy('createdAt', 'desc'), limit(50));
+			qOrders = query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId), limit(500));
+			qAudit = query(collection(db, 'audit_logs'), where('ownerId', '==', owner.ownerId), limit(100));
 			qCust = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
-			qPay = query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId), orderBy('createdAt', 'desc'), limit(300));
+			qPay = query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId), limit(500));
 		}
 
 		// ... inside onSnapshot or effects, apply filtering if not admin

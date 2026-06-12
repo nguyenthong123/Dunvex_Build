@@ -210,16 +210,14 @@ const CustomerList = () => {
 			q = query(
 				collection(db, 'customers'),
 				where('ownerId', '==', owner.ownerId),
-				orderBy('createdAt', 'desc'),
-				limit(300)
+				limit(500)
 			);
 		} else {
 			q = query(
 				collection(db, 'customers'),
 				where('ownerId', '==', owner.ownerId),
 				where('createdByEmail', '==', auth.currentUser?.email),
-				orderBy('createdAt', 'desc'),
-				limit(300)
+				limit(500)
 			);
 		}
 
@@ -231,6 +229,10 @@ const CustomerList = () => {
 				return dateB - dateA;
 			});
 			setCustomers(sortedDocs);
+			setLoading(false);
+		}, (error: any) => {
+			console.error("Lỗi khi tải dữ liệu khách hàng:", error);
+			showToast("Không thể tải dữ liệu: " + error.message, "error");
 			setLoading(false);
 		});
 		return unsubscribe;

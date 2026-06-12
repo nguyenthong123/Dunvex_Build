@@ -65,6 +65,17 @@ const ReloadPrompt: React.FC = () => {
 		setNeedRefresh(false)
 	}
 
+	const [isUpdating, setIsUpdating] = React.useState(false);
+
+	const handleUpdate = () => {
+		setIsUpdating(true);
+		updateServiceWorker(true);
+		// Fallback: Ép tải lại trang sau 1.5s nếu Service Worker bị kẹt không tự reload
+		setTimeout(() => {
+			window.location.reload();
+		}, 1500);
+	};
+
 	return (
 		<div className="fixed bottom-20 right-4 z-[200]">
 			{(offlineReady || needRefresh) && (
@@ -77,15 +88,17 @@ const ReloadPrompt: React.FC = () => {
 					<div className="flex gap-2">
 						{needRefresh && (
 							<button
-								onClick={() => updateServiceWorker(true)}
-								className="px-5 py-2.5 bg-[#1A237E] text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-900/10"
+								onClick={handleUpdate}
+								disabled={isUpdating}
+								className={`px-5 py-2.5 bg-[#1A237E] text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-900/10 ${isUpdating ? 'opacity-50 cursor-wait' : ''}`}
 							>
-								Cập nhật ngay
+								{isUpdating ? 'Đang xử lý...' : 'Cập nhật ngay'}
 							</button>
 						)}
 						<button
 							onClick={() => close()}
-							className="px-5 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+							disabled={isUpdating}
+							className="px-5 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all disabled:opacity-50"
 						>
 							Đóng
 						</button>

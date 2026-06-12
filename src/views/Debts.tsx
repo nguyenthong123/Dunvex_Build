@@ -1942,12 +1942,12 @@ const Debts: React.FC = () => {
 													</div>
 
 													{/* 4. Final Summary Box */}
-													<div className="bg-[#FF6D00] text-white rounded-3xl p-10 flex flex-row justify-between items-center mb-20 shadow-2xl shadow-orange-500/20 relative overflow-hidden">
+													<div className="bg-[#FF6D00] text-white rounded-3xl p-10 flex flex-row justify-between items-center mb-20 shadow-2xl shadow-orange-500/20 relative overflow-hidden gap-4">
 														<div className="absolute right-0 top-1/2 -translate-y-1/2 p-8 opacity-20">
 															<span className="material-symbols-outlined text-[8rem]">payments</span>
 														</div>
-														<span className="relative z-10 font-black uppercase text-2xl tracking-[2px]">SỐ DƯ CÔNG NỢ CÒN LẠI</span>
-														<span className="relative z-10 font-black text-6xl tracking-tighter tabular-nums drop-shadow-lg">{formatPrice(closingBalance)}</span>
+														<span className="relative z-10 font-black uppercase text-2xl tracking-[2px] shrink-0">SỐ DƯ CÔNG NỢ CÒN LẠI</span>
+														<span className="relative z-10 font-black text-5xl tracking-tighter tabular-nums drop-shadow-lg whitespace-nowrap text-right">{formatPrice(closingBalance)}</span>
 													</div>
 
 													{/* 5. Signatures */}

@@ -172,7 +172,8 @@ const NexusControl = () => {
 						paymentConfirmedAt: s.paymentConfirmedAt || u.createdAt || null,
 						manualLockOrders: s.manualLockOrders || false,
 						manualLockDebts: s.manualLockDebts || false,
-						manualLockSheets: s.manualLockSheets || false
+						manualLockSheets: s.manualLockSheets || false,
+						manualLockAi: s.manualLockAi || false
 					};
 				});
 
@@ -272,19 +273,20 @@ const NexusControl = () => {
 			const snap = await getDoc(settingsRef);
 			const data = snap.data() || {};
 
-			if (!data.manualLockOrders || !data.manualLockDebts || !data.manualLockSheets) {
+			if (!data.manualLockOrders || !data.manualLockDebts || !data.manualLockSheets || !data.manualLockAi) {
 				// We use setDoc with merge instead of updateDoc in case the doc doesn't exist yet
 				await setDoc(settingsRef, {
 					manualLockOrders: true,
 					manualLockDebts: true,
 					manualLockSheets: true,
+					manualLockAi: true,
 					aiLockedAt: serverTimestamp(),
 					aiLockReason: 'POCKET_CLICK_PREVENTION'
 				}, { merge: true });
 
 				// 🔍 AI Verification Step
 				const verifySnap = await getDoc(settingsRef);
-				const isLocked = verifySnap.exists() && verifySnap.data().manualLockOrders && verifySnap.data().manualLockDebts && verifySnap.data().manualLockSheets;
+				const isLocked = verifySnap.exists() && verifySnap.data().manualLockOrders && verifySnap.data().manualLockDebts && verifySnap.data().manualLockSheets && verifySnap.data().manualLockAi;
 
 				// Notify User via Bell
 				await addDoc(collection(db, 'notifications'), {
@@ -374,7 +376,8 @@ const NexusControl = () => {
 					subscriptionExpiresAt: expireDate,
 					manualLockOrders: false,
 					manualLockDebts: false,
-					manualLockSheets: false
+					manualLockSheets: false,
+					manualLockAi: false
 				}, { merge: true });
 
 				await addDoc(collection(db, 'ai_actions'), {
@@ -444,19 +447,20 @@ const NexusControl = () => {
 
 			// 2. AUTO-ENFORCEMENT FOR EXPIRED USERS
 			// If expired and features are NOT already manually locked or status is not expired
-			if (status.isExpired && (!customer.manualLockOrders || !customer.manualLockDebts || !customer.manualLockSheets || customer.subscriptionStatus !== 'expired')) {
+			if (status.isExpired && (!customer.manualLockOrders || !customer.manualLockDebts || !customer.manualLockSheets || !customer.manualLockAi || customer.subscriptionStatus !== 'expired')) {
 				try {
 					await setDoc(doc(db, 'settings', customer.uid), {
 						manualLockOrders: true,
 						manualLockDebts: true,
 						manualLockSheets: true,
+						manualLockAi: true,
 						subscriptionStatus: 'expired',
 						isPro: false
 					}, { merge: true });
 
 					// 🔍 AI Verification Step
 						const verifySnap = await getDoc(doc(db, 'settings', customer.uid));
-						const isLocked = verifySnap.exists() && verifySnap.data().manualLockOrders && verifySnap.data().manualLockDebts && verifySnap.data().manualLockSheets;
+						const isLocked = verifySnap.exists() && verifySnap.data().manualLockOrders && verifySnap.data().manualLockDebts && verifySnap.data().manualLockSheets && verifySnap.data().manualLockAi;
 
 						// Notify Verification
 						if (isLocked) {
@@ -518,7 +522,8 @@ const NexusControl = () => {
 					subscriptionExpiresAt: expireDate,
 					manualLockOrders: true,
 					manualLockDebts: true,
-					manualLockSheets: true
+					manualLockSheets: true,
+					manualLockAi: true
 				}, { merge: true });
 
 				await addDoc(collection(db, 'notifications'), {
@@ -649,7 +654,8 @@ const NexusControl = () => {
 					// Auto-unlock features upon approval
 					manualLockOrders: false,
 					manualLockDebts: false,
-					manualLockSheets: false
+					manualLockSheets: false,
+					manualLockAi: false
 				}, { merge: true });
 			}
 
@@ -691,7 +697,8 @@ const NexusControl = () => {
 				// Re-lock features
 				manualLockOrders: true,
 				manualLockDebts: true,
-				manualLockSheets: true
+				manualLockSheets: true,
+				manualLockAi: true
 			}, { merge: true });
 
 			// Notify User
@@ -791,7 +798,8 @@ const NexusControl = () => {
 			const featureMap: Record<string, string> = {
 				'manualLockOrders': 'Chi tiết Đơn hàng',
 				'manualLockDebts': 'Công nợ Chi tiết',
-				'manualLockSheets': 'Tải & Đồng bộ dữ liệu (Export)'
+				'manualLockSheets': 'Tải & Đồng bộ dữ liệu (Export)',
+				'manualLockAi': 'Trợ lý AI'
 			};
 			const featureName = featureMap[field] || 'Chính sách hệ thống';
 
@@ -828,9 +836,18 @@ const NexusControl = () => {
 			<div className="max-w-[1400px] mx-auto">
 				{/* Header */}
 				<div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-					<div>
-						<h1 className="text-2xl md:text-3xl font-black text-slate-800 dark:text-slate-900 dark:text-white uppercase tracking-tight">Nexus Control</h1>
-						<p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mt-1">System Core v1.0</p>
+					<div className="flex items-center gap-4">
+						<div>
+							<h1 className="text-2xl md:text-3xl font-black text-slate-800 dark:text-slate-900 dark:text-white uppercase tracking-tight">Nexus Control</h1>
+							<p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mt-1">System Core v1.0</p>
+						</div>
+						<button 
+							onClick={() => runAutonomousCycle(customers, requests)}
+							className="bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20 flex items-center gap-2 transition-all active:scale-95"
+						>
+							<Bot size={14} />
+							Đồng bộ AI
+						</button>
 					</div>
 
 					<div className="flex bg-white dark:bg-white dark:bg-slate-900 p-1.5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-100 dark:border-slate-800 overflow-x-auto no-scrollbar">

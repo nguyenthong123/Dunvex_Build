@@ -136,6 +136,59 @@ const AppSettings = () => {
 						)}
 					</div>
 
+					{/* ADMIN TOOLS */}
+					<div className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800">
+						<h3 className="text-lg font-bold text-rose-600 dark:text-rose-400 mb-4 uppercase tracking-tight">Công cụ Quản trị hệ thống</h3>
+						<div className="p-4 bg-orange-50 dark:bg-orange-900/10 rounded-2xl border border-orange-200 dark:border-orange-900/30">
+							<p className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Đồng bộ Đơn hàng & Khách hàng</p>
+							<p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Tìm và tự động liên kết các đơn hàng cũ chưa có mã khách hàng vào danh sách khách hàng dựa trên tên. Tự động tính toán lại công nợ.</p>
+							<button
+								onClick={async () => {
+									const { collection, getDocs, writeBatch, doc, increment } = await import('firebase/firestore');
+									const { db } = await import('../services/firebase');
+									if (!confirm('Hệ thống sẽ quét và liên kết lại toàn bộ đơn hàng. Bạn đã thêm lại các Khách hàng bị thiếu chưa?')) return;
+									
+									try {
+										showToast('Đang quét dữ liệu...', 'info');
+										const customersSnap = await getDocs(collection(db, 'customers'));
+										const customersList = customersSnap.docs.map(d => ({ id: d.id, ...d.data() as any }));
+										
+										const ordersSnap = await getDocs(collection(db, 'orders'));
+										const batch = writeBatch(db);
+										let count = 0;
+
+										ordersSnap.docs.forEach(d => {
+											const order = d.data() as any;
+											if (!order.customerId && order.customerName) {
+												const qName = String(order.customerName).trim().toLowerCase();
+												const match = customersList.find(c => String(c.name).trim().toLowerCase() === qName);
+												if (match) {
+													batch.update(d.ref, { customerId: match.id, customerPhone: match.phone || '' });
+													if (order.status === 'Đơn chốt') {
+														batch.update(doc(db, 'customers', match.id), { debt: increment(Number(order.totalAmount || 0)) });
+													}
+													count++;
+												}
+											}
+										});
+
+										if (count > 0) {
+											await batch.commit();
+											showToast(`Đã đồng bộ thành công ${count} đơn hàng!`, 'success');
+										} else {
+											showToast('Không tìm thấy đơn hàng nào cần đồng bộ.', 'info');
+										}
+									} catch (e: any) {
+										showToast('Lỗi đồng bộ: ' + e.message, 'error');
+									}
+								}}
+								className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-all"
+							>
+								Chạy Đồng Bộ Ngay
+							</button>
+						</div>
+					</div>
+
 					{/* Pricing & Subscription Section */}
 					<div ref={pricingRef} className="bg-[#1A237E] dark:bg-indigo-950 p-6 rounded-[2rem] shadow-xl border border-indigo-400/20 text-white relative overflow-hidden">
 						<div className="absolute top-0 right-0 p-8 opacity-10 rotate-12">

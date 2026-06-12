@@ -158,7 +158,6 @@ const AppSettings = () => {
 
 										showToast('Đang quét dữ liệu...', 'info');
 										
-										// Thêm query bắt buộc ownerId để không bị lỗi permissions
 										const qCust = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
 										const customersSnap = await getDocs(qCust);
 										const customersList = customersSnap.docs.map(d => ({ id: d.id, ...d.data() as any }));
@@ -168,11 +167,30 @@ const AppSettings = () => {
 										const batch = writeBatch(db);
 										let count = 0;
 
+										const normalize = (t: any) => String(t || '').normalize('NFC').toLowerCase().replace(/\s+/g, ' ').trim();
+										const removeAccents = (t: any) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+
 										ordersSnap.docs.forEach(d => {
 											const order = d.data() as any;
-											if (!order.customerId && order.customerName) {
-												const qName = String(order.customerName).trim().toLowerCase();
-												const match = customersList.find(c => String(c.name).trim().toLowerCase() === qName);
+											if (!order.customerId && (order.customerName || order.customerBusinessName)) {
+												const oName = normalize(order.customerName || '');
+												const oBiz = normalize(order.customerBusinessName || '');
+												
+												const match = customersList.find(c => {
+													const cName = normalize(c.name || '');
+													const cBiz = normalize(c.businessName || '');
+													
+													const exactMatch = (cName && (cName === oName || cName === oBiz)) || 
+																	   (cBiz && (cBiz === oName || cBiz === oBiz));
+													
+													const includesMatch = (cName && (oName.includes(cName) || oBiz.includes(cName))) ||
+																		  (cBiz && (oName.includes(cBiz) || oBiz.includes(cBiz)));
+													
+													const noAccentMatch = (cName && (removeAccents(oName).includes(removeAccents(cName))));
+
+													return exactMatch || includesMatch || noAccentMatch;
+												});
+
 												if (match) {
 													batch.update(d.ref, { customerId: match.id, customerPhone: match.phone || '' });
 													if (order.status === 'Đơn chốt') {
@@ -187,7 +205,7 @@ const AppSettings = () => {
 											await batch.commit();
 											showToast(`Đã đồng bộ thành công ${count} đơn hàng!`, 'success');
 										} else {
-											showToast('Không tìm thấy đơn hàng nào cần đồng bộ.', 'info');
+											showToast('Không tìm thấy đơn hàng nào cần đồng bộ. Có thể tên khách bạn tạo không khớp với đơn hàng.', 'info');
 										}
 									} catch (e: any) {
 										showToast('Lỗi đồng bộ: ' + e.message, 'error');

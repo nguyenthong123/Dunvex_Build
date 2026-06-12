@@ -1121,7 +1121,7 @@ const NexusControl = () => {
 											<th className="px-3 py-5 text-center">Đơn</th>
 											<th className="px-3 py-5 text-center">Nợ</th>
 											<th className="px-3 py-5 text-center">Sheet</th>
-											<th className="px-6 py-5 text-right">Chi tiết</th>
+											<th className="px-3 py-5 text-center">AI</th>
 										</tr>
 									</thead>
 									<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -1182,8 +1182,14 @@ const NexusControl = () => {
 															{c.manualLockSheets ? <Lock size={12} /> : <Unlock size={12} />}
 														</button>
 													</td>
-													<td className="px-6 py-6 text-right">
-														<ExternalLink size={16} className="text-slate-600 cursor-not-allowed mx-auto" />
+													<td className="px-3 py-6 text-center">
+														<button
+															onClick={() => toggleUserLock(c.uid, 'manualLockAi', c.manualLockAi)}
+															className={`size-8 rounded-lg flex items-center justify-center mx-auto transition-all ${c.manualLockAi ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'bg-slate-800 text-slate-500 hover:text-slate-900 dark:text-white'}`}
+															title={c.manualLockAi ? "Đã khóa" : "Khóa thủ công"}
+														>
+															{c.manualLockAi ? <Lock size={12} /> : <Unlock size={12} />}
+														</button>
 													</td>
 												</tr>
 											);
@@ -1256,6 +1262,15 @@ const NexusControl = () => {
 														className={`size-10 rounded-xl flex items-center justify-center transition-all ${c.manualLockSheets ? 'bg-rose-500 text-white' : 'bg-slate-800 text-slate-500'}`}
 													>
 														{c.manualLockSheets ? <Lock size={16} /> : <Unlock size={16} />}
+													</button>
+												</div>
+												<div className="flex flex-col items-center gap-1.5">
+													<p className="text-[8px] font-black text-slate-600 uppercase tracking-widest">AI</p>
+													<button
+														onClick={() => toggleUserLock(c.uid, 'manualLockAi', c.manualLockAi)}
+														className={`size-10 rounded-xl flex items-center justify-center transition-all ${c.manualLockAi ? 'bg-rose-500 text-white' : 'bg-slate-800 text-slate-500'}`}
+													>
+														{c.manualLockAi ? <Lock size={16} /> : <Unlock size={16} />}
 													</button>
 												</div>
 											</div>

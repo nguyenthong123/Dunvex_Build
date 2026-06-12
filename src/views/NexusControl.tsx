@@ -70,6 +70,16 @@ const NexusControl = () => {
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 	const [searchQuery, setSearchQuery] = useState('');
 
+	// Config Tab States
+	const [paymentConfig, setPaymentConfig] = useState({
+		bankId: '',
+		accountNumber: '',
+		accountName: ''
+	});
+	const [isSavingConfig, setIsSavingConfig] = useState(false);
+	const [addons, setAddons] = useState<any[]>([]);
+	const [editingAddon, setEditingAddon] = useState<any>(null);
+
 	const filteredCustomers = customers.filter(c => {
 		const queryStr = searchQuery.toLowerCase().trim();
 		if (!queryStr) return true;
@@ -189,10 +199,25 @@ const NexusControl = () => {
 			}
 		});
 
+		// 5. System config & Addons for Config Tab
+		const unsubConfig = onSnapshot(doc(db, 'system_config', 'payment'), (snap) => {
+			if (snap.exists()) {
+				setPaymentConfig(snap.data() as any);
+			}
+		});
+
+		const unsubAddons = onSnapshot(collection(db, 'subscription_packages'), (snap) => {
+			const fetchedAddons = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+			fetchedAddons.sort((a: any, b: any) => (a.price || 0) - (b.price || 0));
+			setAddons(fetchedAddons);
+		});
+
 		return () => {
 			unsubRequests();
 			unsubUsers();
 			unsubLogs();
+			unsubConfig();
+			unsubAddons();
 		};
 	}, [navigate, isAiActive, systemConfig.ai_auto_lock]);
 
@@ -550,31 +575,45 @@ const NexusControl = () => {
 				handledBy: auth.currentUser?.email
 			});
 
-			const isYearly = request.planId === 'premium_yearly';
-			const expireDate = new Date();
-			if (isYearly) {
-				expireDate.setFullYear(expireDate.getFullYear() + 1);
+			const planId = request.planId;
+
+			if (planId && planId.startsWith('addon_export')) {
+				const currentMonth = new Date().toISOString().slice(0, 7);
+				const { setDoc, increment } = await import('firebase/firestore');
+				await setDoc(doc(db, 'usage_limits', `${request.ownerId}_${currentMonth}`), {
+					extraExportLimit: increment(5)
+				}, { merge: true });
+			} else if (planId === 'addon_ai_assistant') {
+				await setDoc(doc(db, 'settings', request.ownerId), {
+					hasAIAssistant: true
+				}, { merge: true });
 			} else {
-				expireDate.setMonth(expireDate.getMonth() + 1);
+				const isYearly = planId === 'premium_yearly' || planId === 'addon_yearly';
+				const expireDate = new Date();
+				if (isYearly) {
+					expireDate.setFullYear(expireDate.getFullYear() + 1);
+				} else {
+					expireDate.setMonth(expireDate.getMonth() + 1);
+				}
+
+				await setDoc(doc(db, 'settings', request.ownerId), {
+					subscriptionStatus: 'active',
+					isPro: true,
+					planId: request.planId,
+					paymentConfirmedAt: serverTimestamp(),
+					subscriptionExpiresAt: expireDate,
+					// Auto-unlock features upon approval
+					manualLockOrders: false,
+					manualLockDebts: false,
+					manualLockSheets: false
+				}, { merge: true });
 			}
 
-			await setDoc(doc(db, 'settings', request.ownerId), {
-				subscriptionStatus: 'active',
-				isPro: true,
-				planId: request.planId,
-				paymentConfirmedAt: serverTimestamp(),
-				subscriptionExpiresAt: expireDate,
-				// Auto-unlock features upon approval
-				manualLockOrders: false,
-				manualLockDebts: false,
-				manualLockSheets: false
-			}, { merge: true });
-
-			// Notify User via AI
+			// Notify User
 			await addDoc(collection(db, 'notifications'), {
 				userId: request.ownerId,
 				title: '✨ GIA HẠN THÀNH CÔNG',
-				body: `Nexus AI đã nhận được xác nhận thanh toán. Gói ${request.planName || request.planId} đã được kích hoạt. Tất cả tính năng đã được mở khóa.`,
+				body: `Hệ thống đã nhận được xác nhận thanh toán. Gói ${request.planName || request.planId} đã được kích hoạt thành công.`,
 				type: 'success',
 				priority: 'high',
 				read: false,
@@ -641,6 +680,63 @@ const NexusControl = () => {
 		}
 	};
 
+	const handleSaveConfig = async () => {
+		if (!paymentConfig.bankId || !paymentConfig.accountNumber || !paymentConfig.accountName) {
+			showToast("Vui lòng điền đầy đủ thông tin", "error");
+			return;
+		}
+		setIsSavingConfig(true);
+		try {
+			await setDoc(doc(db, 'system_config', 'payment'), {
+				...paymentConfig,
+				bankId: paymentConfig.bankId.toUpperCase(),
+				accountName: paymentConfig.accountName.toUpperCase(),
+				updatedAt: serverTimestamp(),
+				updatedBy: auth.currentUser?.email
+			});
+			showToast("Đã cập nhật thông tin QR thanh toán!", "success");
+		} catch (error) {
+			showToast("Lỗi khi lưu cấu hình", "error");
+		} finally {
+			setIsSavingConfig(false);
+		}
+	};
+
+	const handleSaveAddon = async (e: React.FormEvent) => {
+		e.preventDefault();
+		if (!editingAddon.id || !editingAddon.name || !editingAddon.price) {
+			showToast("Vui lòng điền đủ mã, tên và giá gói", "error");
+			return;
+		}
+		try {
+			await setDoc(doc(db, 'subscription_packages', editingAddon.id), {
+				name: editingAddon.name,
+				price: Number(editingAddon.price),
+				description: editingAddon.description || '',
+				icon: editingAddon.icon || 'Zap',
+				features: typeof editingAddon.features === 'string' ? editingAddon.features.split('\n').filter((f: string) => f.trim() !== '') : (editingAddon.features || []),
+				bgClass: editingAddon.bgClass || 'bg-slate-50 dark:bg-slate-800',
+				textClass: editingAddon.textClass || 'text-slate-500',
+				shadowClass: editingAddon.shadowClass || 'shadow-none'
+			});
+			showToast("Đã lưu gói dịch vụ!", "success");
+			setEditingAddon(null);
+		} catch (error) {
+			showToast("Lỗi lưu gói dịch vụ", "error");
+		}
+	};
+
+	const handleDeleteAddon = async (id: string) => {
+		if (!window.confirm("Chắc chắn xóa gói dịch vụ này?")) return;
+		try {
+			const { deleteDoc } = await import('firebase/firestore');
+			await deleteDoc(doc(db, 'subscription_packages', id));
+			showToast("Đã xóa gói dịch vụ", "info");
+		} catch (error) {
+			showToast("Lỗi khi xóa gói dịch vụ", "error");
+		}
+	};
+
 	const toggleUserLock = async (ownerId: string, field: string, currentVal: boolean) => {
 		try {
 			const newVal = !currentVal;
@@ -696,8 +792,8 @@ const NexusControl = () => {
 					<div className="flex bg-white dark:bg-white dark:bg-slate-900 p-1.5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-100 dark:border-slate-800 overflow-x-auto no-scrollbar">
 						<TabItem active={activeTab === 'requests'} onClick={() => setActiveTab('requests')} icon={<Activity size={18} />} label="Hệ thống" badge={stats.pendingPayments} />
 						<TabItem active={activeTab === 'customers'} onClick={() => setActiveTab('customers')} icon={<Users size={18} />} label="Khách hàng" />
-						<TabItem active={activeTab === 'config'} onClick={() => setActiveTab('config')} icon={<Settings size={18} />} label="Lịch sử Log" />
-						<TabItem active={activeTab === 'ai'} onClick={() => setActiveTab('ai')} icon={<Bot size={18} />} label="Nexus AI" />
+						<TabItem active={activeTab === 'logs'} onClick={() => setActiveTab('logs')} icon={<Settings size={18} />} label="Lịch sử Log" />
+						<TabItem active={activeTab === 'config'} onClick={() => setActiveTab('config')} icon={<Bot size={18} />} label="Cấu hình" />
 					</div>
 				</div>
 
@@ -840,7 +936,7 @@ const NexusControl = () => {
 						</div>
 					)}
 
-					{activeTab === 'config' && (
+					{activeTab === 'logs' && (
 						<div className="space-y-6">
 							<div className="bg-white dark:bg-slate-900 rounded-3xl lg:rounded-[2rem] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-2xl">
 								<div className="px-6 lg:px-8 py-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-800/20">
@@ -1131,198 +1227,113 @@ const NexusControl = () => {
 						</div>
 					)}
 
-					{activeTab === 'ai' && (
+					{activeTab === 'config' && (
 						<div className="space-y-6 lg:space-y-8 max-w-5xl">
-							{/* AI Control Panel */}
-							<div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
-								<div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 p-6 lg:p-8 shadow-2xl relative overflow-hidden group">
-									<div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity hidden sm:block">
-										<Bot size={120} className="text-indigo-500 rotate-12" />
-									</div>
-									<div className="relative z-10">
-										<div className="flex items-center gap-4 mb-6">
-											<div className={`size-12 rounded-2xl flex items-center justify-center ${isAiActive ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/40 animate-pulse' : 'bg-slate-800 text-slate-500'}`}>
-												<Zap size={24} />
-											</div>
-											<div>
-												<h4 className="text-lg lg:text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Nexus AI Core</h4>
-												<p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest leading-none">Autonomous System Monitoring</p>
-											</div>
-										</div>
-
-										<div className="grid grid-cols-2 gap-3 lg:gap-4 mb-8">
-											<div className="bg-slate-800/40 p-4 lg:p-5 rounded-2xl border border-slate-700/50">
-												<p className="text-[8px] lg:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Status</p>
-												<p className={`text-xs lg:text-sm font-black uppercase ${isAiActive ? 'text-emerald-400' : 'text-rose-400'}`}>
-													{isAiActive ? 'Active' : 'Offline'}
-												</p>
-											</div>
-											<div className="bg-slate-800/40 p-4 lg:p-5 rounded-2xl border border-slate-700/50">
-												<p className="text-[8px] lg:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Threats</p>
-												<p className={`text-xs lg:text-sm font-black uppercase ${aiAnomalies.length > 0 ? 'text-rose-500 animate-pulse' : 'text-emerald-400'}`}>
-													{aiAnomalies.length > 0 ? 'Urgent' : 'Safe'}
-												</p>
-											</div>
-										</div>
-
-										<div className="flex flex-col sm:flex-row gap-3">
-											<button
-												onClick={() => setIsAiActive(!isAiActive)}
-												className={`w-full sm:w-auto px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all ${isAiActive ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20 hover:bg-rose-500 hover:text-slate-900 dark:text-white' : 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'}`}
-											>
-												{isAiActive ? 'Stop AI Monitor' : 'Start Nexus AI'}
-											</button>
-											<button
-												onClick={() => toggleSystemFlag('ai_auto_lock')}
-												className={`w-full sm:w-auto px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all ${systemConfig.ai_auto_lock ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-slate-800 text-slate-500 border border-slate-700'}`}
-											>
-												Auto-Lock: {systemConfig.ai_auto_lock ? 'ON' : 'OFF'}
-											</button>
-										</div>
-									</div>
-								</div>
-
-								<div className="bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 p-6 lg:p-8 shadow-2xl flex flex-col items-center justify-center text-center">
-									<div className="size-16 lg:size-20 rounded-3xl bg-amber-500/10 flex items-center justify-center text-amber-500 mb-6">
-										<Eye size={32} />
-									</div>
-									<h5 className="font-black text-slate-900 dark:text-white uppercase tracking-tight mb-2 text-sm lg:text-base">Bot Intelligence</h5>
-									<p className="text-[10px] lg:text-xs text-slate-500 font-medium mb-6">
-										Bot đang quét và phân tích thao tác cấn máy trên toàn bộ ứng dụng.
-									</p>
-									<div className="w-full bg-slate-800 h-1.5 lg:h-2 rounded-full overflow-hidden">
-										<div className="bg-indigo-500 h-full w-[85%] animate-[progress_2s_ease-in-out_infinite]" />
-									</div>
-								</div>
-							</div>
-
-							{/* Anomalies section */}
+							{/* Bank QR Config */}
 							<div className="bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-2xl">
 								<div className="px-6 lg:px-8 py-5 lg:py-6 border-b border-slate-100 dark:border-slate-800 bg-slate-800/30 flex items-center justify-between">
 									<div className="flex items-center gap-3">
-										<AlertTriangle className="text-amber-500" size={20} />
-										<h4 className="text-[10px] lg:text-xs font-black text-slate-900 dark:text-white uppercase tracking-[2px] lg:tracking-[4px]">Cảnh báo bất thường</h4>
+										<CreditCard className="text-indigo-500" size={20} />
+										<h4 className="text-[10px] lg:text-xs font-black text-slate-900 dark:text-white uppercase tracking-[2px] lg:tracking-[4px]">Cấu hình Tài khoản Nhận tiền</h4>
 									</div>
-									<span className="text-[10px] text-slate-500 font-black uppercase whitespace-nowrap">{aiAnomalies.length} Phát hiện</span>
 								</div>
-
-								{/* Desktop Table */}
-								<div className="hidden md:block overflow-x-auto">
-									<table className="w-full text-left">
-										<thead>
-											<tr className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase tracking-widest text-slate-500">
-												<th className="px-8 py-5">Tài khoản</th>
-												<th className="px-8 py-5">Phân loại</th>
-												<th className="px-8 py-5">Chi tiết phân tích AI</th>
-												<th className="px-8 py-5 text-right">Thao tác</th>
-											</tr>
-										</thead>
-										<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-											{aiAnomalies.map((anom, idx) => (
-												<tr key={idx} className="bg-rose-500/5 hover:bg-rose-500/10 transition-colors">
-													<td className="px-8 py-6">
-														<p className="font-bold text-slate-900 dark:text-white text-xs">{anom.email}</p>
-														<p className="text-[10px] text-slate-500 font-black tracking-widest">{anom.ownerId?.slice(-8)}</p>
-													</td>
-													<td className="px-8 py-6">
-														<span className="px-1.5 py-0.5 bg-rose-500 text-white rounded font-black text-[8px] uppercase tracking-wider">
-															Suspicious
-														</span>
-													</td>
-													<td className="px-8 py-6 text-slate-600 dark:text-slate-300 text-xs font-medium italic">
-														"{anom.details}"
-													</td>
-													<td className="px-8 py-6 text-right">
-														<button
-															onClick={() => toggleUserLock(anom.ownerId, 'manualLockOrders', false)}
-															className="bg-white text-slate-950 px-3 py-1.5 rounded-lg font-black text-[9px] uppercase hover:bg-indigo-500 hover:text-slate-900 dark:text-white transition-all shadow-sm"
-														>
-															Mở khóa
-														</button>
-													</td>
-												</tr>
-											))}
-										</tbody>
-									</table>
-								</div>
-
-								{/* Mobile Cards */}
-								<div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
-									{aiAnomalies.map((anom, idx) => (
-										<div key={idx} className="p-6 space-y-4 bg-rose-500/5">
-											<div className="flex items-center justify-between">
-												<div className="min-w-0">
-													<p className="text-xs font-black text-slate-900 dark:text-white uppercase truncate pr-2">{anom.email}</p>
-													<p className="text-[9px] text-slate-500 font-black tracking-widest uppercase">{anom.ownerId?.slice(-8)}</p>
-												</div>
-												<span className="shrink-0 px-2 py-1 bg-rose-500 text-white rounded-lg font-black text-[8px] uppercase tracking-wider">Mối đe dọa</span>
-											</div>
-											<div className="bg-white dark:bg-slate-900/50 p-4 rounded-xl border border-rose-500/10">
-												<p className="text-[11px] text-slate-600 dark:text-slate-300 font-medium italic leading-relaxed">"{anom.details}"</p>
-											</div>
-											<button
-												onClick={() => toggleUserLock(anom.ownerId, 'manualLockOrders', false)}
-												className="w-full bg-white text-slate-950 py-3 rounded-xl font-black text-[10px] uppercase shadow-lg shadow-white/5 active:scale-95 transition-transform"
-											>
-												Can thiệp ngay
-											</button>
+								<div className="p-6 lg:p-8">
+									<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+										<div>
+											<label className="block text-xs font-bold text-slate-500 uppercase mb-2">Ngân hàng (VD: ICB, VCB)</label>
+											<input type="text" className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white" value={paymentConfig.bankId} onChange={e => setPaymentConfig({...paymentConfig, bankId: e.target.value})} />
 										</div>
-									))}
-								</div>
-								{aiAnomalies.length === 0 && (
-									<div className="py-20 text-center text-slate-600 font-black uppercase tracking-widest text-[10px] opacity-40">
-										✨ Hệ thống chưa phát hiện hành vi bất thường
+										<div>
+											<label className="block text-xs font-bold text-slate-500 uppercase mb-2">Số tài khoản</label>
+											<input type="text" className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white" value={paymentConfig.accountNumber} onChange={e => setPaymentConfig({...paymentConfig, accountNumber: e.target.value})} />
+										</div>
+										<div className="md:col-span-2">
+											<label className="block text-xs font-bold text-slate-500 uppercase mb-2">Tên chủ tài khoản</label>
+											<input type="text" className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white" value={paymentConfig.accountName} onChange={e => setPaymentConfig({...paymentConfig, accountName: e.target.value})} />
+										</div>
 									</div>
-								)}
+									<button onClick={handleSaveConfig} disabled={isSavingConfig} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all w-full md:w-auto flex justify-center items-center gap-2">
+										{isSavingConfig ? <Clock className="animate-spin" size={16} /> : <CheckCircle2 size={16} />}
+										Lưu Cấu Hình QR
+									</button>
+								</div>
 							</div>
 
-							{/* Autonomous Actions Log */}
+							{/* Addons CRUD */}
 							<div className="bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-2xl">
-								<div className="px-6 lg:px-8 py-5 lg:py-6 border-b border-slate-100 dark:border-slate-800 bg-indigo-500/5 flex items-center justify-between">
+								<div className="px-6 lg:px-8 py-5 lg:py-6 border-b border-slate-100 dark:border-slate-800 bg-slate-800/30 flex items-center justify-between">
 									<div className="flex items-center gap-3">
-										<ShieldAlert className="text-indigo-400" size={20} />
-										<h4 className="text-[10px] lg:text-xs font-black text-slate-900 dark:text-white uppercase tracking-[2px] lg:tracking-[4px]">Tác vụ tự động</h4>
+										<Crown className="text-amber-500" size={20} />
+										<h4 className="text-[10px] lg:text-xs font-black text-slate-900 dark:text-white uppercase tracking-[2px] lg:tracking-[4px]">Quản lý Gói Dịch vụ</h4>
 									</div>
-									<div className="hidden sm:flex items-center gap-2">
-										<div className="size-2 rounded-full bg-emerald-500 animate-pulse" />
-										<span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">Bot Live Monitoring</span>
-									</div>
+									<button onClick={() => setEditingAddon({ id: `addon_${Date.now()}`, name: '', price: 0, description: '', icon: 'Zap', features: '', bgClass: '', textClass: '', shadowClass: '' })} className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all">
+										Thêm Gói Mới
+									</button>
 								</div>
+								
+								<div className="p-6 lg:p-8">
+									{editingAddon && (
+										<form onSubmit={handleSaveAddon} className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 mb-8 space-y-4">
+											<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+												<div>
+													<label className="block text-xs font-bold text-slate-500 uppercase mb-2">ID Gói (VD: addon_export_5)</label>
+													<input type="text" required className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white" value={editingAddon.id} onChange={e => setEditingAddon({...editingAddon, id: e.target.value})} />
+												</div>
+												<div>
+													<label className="block text-xs font-bold text-slate-500 uppercase mb-2">Tên gói (VD: Gói Tháng)</label>
+													<input type="text" required className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white" value={editingAddon.name} onChange={e => setEditingAddon({...editingAddon, name: e.target.value})} />
+												</div>
+												<div>
+													<label className="block text-xs font-bold text-slate-500 uppercase mb-2">Mức giá (VNĐ)</label>
+													<input type="number" required className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white" value={editingAddon.price} onChange={e => setEditingAddon({...editingAddon, price: e.target.value})} />
+												</div>
+												<div>
+													<label className="block text-xs font-bold text-slate-500 uppercase mb-2">Icon (Download, Zap, Crown, Rocket, Shield)</label>
+													<input type="text" className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white" value={editingAddon.icon} onChange={e => setEditingAddon({...editingAddon, icon: e.target.value})} />
+												</div>
+												<div className="md:col-span-2">
+													<label className="block text-xs font-bold text-slate-500 uppercase mb-2">Mô tả ngắn gọn</label>
+													<input type="text" className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white" value={editingAddon.description} onChange={e => setEditingAddon({...editingAddon, description: e.target.value})} />
+												</div>
+												<div className="md:col-span-2">
+													<label className="block text-xs font-bold text-slate-500 uppercase mb-2">Tính năng nổi bật (Mỗi dòng 1 tính năng)</label>
+													<textarea rows={3} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white" value={typeof editingAddon.features === 'string' ? editingAddon.features : editingAddon.features?.join('\n')} onChange={e => setEditingAddon({...editingAddon, features: e.target.value})} />
+												</div>
+												<div>
+													<label className="block text-xs font-bold text-slate-500 uppercase mb-2">Màu Background (VD: bg-amber-50)</label>
+													<input type="text" className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white" value={editingAddon.bgClass} onChange={e => setEditingAddon({...editingAddon, bgClass: e.target.value})} />
+												</div>
+												<div>
+													<label className="block text-xs font-bold text-slate-500 uppercase mb-2">Màu Text (VD: text-amber-500)</label>
+													<input type="text" className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white" value={editingAddon.textClass} onChange={e => setEditingAddon({...editingAddon, textClass: e.target.value})} />
+												</div>
+											</div>
+											<div className="flex gap-3 justify-end pt-4">
+												<button type="button" onClick={() => setEditingAddon(null)} className="px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-widest text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">Hủy</button>
+												<button type="submit" className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all">Lưu Gói</button>
+											</div>
+										</form>
+									)}
 
-								{/* Actions List (Unified for better mobile display) */}
-								<div className="divide-y divide-slate-100 dark:divide-slate-800/50">
-									{aiActions.map((action) => (
-										<div key={action.id} className="p-5 lg:px-8 lg:py-6 hover:bg-slate-800/10 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-											<div className="flex items-center gap-4">
-												<div className={`size-10 rounded-xl shrink-0 flex items-center justify-center ${
-													action.type === 'provisioning' ? 'bg-emerald-500/10 text-emerald-500' :
-													action.type === 'enforcement' ? 'bg-amber-500/10 text-amber-500' :
-													'bg-rose-500/10 text-rose-500'
-												}`}>
-													{action.type === 'provisioning' ? <Crown size={18} /> : <Zap size={18} />}
+									<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+										{addons.map(addon => (
+											<div key={addon.id} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-5 rounded-2xl flex flex-col justify-between shadow-sm hover:shadow-md transition-shadow">
+												<div>
+													<div className="flex items-start justify-between mb-2">
+														<h5 className={`font-black text-lg ${addon.textClass || 'text-slate-900 dark:text-white'}`}>{addon.name}</h5>
+														<span className="font-bold text-sm bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded-md text-slate-700 dark:text-slate-300">{addon.price.toLocaleString()}đ</span>
+													</div>
+													<p className="text-xs text-slate-500 dark:text-slate-400 mb-4">{addon.description}</p>
+													<p className="text-[10px] font-black uppercase text-slate-400 mb-1">ID: {addon.id}</p>
 												</div>
-												<div className="min-w-0">
-													<p className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm truncate sm:max-w-[200px]">{action.targetEmail}</p>
-													<p className="text-[10px] text-slate-500 mt-0.5">
-														{action.timestamp?.toDate ? action.timestamp.toDate().toLocaleString('vi-VN', {
-															hour: '2-digit', minute: '2-digit', second: '2-digit', day: '2-digit', month: '2-digit'
-														}) : '---'}
-													</p>
+												<div className="flex gap-2 mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
+													<button onClick={() => setEditingAddon(addon)} className="flex-1 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 py-2 rounded-xl text-xs font-bold uppercase hover:bg-indigo-100 transition-colors">Sửa</button>
+													<button onClick={() => handleDeleteAddon(addon.id)} className="flex-1 bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 py-2 rounded-xl text-xs font-bold uppercase hover:bg-rose-100 transition-colors">Xóa</button>
 												</div>
 											</div>
-											<div className="flex flex-col sm:items-end gap-1 px-14 sm:px-0">
-												<span className="text-[10px] text-slate-400 font-medium bg-slate-50 dark:bg-slate-800/50 px-2 py-1 rounded-md">
-													{action.details}
-												</span>
-											</div>
-										</div>
-									))}
-								</div>
-								{aiActions.length === 0 && (
-									<div className="py-20 text-center text-slate-600 font-black uppercase tracking-widest text-[10px] opacity-40">
-										Đang chờ tác vụ tiếp theo...
+										))}
 									</div>
-								)}
+								</div>
 							</div>
 						</div>
 					)}

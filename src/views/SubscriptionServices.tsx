@@ -38,52 +38,31 @@ const SubscriptionServices = () => {
 		});
 	};
 
-	const addons = [
-		{
-			id: 'addon_export_5',
-			name: 'Gói thêm 5 lượt tải Excel',
-			price: 100000,
-			description: 'Giải pháp tức thời khi bạn đã dùng hết giới hạn trích xuất dữ liệu trong tháng.',
-			icon: <Download size={28} className="text-blue-500" />,
-			features: ['Có tác dụng ngay lập tức', 'Cộng dồn vào tháng hiện tại', 'Không giới hạn dung lượng tải'],
-			bgClass: 'bg-blue-50 dark:bg-blue-900/10',
-			textClass: 'text-blue-500',
-			shadowClass: 'shadow-blue-500/20'
-		},
-		{
-			id: 'addon_monthly',
-			name: 'Gói Tháng',
-			price: 250000,
-			description: 'Trải nghiệm toàn bộ tính năng quản lý ưu việt của Dunvex Build trong 1 tháng.',
-			icon: <Zap size={28} className="text-amber-500" />,
-			features: ['Mở khóa tất cả tính năng', 'Không giới hạn dung lượng', 'Hỗ trợ kỹ thuật ưu tiên'],
-			bgClass: 'bg-amber-50 dark:bg-amber-900/10',
-			textClass: 'text-amber-500',
-			shadowClass: 'shadow-amber-500/20'
-		},
-		{
-			id: 'addon_yearly',
-			name: 'Gói Năm',
-			price: 2500000,
-			description: 'Gói siêu tiết kiệm dành cho doanh nghiệp, sử dụng liên tục trong 12 tháng.',
-			icon: <Crown size={28} className="text-rose-500" />,
-			features: ['Tiết kiệm 2 tháng sử dụng', 'Ưu tiên cập nhật tính năng mới', 'Hỗ trợ trực tiếp 1-1'],
-			bgClass: 'bg-rose-50 dark:bg-rose-900/10',
-			textClass: 'text-rose-500',
-			shadowClass: 'shadow-rose-500/20'
-		},
-		{
-			id: 'addon_ai_assistant',
-			name: 'Gói Trợ lý AI',
-			price: 500000,
-			description: 'Sử dụng SaleBot AI để lên đơn hàng nhanh chóng bằng giọng nói hoặc tin nhắn.',
-			icon: <Rocket size={28} className="text-purple-500" />,
-			features: ['Lên đơn siêu tốc', 'Phân tích tin nhắn tự động', 'Hỗ trợ trả lời khách hàng'],
-			bgClass: 'bg-purple-50 dark:bg-purple-900/10',
-			textClass: 'text-purple-500',
-			shadowClass: 'shadow-purple-500/20'
+	const [addons, setAddons] = useState<any[]>([]);
+
+	useEffect(() => {
+		const unsubAddons = onSnapshot(collection(db, 'subscription_packages'), (snapshot) => {
+			const fetchedAddons = snapshot.docs.map(doc => ({
+				id: doc.id,
+				...doc.data()
+			}));
+			// Sort by price or order if needed, assuming they have price
+			fetchedAddons.sort((a: any, b: any) => (a.price || 0) - (b.price || 0));
+			setAddons(fetchedAddons);
+		});
+		return () => unsubAddons();
+	}, []);
+
+	const renderIcon = (iconName: string, textClass: string) => {
+		switch (iconName) {
+			case 'Download': return <Download size={28} className={textClass} />;
+			case 'Zap': return <Zap size={28} className={textClass} />;
+			case 'Crown': return <Crown size={28} className={textClass} />;
+			case 'Rocket': return <Rocket size={28} className={textClass} />;
+			case 'Shield': return <Shield size={28} className={textClass} />;
+			default: return <Zap size={28} className={textClass} />;
 		}
-	];
+	};
 
 	return (
 		<div className="min-h-screen bg-[#F8F9FA] dark:bg-slate-950 p-4 md:p-8 font-sans transition-colors duration-300 pb-32">
@@ -152,7 +131,7 @@ const SubscriptionServices = () => {
 								<div className={`h-32 ${addon.bgClass} relative flex items-center justify-center overflow-hidden`}>
 									<div className="absolute inset-0 opacity-20 bg-gradient-to-br from-transparent to-black/5 dark:to-white/5"></div>
 									<div className={`p-5 rounded-3xl bg-white dark:bg-slate-800 shadow-xl ${addon.shadowClass} group-hover:scale-110 transition-transform duration-500 z-10`}>
-										{addon.icon}
+										{renderIcon(addon.icon, addon.textClass)}
 									</div>
 								</div>
 								

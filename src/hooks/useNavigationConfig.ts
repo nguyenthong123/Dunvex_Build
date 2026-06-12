@@ -178,12 +178,12 @@ export const useNavigationConfig = () => {
 	const getMobileItems = () => {
 		const home = allItems[0];
 		const orders = allItems[1];
-		const products = allItems[5];
+		const searchBtn = { icon: 'search', label: 'Tìm kiếm', path: '/orders?search=focus' };
 		const aiBot = allItems.find(i => i.path === '/sale-bot') || allItems[13];
 		const center = { ...getCenterItem(), isCenter: true };
 
 		// Các vị trí 1, 2, 4, 5 (không tính center ở vị trí 3)
-		const slots = [home, orders, products, aiBot];
+		const slots = [home, orders, searchBtn, aiBot];
 		
 		// Kiểm tra quyền cho từng slot, nếu không có quyền thì thay thế bằng fallback hợp lệ
 		const validatedSlots = slots.map(item => {

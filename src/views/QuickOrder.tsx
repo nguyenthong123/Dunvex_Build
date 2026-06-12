@@ -718,6 +718,7 @@ const QuickOrder = () => {
 				// 2. Sync Inventory: Revert old logs and apply new ones
 				const existingLogsQ = query(
 					collection(db, 'inventory_logs'),
+					where('ownerId', '==', owner.ownerId),
 					where('orderId', '==', id)
 				);
 				const existingLogsSnap = await getDocs(existingLogsQ);

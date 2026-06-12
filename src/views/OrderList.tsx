@@ -172,7 +172,11 @@ const OrderList = () => {
 				const batch = writeBatch(db);
 
 				// 1. Revert Inventory
-				const logsQ = query(collection(db, 'inventory_logs'), where('orderId', '==', id));
+				const logsQ = query(
+					collection(db, 'inventory_logs'), 
+					where('ownerId', '==', owner.ownerId),
+					where('orderId', '==', id)
+				);
 				const logsSnap = await getDocs(logsQ);
 
 				for (const logDoc of logsSnap.docs) {

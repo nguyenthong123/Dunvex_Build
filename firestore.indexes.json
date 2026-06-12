@@ -1,6 +1,20 @@
 {
 	"indexes": [
 		{
+			"collectionGroup": "inventory_logs",
+			"queryScope": "COLLECTION",
+			"fields": [
+				{
+					"fieldPath": "ownerId",
+					"order": "ASCENDING"
+				},
+				{
+					"fieldPath": "orderId",
+					"order": "ASCENDING"
+				}
+			]
+		},
+		{
 			"collectionGroup": "orders",
 			"queryScope": "COLLECTION",
 			"fields": [

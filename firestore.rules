@@ -60,39 +60,45 @@ service cloud.firestore {
 
     // Business Collections
     match /products/{docId} {
-      allow read, update, delete: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
+      allow read, update, delete: if isAuthed() && (resource == null || resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
       allow create: if isAuthed() && (request.resource.data.ownerId == request.auth.uid || getUserData().ownerId == request.resource.data.ownerId);
     }
     match /customers/{docId} {
-      allow read, update, delete: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
+      allow read, update, delete: if isAuthed() && (resource == null || resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
       allow create: if isAuthed() && (request.resource.data.ownerId == request.auth.uid || getUserData().ownerId == request.resource.data.ownerId);
     }
     match /orders/{docId} {
-      allow read, update, delete: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
+      allow read, update, delete: if isAuthed() && (resource == null || resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
       allow create: if isAuthed() && (request.resource.data.ownerId == request.auth.uid || getUserData().ownerId == request.resource.data.ownerId);
     }
     match /inventory_logs/{docId} {
-      allow read, update, delete: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
+      allow read, update, delete: if isAuthed() && (resource == null || resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
       allow create: if isAuthed() && (request.resource.data.ownerId == request.auth.uid || getUserData().ownerId == request.resource.data.ownerId);
     }
     match /audit_logs/{docId} {
-      allow read, update, delete: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
+      allow read, update, delete: if isAuthed() && (resource == null || resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
       allow create: if isAuthed() && (request.resource.data.ownerId == request.auth.uid || getUserData().ownerId == request.resource.data.ownerId);
     }
     match /payments/{docId} {
-      allow read, update, delete: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
+      allow read, update, delete: if isAuthed() && (resource == null || resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
       allow create: if isAuthed() && (request.resource.data.ownerId == request.auth.uid || getUserData().ownerId == request.resource.data.ownerId);
     }
     match /debts/{docId} {
-      allow read, update, delete: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
+      allow read, update, delete: if isAuthed() && (resource == null || resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
       allow create: if isAuthed() && (request.resource.data.ownerId == request.auth.uid || getUserData().ownerId == request.resource.data.ownerId);
     }
     match /finance_transactions/{docId} {
-      allow read, update, delete: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
+      allow read, update, delete: if isAuthed() && (resource == null || resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
       allow create: if isAuthed() && (request.resource.data.ownerId == request.auth.uid || getUserData().ownerId == request.resource.data.ownerId);
     }
     match /checkins/{docId} {
-      allow read, update, delete: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
+      allow read, update, delete: if isAuthed() && (resource == null || resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
+      allow create: if isAuthed() && (request.resource.data.ownerId == request.auth.uid || getUserData().ownerId == request.resource.data.ownerId);
+    }
+    
+    // AI Chat Persistence
+    match /bot_chats/{docId} {
+      allow read, update, delete: if isAuthed() && (resource == null || resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
       allow create: if isAuthed() && (request.resource.data.ownerId == request.auth.uid || getUserData().ownerId == request.resource.data.ownerId);
     }
     

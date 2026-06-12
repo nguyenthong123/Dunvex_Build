@@ -152,7 +152,7 @@ const NexusControl = () => {
 
 		// 2. Listen to Users & Settings to merge data
 		const unsubUsers = onSnapshot(collection(db, 'users'), (userSnap) => {
-			const usersData = userSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+			const usersData = userSnap.docs.map(d => ({ id: d.id, ...d.data(), uid: d.data().uid || d.id }));
 			const owners = usersData.filter((u: any) => u.uid === u.ownerId || !u.ownerId);
 
 			// Listen to Settings as well for real-time lock updates
@@ -811,8 +811,9 @@ const NexusControl = () => {
 				read: false,
 				createdAt: serverTimestamp()
 			});
-		} catch (error) {
-			// Error
+		} catch (error: any) {
+			console.error("Lock Toggle Error:", error);
+			showToast("Lỗi khi khóa: " + error.message, "error");
 		}
 	};
 

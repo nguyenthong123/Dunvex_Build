@@ -18,8 +18,8 @@ service cloud.firestore {
     }
 
     function hasAccessToResource() {
-      let existingOwnerId = resource != null && 'ownerId' in resource.data ? resource.data.ownerId : 'UNKNOWN';
-      let newOwnerId = request.resource != null && 'ownerId' in request.resource.data ? request.resource.data.ownerId : 'UNKNOWN';
+      let existingOwnerId = resource == null ? 'UNKNOWN' : resource.data.ownerId;
+      let newOwnerId = request.resource == null ? 'UNKNOWN' : request.resource.data.ownerId;
       return request.resource == null ? hasAccess(existingOwnerId) : (resource == null ? hasAccess(newOwnerId) : (hasAccess(existingOwnerId) && hasAccess(newOwnerId)));
     }
 

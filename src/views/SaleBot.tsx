@@ -104,7 +104,8 @@ const SaleBot = () => {
                 const snapCust = await getDocs(qCust);
                 const custs = snapCust.docs.map(d => {
                     const data = d.data();
-                    return `- Tên: ${data.name || 'Khách vãng lai'} | SĐT: ${data.phone || 'Không có'} | Nợ: ${data.debt || 0}đ | Nhóm: ${data.type || 'Không có'}`;
+                    const displayName = data.businessName ? `${data.businessName} (Đại diện: ${data.name})` : (data.name || 'Khách vãng lai');
+                    return `- Tên: ${displayName} | SĐT: ${data.phone || 'Không có'} | Nợ: ${data.debt || 0}đ | Nhóm: ${data.type || 'Không có'}`;
                 }).filter(Boolean);
 
                 let contextData = "";
@@ -480,7 +481,7 @@ const SaleBot = () => {
                     
                     if (found) {
                         targetId = found.id;
-                        targetName = found.data().name;
+                        targetName = found.data().businessName || found.data().name;
                     }
                 }
 

@@ -46,7 +46,13 @@ const SaleBot = () => {
                 // Lấy khách hàng
                 const qCust = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
                 const snapCust = await getDocs(qCust);
-                const custs = snapCust.docs.map(d => d.data().name).filter(Boolean);
+                const custs = snapCust.docs.map(d => {
+                    const data = d.data();
+                    let nameStr = data.name || '';
+                    if (data.businessName) nameStr += ` (Tên cơ sở: ${data.businessName})`;
+                    if (data.phone) nameStr += ` - SĐT: ${data.phone}`;
+                    return nameStr;
+                }).filter(Boolean);
 
                 let contextData = "";
                 if (prods.length > 0) contextData += "Danh sách Sản phẩm hiện có:\n" + prods.join("\n") + "\n\n";

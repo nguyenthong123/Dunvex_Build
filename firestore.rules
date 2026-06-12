@@ -13,14 +13,14 @@ service cloud.firestore {
     function hasAccess(docOwnerId) {
       return isAuthed() && (
         request.auth.uid == docOwnerId || 
-        getUserData().ownerId == docOwnerId
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().ownerId == docOwnerId)
       );
     }
 
     function hasAccessToResource() {
-      let existingOwnerId = resource != null ? resource.data.ownerId : request.resource.data.ownerId;
-      let newOwnerId = request.resource != null ? request.resource.data.ownerId : existingOwnerId;
-      return hasAccess(existingOwnerId) && hasAccess(newOwnerId);
+      let existingOwnerId = resource != null && 'ownerId' in resource.data ? resource.data.ownerId : 'UNKNOWN';
+      let newOwnerId = request.resource != null && 'ownerId' in request.resource.data ? request.resource.data.ownerId : 'UNKNOWN';
+      return (request.method == 'read' || request.method == 'delete') ? hasAccess(existingOwnerId) : (hasAccess(existingOwnerId) && hasAccess(newOwnerId));
     }
 
     match /users/{userId} {
@@ -69,7 +69,12 @@ service cloud.firestore {
     // Additional Missing Collections
     match /price_lists/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
     match /attendance_logs/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
-    match /notifications/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
+    match /notifications/{docId} { 
+      allow read, write: if isAuthed() && (
+        (resource != null && resource.data.userId == request.auth.uid) ||
+        (request.resource != null && request.resource.data.userId == request.auth.uid)
+      ); 
+    }
     match /ai_actions/{docId} { allow read, write: if isAuthed() && hasAccessToResource(); }
   }
 }

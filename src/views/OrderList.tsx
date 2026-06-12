@@ -31,6 +31,7 @@ const OrderList = () => {
 		const isAdmin = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
 
 		let q;
+		console.log("OrderList Query Executing with ownerId:", owner.ownerId, "uid:", auth.currentUser?.uid, "isAdmin:", isAdmin);
 		if (isAdmin) {
 			q = query(
 				collection(db, 'orders'),

@@ -209,15 +209,13 @@ const CustomerList = () => {
 		if (isAdmin) {
 			q = query(
 				collection(db, 'customers'),
-				where('ownerId', '==', owner.ownerId),
-				limit(500)
+				where('ownerId', '==', owner.ownerId)
 			);
 		} else {
 			q = query(
 				collection(db, 'customers'),
 				where('ownerId', '==', owner.ownerId),
-				where('createdByEmail', '==', auth.currentUser?.email),
-				limit(500)
+				where('createdByEmail', '==', auth.currentUser?.email)
 			);
 		}
 

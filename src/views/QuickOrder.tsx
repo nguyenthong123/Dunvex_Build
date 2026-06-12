@@ -343,6 +343,10 @@ const QuickOrder = () => {
 			if (data.shipping_fee) {
 				setShippingFee(data.shipping_fee);
 			}
+			
+			if (data.discount_amount) {
+				setDiscountAmt(data.discount_amount);
+			}
 
 			// Tự động set mặc định là Đơn Nháp để an toàn kho bãi
 			setOrderStatus('Đơn nháp');

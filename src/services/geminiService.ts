@@ -82,6 +82,11 @@ const botResponseSchema: Schema = {
             description: "Phí vận chuyển (nếu có nhắc đến, ví dụ: 'vận chuyển 400 ngàn' -> 400000)",
             nullable: true
         },
+        discount_amount: {
+            type: SchemaType.NUMBER,
+            description: "Số tiền chiết khấu (nếu có nhắc đến, ví dụ: 'chiết khấu 200 ngàn' -> 200000)",
+            nullable: true
+        },
         missing_info: {
             type: SchemaType.ARRAY,
             description: "Các thông tin còn thiếu cần hỏi lại người dùng",
@@ -110,7 +115,7 @@ Bạn là "SaleBot" - Trợ lý AI Đa nhiệm của hệ thống DunvexBuild.
 Nhiệm vụ của bạn là nhận tin nhắn và lịch sử hội thoại của người dùng để hiểu ngữ cảnh.
 - Nếu tạo mới, trích xuất thông tin.
 - Nếu tìm kiếm (SEARCH_CUSTOMER), trích xuất search_query.
-- Nếu người dùng yêu cầu Lên đơn (CREATE_ORDER): BẮT BUỘC trích xuất 'products' (bao gồm tên, số lượng, và category nếu có nhắc đến mức giá như giá tại kho, giá thợ, v.v.), 'order_category' (nếu có nhắc đến mức giá chung cho cả đơn), 'notes', 'shipping_fee'.
+- Nếu người dùng yêu cầu Lên đơn (CREATE_ORDER): BẮT BUỘC trích xuất 'products' (bao gồm tên, số lượng, và category nếu có nhắc đến mức giá như giá tại kho, giá thợ, v.v.), 'order_category' (nếu có nhắc đến mức giá chung cho cả đơn), 'notes', 'shipping_fee', 'discount_amount'.
   + LƯU Ý KHI LÊN ĐƠN: TUYỆT ĐỐI KHÔNG BẮT BUỘC số điện thoại. Về địa chỉ: Nếu chưa có địa chỉ, hãy hỏi "Anh/chị muốn giao hàng ra công trình hay giao về địa chỉ mặc định?". Nếu khách chọn "giao công trình", mới yêu cầu cung cấp địa chỉ cụ thể. Nếu khách chọn "mặc định", không cần hỏi thêm. TUYỆT ĐỐI KHÔNG đưa "phone" hay "address" vào mảng 'missing_info' trừ khi khách đã chọn "giao công trình" mà chưa cho địa chỉ.
 - Nếu người dùng yêu cầu Tạo sản phẩm (CREATE_PRODUCT): Bạn bắt buộc phải thu thập đủ 7 trường thông tin: Tên, Tên danh mục, Quy cách, Trọng lượng, Đóng gói, Giá nhập, Giá bán. (Mã SKU sẽ do hệ thống tự tạo, không cần hỏi). Nếu người dùng chưa cung cấp đủ, hãy liệt kê các trường còn thiếu vào mảng 'missing_info' và dùng trường 'message' để hỏi họ bổ sung. Nếu đã đủ, điền vào object 'product_info'.
 - Tự động bổ sung thông tin còn thiếu nếu người dùng trả lời cho câu hỏi trước đó.

@@ -170,7 +170,8 @@ export const useNavigationConfig = () => {
 		{ icon: 'workspace_premium', label: 'Dịch vụ', path: '/services' },                                          // 10
 		{ icon: 'admin_panel_settings', label: 'Quản trị', path: '/admin', permissionKey: 'admin' },          // 11
 		{ icon: 'settings', label: 'Cài đặt', path: '/settings' },                                            // 12
-		{ icon: 'security', label: 'Nexus Control', path: '/nexus-control', permissionKey: 'nexus_control' }, // 13
+		{ icon: 'smart_toy', label: 'Trợ lý AI', path: '/sale-bot' },                                         // 13 (NEW)
+		{ icon: 'security', label: 'Nexus Control', path: '/nexus-control', permissionKey: 'nexus_control' }, // 14
 	];
 
 	// Xử lý Dynamic Menu cho Mobile - Giờ đây đã được ổn định hóa và kiểm tra quyền

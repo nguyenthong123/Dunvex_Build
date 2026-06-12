@@ -236,28 +236,42 @@ const CustomerList = () => {
 		return unsubscribe;
 	}, [owner.loading, owner.ownerId, owner.role, owner.isEmployee]);
 
-	const { search } = useLocation();
+	const { search, state } = useLocation();
 	useEffect(() => {
 		const params = new URLSearchParams(search);
 		if (params.get('new') === 'true') {
 			resetForm();
+			
+			// Tự động điền dữ liệu từ SaleBot
+			if (state?.prefill) {
+				const data = state.prefill;
+				setFormData(prev => ({
+					...prev,
+					name: data.name || '',
+					phone: data.phone || '',
+					address: data.address || ''
+				}));
+				showToast("Đã nhập thông tin khách từ SaleBot!", "success");
+			}
+			
 			setShowAddForm(true);
-			navigate('/customers', { replace: true });
+			// Xóa param và state khỏi URL để tránh lặp lại khi refresh
+			navigate('/customers', { replace: true, state: {} });
 		}
 		if (params.get('search') === 'true' || params.get('search') === 'focus') {
 			setShowMobileSearch(true);
 			setTimeout(() => searchInputRef.current?.focus(), 200);
-			navigate('/customers', { replace: true });
+			navigate('/customers', { replace: true, state: {} });
 		}
 		if (params.get('map') === 'true') {
 			setShowMap(true);
-			navigate('/customers', { replace: true });
+			navigate('/customers', { replace: true, state: {} });
 		}
 		if (params.get('import') === 'true') {
 			setShowImport(true);
-			navigate('/customers', { replace: true });
+			navigate('/customers', { replace: true, state: {} });
 		}
-	}, [search, navigate]);
+	}, [search, state, navigate]);
 
 	useEffect(() => {
 		if (showMobileSearch && searchInputRef.current) {

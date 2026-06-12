@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Search, Plus, Minus, Trash2, ShoppingCart, User, Package, MapPin, Truck, FileText, ChevronDown, X, Layers, CheckCircle, Mail, RotateCcw, QrCode, Ticket, Tag, Lock, Crown, Eye, EyeOff } from 'lucide-react';
 import QRScanner from '../components/shared/QRScanner';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { db, auth } from '../services/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, doc, getDoc, serverTimestamp, where, increment, writeBatch, getDocs, limit, Timestamp } from 'firebase/firestore';
 import { useOwner } from '../hooks/useOwner';
@@ -10,6 +10,7 @@ import { useToast } from '../components/shared/Toast';
 const QuickOrder = () => {
 	const navigate = useNavigate();
 	const { id } = useParams();
+	const location = useLocation();
 	const owner = useOwner();
 	const { showToast } = useToast();
 	const normalizeText = (text: any) => text ? String(text).normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase() : '';
@@ -307,6 +308,121 @@ const QuickOrder = () => {
 		}
 		setLineItems(newItems);
 	};
+
+	// Xử lý dữ liệu được truyền từ SaleBot (Prefill)
+	useEffect(() => {
+		if (loading || fetchingOrder || products.length === 0 || customers.length === 0) return;
+		if (location.state?.prefill && !id) {
+			const data = location.state.prefill;
+			let isCustomerFound = false;
+
+			// 1. Tự động tìm & chọn Khách Hàng
+			if (data.customer?.name) {
+				const queryName = normalizeSmart(data.customer.name);
+				const queryWords = queryName.split(' ').filter(Boolean);
+				const foundCust = customers.find(c => {
+					const cName = normalizeSmart(c.name);
+					return cName.includes(queryName) || 
+						   queryName.includes(cName) || 
+						   queryWords.every(w => cName.includes(w)) ||
+						   (data.customer.phone && c.phone === data.customer.phone);
+				});
+				if (foundCust) {
+					setSelectedCustomer(foundCust);
+					setSearchCustomerQuery(foundCust.name);
+					isCustomerFound = true;
+				} else {
+					setSearchCustomerQuery(data.customer.name);
+				}
+			}
+
+			if (data.notes) {
+				setOrderNote(data.notes);
+			}
+
+			if (data.shipping_fee) {
+				setShippingFee(data.shipping_fee);
+			}
+
+			// Tự động set mặc định là Đơn Nháp để an toàn kho bãi
+			setOrderStatus('Đơn nháp');
+
+			// 2. Tự động ánh xạ Hàng Hóa
+			if (data.products && data.products.length > 0) {
+				const mappedItems = data.products.map((p: any) => {
+					const prodQuery = normalizeSmart(p.name);
+					const prodWords = prodQuery.split(' ').filter(Boolean);
+					const rawCat = p.category || data.order_category || '';
+					const catQuery = rawCat ? normalizeSmart(rawCat) : '';
+
+					let foundProd = products.find(prod => {
+						const prodNameNormalized = normalizeSmart(prod.name);
+						const nameMatch = prodNameNormalized.includes(prodQuery) || 
+										  prodQuery.includes(prodNameNormalized) ||
+										  prodWords.every(w => prodNameNormalized.includes(w)) ||
+										  (prod.sku && normalizeSmart(prod.sku).includes(prodQuery));
+						if (!nameMatch) return false;
+						if (catQuery) {
+							return prod.category && normalizeSmart(prod.category).includes(catQuery);
+						}
+						return true;
+					});
+
+					// Fallback: Nếu không tìm thấy sản phẩm có danh mục đó, ưu tiên khớp tên
+					if (!foundProd && catQuery) {
+						foundProd = products.find(prod => {
+							const prodNameNormalized = normalizeSmart(prod.name);
+							return prodNameNormalized.includes(prodQuery) || 
+								   prodQuery.includes(prodNameNormalized) ||
+								   prodWords.every(w => prodNameNormalized.includes(w)) ||
+								   (prod.sku && normalizeSmart(prod.sku).includes(prodQuery));
+						});
+					}
+
+					if (foundProd) {
+						return {
+							id: Math.random(),
+							productId: foundProd.id,
+							name: foundProd.name,
+							sku: foundProd.sku || '',
+							category: foundProd.category || '',
+							qty: p.quantity || 1,
+							price: foundProd.priceSell,
+							buyPrice: foundProd.priceImport || 0,
+							unit: p.unit || foundProd.unit || '',
+							packaging: foundProd.packaging || '',
+							density: foundProd.density || '',
+							serialNumber: foundProd.serialNumber || '',
+							imageUrl: foundProd.imageUrl || '',
+							maxStock: getEffectiveStock(foundProd)
+						};
+					}
+
+					// Fallback nếu không tìm thấy chính xác
+					return {
+						id: Math.random(),
+						productId: '',
+						name: p.name,
+						qty: p.quantity || 1,
+						price: 0,
+						buyPrice: 0,
+						unit: p.unit || '',
+						category: rawCat,
+						packaging: '',
+						density: '',
+						maxStock: 0
+					};
+				});
+				setLineItems(mappedItems);
+			}
+
+			// Show success message
+			showToast("Đã nhập dữ liệu từ SaleBot thành công!", "success");
+
+			// Xóa state để không bị fill lại nếu người dùng F5
+			window.history.replaceState({}, document.title);
+		}
+	}, [location.state, products.length, customers.length, loading, fetchingOrder]);
 
 
 	const handleQRScan = (productId: string) => {

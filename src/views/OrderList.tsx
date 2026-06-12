@@ -195,9 +195,13 @@ const OrderList = () => {
 
 				// 2.5 Revert Debt
 				if (order?.status === 'Đơn chốt' && order?.customerId) {
-					batch.update(doc(db, 'customers', order.customerId), {
-						debt: increment(-Number(order.totalAmount || 0))
-					});
+					const custRef = doc(db, 'customers', order.customerId);
+					const custSnap = await getDoc(custRef);
+					if (custSnap.exists()) {
+						batch.update(custRef, {
+							debt: increment(-Number(order.totalAmount || 0))
+						});
+					}
 				}
 
 				// 3. Log Audit

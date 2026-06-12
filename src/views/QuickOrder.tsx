@@ -706,9 +706,13 @@ const QuickOrder = () => {
 				const newTotal = orderStatus === 'Đơn chốt' ? Number(finalTotal || 0) : 0;
 				const diffDebt = newTotal - oldTotal;
 				if (diffDebt !== 0 && orderData.customerId) {
-					batch.update(doc(db, 'customers', orderData.customerId), {
-						debt: increment(diffDebt)
-					});
+					const custRef = doc(db, 'customers', orderData.customerId);
+					const custSnap = await getDoc(custRef);
+					if (custSnap.exists()) {
+						batch.update(custRef, {
+							debt: increment(diffDebt)
+						});
+					}
 				}
 
 				// 2. Sync Inventory: Revert old logs and apply new ones
@@ -784,9 +788,13 @@ const QuickOrder = () => {
 
 				// 1.5 Add Debt to Customer
 				if (orderStatus === 'Đơn chốt' && orderData.customerId) {
-					batch.update(doc(db, 'customers', orderData.customerId), {
-						debt: increment(Number(finalTotal || 0))
-					});
+					const custRef = doc(db, 'customers', orderData.customerId);
+					const custSnap = await getDoc(custRef);
+					if (custSnap.exists()) {
+						batch.update(custRef, {
+							debt: increment(Number(finalTotal || 0))
+						});
+					}
 				}
 
 				// 2. Create Notification

@@ -505,7 +505,7 @@ const SaleBot = () => {
                                         <div className="flex items-center gap-2 mb-3 pb-3 border-b border-slate-100 dark:border-slate-700">
                                             <CheckCircle2 size={18} className="text-green-500" />
                                             <span className="text-xs font-black uppercase text-slate-800 dark:text-white">
-                                                {msg.parsedData.intent === 'CREATE_ORDER' ? 'Thông tin Lên Đơn' : 'Thông tin Khách Hàng'}
+                                                {msg.parsedData.intent === 'CREATE_ORDER' ? 'Thông tin Lên Đơn' : msg.parsedData.intent === 'CREATE_PRODUCT' ? 'Thông tin Sản Phẩm' : 'Thông tin Khách Hàng'}
                                             </span>
                                         </div>
                                         

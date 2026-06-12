@@ -473,7 +473,12 @@ const SaleBot = () => {
                                                 <div className="space-y-2">
                                                     {msg.parsedData.products.map((p: any, idx: number) => (
                                                         <div key={idx} className="flex justify-between items-center bg-slate-50 dark:bg-slate-900/50 p-2 px-3 rounded-lg border border-slate-100 dark:border-slate-800">
-                                                            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{p.name}</span>
+                                                            <div className="flex flex-col">
+                                                                <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{p.name}</span>
+                                                                {(p.category || msg.parsedData.order_category) && (
+                                                                    <span className="text-[10px] text-slate-500 italic mt-0.5">Giá: {p.category || msg.parsedData.order_category}</span>
+                                                                )}
+                                                            </div>
                                                             <span className="text-xs font-black text-[#FF6D00]">x{p.quantity}</span>
                                                         </div>
                                                     ))}

@@ -108,19 +108,7 @@ const Debts: React.FC = () => {
 		setCurrentPage(1);
 	}, [searchTerm, statusFilter, fromDate, toDate]);
 
-	const { search } = useLocation();
-	useEffect(() => {
-		const params = new URLSearchParams(search);
-		if (params.get('payment') === 'true') {
-			setShowPaymentForm(true);
-		}
-		const tabParam = params.get('tab');
-		if (tabParam === 'history') {
-			setActiveTab('history');
-		} else if (tabParam === 'customers') {
-			setActiveTab('customers');
-		}
-	}, [search]);
+	const location = useLocation();
 
 	const markAllAsRead = async () => {
 		if (!auth.currentUser) return;
@@ -352,7 +340,29 @@ const Debts: React.FC = () => {
 	const [uploadingPaymentImage, setUploadingPaymentImage] = useState(false);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
-
+	useEffect(() => {
+		const { search, state } = location;
+		const params = new URLSearchParams(search);
+		if (params.get('payment') === 'true' || state?.payment) {
+			setShowPaymentForm(true);
+			if (state?.prefillData) {
+				setPaymentData(prev => ({
+					...prev,
+					...state.prefillData
+				}));
+			}
+			// Xóa state để tránh mở lại modal khi reload
+			if (state) {
+				window.history.replaceState({}, document.title);
+			}
+		}
+		const tabParam = params.get('tab');
+		if (tabParam === 'history') {
+			setActiveTab('history');
+		} else if (tabParam === 'customers') {
+			setActiveTab('customers');
+		}
+	}, [location]);
 	useEffect(() => {
 		const timer = setInterval(() => setCurrentTime(new Date()), 60000);
 		return () => clearInterval(timer);

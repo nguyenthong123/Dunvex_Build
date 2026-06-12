@@ -497,49 +497,23 @@ const SaleBot = () => {
                     return;
                 }
 
-                const paymentData = {
-                    amount: amount,
-                    customerId: targetId,
-                    customerName: targetName,
-                    date: serverTimestamp(),
-                    note: data.payment_info?.note || 'Thu công nợ qua Bot',
-                    ownerId: owner.ownerId,
-                    ownerEmail: owner.ownerEmail,
-                    createdBy: auth.currentUser?.uid || "",
-                    createdByEmail: auth.currentUser?.email || "",
-                    createdAt: serverTimestamp(),
-                };
-
-                // Add payment document
-                await addDoc(collection(db, 'payments'), paymentData);
-
-                // Update customer debt
-                await updateDoc(doc(db, 'customers', targetId), {
-                    debt: increment(-amount)
+                // Chuyển hướng sang trang Công nợ kèm dữ liệu prefill
+                navigate('/debts', {
+                    state: {
+                        payment: true,
+                        prefillData: {
+                            customerId: targetId,
+                            customerName: targetName,
+                            amount: amount,
+                            note: data.payment_info?.note || 'Thu công nợ qua Bot',
+                            date: new Date().toISOString().split('T')[0]
+                        }
+                    }
                 });
-
-                // Add audit log
-                try {
-                    await addDoc(collection(db, 'audit_logs'), {
-                        action: 'Ghi nhận thu nợ (Qua Bot)',
-                        user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
-                        userId: auth.currentUser?.uid || "",
-                        ownerId: owner.ownerId,
-                        details: `AI Bot đã thu ${amount.toLocaleString('vi-VN')} đ từ ${targetName}`,
-                        createdAt: serverTimestamp()
-                    });
-                } catch (auditErr) {
-                    console.error("Lỗi lưu audit_logs:", auditErr);
-                }
-
-                setMessages(prev => [...prev, {
-                    id: Date.now().toString(),
-                    role: 'bot',
-                    content: `🎉 Tự động hóa thành công! Đã ghi nhận thu **${amount.toLocaleString('vi-VN')} đ** cho khách hàng **${targetName}**.`
-                }]);
+                
             } catch (error: any) {
                 console.error("Lỗi thu tiền:", error);
-                alert(`Lỗi khi tự động thu tiền: ${error?.message || JSON.stringify(error)}`);
+                alert(`Lỗi khi chuyển hướng thu tiền: ${error?.message || JSON.stringify(error)}`);
             } finally {
                 setIsLoading(false);
             }
@@ -712,7 +686,7 @@ const SaleBot = () => {
                                                 {msg.parsedData.intent === 'CREATE_CUSTOMER' ? 'Lưu Khách Hàng Mới' : 
                                                  msg.parsedData.intent === 'UPDATE_CUSTOMER' ? 'Xác Nhận Cập Nhật' : 
                                                  msg.parsedData.intent === 'CREATE_PRODUCT' ? 'Tạo Sản Phẩm Mới' :
-                                                 msg.parsedData.intent === 'CREATE_PAYMENT' ? 'Xác Nhận Thu Tiền' :
+                                                 msg.parsedData.intent === 'CREATE_PAYMENT' ? 'Đi tới Form Phiếu Thu' :
                                                  'Tiếp Tục Lên Đơn'}
                                             </button>
                                         )}

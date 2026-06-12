@@ -78,6 +78,6 @@ service cloud.firestore {
         (request.resource != null && request.resource.data.userId == request.auth.uid)
       ); 
     }
-    match /ai_actions/{docId} { allow read: if isAuthed() && canReadResource(); allow write: if isAuthed() && canWriteResource(); }
+    match /ai_actions/{docId} { allow read, write: if isAuthed() && (resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId); }
   }
 }

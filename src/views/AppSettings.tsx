@@ -148,7 +148,6 @@ const AppSettings = () => {
 								onClick={async () => {
 									const { collection, getDocs, writeBatch, doc, increment, query, where } = await import('firebase/firestore');
 									const { db } = await import('../services/firebase');
-									if (!confirm('Hệ thống sẽ quét và liên kết lại toàn bộ đơn hàng. Bạn đã thêm lại các Khách hàng bị thiếu chưa?')) return;
 									
 									try {
 										if (!owner.ownerId) {
@@ -156,7 +155,7 @@ const AppSettings = () => {
 											return;
 										}
 
-										showToast('Đang quét dữ liệu...', 'info');
+										showToast('Đang quét dữ liệu, vui lòng đợi...', 'info');
 										
 										const qCust = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
 										const customersSnap = await getDocs(qCust);
@@ -164,40 +163,49 @@ const AppSettings = () => {
 										
 										const qOrd = query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId));
 										const ordersSnap = await getDocs(qOrd);
+										
+										const orphans = ordersSnap.docs.map(d => ({ id: d.id, ...d.data() as any }))
+											.filter(o => !o.customerId && (o.customerName || o.customerBusinessName));
+
+										if (orphans.length === 0) {
+											alert('Không có đơn hàng nào bị mồ côi (chưa có mã khách hàng) trong hệ thống.');
+											return;
+										}
+
+										const msg = orphans.map(o => `- Đơn ${o.id.slice(0,6)}: "${o.customerName}" / "${o.customerBusinessName}"`).join('\n');
+										if (!confirm(`Tìm thấy ${orphans.length} đơn hàng chưa có mã khách hàng:\n${msg}\n\nBạn có muốn tự động tìm khớp và nối vào khách hàng không?`)) return;
+
 										const batch = writeBatch(db);
 										let count = 0;
 
 										const normalize = (t: any) => String(t || '').normalize('NFC').toLowerCase().replace(/\s+/g, ' ').trim();
 										const removeAccents = (t: any) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
 
-										ordersSnap.docs.forEach(d => {
-											const order = d.data() as any;
-											if (!order.customerId && (order.customerName || order.customerBusinessName)) {
-												const oName = normalize(order.customerName || '');
-												const oBiz = normalize(order.customerBusinessName || '');
+										orphans.forEach(order => {
+											const oName = normalize(order.customerName || '');
+											const oBiz = normalize(order.customerBusinessName || '');
+											
+											const match = customersList.find(c => {
+												const cName = normalize(c.name || '');
+												const cBiz = normalize(c.businessName || '');
 												
-												const match = customersList.find(c => {
-													const cName = normalize(c.name || '');
-													const cBiz = normalize(c.businessName || '');
-													
-													const exactMatch = (cName && (cName === oName || cName === oBiz)) || 
-																	   (cBiz && (cBiz === oName || cBiz === oBiz));
-													
-													const includesMatch = (cName && (oName.includes(cName) || oBiz.includes(cName))) ||
-																		  (cBiz && (oName.includes(cBiz) || oBiz.includes(cBiz)));
-													
-													const noAccentMatch = (cName && (removeAccents(oName).includes(removeAccents(cName))));
+												const exactMatch = (cName && (cName === oName || cName === oBiz)) || 
+																   (cBiz && (cBiz === oName || cBiz === oBiz));
+												
+												const includesMatch = (cName && (oName.includes(cName) || oBiz.includes(cName))) ||
+																	  (cBiz && (oName.includes(cBiz) || oBiz.includes(cBiz)));
+												
+												const noAccentMatch = (cName && (removeAccents(oName).includes(removeAccents(cName))));
 
-													return exactMatch || includesMatch || noAccentMatch;
-												});
+												return exactMatch || includesMatch || noAccentMatch;
+											});
 
-												if (match) {
-													batch.update(d.ref, { customerId: match.id, customerPhone: match.phone || '' });
-													if (order.status === 'Đơn chốt') {
-														batch.update(doc(db, 'customers', match.id), { debt: increment(Number(order.totalAmount || 0)) });
-													}
-													count++;
+											if (match) {
+												batch.update(doc(db, 'orders', order.id), { customerId: match.id, customerPhone: match.phone || '' });
+												if (order.status === 'Đơn chốt') {
+													batch.update(doc(db, 'customers', match.id), { debt: increment(Number(order.totalAmount || 0)) });
 												}
+												count++;
 											}
 										});
 
@@ -205,7 +213,7 @@ const AppSettings = () => {
 											await batch.commit();
 											showToast(`Đã đồng bộ thành công ${count} đơn hàng!`, 'success');
 										} else {
-											showToast('Không tìm thấy đơn hàng nào cần đồng bộ. Có thể tên khách bạn tạo không khớp với đơn hàng.', 'info');
+											showToast('Tìm thấy đơn mồ côi nhưng TÊN KHÔNG KHỚP với bất kỳ khách hàng nào đang có.', 'warning');
 										}
 									} catch (e: any) {
 										showToast('Lỗi đồng bộ: ' + e.message, 'error');

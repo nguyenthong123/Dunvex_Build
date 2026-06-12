@@ -3,7 +3,7 @@ import { parseSaleMessage } from '../services/geminiService';
 import { BotMessageSquare, Send, Sparkles, User, AlertCircle, CheckCircle2, Package } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { db, auth } from '../services/firebase';
-import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, updateDoc, setDoc, getDoc } from 'firebase/firestore';
 import { useOwner } from '../hooks/useOwner';
 
 interface ChatMessage {
@@ -30,8 +30,64 @@ const SaleBot = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
 
+    const getChatDocId = () => {
+        if (!owner.ownerId || !auth.currentUser?.uid) return null;
+        return `${owner.ownerId}_${auth.currentUser.uid}`;
+    };
+
     useEffect(() => {
         scrollToBottom();
+    }, [messages]);
+
+    const isInitialLoad = useRef(true);
+
+    useEffect(() => {
+        const loadChat = async () => {
+            const docId = getChatDocId();
+            if (!docId) return;
+            try {
+                const docSnap = await getDoc(doc(db, 'bot_chats', docId));
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    if (data.messages && data.messages.length > 0) {
+                        setMessages(data.messages);
+                    }
+                }
+            } catch (err) {
+                console.error("Lỗi tải chat:", err);
+            } finally {
+                setTimeout(() => { isInitialLoad.current = false; }, 100);
+            }
+        };
+        loadChat();
+    }, [owner.ownerId, auth.currentUser?.uid]);
+
+    const saveMessagesToDb = async (msgs: ChatMessage[]) => {
+        const docId = getChatDocId();
+        if (!docId) return;
+        try {
+            const recentMsgs = msgs.slice(-30).map(m => {
+                const newM = { ...m };
+                if (newM.parsedData) {
+                    newM.parsedData = { ...newM.parsedData };
+                    delete newM.parsedData.searchResults; // Remove huge array to save space
+                }
+                return newM;
+            });
+            await setDoc(doc(db, 'bot_chats', docId), {
+                ownerId: owner.ownerId,
+                userId: auth.currentUser?.uid,
+                messages: recentMsgs,
+                updatedAt: serverTimestamp()
+            }, { merge: true });
+        } catch (err) {
+            console.error("Lỗi lưu chat:", err);
+        }
+    };
+
+    useEffect(() => {
+        if (isInitialLoad.current) return;
+        saveMessagesToDb(messages);
     }, [messages]);
 
     useEffect(() => {

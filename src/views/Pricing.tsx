@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Check, Zap, Crown, Rocket, ShieldCheck, ArrowLeft, CreditCard, QrCode, Lock, Settings, Mail, X, Save } from 'lucide-react';
+import { Check, Zap, Crown, Rocket, ShieldCheck, ArrowLeft, CreditCard, QrCode, Lock, Settings, Mail, X, Save, Download, Database, Activity, Shield } from 'lucide-react';
 import { auth, db } from '../services/firebase';
 import { collection, addDoc, serverTimestamp, query, where, limit, getDocs, doc, updateDoc, increment, onSnapshot } from 'firebase/firestore';
 import { useEffect } from 'react';
@@ -8,6 +8,19 @@ import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
 
 import NotificationBell from '../components/NotificationBell';
+
+const renderIcon = (iconName: string, className: string) => {
+	switch (iconName) {
+		case 'Crown': return <Crown className={className} />;
+		case 'Rocket': return <Rocket className={className} />;
+		case 'Shield': return <Shield className={className} />;
+		case 'Download': return <Download className={className} />;
+		case 'Database': return <Database className={className} />;
+		case 'Activity': return <Activity className={className} />;
+		case 'Zap':
+		default: return <Zap className={className} />;
+	}
+};
 
 const Pricing = () => {
 	const navigate = useNavigate();
@@ -81,37 +94,19 @@ const Pricing = () => {
 		return `DVX ${prefix} ${random}`;
 	};
 
-	const plans = [
-		{
-			id: 'premium_monthly',
-			name: 'Gói Tháng',
-			price: 199000,
-			period: 'tháng',
-			description: 'Dành cho shop lẻ muốn trải nghiệm dịch vụ.',
-			features: [
-				'Đầy đủ tính năng bán hàng',
-				'Quản lý công nợ khách hàng',
-				'Báo cáo doanh thu chi tiết',
-				'Hỗ trợ kỹ thuật 24/7'
-			],
-			color: 'indigo'
-		},
-		{
-			id: 'premium_yearly',
-			name: 'Gói Năm',
-			price: 1500000,
-			period: 'năm',
-			description: 'Tiết kiệm hơn 35% - Giải pháp kinh doanh bền vững.',
-			features: [
-				'Toàn bộ tính năng Gói Tháng',
-				'Quản lý nhân sự & Phân quyền',
-				'Ưu tiên cập nhật tính năng mới',
-				'Tặng 01 buổi training online'
-			],
-			recommended: true,
-			color: 'amber'
-		}
-	];
+	const [plans, setPlans] = useState<any[]>([]);
+
+	useEffect(() => {
+		const unsubPlans = onSnapshot(collection(db, 'subscription_packages'), (snapshot) => {
+			const fetchedPlans = snapshot.docs.map(doc => ({
+				id: doc.id,
+				...doc.data()
+			}));
+			fetchedPlans.sort((a: any, b: any) => (a.price || 0) - (b.price || 0));
+			setPlans(fetchedPlans);
+		});
+		return () => unsubPlans();
+	}, []);
 
 	const handleSelectPlan = (plan: any) => {
 		setSelectedPlan(plan);
@@ -317,11 +312,11 @@ const Pricing = () => {
 
 									<div className="flex justify-between items-start mb-6">
 										<div>
-											<h3 className="text-2xl font-black text-slate-800 dark:text-white mb-1">{plan.name}</h3>
+											<h3 className={`text-2xl font-black mb-1 ${plan.textClass || 'text-slate-800 dark:text-white'}`}>{plan.name}</h3>
 											<p className="text-slate-400 dark:text-slate-500 text-sm font-medium">{plan.description}</p>
 										</div>
-										<div className={`p-3 rounded-2xl bg-${plan.color}-50 dark:bg-${plan.color}-900/20 text-${plan.color}-600 dark:text-${plan.color}-400`}>
-											{plan.id === 'premium_monthly' ? <Rocket size={32} /> : <Crown size={32} />}
+										<div className={`p-3 rounded-2xl ${plan.bgClass || 'bg-slate-50 dark:bg-slate-800'} ${plan.textClass || 'text-slate-600 dark:text-slate-400'}`}>
+											{renderIcon(plan.icon, "size-8")}
 										</div>
 									</div>
 
@@ -329,11 +324,11 @@ const Pricing = () => {
 										<span className="text-4xl font-black text-slate-900 dark:text-white">
 											{new Intl.NumberFormat('vi-VN').format(plan.price)}
 										</span>
-										<span className="text-slate-400 dark:text-slate-500 font-bold uppercase text-xs">/ {plan.period}</span>
+										<span className="text-slate-400 dark:text-slate-500 font-bold uppercase text-xs">/ {plan.period || 'gói'}</span>
 									</div>
 
 									<div className="space-y-4 mb-10">
-										{plan.features.map((feature, idx) => (
+										{plan.features?.map((feature: string, idx: number) => (
 											<div key={idx} className="flex items-center gap-3">
 												<div className="size-6 rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 flex items-center justify-center shrink-0">
 													<Check size={14} />

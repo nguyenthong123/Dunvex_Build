@@ -23,7 +23,10 @@ import {
 	Bot,
 	Zap,
 	AlertTriangle,
-	Eye
+	Eye,
+	Download,
+	Rocket,
+	Shield
 } from 'lucide-react';
 import { useToast } from '../components/shared/Toast';
 import { auth, db } from '../services/firebase';
@@ -42,6 +45,47 @@ import {
 } from 'firebase/firestore';
 
 const NEXUS_ADMIN_EMAIL = 'dunvex.green@gmail.com'; // User's email
+
+const VIETNAM_BANKS = [
+	{ id: "VCB", name: "Vietcombank (VCB)" },
+	{ id: "ICB", name: "VietinBank (ICB)" },
+	{ id: "BIDV", name: "BIDV" },
+	{ id: "VBA", name: "Agribank (VBA)" },
+	{ id: "STB", name: "Sacombank (STB)" },
+	{ id: "TCB", name: "Techcombank (TCB)" },
+	{ id: "MB", name: "MBBank (MB)" },
+	{ id: "ACB", name: "ACB" },
+	{ id: "VPB", name: "VPBank (VPB)" },
+	{ id: "TPB", name: "TPBank (TPB)" },
+	{ id: "VIB", name: "VIB" },
+	{ id: "HDB", name: "HDBank (HDB)" },
+	{ id: "SHB", name: "SHB" },
+	{ id: "EIB", name: "Eximbank (EIB)" },
+	{ id: "MSB", name: "MSB" },
+	{ id: "OCB", name: "OCB" },
+	{ id: "SCB", name: "SCB" },
+	{ id: "LPB", name: "LienVietPostBank (LPB)" },
+	{ id: "SGB", name: "Saigonbank (SGB)" },
+	{ id: "NAB", name: "Nam A Bank (NAB)" },
+	{ id: "KLB", name: "Kienlongbank (KLB)" },
+	{ id: "VAB", name: "VietA Bank (VAB)" },
+	{ id: "BVB", name: "BaoViet Bank (BVB)" },
+	{ id: "NCB", name: "NCB" }
+];
+
+const renderAddonIcon = (iconName: string, className: string) => {
+	switch (iconName) {
+		case 'Crown': return <Crown className={className} />;
+		case 'Rocket': return <Rocket className={className} />;
+		case 'Shield': return <Shield className={className} />;
+		case 'Download': return <Download className={className} />;
+		case 'Database': return <Database className={className} />;
+		case 'Activity': return <Activity className={className} />;
+		case 'Zap':
+		default:
+			return <Zap className={className} />;
+	}
+};
 
 const NexusControl = () => {
 	const navigate = useNavigate();
@@ -1241,8 +1285,10 @@ const NexusControl = () => {
 									<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
 										<div>
 											<label className="block text-xs font-bold text-slate-500 uppercase mb-2">Ngân hàng (VD: ICB, VCB)</label>
-											<input type="text" className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white" value={paymentConfig.bankId} onChange={e => setPaymentConfig({...paymentConfig, bankId: e.target.value})} />
-										</div>
+											<select className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white" value={paymentConfig.bankId} onChange={e => setPaymentConfig({...paymentConfig, bankId: e.target.value})}>
+												<option value="" disabled>-- Chọn ngân hàng --</option>
+												{VIETNAM_BANKS.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+											</select>										</div>
 										<div>
 											<label className="block text-xs font-bold text-slate-500 uppercase mb-2">Số tài khoản</label>
 											<input type="text" className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white" value={paymentConfig.accountNumber} onChange={e => setPaymentConfig({...paymentConfig, accountNumber: e.target.value})} />
@@ -1288,8 +1334,16 @@ const NexusControl = () => {
 													<input type="number" required className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white" value={editingAddon.price} onChange={e => setEditingAddon({...editingAddon, price: e.target.value})} />
 												</div>
 												<div>
-													<label className="block text-xs font-bold text-slate-500 uppercase mb-2">Icon (Download, Zap, Crown, Rocket, Shield)</label>
-													<input type="text" className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white" value={editingAddon.icon} onChange={e => setEditingAddon({...editingAddon, icon: e.target.value})} />
+													<label className="block text-xs font-bold text-slate-500 uppercase mb-2">Biểu tượng (Icon)</label>
+													<select className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white" value={editingAddon.icon} onChange={e => setEditingAddon({...editingAddon, icon: e.target.value})}>
+														<option value="Zap">Tia sét (Zap)</option>
+														<option value="Crown">Vương miện (Crown)</option>
+														<option value="Rocket">Tên lửa (Rocket)</option>
+														<option value="Shield">Cái khiên (Shield)</option>
+														<option value="Download">Tải xuống (Download)</option>
+														<option value="Database">Cơ sở dữ liệu (Database)</option>
+														<option value="Activity">Biểu đồ (Activity)</option>
+													</select>
 												</div>
 												<div className="md:col-span-2">
 													<label className="block text-xs font-bold text-slate-500 uppercase mb-2">Mô tả ngắn gọn</label>
@@ -1299,13 +1353,27 @@ const NexusControl = () => {
 													<label className="block text-xs font-bold text-slate-500 uppercase mb-2">Tính năng nổi bật (Mỗi dòng 1 tính năng)</label>
 													<textarea rows={3} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white" value={typeof editingAddon.features === 'string' ? editingAddon.features : editingAddon.features?.join('\n')} onChange={e => setEditingAddon({...editingAddon, features: e.target.value})} />
 												</div>
-												<div>
-													<label className="block text-xs font-bold text-slate-500 uppercase mb-2">Màu Background (VD: bg-amber-50)</label>
-													<input type="text" className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white" value={editingAddon.bgClass} onChange={e => setEditingAddon({...editingAddon, bgClass: e.target.value})} />
-												</div>
-												<div>
-													<label className="block text-xs font-bold text-slate-500 uppercase mb-2">Màu Text (VD: text-amber-500)</label>
-													<input type="text" className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white" value={editingAddon.textClass} onChange={e => setEditingAddon({...editingAddon, textClass: e.target.value})} />
+												<div className="md:col-span-2">
+													<label className="block text-xs font-bold text-slate-500 uppercase mb-2">Màu sắc chủ đạo (Theme)</label>
+													<select 
+														className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white"
+														value={editingAddon.textClass?.match(/text-([a-z]+)-/)?.[1] || 'slate'}
+														onChange={e => {
+															const color = e.target.value;
+															setEditingAddon({
+																...editingAddon, 
+																bgClass: `bg-${color}-50 dark:bg-${color}-500/10`, 
+																textClass: `text-${color}-600 dark:text-${color}-400`
+															});
+														}}
+													>
+														<option value="slate">Màu Xám (Mặc định)</option>
+														<option value="indigo">Màu Tím (Indigo)</option>
+														<option value="blue">Màu Xanh Dương (Blue)</option>
+														<option value="emerald">Màu Xanh Ngọc (Emerald)</option>
+														<option value="amber">Màu Cam (Amber)</option>
+														<option value="rose">Màu Hồng (Rose)</option>
+													</select>
 												</div>
 											</div>
 											<div className="flex gap-3 justify-end pt-4">
@@ -1320,7 +1388,10 @@ const NexusControl = () => {
 											<div key={addon.id} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-5 rounded-2xl flex flex-col justify-between shadow-sm hover:shadow-md transition-shadow">
 												<div>
 													<div className="flex items-start justify-between mb-2">
-														<h5 className={`font-black text-lg ${addon.textClass || 'text-slate-900 dark:text-white'}`}>{addon.name}</h5>
+														<h5 className={`font-black text-lg flex items-center gap-2 ${addon.textClass || 'text-slate-900 dark:text-white'}`}>
+															{renderAddonIcon(addon.icon, "size-5")}
+															{addon.name}
+														</h5>
 														<span className="font-bold text-sm bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded-md text-slate-700 dark:text-slate-300">{addon.price.toLocaleString()}đ</span>
 													</div>
 													<p className="text-xs text-slate-500 dark:text-slate-400 mb-4">{addon.description}</p>

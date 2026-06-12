@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useOwner } from '../hooks/useOwner';
 import { Crown, Download, Zap, CheckCircle2, ShoppingCart, Rocket, Shield, Clock, ChevronRight } from 'lucide-react';
 import { db } from '../services/firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, collection } from 'firebase/firestore';
 
 const SubscriptionServices = () => {
 	const navigate = useNavigate();
@@ -147,7 +147,7 @@ const SubscriptionServices = () => {
 									</p>
 									
 									<div className="space-y-3 mb-8">
-										{addon.features.map((feature, idx) => (
+										{addon.features?.map((feature: string, idx: number) => (
 											<div key={idx} className="flex items-start gap-2">
 												<CheckCircle2 size={16} className={`${addon.textClass} shrink-0 mt-0.5`} />
 												<span className="text-xs font-bold text-slate-600 dark:text-slate-300">{feature}</span>

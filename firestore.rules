@@ -37,7 +37,11 @@ service cloud.firestore {
     }
     
     match /system_config/{docId} {
-      allow read: if isAuthed();
+      allow read, write: if isAuthed();
+    }
+
+    match /subscription_packages/{docId} {
+      allow read, write: if isAuthed();
     }
 
     match /coupons/{docId} {

@@ -645,8 +645,8 @@ const CustomerList = () => {
 				{/* Stats Cards */}
 				<div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
 					<StatCard icon="group" label="Tổng khách" value={customers.length.toString()} color="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400" />
-					<StatCard icon="person_add" label="Khách mới" value="12" color="bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400" />
-					<StatCard icon="verified" label="VIP" value="5" color="bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400" />
+					<StatCard icon="person_add" label="Khách mới" value={customers.filter(c => c.createdAt && (Date.now() - (c.createdAt?.seconds * 1000 || Date.now())) < 30 * 24 * 60 * 60 * 1000).length.toString()} color="bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400" />
+					<StatCard icon="verified" label="VIP" value={customers.filter(c => c.type?.toLowerCase().includes('đại lý') || c.type?.toLowerCase().includes('nhà phân phối') || c.type?.toLowerCase().includes('vip')).length.toString()} color="bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400" />
 					<div onClick={() => setShowMap(true)} className="cursor-pointer">
 						<StatCard icon="location_on" label="Vị trí" value={customers.filter(c => c.lat && c.lng).length.toString()} color="bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400" />
 					</div>

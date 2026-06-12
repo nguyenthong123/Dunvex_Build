@@ -406,24 +406,20 @@ const NexusControl = () => {
 		
 		if (currentCustomers.length === 0) return;
 		
-		for (const customer of currentCustomers) {
+		const processPromises = currentCustomers.map(async (customer) => {
 			// CRITICAL: NEVER process the Super Admin account
-			if (customer.email === NEXUS_ADMIN_EMAIL) continue;
+			if (customer.email === NEXUS_ADMIN_EMAIL) return;
 
 			const status = getEffectiveStatus(customer);
 			
 			// 1. AUTO-PROVISIONING FOR NEW USERS (ADMINS/OWNERS)
-			// A user is an "Admin/Owner" if uid matches ownerId (it's how we filtered them in useEffect)
-			// Staff/Employees are NOT in this list, so they are never processed individually.
-			// Check: user has no planId set in settings AND has not been processed by AI yet
 			const isNewOwner = !customer.planId && !customer.isAiProcessed;
 			
 			if (isNewOwner) {
 				try {
-					// Use the user's original account creation date as the start point
 					const userCreatedDate = customer.createdAt?.toDate ? customer.createdAt.toDate() : new Date();
 					const expireDate = new Date(userCreatedDate.getTime());
-					expireDate.setDate(expireDate.getDate() + 60); // 60 days trial from account creation
+					expireDate.setDate(expireDate.getDate() + 60);
 
 					await setDoc(doc(db, 'settings', customer.uid), {
 						planId: 'free',
@@ -431,7 +427,7 @@ const NexusControl = () => {
 						subscriptionStatus: 'trial',
 						paymentConfirmedAt: customer.createdAt || serverTimestamp(),
 						subscriptionExpiresAt: expireDate,
-						isAiProcessed: true // Mark so we don't repeat
+						isAiProcessed: true
 					}, { merge: true });
 
 					await addDoc(collection(db, 'ai_actions'), {
@@ -446,7 +442,6 @@ const NexusControl = () => {
 			}
 
 			// 2. AUTO-ENFORCEMENT FOR EXPIRED USERS
-			// If expired and features are NOT already manually locked or status is not expired
 			if (status.isExpired && (!customer.manualLockOrders || !customer.manualLockDebts || !customer.manualLockSheets || !customer.manualLockAi || customer.subscriptionStatus !== 'expired')) {
 				try {
 					await setDoc(doc(db, 'settings', customer.uid), {
@@ -459,47 +454,50 @@ const NexusControl = () => {
 					}, { merge: true });
 
 					// 🔍 AI Verification Step
-						const verifySnap = await getDoc(doc(db, 'settings', customer.uid));
-						const isLocked = verifySnap.exists() && verifySnap.data().manualLockOrders && verifySnap.data().manualLockDebts && verifySnap.data().manualLockSheets && verifySnap.data().manualLockAi;
+					const verifySnap = await getDoc(doc(db, 'settings', customer.uid));
+					const isLocked = verifySnap.exists() && verifySnap.data().manualLockOrders && verifySnap.data().manualLockDebts && verifySnap.data().manualLockSheets && verifySnap.data().manualLockAi;
 
-						// Notify Verification
-						if (isLocked) {
-							await addDoc(collection(db, 'notifications'), {
-								userId: customer.uid,
-								title: '🔒 HỆ THỐNG NEXUS AI: ĐÃ XÁC NHẬN KHÓA',
-								body: 'Gói của bạn đã hết hạn. AI đã chủ động khóa và XÁC NHẬN KHÓA THÀNH CÔNG các tính năng theo chính sách. Vui lòng liên hệ Admin.',
-								type: 'alert',
-								priority: 'high',
-								read: false,
-								createdAt: serverTimestamp()
-							});
-						}
-
-						await addDoc(collection(db, 'ai_actions'), {
-							type: 'enforcement',
-							targetEmail: customer.email,
-							targetId: customer.uid,
-							details: isLocked 
-								? 'Tự động ngắt TẤT CẢ tính năng do hết hạn (ĐÃ XÁC NHẬN KHÓA THÀNH CÔNG).'
-								: 'Tự động ngắt tính năng do hết hạn (Không thể xác minh khóa).',
-							timestamp: serverTimestamp()
-						});
-
+					if (isLocked) {
 						await addDoc(collection(db, 'notifications'), {
 							userId: customer.uid,
-							title: '🔒 TỰ ĐỘNG KHÓA VÀ THU HỒI GÓI (HẾT HẠN)',
-							body: 'Gói dịch vụ cũ của bạn đã hết hạn. Hệ thống AI đã tự động cập nhật trạng thái gói và khóa các tính năng (Đơn hàng, Công nợ, Sheet) để bảo vệ dữ liệu. Vui lòng thực hiện thanh toán gia hạn để tự động kích hoạt lại.',
-							type: 'lock',
+							title: '🔒 HỆ THỐNG NEXUS AI: ĐÃ XÁC NHẬN KHÓA',
+							body: 'Gói của bạn đã hết hạn. AI đã chủ động khóa và XÁC NHẬN KHÓA THÀNH CÔNG các tính năng theo chính sách. Vui lòng liên hệ Admin.',
+							type: 'alert',
 							priority: 'high',
 							read: false,
 							createdAt: serverTimestamp()
 						});
-						console.log(`Nexus AI: Auto-locked expired account ${customer.email}`);
-					} catch (e) {
+					}
+
+					await addDoc(collection(db, 'ai_actions'), {
+						type: 'enforcement',
+						targetEmail: customer.email,
+						targetId: customer.uid,
+						details: isLocked 
+							? 'Tự động ngắt TẤT CẢ tính năng do hết hạn (ĐÃ XÁC NHẬN KHÓA THÀNH CÔNG).'
+							: 'Tự động ngắt tính năng do hết hạn (Không thể xác minh khóa).',
+						timestamp: serverTimestamp()
+					});
+
+					await addDoc(collection(db, 'notifications'), {
+						userId: customer.uid,
+						title: '🔒 TỰ ĐỘNG KHÓA VÀ THU HỒI GÓI (HẾT HẠN)',
+						body: 'Gói dịch vụ cũ của bạn đã hết hạn. Hệ thống AI đã tự động cập nhật trạng thái gói và khóa các tính năng (Đơn hàng, Công nợ, Sheet, AI) để bảo vệ dữ liệu. Vui lòng thực hiện thanh toán gia hạn để tự động kích hoạt lại.',
+						type: 'lock',
+						priority: 'high',
+						read: false,
+						createdAt: serverTimestamp()
+					});
+					console.log(`Nexus AI: Auto-locked expired account ${customer.email}`);
+				} catch (e) {
 					console.error("Auto Enforcement Error:", e);
 				}
 			}
-		}
+		});
+
+		await Promise.all(processPromises);
+		
+		console.log("Nexus AI: Cycle complete.");
 	};
 
 	// Run cycle when customers change or AI is toggled

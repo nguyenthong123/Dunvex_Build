@@ -100,7 +100,7 @@ const SaleBot = () => {
                 const prods = snapProd.docs.map(d => {
                     const data = d.data();
                     if (!data.name) return null;
-                    return `- Tên: ${data.name} | Giá bán: ${data.priceSell ? data.priceSell.toLocaleString('vi-VN') + 'đ' : 'Chưa có'}`;
+                    return `- Danh mục: ${data.category || 'Không có'} | Tên: ${data.name} | Giá bán: ${data.priceSell ? data.priceSell.toLocaleString('vi-VN') + 'đ' : 'Chưa có'}`;
                 }).filter(Boolean);
                 
                 // Lấy khách hàng

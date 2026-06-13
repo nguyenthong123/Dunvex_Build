@@ -97,7 +97,11 @@ const SaleBot = () => {
                 // Lấy sản phẩm
                 const qProd = query(collection(db, 'products'), where('ownerId', '==', owner.ownerId));
                 const snapProd = await getDocs(qProd);
-                const prods = snapProd.docs.map(d => d.data().name).filter(Boolean);
+                const prods = snapProd.docs.map(d => {
+                    const data = d.data();
+                    if (!data.name) return null;
+                    return `- Tên: ${data.name} | Giá bán: ${data.priceSell ? data.priceSell.toLocaleString('vi-VN') + 'đ' : 'Chưa có'}`;
+                }).filter(Boolean);
                 
                 // Lấy khách hàng
                 const qCust = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));

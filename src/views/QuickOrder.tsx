@@ -372,7 +372,7 @@ const QuickOrder = () => {
 				const mappedItems = data.products.map((p: any) => {
 					const prodQuery = normalizeSmart(p.name);
 					const prodWords = prodQuery.split(' ').filter(Boolean);
-					const rawCat = p.category || data.order_category || '';
+					const rawCat = p.category || '';
 					const catQuery = rawCat ? normalizeSmart(rawCat) : '';
 
 					// 1. Ưu tiên tìm chính xác tên trước

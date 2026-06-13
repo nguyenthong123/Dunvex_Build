@@ -1133,7 +1133,7 @@ const QuickOrder = () => {
 					</div>
 					<div className="p-4 md:p-8">
 						{/* DESKTOP HEADER - HIDDEN ON MOBILE */}
-						<div className="hidden md:grid grid-cols-[180px_1fr_100px_150px_60px_120px_40px] gap-4 mb-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest border-b border-slate-50 dark:border-slate-800 pb-4">
+						<div className="hidden md:grid md:grid-cols-[1.2fr_1.5fr_0.8fr_1fr_0.4fr_1fr_30px] lg:grid-cols-[180px_1fr_100px_150px_60px_120px_40px] gap-2 lg:gap-4 mb-4 text-[9px] lg:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest border-b border-slate-50 dark:border-slate-800 pb-4">
 							<div>DANH MỤC</div>
 							<div>SẢN PHẨM</div>
 							<div className="text-center">SỐ LƯỢNG</div>
@@ -1146,7 +1146,7 @@ const QuickOrder = () => {
 						{/* LIST OF ITEMS */}
 						<div className="space-y-6 md:space-y-0">
 							{lineItems.map((item, index) => (
-								<div key={index} className="group relative bg-[#fcfdfe] dark:bg-slate-800/30 md:bg-transparent rounded-[2rem] md:rounded-none p-5 md:p-0 border border-slate-100 dark:border-slate-800/50 md:border-t-0 md:border-x-0 md:border-b md:dark:border-slate-800 md:grid md:grid-cols-[180px_1fr_100px_150px_60px_120px_40px] md:gap-4 md:items-center md:py-6 transition-all">
+								<div key={index} className="group relative bg-[#fcfdfe] dark:bg-slate-800/30 md:bg-transparent rounded-[2rem] md:rounded-none p-5 md:p-0 border border-slate-100 dark:border-slate-800/50 md:border-t-0 md:border-x-0 md:border-b md:dark:border-slate-800 md:grid md:grid-cols-[1.2fr_1.5fr_0.8fr_1fr_0.4fr_1fr_30px] lg:grid-cols-[180px_1fr_100px_150px_60px_120px_40px] gap-2 lg:gap-4 md:items-center md:py-6 transition-all">
 
 									{/* SELECTION AREA (CATEGORY & PRODUCT) */}
 									<div className="grid grid-cols-1 md:contents gap-4">
@@ -1154,17 +1154,17 @@ const QuickOrder = () => {
 										<div className="relative" ref={activeRow === index && activeField === 'category' ? dropdownRef : null}>
 											<label className="md:hidden text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px] mb-2 block ml-1">DANH MỤC</label>
 											<div
-												className="w-full h-12 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl px-4 flex items-center justify-between cursor-pointer hover:border-[#f27121] transition-all"
+												className="w-full h-12 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl px-2 lg:px-4 flex items-center justify-between cursor-pointer hover:border-[#f27121] transition-all"
 												onClick={() => {
 													setActiveRow(index);
 													setActiveField('category');
 													setLineSearchQuery('');
 												}}
 											>
-												<span className={`text-[12px] font-bold truncate ${item.category ? 'text-slate-900 dark:text-white' : 'text-slate-300 dark:text-slate-600'}`}>
+												<span className={`text-[10px] lg:text-[12px] font-bold truncate ${item.category ? 'text-slate-900 dark:text-white' : 'text-slate-300 dark:text-slate-600'}`}>
 													{item.category || 'Tìm danh mục...'}
 												</span>
-												<ChevronDown size={14} className="text-slate-300 shrink-0" />
+												<ChevronDown size={14} className="text-slate-300 shrink-0 hidden lg:block" />
 											</div>
 
 											{activeRow === index && activeField === 'category' && (
@@ -1215,34 +1215,34 @@ const QuickOrder = () => {
 										<div className="relative md:pl-0" ref={activeRow === index && activeField === 'productId' ? dropdownRef : null}>
 											<label className="md:hidden text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px] mb-2 block ml-1">SẢN PHẨM</label>
 											<div
-												className="w-full h-12 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl px-4 flex items-center justify-between cursor-pointer hover:border-[#f27121] transition-all"
+												className="w-full h-12 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl px-2 lg:px-4 flex items-center justify-between cursor-pointer hover:border-[#f27121] transition-all"
 												onClick={() => {
 													setActiveRow(index);
 													setActiveField('productId');
 													setLineSearchQuery('');
 												}}
 											>
-												<div className="flex flex-col">
-													<span className={`text-[12px] font-bold truncate ${item.name ? 'text-slate-900 dark:text-white' : 'text-slate-300 dark:text-slate-600'} mr-2`}>
+												<div className="flex flex-col truncate">
+													<span className={`text-[10px] lg:text-[12px] font-bold truncate ${item.name ? 'text-slate-900 dark:text-white' : 'text-slate-300 dark:text-slate-600'} lg:mr-2`}>
 														{item.name || 'Tìm sản phẩm...'}
 													</span>
 													{item.serialNumber && (
-														<span className="text-[10px] font-black text-[#B48C00] uppercase leading-none mb-1">
+														<span className="text-[9px] lg:text-[10px] font-black text-[#B48C00] uppercase leading-none mb-1">
 															SN: {item.serialNumber}
 														</span>
 													)}
 													{item.sku && (
 														<span
-															className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase flex items-center gap-1 hover:text-[#f27121] transition-colors"
+															className="text-[8px] lg:text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase flex items-center gap-1 hover:text-[#f27121] transition-colors truncate"
 															onClick={(e) => { e.stopPropagation(); copyToClipboard(item.sku, 'mã SKU'); }}
 															title="Copy SKU"
 														>
-															{item.sku}
-															<span className="material-symbols-outlined text-[10px]">content_copy</span>
+															<span className="truncate">{item.sku}</span>
+															<span className="material-symbols-outlined text-[10px] hidden lg:block">content_copy</span>
 														</span>
 													)}
 												</div>
-												<ChevronDown size={14} className="text-slate-300 shrink-0" />
+												<ChevronDown size={14} className="text-slate-300 shrink-0 hidden lg:block" />
 											</div>
 
 											{activeRow === index && activeField === 'productId' && (
@@ -1340,15 +1340,15 @@ const QuickOrder = () => {
 									</div>
 
 									{/* NUMERIC AREA (QTY & PRICE) */}
-									<div className="grid grid-cols-2 md:contents gap-4 mt-4 md:mt-0">
+									<div className="grid grid-cols-2 md:contents gap-2 lg:gap-4 mt-4 md:mt-0">
 										{/* QUANTITY */}
 										<div className="flex flex-col md:items-center">
 											<label className="md:hidden text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px] mb-2 block ml-1">SỐ LƯỢNG</label>
-											<div className="relative w-full md:w-24">
+											<div className="relative w-full">
 												<input
 													type="number"
 													step="any"
-													className="w-full h-12 text-center bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl text-base font-black text-slate-900 dark:text-white focus:ring-2 focus:ring-[#f27121]/10 focus:border-[#f27121] transition-all"
+													className="w-full h-12 px-1 lg:px-4 text-center bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl text-sm lg:text-base font-black text-slate-900 dark:text-white focus:ring-2 focus:ring-[#f27121]/10 focus:border-[#f27121] transition-all"
 													value={item.qty}
 													onChange={(e) => updateLineItem(index, 'qty', e.target.value)}
 													placeholder="0"
@@ -1359,13 +1359,13 @@ const QuickOrder = () => {
 										{/* PRICE */}
 										<div className="flex flex-col md:items-center">
 											<label className="md:hidden text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px] mb-2 block ml-1">ĐƠN GIÁ</label>
-											<div className="relative w-full md:w-32">
+											<div className="relative w-full">
 												<input
 													type="number"
-													className="w-full h-12 text-center bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl text-base font-black text-slate-500 dark:text-slate-400 focus:ring-2 focus:ring-[#f27121]/10 focus:border-[#f27121] transition-all"
+													className="w-full h-12 px-1 lg:px-4 text-center bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl text-sm lg:text-base font-black text-slate-500 dark:text-slate-400 focus:ring-2 focus:ring-[#f27121]/10 focus:border-[#f27121] transition-all"
 													value={item.price === 0 ? '' : item.price}
 													onChange={(e) => updateLineItem(index, 'price', e.target.value === '' ? 0 : Number(e.target.value))}
-													placeholder="Giá bán"
+													placeholder="Giá"
 												/>
 											</div>
 										</div>

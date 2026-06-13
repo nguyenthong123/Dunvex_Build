@@ -364,26 +364,50 @@ const QuickOrder = () => {
 					const rawCat = p.category || data.order_category || '';
 					const catQuery = rawCat ? normalizeSmart(rawCat) : '';
 
-					let foundProd = products.find(prod => {
-						const prodNameNormalized = normalizeSmart(prod.name);
-						const nameMatch = prodNameNormalized.includes(prodQuery) || 
-										  prodQuery.includes(prodNameNormalized) ||
-										  prodWords.every(w => prodNameNormalized.includes(w)) ||
-										  (prod.sku && normalizeSmart(prod.sku).includes(prodQuery));
-						if (!nameMatch) return false;
-						if (catQuery) {
-							return prod.category && normalizeSmart(prod.category).includes(catQuery);
-						}
-						return true;
-					});
+					// 1. Ưu tiên tìm chính xác tên trước
+					let foundProd = products.find(prod => normalizeSmart(prod.name) === prodQuery);
+
+					if (!foundProd) {
+						foundProd = products.find(prod => {
+							const prodNameNormalized = normalizeSmart(prod.name);
+							
+							const isStrictWordMatch = prodWords.every(w => {
+								if (/\d/.test(w)) {
+									// Tránh lỗi 8.0mm match vào 18.0mm
+									const parts = prodNameNormalized.split(' ');
+									// Chỉ cho phép khớp chính xác hoặc bắt đầu bằng (ví dụ: 8.0mmx1220)
+									return parts.some(p => p === w || p.startsWith(w + 'x') || p.startsWith(w + '*'));
+								}
+								return prodNameNormalized.includes(w);
+							});
+
+							const nameMatch = prodNameNormalized.includes(prodQuery) || 
+											  prodQuery.includes(prodNameNormalized) ||
+											  isStrictWordMatch ||
+											  (prod.sku && normalizeSmart(prod.sku).includes(prodQuery));
+							if (!nameMatch) return false;
+							if (catQuery) {
+								return prod.category && normalizeSmart(prod.category).includes(catQuery);
+							}
+							return true;
+						});
+					}
 
 					// Fallback: Nếu không tìm thấy sản phẩm có danh mục đó, ưu tiên khớp tên
 					if (!foundProd && catQuery) {
 						foundProd = products.find(prod => {
 							const prodNameNormalized = normalizeSmart(prod.name);
-							return prodNameNormalized.includes(prodQuery) || 
+							const isStrictWordMatch = prodWords.every(w => {
+								if (/\d/.test(w)) {
+									const parts = prodNameNormalized.split(' ');
+									return parts.some(p => p === w || p.startsWith(w + 'x') || p.startsWith(w + '*'));
+								}
+								return prodNameNormalized.includes(w);
+							});
+							return prodNameNormalized === prodQuery ||
+								   prodNameNormalized.includes(prodQuery) || 
 								   prodQuery.includes(prodNameNormalized) ||
-								   prodWords.every(w => prodNameNormalized.includes(w)) ||
+								   isStrictWordMatch ||
 								   (prod.sku && normalizeSmart(prod.sku).includes(prodQuery));
 						});
 					}

@@ -43,8 +43,8 @@ const InventoryDesktopTable: React.FC<InventoryDesktopTableProps> = ({
 	const allSelected = paginatedProducts.length > 0 && paginatedProducts.every(p => selectedIds.includes(p.id));
 
 	return (
-		<div className="hidden md:block bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-800 overflow-hidden transition-colors duration-300">
-			<table className="w-full text-left">
+		<div className="hidden md:block bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-800 overflow-x-auto custom-scrollbar overflow-y-hidden transition-colors duration-300">
+			<table className="w-full text-left min-w-[800px]">
 				{activeTab === 'products' ? (
 					<>
 						<thead>

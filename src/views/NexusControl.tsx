@@ -867,7 +867,7 @@ const NexusControl = () => {
 						<div className="space-y-6">
 							<div className="bg-white dark:bg-slate-900 rounded-3xl lg:rounded-[2rem] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-2xl">
 								{/* Desktop Table */}
-								<div className="hidden md:block overflow-x-auto">
+								<div className="hidden md:block overflow-x-auto custom-scrollbar">
 									<table className="w-full text-left min-w-[800px]">
 										<thead>
 											<tr className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase tracking-widest text-slate-500">
@@ -1007,7 +1007,7 @@ const NexusControl = () => {
 								</div>
 
 								{/* Desktop Table */}
-								<div className="hidden md:block overflow-x-auto">
+								<div className="hidden md:block overflow-x-auto custom-scrollbar">
 									<table className="w-full text-left min-w-[800px]" data-chatbot="audit-logs-table">
 										<thead>
 											<tr className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase tracking-widest text-slate-500">
@@ -1123,7 +1123,7 @@ const NexusControl = () => {
 							</div>
 
 							{/* Desktop Table */}
-							<div className="hidden lg:block overflow-x-auto">
+							<div className="hidden lg:block overflow-x-auto custom-scrollbar">
 								<table className="w-full text-left min-w-[900px]">
 									<thead>
 										<tr className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase tracking-widest text-slate-500">

@@ -559,8 +559,8 @@ const Home = () => {
 								))}
 							</div>
 
-							<div className="hidden md:block overflow-x-auto">
-								<table className="w-full text-left font-['Inter']">
+							<div className="hidden md:block overflow-x-auto custom-scrollbar">
+								<table className="w-full text-left font-['Inter'] min-w-[600px]">
 									<thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] uppercase font-black text-slate-500 dark:text-slate-500 tracking-widest">
 										<tr>
 											<th className="px-5 py-3">Nhân viên / Khách</th>

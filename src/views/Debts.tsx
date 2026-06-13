@@ -1305,9 +1305,9 @@ const Debts: React.FC = () => {
 							<div className="p-6 border-b border-slate-50 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-800/30">
 								<h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">Danh sách phiếu thu gần đây</h3>
 							</div>
-							<div className="overflow-x-auto">
+							<div className="overflow-x-auto custom-scrollbar">
 								{/* Desktop Table */}
-								<table className="w-full text-left hidden md:table">
+								<table className="w-full text-left hidden md:table min-w-[800px]">
 									<thead>
 										<tr className="bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
 											<th className="px-8 py-5 text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest text-left">Khách hàng</th>
@@ -1874,8 +1874,8 @@ const Debts: React.FC = () => {
 														<h3 className="flex items-center text-slate-900 font-black text-lg mb-4 pl-4 border-l-[6px] border-[#1A237E] uppercase tracking-tight">
 															1. Danh sách đơn hàng
 														</h3>
-														<div className="rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-															<table className="w-full text-sm border-collapse">
+														<div className="rounded-2xl border border-slate-200 overflow-x-auto custom-scrollbar shadow-sm">
+															<table className="w-full text-sm border-collapse min-w-[600px]">
 																<thead className="bg-[#1c130d] text-white font-black uppercase tracking-widest text-[10px]">
 																	<tr>
 																		<th className="py-4 px-6 text-left w-1/4 border-r border-white/10">Ngày</th>
@@ -1918,8 +1918,8 @@ const Debts: React.FC = () => {
 														<h3 className="flex items-center text-slate-900 font-black text-lg mb-4 pl-4 border-l-[6px] border-emerald-500 uppercase tracking-tight">
 															2. Lịch sử thanh toán
 														</h3>
-														<div className="rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-															<table className="w-full text-sm border-collapse">
+														<div className="rounded-2xl border border-slate-200 overflow-x-auto custom-scrollbar shadow-sm">
+															<table className="w-full text-sm border-collapse min-w-[600px]">
 																<thead className="bg-[#1c130d] text-white font-black uppercase tracking-widest text-[10px]">
 																	<tr>
 																		<th className="py-4 px-6 text-left w-1/4 border-r border-white/10">Ngày</th>

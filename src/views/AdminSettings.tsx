@@ -946,7 +946,7 @@ const AdminSettings = () => {
 
 					{activeTab === 'permissions' && canManageUsers && (
 						<div className="space-y-6">
-							<div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-x-auto">
+							<div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-x-auto custom-scrollbar">
 								<table className="w-full text-left min-w-[1000px]">
 									<thead>
 										<tr className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-400">
@@ -1174,7 +1174,7 @@ const UserManagement = ({ userList, showAdd, onShowAdd, newUser, setNewUser, han
 			)}
 
 			<div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
-				<div className="overflow-x-auto">
+				<div className="overflow-x-auto custom-scrollbar">
 					<table className="w-full text-left min-w-[700px]">
 						<thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-400">
 							<tr><th className="px-6 py-4">Nhân viên</th><th className="px-6 py-4">Vai trò</th><th className="px-6 py-4">Trạng thái</th><th className="px-6 py-4 text-right">Hành động</th></tr>
@@ -1412,7 +1412,7 @@ const AttendanceAdmin = ({ logs, fieldLogs, companyInfo, setCompanyInfo, onSave 
 						</div>
 					</div>
 				</div>
-				<div className="overflow-x-auto">
+				<div className="overflow-x-auto custom-scrollbar">
 					<table className="w-full text-left min-w-[1000px]">
 						<thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-400">
 							<tr>

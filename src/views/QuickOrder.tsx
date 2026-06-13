@@ -320,18 +320,29 @@ const QuickOrder = () => {
 			if (data.customer?.name) {
 				const queryName = normalizeSmart(data.customer.name);
 				const queryWords = queryName.split(' ').filter(Boolean);
-				const foundCust = customers.find(c => {
+				// Priority 1: Exact Match
+				let foundCust = customers.find(c => {
+					if (data.customer.phone && c.phone === data.customer.phone) return true;
 					const cName = normalizeSmart(c.name);
 					const cBusiness = normalizeSmart(c.businessName || '');
-					
-					if (data.customer.phone && c.phone === data.customer.phone) return true;
-					
-					const matchName = cName && (cName.includes(queryName) || queryName.includes(cName));
-					const matchBusiness = cBusiness && (cBusiness.includes(queryName) || queryName.includes(cBusiness));
-					const matchWords = queryWords.length > 0 && queryWords.every(w => (cName && cName.includes(w)) || (cBusiness && cBusiness.includes(w)));
-					
-					return matchName || matchBusiness || matchWords;
+					return cName === queryName || cBusiness === queryName;
 				});
+
+				// Priority 2: Fuzzy Match
+				if (!foundCust) {
+					foundCust = customers.find(c => {
+						const cName = normalizeSmart(c.name);
+						const cBusiness = normalizeSmart(c.businessName || '');
+						
+						if (data.customer.phone && c.phone === data.customer.phone) return true;
+						
+						const matchName = cName && (cName.includes(queryName) || queryName.includes(cName));
+						const matchBusiness = cBusiness && (cBusiness.includes(queryName) || queryName.includes(cBusiness));
+						const matchWords = queryWords.length > 0 && queryWords.every(w => (cName && cName.includes(w)) || (cBusiness && cBusiness.includes(w)));
+						
+						return matchName || matchBusiness || matchWords;
+					});
+				}
 				if (foundCust) {
 					setSelectedCustomer(foundCust);
 					setSearchCustomerQuery(foundCust.businessName || foundCust.name);

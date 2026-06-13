@@ -174,24 +174,37 @@ const SaleBot = () => {
                     const snap = await getDocs(q);
                     const queryName = data.customer.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                     
-                    const found = snap.docs.find(d => {
+                    const matches = snap.docs.filter(d => {
                         const dbName = (d.data().name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                         return dbName.includes(queryName) || queryName.includes(dbName);
                     });
+                    
+                    let found = null;
+                    if (matches.length === 1) {
+                        found = matches[0];
+                    } else if (matches.length > 1) {
+                        found = matches.find(d => {
+                            const dbName = (d.data().name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                            return dbName === queryName;
+                        });
+                    }
                     
                     if (found) {
                         data.customer.id = found.id;
                         data.customer.name = found.data().name; // Đồng bộ lại tên chuẩn
                     } else {
-                        // Nếu không thấy chính xác, tìm các kết quả gần giống để gợi ý
-                        const words = queryName.split(' ').filter(Boolean);
-                        const suggestions = snap.docs
-                            .map(d => ({ id: d.id, ...d.data() }))
-                            .filter((c: any) => {
-                                const cName = (c.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-                                return words.some((w: string) => cName.includes(w));
-                            })
-                            .slice(0, 3);
+                        // Nếu không thấy chính xác hoặc có nhiều kết quả, tìm các kết quả gần giống để gợi ý
+                        let suggestions = matches.map(d => ({ id: d.id, ...d.data() })).slice(0, 3);
+                        if (suggestions.length === 0) {
+                            const words = queryName.split(' ').filter(Boolean);
+                            suggestions = snap.docs
+                                .map(d => ({ id: d.id, ...d.data() }))
+                                .filter((c: any) => {
+                                    const cName = (c.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                                    return words.some((w: string) => cName.includes(w));
+                                })
+                                .slice(0, 3);
+                        }
                             
                         const originalName = data.customer.name;
                         
@@ -199,7 +212,7 @@ const SaleBot = () => {
                         data.customer = undefined; // Tuớc quyền render khung hành động
                         
                         if (suggestions.length > 0) {
-                            data.message = `Em không tìm thấy chính xác khách hàng "${originalName}". Anh/chị có phải đang tìm một trong các khách hàng dưới đây không?`;
+                            data.message = `Em không tìm thấy chính xác khách hàng "${originalName}" (Hoặc có nhiều khách hàng trùng tên). Anh/chị có phải đang tìm một trong các khách hàng dưới đây không?`;
                             data.searchResults = suggestions;
                         } else {
                             data.message = `Em không tìm thấy hồ sơ khách hàng "${originalName}" trong hệ thống để cập nhật. Anh/chị vui lòng kiểm tra lại tên!`;
@@ -395,10 +408,20 @@ const SaleBot = () => {
                     const snap = await getDocs(q);
                     const queryName = data.customer.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                     
-                    const found = snap.docs.find(d => {
+                    const matches = snap.docs.filter(d => {
                         const dbName = (d.data().name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                         return dbName.includes(queryName) || queryName.includes(dbName);
                     });
+                    
+                    let found = null;
+                    if (matches.length === 1) {
+                        found = matches[0];
+                    } else if (matches.length > 1) {
+                        found = matches.find(d => {
+                            const dbName = (d.data().name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                            return dbName === queryName;
+                        });
+                    }
                     
                     if (found) {
                         targetId = found.id;
@@ -474,7 +497,7 @@ const SaleBot = () => {
                     const snap = await getDocs(q);
                     const queryName = targetName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                     
-                    const found = snap.docs.find(d => {
+                    const matches = snap.docs.filter(d => {
                         const dbName = (d.data().name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                         const dbBusiness = (d.data().businessName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                         
@@ -483,6 +506,17 @@ const SaleBot = () => {
                         
                         return matchName || matchBusiness;
                     });
+                    
+                    let found = null;
+                    if (matches.length === 1) {
+                        found = matches[0];
+                    } else if (matches.length > 1) {
+                        found = matches.find(d => {
+                            const dbName = (d.data().name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                            const dbBusiness = (d.data().businessName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                            return dbName === queryName || dbBusiness === queryName;
+                        });
+                    }
                     
                     if (found) {
                         targetId = found.id;

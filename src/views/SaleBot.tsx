@@ -337,53 +337,68 @@ const SaleBot = () => {
                 }
                 setIsLoading(true);
                 
-                const pInfo = data.product_info;
-                if (!pInfo || !pInfo.name) {
+                const productsToCreate = data.products_to_create || [];
+                if (productsToCreate.length === 0) {
                     alert("Dữ liệu sản phẩm không hợp lệ.");
                     setIsLoading(false);
                     return;
                 }
 
-                // Tự động tạo mã SKU (Ví dụ: SP + 4 số ngẫu nhiên + 4 số cuối timestamp)
-                const generatedSku = 'SP' + Math.floor(1000 + Math.random() * 9000) + Date.now().toString().slice(-4);
+                let successCount = 0;
+                let firstProductName = "";
 
-                const productData = {
-                    name: pInfo.name,
-                    sku: generatedSku,
-                    category: pInfo.category || 'Chưa phân loại',
-                    priceImport: pInfo.import_price || 0,
-                    priceSell: pInfo.retail_price || 0,
-                    stock: 0,
-                    unit: 'Cái', // Mặc định, có thể để trống hoặc cho AI cập nhật nếu cần
-                    specification: pInfo.specs || '',
-                    packaging: pInfo.packaging || '',
-                    density: pInfo.weight || '',
-                    status: 'Kinh doanh',
-                    createdAt: serverTimestamp(),
-                    ownerId: owner.ownerId,
-                    ownerEmail: owner.ownerEmail,
-                    createdBy: auth.currentUser?.uid || "",
-                    createdByEmail: auth.currentUser?.email || "",
-                    linkedProductId: ''
-                };
+                for (let i = 0; i < productsToCreate.length; i++) {
+                    const pInfo = productsToCreate[i];
+                    if (!pInfo.name) continue;
 
-                await addDoc(collection(db, 'products'), productData);
-                
-                await addDoc(collection(db, 'audit_logs'), {
-                    action: 'Thêm sản phẩm mới (Qua Bot)',
-                    user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
-                    userId: auth.currentUser?.uid || "",
-                    ownerId: owner.ownerId,
-                    details: `AI Bot đã tạo sản phẩm: ${productData.name} (${productData.sku})`,
-                    createdAt: serverTimestamp()
-                });
+                    // Tự động tạo mã SKU (Ví dụ: SP + 4 số ngẫu nhiên + 4 số cuối timestamp)
+                    const generatedSku = 'SP' + Math.floor(1000 + Math.random() * 9000) + Date.now().toString().slice(-4) + i.toString();
 
-                // Cập nhật tin nhắn thành công
-                setMessages(prev => [...prev, {
-                    id: Date.now().toString(),
-                    role: 'bot',
-                    content: `🎉 Tự động hóa thành công! Sản phẩm **${productData.name}** đã được lưu thẳng vào kho hàng với mã SKU **${productData.sku}**.`
-                }]);
+                    const productData = {
+                        name: pInfo.name,
+                        sku: generatedSku,
+                        category: pInfo.category || 'Chưa phân loại',
+                        priceImport: pInfo.import_price || 0,
+                        priceSell: pInfo.retail_price || 0,
+                        stock: 0,
+                        unit: 'Cái', // Mặc định
+                        specification: pInfo.specs || '',
+                        packaging: pInfo.packaging || '',
+                        density: pInfo.weight || '',
+                        status: 'Kinh doanh',
+                        createdAt: serverTimestamp(),
+                        ownerId: owner.ownerId,
+                        ownerEmail: owner.ownerEmail,
+                        createdBy: auth.currentUser?.uid || "",
+                        createdByEmail: auth.currentUser?.email || "",
+                        linkedProductId: ''
+                    };
+
+                    await addDoc(collection(db, 'products'), productData);
+                    
+                    if (successCount === 0) firstProductName = productData.name;
+                    successCount++;
+                }
+
+                if (successCount > 0) {
+                    await addDoc(collection(db, 'audit_logs'), {
+                        action: 'Thêm sản phẩm mới (Qua Bot)',
+                        user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
+                        userId: auth.currentUser?.uid || "",
+                        ownerId: owner.ownerId,
+                        details: `AI Bot đã tạo ${successCount} sản phẩm. (Bao gồm: ${firstProductName}${successCount > 1 ? '...' : ''})`,
+                        createdAt: serverTimestamp()
+                    });
+
+                    // Cập nhật tin nhắn thành công
+                    setMessages(prev => [...prev, {
+                        id: Date.now().toString(),
+                        role: 'bot',
+                        content: `🎉 Tự động hóa thành công! Đã lưu ${successCount} sản phẩm thẳng vào kho hàng.`
+                    }]);
+                } else {
+                    alert("Không có sản phẩm nào hợp lệ để tạo.");
+                }
             } catch (error) {
                 console.error("Lỗi tạo sản phẩm:", error);
                 alert("Lỗi khi tự động tạo sản phẩm.");
@@ -699,21 +714,25 @@ const SaleBot = () => {
                                             </div>
                                         )}
 
-                                        {msg.parsedData.product_info && msg.parsedData.intent === 'CREATE_PRODUCT' && (
-                                            <div className="mb-3 p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-100 dark:border-indigo-800/50">
+                                        {msg.parsedData.products_to_create && msg.parsedData.products_to_create.length > 0 && msg.parsedData.intent === 'CREATE_PRODUCT' && (
+                                            <div className="mb-3 space-y-2">
                                                 <div className="flex items-center gap-2 mb-2 text-indigo-700 dark:text-indigo-400">
                                                     <Package size={16} />
-                                                    <span className="text-xs font-bold uppercase">THÔNG TIN SẢN PHẨM</span>
+                                                    <span className="text-xs font-bold uppercase">THÔNG TIN SẢN PHẨM ({msg.parsedData.products_to_create.length})</span>
                                                 </div>
-                                                <div className="grid grid-cols-2 gap-2 text-xs">
-                                                    <div className="text-slate-500">Tên SP: <span className="text-slate-800 dark:text-slate-200 font-medium">{msg.parsedData.product_info.name || '---'}</span></div>
-                                                    <div className="text-slate-500">Danh mục: <span className="text-slate-800 dark:text-slate-200 font-medium">{msg.parsedData.product_info.category || '---'}</span></div>
-                                                    <div className="text-slate-500">Quy cách: <span className="text-slate-800 dark:text-slate-200 font-medium">{msg.parsedData.product_info.specs || '---'}</span></div>
-                                                    <div className="text-slate-500">Trọng lượng: <span className="text-slate-800 dark:text-slate-200 font-medium">{msg.parsedData.product_info.weight || '---'}</span></div>
-                                                    <div className="text-slate-500">Đóng gói: <span className="text-slate-800 dark:text-slate-200 font-medium">{msg.parsedData.product_info.packaging || '---'}</span></div>
-                                                    <div className="text-slate-500">Giá nhập: <span className="text-red-600 font-bold">{msg.parsedData.product_info.import_price?.toLocaleString('vi-VN') || 0}đ</span></div>
-                                                    <div className="text-slate-500">Giá bán: <span className="text-green-600 font-bold">{msg.parsedData.product_info.retail_price?.toLocaleString('vi-VN') || 0}đ</span></div>
-                                                </div>
+                                                {msg.parsedData.products_to_create.map((pInfo: any, pIdx: number) => (
+                                                    <div key={pIdx} className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-100 dark:border-indigo-800/50">
+                                                        <div className="grid grid-cols-2 gap-2 text-xs">
+                                                            <div className="text-slate-500 col-span-2">Tên SP: <span className="text-slate-800 dark:text-slate-200 font-bold">{pInfo.name || '---'}</span></div>
+                                                            <div className="text-slate-500">Danh mục: <span className="text-slate-800 dark:text-slate-200 font-medium">{pInfo.category || '---'}</span></div>
+                                                            <div className="text-slate-500">Quy cách: <span className="text-slate-800 dark:text-slate-200 font-medium">{pInfo.specs || '---'}</span></div>
+                                                            <div className="text-slate-500">Trọng lượng: <span className="text-slate-800 dark:text-slate-200 font-medium">{pInfo.weight || '---'}</span></div>
+                                                            <div className="text-slate-500">Đóng gói: <span className="text-slate-800 dark:text-slate-200 font-medium">{pInfo.packaging || '---'}</span></div>
+                                                            <div className="text-slate-500">Giá nhập: <span className={pInfo.import_price ? "text-red-600 font-bold" : "text-slate-400"}>{pInfo.import_price ? pInfo.import_price.toLocaleString('vi-VN') + 'đ' : '---'}</span></div>
+                                                            <div className="text-slate-500">Giá bán: <span className={pInfo.retail_price ? "text-green-600 font-bold" : "text-slate-400"}>{pInfo.retail_price ? pInfo.retail_price.toLocaleString('vi-VN') + 'đ' : '---'}</span></div>
+                                                        </div>
+                                                    </div>
+                                                ))}
                                             </div>
                                         )}
 
@@ -725,7 +744,7 @@ const SaleBot = () => {
                                             >
                                                 {msg.parsedData.intent === 'CREATE_CUSTOMER' ? 'Lưu Khách Hàng Mới' : 
                                                  msg.parsedData.intent === 'UPDATE_CUSTOMER' ? 'Xác Nhận Cập Nhật' : 
-                                                 msg.parsedData.intent === 'CREATE_PRODUCT' ? 'Tạo Sản Phẩm Mới' :
+                                                 msg.parsedData.intent === 'CREATE_PRODUCT' ? `Tạo ${msg.parsedData.products_to_create?.length || ''} Sản Phẩm Mới` :
                                                  msg.parsedData.intent === 'CREATE_PAYMENT' ? 'Đi tới Form Phiếu Thu' :
                                                  'Tiếp Tục Lên Đơn'}
                                             </button>

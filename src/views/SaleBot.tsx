@@ -133,10 +133,22 @@ const SaleBot = () => {
         setMessages(newMessages);
         setIsLoading(true);
 
-        const formattedHistory = messages.map(m => ({
-            role: m.role,
-            content: m.content + (m.parsedData?.searchResults ? ` [System Search Results: ${JSON.stringify(m.parsedData.searchResults.map((r:any) => ({id: r.id, name: r.name, phone: r.phone})))}]` : '')
-        }));
+        const formattedHistory = messages.map(m => {
+            let extraContext = '';
+            if (m.parsedData) {
+                const { message, searchResults, ...draftData } = m.parsedData;
+                if (Object.keys(draftData).length > 0) {
+                    extraContext += ` [Bản nháp đang có: ${JSON.stringify(draftData)}]`;
+                }
+                if (searchResults) {
+                    extraContext += ` [Kết quả tìm kiếm: ${JSON.stringify(searchResults.map((r:any) => ({id: r.id, name: r.name, phone: r.phone})))}]`;
+                }
+            }
+            return {
+                role: m.role,
+                content: m.content + extraContext
+            };
+        });
 
         try {
             const data = await parseSaleMessage(userMsg, productsStr, formattedHistory);

@@ -372,39 +372,25 @@ const QuickOrder = () => {
 				const mappedItems = data.products.map((p: any) => {
 					const prodQuery = normalizeSmart(p.name);
 					const prodWords = prodQuery.split(' ').filter(Boolean);
-					const rawCat = p.category || '';
+					const rawCat = p.category || data.order_category || ''; // Khôi phục lại order_category fallback vì user muốn áp dụng chung
 					const catQuery = rawCat ? normalizeSmart(rawCat) : '';
 
-					// 1. Ưu tiên tìm chính xác tên trước
-					let foundProd = products.find(prod => normalizeSmart(prod.name) === prodQuery);
+					let foundProd = null;
 
-					if (!foundProd) {
-						foundProd = products.find(prod => {
-							const prodNameNormalized = normalizeSmart(prod.name);
-							
-							const isStrictWordMatch = prodWords.every(w => {
-								if (/\d/.test(w)) {
-									// Tránh lỗi 8.0mm match vào 18.0mm
-									const parts = prodNameNormalized.split(' ');
-									// Chỉ cho phép khớp chính xác hoặc bắt đầu bằng (ví dụ: 8.0mmx1220)
-									return parts.some(p => p === w || p.startsWith(w + 'x') || p.startsWith(w + '*'));
-								}
-								return prodNameNormalized.includes(w);
-							});
-
-							const nameMatch = prodNameNormalized.includes(prodQuery) || 
-											  prodQuery.includes(prodNameNormalized) ||
-											  isStrictWordMatch ||
-											  (prod.sku && normalizeSmart(prod.sku).includes(prodQuery));
-							if (!nameMatch) return false;
-							if (catQuery) {
-								return prod.category && normalizeSmart(prod.category).includes(catQuery);
-							}
-							return true;
-						});
+					// 1. Ưu tiên tìm chính xác CẢ tên VÀ danh mục (nếu có danh mục)
+					if (catQuery) {
+						foundProd = products.find(prod => 
+							normalizeSmart(prod.name) === prodQuery && 
+							prod.category && normalizeSmart(prod.category).includes(catQuery)
+						);
 					}
 
-					// Fallback: Nếu không tìm thấy sản phẩm có danh mục đó, ưu tiên khớp tên
+					// 2. Nếu không có danh mục, hoặc bước 1 không tìm thấy, tìm chính xác tên
+					if (!foundProd) {
+						foundProd = products.find(prod => normalizeSmart(prod.name) === prodQuery);
+					}
+
+					// 3. Nếu vẫn không thấy, tìm mờ (fuzzy) CÓ kèm danh mục
 					if (!foundProd && catQuery) {
 						foundProd = products.find(prod => {
 							const prodNameNormalized = normalizeSmart(prod.name);
@@ -415,6 +401,30 @@ const QuickOrder = () => {
 								}
 								return prodNameNormalized.includes(w);
 							});
+
+							const nameMatch = prodNameNormalized === prodQuery ||
+											  prodNameNormalized.includes(prodQuery) || 
+											  prodQuery.includes(prodNameNormalized) ||
+											  isStrictWordMatch ||
+											  (prod.sku && normalizeSmart(prod.sku).includes(prodQuery));
+											  
+							if (!nameMatch) return false;
+							return prod.category && normalizeSmart(prod.category).includes(catQuery);
+						});
+					}
+
+					// 4. Nếu vẫn không thấy, tìm mờ KHÔNG kèm danh mục
+					if (!foundProd) {
+						foundProd = products.find(prod => {
+							const prodNameNormalized = normalizeSmart(prod.name);
+							const isStrictWordMatch = prodWords.every(w => {
+								if (/\d/.test(w)) {
+									const parts = prodNameNormalized.split(' ');
+									return parts.some(p => p === w || p.startsWith(w + 'x') || p.startsWith(w + '*'));
+								}
+								return prodNameNormalized.includes(w);
+							});
+
 							return prodNameNormalized === prodQuery ||
 								   prodNameNormalized.includes(prodQuery) || 
 								   prodQuery.includes(prodNameNormalized) ||

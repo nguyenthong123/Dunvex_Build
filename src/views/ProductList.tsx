@@ -700,7 +700,15 @@ const ProductList = () => {
 
 	const sourceList = activeTab === 'products' ? products : groupedProducts;
 
+	const locationState = location.state as any;
+	const missingSkus = locationState?.missingSkus as string[] | undefined;
+
 	const filteredProducts = sourceList.filter(product => {
+		// NẾU CÓ TRUYỀN DANH SÁCH SẢN PHẨM THIẾU TỪ ORDERLIST THÌ CHỈ LỌC NHỮNG SẢN PHẨM ĐÓ
+		if (missingSkus && missingSkus.length > 0) {
+			return missingSkus.includes(product.sku);
+		}
+
 		const matchesSearch = isMatch(product.name || '', searchTerm) ||
 			isMatch(product.sku || '', searchTerm) ||
 			isMatch(product.serialNumber || '', searchTerm) ||
@@ -1030,6 +1038,30 @@ const ProductList = () => {
 							hasManagePermission={hasManagePermission}
 						/>
 						<div className="mt-8 mb-4">
+
+							{missingSkus && missingSkus.length > 0 && (
+								<div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-xl p-4 mb-4 flex items-center justify-between">
+									<div className="flex items-center gap-3 text-amber-800 dark:text-amber-300">
+										<div className="p-2 bg-amber-100 dark:bg-amber-900/40 rounded-lg">
+											<span className="material-symbols-outlined">warning</span>
+										</div>
+										<div>
+											<p className="font-bold text-sm">Đang lọc mặt hàng thiếu tồn kho từ đơn hàng</p>
+											<p className="text-xs opacity-80 mt-0.5">Vui lòng cập nhật số lượng tồn kho cho các sản phẩm dưới đây.</p>
+										</div>
+									</div>
+									<button 
+										onClick={() => {
+											const state = { ...location.state };
+											delete state.missingSkus;
+											navigate('/inventory', { state, replace: true });
+										}}
+										className="px-4 py-2 bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 font-bold text-xs rounded-lg border border-amber-200 dark:border-amber-700/50 hover:bg-amber-50 dark:hover:bg-amber-900/40 transition-colors"
+									>
+										Xóa bộ lọc
+									</button>
+								</div>
+							)}
 
 							{/* Pagination Controls */}
 							{

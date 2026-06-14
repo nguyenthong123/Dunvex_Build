@@ -678,7 +678,8 @@ const QuickOrder = () => {
 							productId: mainCand.id,
 							qty: remainingQty,
 							productName: mainCand.name,
-							buyPrice: mainCand.priceImport || 0
+							buyPrice: mainCand.priceImport || 0,
+							isMissing: true // Flag to block checkout
 						});
 					}
 				}
@@ -698,6 +699,16 @@ const QuickOrder = () => {
 					serialNumber: item.serialNumber || ''
 				});
 			});
+
+			if (orderStatus === 'Đơn chốt') {
+				const missingProducts = stockDeletions.filter(d => d.isMissing);
+				if (missingProducts.length > 0) {
+					const missingNames = missingProducts.map(p => p.productName).join(', ');
+					showToast(`Tồn kho không đủ cho: ${missingNames}. Vui lòng tạo đơn Nháp (Mới/Đang xử lý) hoặc nhập thêm kho!`, "error");
+					setIsSubmitting(false);
+					return;
+				}
+			}
 
 			// Auto-resolve customer if they typed the exact name but didn't click dropdown
 			let finalCustomer = selectedCustomer;
@@ -1290,13 +1301,11 @@ const QuickOrder = () => {
 																	return (
 																		<div
 																			key={p.id}
-																			className={`px-5 py-4 hover:bg-[#1A237E]/5 dark:hover:bg-indigo-500/10 cursor-pointer border-b border-slate-50 dark:border-slate-700/50 last:border-none transition-all flex items-center justify-between group/prod ${effStock <= 0 ? 'opacity-50 grayscale' : ''}`}
+																			className={`px-5 py-4 hover:bg-[#1A237E]/5 dark:hover:bg-indigo-500/10 cursor-pointer border-b border-slate-50 dark:border-slate-700/50 last:border-none transition-all flex items-center justify-between group/prod`}
 																			onClick={() => {
-																				if (effStock > 0) {
-																					updateLineItem(index, 'productId', p.id);
-																					setActiveRow(null);
-																					setActiveField(null);
-																				}
+																				updateLineItem(index, 'productId', p.id);
+																				setActiveRow(null);
+																				setActiveField(null);
 																			}}
 																		>
 																			<div className="flex flex-col gap-1 max-w-[70%]">

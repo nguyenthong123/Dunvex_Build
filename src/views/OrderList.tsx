@@ -145,13 +145,113 @@ const OrderList = () => {
 
 	const updateStatus = async (id: string, newStatus: string) => {
 		try {
+			const order = orders.find(o => o.id === id);
+			
+			// 1. Nếu chuyển sang Đơn chốt, cần kiểm tra và trừ tồn kho
+			if (newStatus === 'Đơn chốt') {
+				// Lấy danh sách sản phẩm hiện tại
+				const productsSnap = await getDocs(query(collection(db, 'products'), where('ownerId', '==', owner.ownerId)));
+				const allProducts = productsSnap.docs.map(d => ({ id: d.id, ...d.data() as any }));
+				const normalizeText = (text: any) => text ? String(text).normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase() : '';
+				
+				let isMissing = false;
+				const missingSkus: string[] = [];
+				const stockDeletions: any[] = [];
+				
+				for (const item of order?.products || []) {
+					let remainingQty = Number(item.qty) || 0;
+					const sourceProduct = allProducts.find(p => p.id === item.id);
+					const cleanSku = normalizeText(sourceProduct?.sku || item.sku);
+					
+					let stockCandidates: any[] = [];
+					if (sourceProduct?.linkedProductId) {
+						const linked = allProducts.find(p => p.id === sourceProduct.linkedProductId);
+						if (linked) stockCandidates = [linked];
+					} else if (cleanSku) {
+						stockCandidates = allProducts
+							.filter(p => normalizeText(p.sku) === cleanSku && !p.linkedProductId)
+							.sort((a: any, b: any) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+					}
+					if (stockCandidates.length === 0 && sourceProduct) {
+						stockCandidates = [sourceProduct];
+					}
+					
+					for (const cand of stockCandidates) {
+						if (remainingQty <= 0) break;
+						const available = Number(cand.stock) || 0;
+						if (available <= 0) continue;
+						const take = Math.min(remainingQty, available);
+						stockDeletions.push({
+							productId: cand.id,
+							qty: take,
+							productName: cand.name
+						});
+						remainingQty -= take;
+					}
+					
+					if (remainingQty > 0) {
+						isMissing = true;
+						if (cleanSku) missingSkus.push(sourceProduct?.sku || item.sku);
+					}
+				}
+				
+				if (isMissing) {
+					showToast("Tồn kho không đủ cho một số mặt hàng! Chuyển đến trang Sản phẩm để nhập kho...", "error");
+					setTimeout(() => {
+						navigate('/inventory', { state: { missingSkus } });
+					}, 1500);
+					return;
+				}
+				
+				// Nếu đủ hàng, thực hiện trừ tồn kho
+				const batch = writeBatch(db);
+				stockDeletions.forEach(del => {
+					const prodRef = doc(db, 'products', del.productId);
+					batch.update(prodRef, { stock: increment(-del.qty) });
+					
+					const invLogRef = doc(collection(db, 'inventory_logs'));
+					batch.set(invLogRef, {
+						productId: del.productId,
+						orderId: id,
+						customerName: order?.customerName || 'Khách',
+						productName: del.productName,
+						type: 'out',
+						qty: del.qty,
+						note: `Xuất đơn hàng (FIFO) (Từ chuyển trạng thái Đơn chốt)`,
+						ownerId: owner.ownerId || '',
+						user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
+						createdAt: serverTimestamp()
+					});
+				});
+				
+				// Cập nhật trạng thái đơn
+				batch.update(doc(db, 'orders', id), {
+					status: newStatus,
+					updatedAt: serverTimestamp()
+				});
+				
+				const auditRef = doc(collection(db, 'audit_logs'));
+				batch.set(auditRef, {
+					action: 'Cập nhật trạng thái đơn',
+					user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
+					userId: auth.currentUser?.uid || "",
+					ownerId: owner.ownerId,
+					details: `Đã đổi đơn hàng của ${order?.customerName || 'Khách'} sang: ${newStatus}`,
+					createdAt: serverTimestamp()
+				});
+				
+				await batch.commit();
+				showToast("Đã chốt đơn và xuất kho thành công", "success");
+				return;
+			}
+
+			// 2. Chuyển các trạng thái khác (Không trừ tồn kho)
 			await updateDoc(doc(db, 'orders', id), {
 				status: newStatus,
 				updatedAt: serverTimestamp()
 			});
 
 			// Log Status Update
-			const order = orders.find(o => o.id === id);
 			await addDoc(collection(db, 'audit_logs'), {
 				action: 'Cập nhật trạng thái đơn',
 				user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
@@ -160,7 +260,9 @@ const OrderList = () => {
 				details: `Đã đổi đơn hàng của ${order?.customerName || 'Khách'} sang: ${newStatus}`,
 				createdAt: serverTimestamp()
 			});
+			showToast("Đã cập nhật trạng thái", "success");
 		} catch (error) {
+			console.error("Lỗi cập nhật trạng thái:", error);
 			showToast("Lỗi khi cập nhật trạng thái", "error");
 		}
 	};

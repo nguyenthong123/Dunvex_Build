@@ -41,9 +41,14 @@ const MobileNav = () => {
 						key={`nav-${idx}`}
 						onClick={() => {
 							const isSearchBtn = item.path.includes('search=focus');
-							const targetBase = item.path.split('?')[0];
-							if (isSearchBtn && currentPath === targetBase) {
-								window.dispatchEvent(new CustomEvent('open-mobile-search'));
+							if (isSearchBtn) {
+								const searchablePaths = ['/customers', '/debts', '/orders', '/inventory', '/price-list'];
+								const isSearchable = searchablePaths.some(p => currentPath.startsWith(p));
+								if (isSearchable) {
+									window.dispatchEvent(new CustomEvent('open-mobile-search'));
+								} else {
+									navigate('/inventory?search=focus');
+								}
 							} else {
 								navigate(item.path);
 							}

@@ -160,6 +160,7 @@ const QuickOrder = () => {
 								unit: item.unit || '',
 								packaging: item.packaging || '',
 								density: item.density || '',
+								specification: item.specification || currentProduct?.specification || '',
 								serialNumber: item.serialNumber || '',
 								imageUrl: item.imageUrl || currentProduct?.imageUrl || '',
 								maxStock: currentProduct ? (Number(currentProduct.stock) || 0) : 0
@@ -301,6 +302,7 @@ const QuickOrder = () => {
 				newItems[index].unit = prod.unit;
 				newItems[index].category = prod.category;
 				newItems[index].packaging = prod.packaging;
+				newItems[index].specification = prod.specification || '';
 				newItems[index].density = prod.density;
 				newItems[index].imageUrl = prod.imageUrl || '';
 				newItems[index].maxStock = getEffectiveStock(prod);
@@ -695,6 +697,7 @@ const QuickOrder = () => {
 					category: item.category || '',
 					density: item.density || '',
 					packaging: item.packaging || '',
+					specification: item.specification || sourceProduct?.specification || '',
 					imageUrl: item.imageUrl || '',
 					serialNumber: item.serialNumber || ''
 				});
@@ -1144,9 +1147,10 @@ const QuickOrder = () => {
 					</div>
 					<div className="p-4 md:p-8">
 						{/* DESKTOP HEADER - HIDDEN ON MOBILE */}
-						<div className="hidden md:grid md:grid-cols-[1.2fr_1.5fr_0.8fr_1fr_0.4fr_1fr_30px] lg:grid-cols-[180px_1fr_100px_150px_60px_120px_40px] gap-2 lg:gap-4 mb-4 text-[9px] lg:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest border-b border-slate-50 dark:border-slate-800 pb-4">
+						<div className="hidden md:grid md:grid-cols-[1.2fr_1.5fr_0.8fr_0.8fr_1fr_0.4fr_1fr_30px] lg:grid-cols-[140px_1fr_100px_90px_130px_60px_120px_40px] gap-2 lg:gap-4 mb-4 text-[9px] lg:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest border-b border-slate-50 dark:border-slate-800 pb-4">
 							<div>DANH MỤC</div>
 							<div>SẢN PHẨM</div>
+							<div className="text-center">QUY CÁCH</div>
 							<div className="text-center">SỐ LƯỢNG</div>
 							<div className="text-center">ĐƠN GIÁ</div>
 							<div className="text-center">KIỆN</div>
@@ -1157,7 +1161,7 @@ const QuickOrder = () => {
 						{/* LIST OF ITEMS */}
 						<div className="space-y-6 md:space-y-0">
 							{lineItems.map((item, index) => (
-								<div key={index} className="group relative bg-[#fcfdfe] dark:bg-slate-800/30 md:bg-transparent rounded-[2rem] md:rounded-none p-5 md:p-0 border border-slate-100 dark:border-slate-800/50 md:border-t-0 md:border-x-0 md:border-b md:dark:border-slate-800 md:grid md:grid-cols-[1.2fr_1.5fr_0.8fr_1fr_0.4fr_1fr_30px] lg:grid-cols-[180px_1fr_100px_150px_60px_120px_40px] gap-2 lg:gap-4 md:items-center md:py-6 transition-all">
+								<div key={index} className="group relative bg-[#fcfdfe] dark:bg-slate-800/30 md:bg-transparent rounded-[2rem] md:rounded-none p-5 md:p-0 border border-slate-100 dark:border-slate-800/50 md:border-t-0 md:border-x-0 md:border-b md:dark:border-slate-800 md:grid md:grid-cols-[1.2fr_1.5fr_0.8fr_0.8fr_1fr_0.4fr_1fr_30px] lg:grid-cols-[140px_1fr_100px_90px_130px_60px_120px_40px] gap-2 lg:gap-4 md:items-center md:py-6 transition-all">
 
 									{/* SELECTION AREA (CATEGORY & PRODUCT) */}
 									<div className="grid grid-cols-1 md:contents gap-4">
@@ -1165,14 +1169,14 @@ const QuickOrder = () => {
 										<div className="relative" ref={activeRow === index && activeField === 'category' ? dropdownRef : null}>
 											<label className="md:hidden text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px] mb-2 block ml-1">DANH MỤC</label>
 											<div
-												className="w-full h-12 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl px-2 lg:px-4 flex items-center justify-between cursor-pointer hover:border-[#f27121] transition-all"
+												className="w-full min-h-[48px] py-2 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl px-2 lg:px-4 flex items-center justify-between cursor-pointer hover:border-[#f27121] transition-all"
 												onClick={() => {
 													setActiveRow(index);
 													setActiveField('category');
 													setLineSearchQuery('');
 												}}
 											>
-												<span className={`text-[10px] lg:text-[12px] font-bold truncate ${item.category ? 'text-slate-900 dark:text-white' : 'text-slate-300 dark:text-slate-600'}`}>
+												<span className={`text-[10px] lg:text-[12px] font-bold break-words whitespace-normal ${item.category ? 'text-slate-900 dark:text-white' : 'text-slate-300 dark:text-slate-600'}`}>
 													{item.category || 'Tìm danh mục...'}
 												</span>
 												<ChevronDown size={14} className="text-slate-300 shrink-0 hidden lg:block" />
@@ -1226,15 +1230,15 @@ const QuickOrder = () => {
 										<div className="relative md:pl-0" ref={activeRow === index && activeField === 'productId' ? dropdownRef : null}>
 											<label className="md:hidden text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px] mb-2 block ml-1">SẢN PHẨM</label>
 											<div
-												className="w-full h-12 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl px-2 lg:px-4 flex items-center justify-between cursor-pointer hover:border-[#f27121] transition-all"
+												className="w-full min-h-[48px] py-2 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl px-2 lg:px-4 flex items-center justify-between cursor-pointer hover:border-[#f27121] transition-all"
 												onClick={() => {
 													setActiveRow(index);
 													setActiveField('productId');
 													setLineSearchQuery('');
 												}}
 											>
-												<div className="flex flex-col truncate">
-													<span className={`text-[10px] lg:text-[12px] font-bold truncate ${item.name ? 'text-slate-900 dark:text-white' : 'text-slate-300 dark:text-slate-600'} lg:mr-2`}>
+												<div className="flex flex-col break-words whitespace-normal w-full overflow-hidden">
+													<span className={`text-[10px] lg:text-[12px] font-bold break-words whitespace-normal ${item.name ? 'text-slate-900 dark:text-white' : 'text-slate-300 dark:text-slate-600'} lg:mr-2`}>
 														{item.name || 'Tìm sản phẩm...'}
 													</span>
 													{item.serialNumber && (
@@ -1244,16 +1248,21 @@ const QuickOrder = () => {
 													)}
 													{item.sku && (
 														<span
-															className="text-[8px] lg:text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase flex items-center gap-1 hover:text-[#f27121] transition-colors truncate"
+															className="text-[8px] lg:text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase flex items-center gap-1 hover:text-[#f27121] transition-colors break-words whitespace-normal"
 															onClick={(e) => { e.stopPropagation(); copyToClipboard(item.sku, 'mã SKU'); }}
 															title="Copy SKU"
 														>
-															<span className="truncate">{item.sku}</span>
+															<span className="break-words whitespace-normal">{item.sku}</span>
 															<span className="material-symbols-outlined text-[10px] hidden lg:block">content_copy</span>
 														</span>
 													)}
+													{item.specification && (
+														<span className="text-[9px] lg:text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-0.5 break-words whitespace-normal">
+															QC: {item.specification}
+														</span>
+													)}
 												</div>
-												<ChevronDown size={14} className="text-slate-300 shrink-0 hidden lg:block" />
+												<ChevronDown size={14} className="text-slate-300 shrink-0 hidden lg:block ml-2" />
 											</div>
 
 											{activeRow === index && activeField === 'productId' && (
@@ -1315,6 +1324,11 @@ const QuickOrder = () => {
 																						SN: {p.serialNumber}
 																					</span>
 																				)}
+																				{p.specification && (
+																					<span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 leading-tight line-clamp-2">
+																						QC: {p.specification}
+																					</span>
+																				)}
 																				<div className="flex items-center gap-2">
 																					<div
 																						className="flex items-center gap-1 cursor-pointer group/sku"
@@ -1349,7 +1363,21 @@ const QuickOrder = () => {
 									</div>
 
 									{/* NUMERIC AREA (QTY & PRICE) */}
-									<div className="grid grid-cols-2 md:contents gap-2 lg:gap-4 mt-4 md:mt-0">
+									<div className="grid grid-cols-3 md:contents gap-2 lg:gap-4 mt-4 md:mt-0">
+										{/* QUY CÁCH */}
+										<div className="flex flex-col md:items-center">
+											<label className="md:hidden text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px] mb-2 block ml-1">QUY CÁCH</label>
+											<div className="relative w-full h-full flex items-center">
+												<textarea
+													className="w-full min-h-[48px] py-2 px-1 lg:px-2 text-center bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl text-[10px] lg:text-xs font-black text-slate-900 dark:text-white focus:ring-2 focus:ring-[#f27121]/10 focus:border-[#f27121] transition-all resize-none custom-scrollbar break-words whitespace-pre-wrap leading-tight flex items-center justify-center"
+													value={item.specification || ''}
+													onChange={(e) => updateLineItem(index, 'specification', e.target.value)}
+													placeholder="---"
+													rows={2}
+												/>
+											</div>
+										</div>
+
 										{/* QUANTITY */}
 										<div className="flex flex-col md:items-center">
 											<label className="md:hidden text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px] mb-2 block ml-1">SỐ LƯỢNG</label>

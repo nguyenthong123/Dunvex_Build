@@ -30,8 +30,8 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 
 	useEffect(() => {
 		const handleResize = () => {
-			if (window.innerWidth < 850) {
-				const s = (window.innerWidth - 40) / 800;
+			if (window.innerWidth < 1050) {
+				const s = (window.innerWidth - 40) / 1000;
 				setScale(s);
 			} else {
 				setScale(1);
@@ -56,7 +56,7 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 		const printContent = document.getElementById('order-ticket-paper');
 		if (!printContent) return;
 
-		const printWindow = window.open('', '_blank', 'width=1000,height=1000');
+		const printWindow = window.open('', '_blank', 'width=1200,height=1000');
 		if (!printWindow) {
 			alert("Vui lòng cho phép trình duyệt mở popup để in!");
 			return;
@@ -315,7 +315,7 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 			{/* Wrapper for scaling */}
 			<div
 				style={{
-					width: '800px',
+					width: '1000px',
 					transform: `scale(${scale * zoom})`,
 					transformOrigin: 'top center',
 					marginBottom: (scale * zoom) < 1 ? `-${(1 - (scale * zoom)) * 1100}px` : '0'
@@ -438,6 +438,7 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 										<tr>
 											<th className="px-3 py-4 text-center w-14 border-r border-white/10">ẢNH</th>
 											<th className="px-5 py-4 border-r border-white/10">Tên Hàng Hóa / Sản phẩm</th>
+											<th className="px-3 py-4 border-r border-white/10 w-24">Quy cách</th>
 											<th className="px-3 py-4 text-center border-r border-white/10 w-16">ĐVT</th>
 											<th className="px-3 py-4 text-center border-r border-white/10 w-16">SL</th>
 											<th className="px-5 py-4 text-right border-r border-white/10 w-28">Đơn Giá</th>
@@ -470,6 +471,7 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 														<div className="text-[10px] text-[#B48C00] mt-0.5 font-bold break-words">SN: {item.serialNumber}</div>
 													)}
 												</td>
+												<td className="px-3 py-4 border-r border-gray-50 text-gray-500 font-bold text-[10px] uppercase">{item.specification || '---'}</td>
 												<td className="px-3 py-4 text-center border-r border-gray-50 text-gray-500 font-bold text-xs uppercase">{item.unit || '---'}</td>
 												<td className="px-3 py-4 text-center border-r border-gray-50 font-black text-gray-900 text-base">{item.qty}</td>
 												<td className="px-5 py-4 text-right border-r border-gray-50 text-gray-600 font-bold">{formatPrice(item.price)}</td>

@@ -22,7 +22,28 @@ const SaleBot = () => {
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [productsStr, setProductsStr] = useState<string>("");
+    const [showProductsModal, setShowProductsModal] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+    const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        setInput(e.target.value);
+        if (textareaRef.current) {
+            textareaRef.current.style.height = 'auto';
+            textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+        }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            if (input.trim() && !isLoading) {
+                // simulate form submission
+                const formEvent = { preventDefault: () => {} } as React.FormEvent;
+                handleSend(formEvent);
+            }
+        }
+    };
     const navigate = useNavigate();
     const owner = useOwner();
 
@@ -38,6 +59,13 @@ const SaleBot = () => {
     useEffect(() => {
         scrollToBottom();
     }, [messages]);
+
+    // Reset textarea height when input is cleared
+    useEffect(() => {
+        if (input === '' && textareaRef.current) {
+            textareaRef.current.style.height = 'auto';
+        }
+    }, [input]);
 
     const isInitialLoad = useRef(true);
 
@@ -789,18 +817,21 @@ const SaleBot = () => {
                 {/* Input Area */}
                 <div className="p-4 md:p-6 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shrink-0">
                     <form onSubmit={handleSend} className="relative flex items-center">
-                        <input 
-                            type="text" 
+                        <textarea
+                            ref={textareaRef}
                             value={input}
-                            onChange={(e) => setInput(e.target.value)}
+                            onChange={handleInput}
+                            onKeyDown={handleKeyDown}
                             placeholder="Nhập yêu cầu tạo đơn/khách (Ví dụ: Tạo khách anh Nam ở Q1...)"
-                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full py-4 pl-6 pr-14 outline-none focus:border-[#FF6D00] dark:focus:border-[#FF6D00] transition-colors text-slate-800 dark:text-white"
+                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[24px] py-4 pl-6 pr-14 outline-none focus:border-[#FF6D00] dark:focus:border-[#FF6D00] transition-colors text-slate-800 dark:text-white resize-none overflow-hidden custom-scrollbar leading-relaxed"
+                            style={{ minHeight: '56px', maxHeight: '120px' }}
+                            rows={1}
                             disabled={isLoading}
                         />
                         <button 
                             type="submit" 
                             disabled={!input.trim() || isLoading}
-                            className="absolute right-2 size-10 bg-[#FF6D00] hover:bg-[#E66000] disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded-full flex items-center justify-center transition-colors shadow-md"
+                            className="absolute right-2 bottom-2 size-10 bg-[#FF6D00] hover:bg-[#E66000] disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded-full flex items-center justify-center transition-colors shadow-md"
                         >
                             <Send size={18} className={input.trim() && !isLoading ? 'ml-1' : ''} />
                         </button>

@@ -70,9 +70,9 @@ export const useNavigationConfig = () => {
 
 		if (path === '/inventory') {
 			return {
-				icon: 'add_circle',
-				label: 'Thêm SP',
-				path: '/inventory?new=true',
+				icon: 'add_box',
+				label: 'Phiếu Kho',
+				path: 'event:open-mobile-add',
 				permissionKey: 'inventory_manage'
 			};
 		}
@@ -81,7 +81,7 @@ export const useNavigationConfig = () => {
 			return {
 				icon: 'person_add',
 				label: 'Thêm Khách',
-				path: '/customers?new=true',
+				path: 'event:open-mobile-add',
 				permissionKey: 'customers_manage'
 			};
 		}
@@ -90,7 +90,7 @@ export const useNavigationConfig = () => {
 			return {
 				icon: 'payments',
 				label: 'Thu nợ',
-				path: '/debts?payment=true',
+				path: 'event:open-mobile-add',
 				permissionKey: 'debts_manage'
 			};
 		}
@@ -99,7 +99,7 @@ export const useNavigationConfig = () => {
 			return {
 				icon: 'person_add',
 				label: 'Thêm NV',
-				path: '/admin?tab=users&action=add',
+				path: 'event:open-mobile-add',
 				permissionKey: 'users_manage'
 			};
 		}
@@ -133,25 +133,25 @@ export const useNavigationConfig = () => {
 			return {
 				icon: 'cloud_upload',
 				label: 'Cập nhật Data',
-				path: '/price-list?import=true',
+				path: 'event:open-mobile-add',
 			};
 		}
 
 		if (path === '/coupons') {
 			return {
 				icon: 'confirmation_number',
-				label: 'Tạo mã mới',
-				path: '/coupons?action=new',
-				permissionKey: 'admin'
+				label: 'Tạo mã',
+				path: 'event:open-mobile-add',
+				permissionKey: 'coupons_manage'
 			};
 		}
 
 		// Mặc định cho các trang khác
 		return {
 			icon: 'add',
-			label: 'Checkin',
-			path: '/checkin?new=true',
-			permissionKey: 'checkin_create'
+			label: 'Thêm SP',
+			path: 'event:open-mobile-add',
+			permissionKey: 'products_manage'
 		};
 	};
 
@@ -162,7 +162,8 @@ export const useNavigationConfig = () => {
 		{ ...getCenterItem(), isCenter: true },                                              // 2
 		{ icon: 'account_balance_wallet', label: 'Công nợ', path: '/debts', permissionKey: 'debts_manage' }, // 3
 		{ icon: 'group', label: 'Khách hàng', path: '/customers', permissionKey: 'customers_manage' },       // 4
-		{ icon: 'inventory_2', label: 'Sản phẩm', path: '/inventory', permissionKey: 'inventory_view' },     // 5
+		{ icon: 'category', label: 'Sản phẩm', path: '/products', permissionKey: 'inventory_view' },     // 5
+		{ icon: 'inventory_2', label: 'Tồn kho', path: '/inventory', permissionKey: 'inventory_view' },    // 5.5
 		{ icon: 'request_quote', label: 'Báo giá', path: '/price-list' },                                     // 6
 		{ icon: 'location_on', label: 'Checkin', path: '/checkin?action=history', permissionKey: 'checkin_create' }, // 7
 		{ icon: 'confirmation_number', label: 'Ưu đãi', path: '/coupons' },                                    // 8

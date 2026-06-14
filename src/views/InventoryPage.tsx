@@ -13,9 +13,10 @@ import InventoryLogsTable from '../components/inventory/InventoryLogsTable';
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
 import { getOptimizedImageUrl } from '../utils/validation';
+import InventoryActionModal from '../components/inventory/InventoryActionModal';
 
 
-const ProductList = () => {
+const InventoryPage = () => {
 	const navigate = useNavigate();
 	const location = useLocation();
 	const owner = useOwner();
@@ -27,10 +28,13 @@ const ProductList = () => {
 	const [showImport, setShowImport] = useState(false);
 	const [showEditForm, setShowEditForm] = useState(false);
 	const [showDetail, setShowDetail] = useState(false);
+	const [showActionModal, setShowActionModal] = useState(false);
+	const [actionModalInitialProduct, setActionModalInitialProduct] = useState<any>(null);
 	const [selectedProduct, setSelectedProduct] = useState<any>(null);
 	const [searchTerm, setSearchTerm] = useState('');
 	const [uploading, setUploading] = useState(false);
 	const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+	const [activeTab, setActiveTab] = useState<'inventory' | 'logs'>('inventory');
 	const [inventoryLogs, setInventoryLogs] = useState<any[]>([]);
 	const [orders, setOrders] = useState<any[]>([]);
 	const [expandedSkus, setExpandedSkus] = useState<Set<string>>(new Set());
@@ -215,18 +219,22 @@ const ProductList = () => {
 			setShowAddForm(true);
 			navigate('/inventory', { replace: true });
 		} else if (params.get('tab') === 'inventory') {
+			setActiveTab('inventory');
 			navigate('/inventory', { replace: true });
 		} else if (params.get('tab') === 'logs') {
+			setActiveTab('logs');
 			navigate('/inventory', { replace: true });
 		} else if (params.get('import') === 'true') {
 			setShowImport(true);
 			navigate('/inventory', { replace: true });
 		} else if (params.get('search') === 'focus') {
 			setShowMobileSearch(true);
+			setActiveTab('inventory');
 			setTimeout(() => searchRef.current?.focus(), 200);
 			navigate('/inventory', { replace: true });
 		} else if (params.get('filter') === 'low_stock') {
 			setCurrentFilter('low_stock');
+			setActiveTab('inventory');
 			navigate('/inventory', { replace: true });
 		}
 	}, [search, navigate]);
@@ -238,7 +246,7 @@ const ProductList = () => {
 	useEffect(() => {
 		const handleOpenSearch = () => {
 			setShowMobileSearch(true);
-			// // setActiveTab('products');
+			setActiveTab('inventory');
 			setTimeout(() => searchRef.current?.focus(), 200);
 		};
 		window.addEventListener('open-mobile-search', handleOpenSearch);
@@ -247,7 +255,8 @@ const ProductList = () => {
 
 	useEffect(() => {
 		const handleOpenAdd = () => {
-			setShowAddForm(true);
+			setActionModalInitialProduct(null);
+			setShowActionModal(true);
 		};
 		window.addEventListener('open-mobile-add', handleOpenAdd);
 		return () => window.removeEventListener('open-mobile-add', handleOpenAdd);
@@ -674,26 +683,8 @@ const ProductList = () => {
 
 
 	const openEdit = (product: any) => {
-		setSelectedProduct(product);
-		setFormData({
-			name: product.name,
-			sku: product.sku || '',
-			serialNumber: product.serialNumber || '',
-			category: product.category || 'Tôn lợp',
-			priceImport: product.priceImport || 0,
-			priceSell: product.priceSell || 0,
-			stock: product.stock || 0,
-			unit: product.unit || 'm2',
-			imageUrl: product.imageUrl || '',
-			note: product.note || '',
-			status: product.status || 'Kinh doanh',
-			specification: product.specification || '',
-			packaging: product.packaging || '',
-			density: product.density || '',
-			linkedProductId: product.linkedProductId || '',
-			expiryDate: product.expiryDate || ''
-		});
-		setShowEditForm(true);
+		setActionModalInitialProduct(product);
+		setShowActionModal(true);
 	};
 
 	const openDetail = (product: any) => {
@@ -701,7 +692,7 @@ const ProductList = () => {
 		setShowDetail(true);
 	};
 
-	const sourceList = products;
+	const sourceList = groupedProducts;
 
 	const locationState = location.state as any;
 	const missingSkus = locationState?.missingSkus as string[] | undefined;
@@ -872,10 +863,26 @@ const ProductList = () => {
 						<span className="material-symbols-outlined text-xl group-hover:rotate-[-45deg] transition-transform">home</span>
 					</button>
 					<div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
-					<h2 className="text-sm lg:text-lg xl:text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight line-clamp-1">Sản Phẩm</h2>
+					<h2 className="text-sm lg:text-lg xl:text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight line-clamp-1">Quản Lý Tồn Kho</h2>
 				</div>
 
 				<div className="flex items-center gap-4">
+					<div className="hidden lg:flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 border border-slate-200 dark:border-slate-800">
+						<button
+							onClick={() => { setActiveTab('inventory'); setCurrentFilter(null); }}
+							className={`px-3 xl:px-4 py-1.5 rounded-lg text-xs font-black transition-all ${activeTab === 'inventory' ? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm' : 'text-slate-400'}`}
+						>
+							<span className="xl:inline">TỒN KHO </span>GỘP
+						</button>
+						<button
+							onClick={() => { setActiveTab('logs'); setCurrentFilter(null); }}
+							className={`px-3 xl:px-4 py-1.5 rounded-lg text-xs font-black transition-all ${activeTab === 'logs' ? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm' : 'text-slate-400'}`}
+						>
+							<span className="xl:inline">LỊCH SỬ </span>KHO
+						</button>
+					</div>
+
+					{activeTab !== 'logs' && (
 						<div className="hidden lg:flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-full px-4 py-2 w-48 xl:w-64 border border-slate-200 dark:border-transparent focus-within:border-[#FF6D00] focus-within:bg-white dark:focus-within:bg-slate-900 transition-all">
 							<span className="material-symbols-outlined text-slate-500 text-lg">search</span>
 							<input
@@ -887,6 +894,7 @@ const ProductList = () => {
 								onChange={(e) => setSearchTerm(e.target.value)}
 							/>
 						</div>
+					)}
 
 					{currentFilter === 'low_stock' && (
 						<div className="flex bg-orange-50 dark:bg-orange-900/20 text-[#FF6D00] px-4 py-2 rounded-xl border border-orange-100 dark:border-orange-900/50 items-center gap-3 shadow-sm animate-in fade-in slide-in-from-right-4 duration-300">
@@ -904,29 +912,15 @@ const ProductList = () => {
 
 					{hasManagePermission && (
 						<div className="flex items-center gap-2">
-							{selectedIds.length > 0 && (
-								<button
-									onClick={handleBulkDelete}
-									className="flex bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 px-4 py-2.5 rounded-xl font-bold border border-rose-100 dark:border-rose-900/50 active:scale-95 transition-all items-center gap-2 hover:bg-rose-100"
-								>
-									<span className="material-symbols-outlined">delete_sweep</span>
-									<span>Xóa ({selectedIds.length})</span>
-								</button>
-							)}
-
 							<button
-								onClick={() => setShowImport(true)}
-								className="hidden md:flex bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-3 xl:px-4 py-2.5 rounded-xl font-bold border border-slate-200 dark:border-slate-800 active:scale-95 transition-all items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-700"
-							>
-								<span className="material-symbols-outlined">file_upload</span>
-								<span className="hidden xl:inline">Nhập Excel</span>
-							</button>
-							<button
-								onClick={() => setShowAddForm(true)}
+								onClick={() => {
+									setActionModalInitialProduct(null);
+									setShowActionModal(true);
+								}}
 								className="hidden md:flex bg-[#FF6D00] hover:bg-orange-600 text-white px-3 xl:px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-orange-500/20 active:scale-95 transition-all items-center gap-2"
 							>
-								<span className="material-symbols-outlined text-xl">add</span>
-								<span className="hidden xl:inline">Thêm Mới</span>
+								<span className="material-symbols-outlined text-xl">add_box</span>
+								<span className="hidden xl:inline">Tạo Phiếu Kho</span>
 							</button>
 						</div>
 					)}
@@ -978,13 +972,14 @@ const ProductList = () => {
 				)}
 
 				{/* Main Content Area */}
-				<>
-					{/* Table - Desktop */}
-					<InventoryDesktopTable
+				{activeTab !== 'logs' ? (
+					<>
+						{/* Table - Desktop */}
+						<InventoryDesktopTable
 							loading={loading}
 							paginatedProducts={paginatedProducts}
 							selectedIds={selectedIds}
-							activeTab={'products'}
+							activeTab={activeTab}
 							expandedSkus={expandedSkus}
 							hasManagePermission={hasManagePermission}
 							toggleSelectAll={toggleSelectAll}
@@ -1004,7 +999,7 @@ const ProductList = () => {
 						<InventoryMobileGrid
 							loading={loading}
 							paginatedProducts={paginatedProducts}
-							activeTab={'products'}
+							activeTab={activeTab}
 							expandedSkus={expandedSkus}
 							openDetail={openDetail}
 							openEdit={openEdit}
@@ -1047,7 +1042,7 @@ const ProductList = () => {
 								totalPages > 1 && (
 									<div className="mt-8 mb-12 flex flex-col md:flex-row items-center justify-between gap-4">
 										<p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-											Hiển thị {((currentPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredProducts.length)} trên tổng {filteredProducts.length} sản phẩm
+											Hiển thị {((currentPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredProducts.length)} trên tổng {filteredProducts.length} {activeTab === 'inventory' ? 'nhóm SKU' : 'lịch sử'}
 										</p>
 										<div className="flex items-center gap-1">
 											<button
@@ -1100,6 +1095,10 @@ const ProductList = () => {
 							}
 						</div>
 					</>
+				) : (
+					/* LOGS VIEW */
+					<InventoryLogsTable inventoryLogs={inventoryLogs} />
+				)}
 			</div>
 
 			<InventoryFormModal
@@ -1138,6 +1137,17 @@ const ProductList = () => {
 				printQRLabel={printQRLabel}
 			/>
 
+			<InventoryActionModal
+				show={showActionModal}
+				onClose={() => {
+					setShowActionModal(false);
+					setActionModalInitialProduct(null);
+				}}
+				products={products}
+				owner={owner}
+				initialProduct={actionModalInitialProduct}
+			/>
+
 			{
 				showScanner && (
 					<QRScanner
@@ -1151,4 +1161,4 @@ const ProductList = () => {
 	);
 };
 
-export default ProductList;
+export default InventoryPage;

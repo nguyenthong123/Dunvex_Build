@@ -30,26 +30,35 @@ const InventoryLogsTable: React.FC<InventoryLogsTableProps> = ({ inventoryLogs }
 									</td>
 									<td className="py-4 px-6">
 										<span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
-											log.type === 'in' ? 'bg-green-50 text-green-600' :
-											log.type === 'out' ? 'bg-orange-50 text-orange-600' :
+											(log.type === 'in' || log.type === 'import') ? 'bg-green-50 text-green-600' :
+											(log.type === 'out' || log.type === 'export') ? 'bg-orange-50 text-orange-600' :
 											log.type === 'transfer' ? 'bg-blue-50 text-blue-600' :
 											log.type === 'audit' ? (log.diffType === 'increase' ? 'bg-green-50 text-green-600' : 'bg-rose-50 text-rose-600') :
 											'bg-slate-50 text-slate-600'
 										}`}>
-											{log.type === 'in' ? 'Nhập kho' :
-											 log.type === 'out' ? 'Xuất đơn' :
+											{(log.type === 'in' || log.type === 'import') ? 'Nhập kho' :
+											 (log.type === 'out' || log.type === 'export') ? 'Xuất kho' :
 											 log.type === 'transfer' ? 'Chuyển kho' :
 											 log.type === 'audit' ? (log.diffType === 'increase' ? 'Nhập thêm' : 'Điều chỉnh giảm') : 
-											 'Khởi tạo'}
+											 log.action || 'Khởi tạo'}
 										</span>
 									</td>
 									<td className="py-4 px-6 font-bold text-slate-900 dark:text-white">
-										{log.productName}
+										{log.items ? (
+											<div className="flex flex-col gap-1">
+												{log.items.map((item: any, idx: number) => (
+													<span key={idx}>{item.name} {item.quantity > 1 ? `(x${item.quantity})` : ''}</span>
+												))}
+											</div>
+										) : (
+											log.productName
+										)}
 									</td>
 									<td className={`py-4 px-6 font-black ${
-										log.type === 'in' || (log.type === 'audit' && log.diffType === 'increase') ? 'text-green-600' : 'text-orange-600'
+										(log.type === 'in' || log.type === 'import') || (log.type === 'audit' && log.diffType === 'increase') ? 'text-green-600' : 'text-orange-600'
 									}`}>
-										{log.type === 'in' || (log.type === 'audit' && log.diffType === 'increase') ? '+' : '-'}{log.qty}
+										{(log.type === 'in' || log.type === 'import') || (log.type === 'audit' && log.diffType === 'increase') ? '+' : '-'}
+										{log.items ? log.items.reduce((acc: number, curr: any) => acc + curr.quantity, 0) : log.qty}
 									</td>
 									<td className="py-4 px-6 text-slate-500 italic max-w-xs truncate">{log.note}</td>
 									<td className="py-4 px-6 font-bold text-[#1A237E] dark:text-indigo-400">{log.user}</td>

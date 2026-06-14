@@ -290,6 +290,88 @@ const SaleBot = () => {
     const handleAction = async (data: any) => {
         if (data.intent === 'CREATE_ORDER') {
             navigate('/quick-order', { state: { prefill: data } });
+        } else if (data.intent === 'INVENTORY_ACTION') {
+            try {
+                if (!owner.ownerId) {
+                    alert("Không thể xác thực quyền truy cập. Vui lòng thử lại sau.");
+                    return;
+                }
+                if (!data.products || data.products.length === 0) {
+                    alert("Không tìm thấy sản phẩm nào để tạo phiếu kho.");
+                    return;
+                }
+                setIsLoading(true);
+
+                const qProd = query(collection(db, 'products'), where('ownerId', '==', owner.ownerId));
+                const snap = await getDocs(qProd);
+                const allProducts = snap.docs.map(d => ({ id: d.id, ...d.data() as any }));
+
+                const matchedItems = [];
+                for (const aiProd of data.products) {
+                    const aiName = (aiProd.name || '').toLowerCase().trim();
+                    let matchedProd = allProducts.find(p => (p.name || '').toLowerCase() === aiName);
+                    if (!matchedProd) {
+                        matchedProd = allProducts.find(p => (p.name || '').toLowerCase().includes(aiName));
+                    }
+
+                    if (matchedProd) {
+                        matchedItems.push({
+                            product: matchedProd,
+                            quantity: Number(aiProd.quantity) || 0
+                        });
+                    }
+                }
+
+                if (matchedItems.length === 0) {
+                    setMessages(prev => [...prev, {
+                        id: Date.now().toString(),
+                        role: 'bot',
+                        content: `❌ Không tìm thấy sản phẩm nào khớp trong kho. Vui lòng kiểm tra lại tên sản phẩm.`
+                    }]);
+                    setIsLoading(false);
+                    return;
+                }
+
+                const type = data.inventory_action?.type === 'export' ? 'export' : 'import';
+                const actionName = type === 'import' ? 'Nhập kho' : 'Xuất kho';
+                
+                const logData = {
+                    action: actionName,
+                    type: type,
+                    items: matchedItems.map(i => ({
+                        productId: i.product.id,
+                        name: i.product.name,
+                        sku: i.product.sku || '',
+                        quantity: i.quantity,
+                        previousStock: i.product.stock || 0,
+                        newStock: type === 'import' ? (i.product.stock || 0) + i.quantity : (i.product.stock || 0) - i.quantity
+                    })),
+                    note: data.inventory_action?.note || 'Tạo tự động từ SaleBot',
+                    createdAt: serverTimestamp(),
+                    ownerId: owner.ownerId,
+                    user: auth.currentUser?.displayName || 'Unknown'
+                };
+                await addDoc(collection(db, 'inventory_logs'), logData);
+
+                for (const item of matchedItems) {
+                    const newStock = type === 'import' ? (item.product.stock || 0) + item.quantity : (item.product.stock || 0) - item.quantity;
+                    await updateDoc(doc(db, 'products', item.product.id), {
+                        stock: newStock,
+                        updatedAt: serverTimestamp()
+                    });
+                }
+
+                setMessages(prev => [...prev, {
+                    id: Date.now().toString(),
+                    role: 'bot',
+                    content: `✅ Đã tạo thành công Phiếu ${actionName} cho ${matchedItems.length} mặt hàng.`
+                }]);
+            } catch (err) {
+                console.error(err);
+                alert("Lỗi khi tạo phiếu kho");
+            } finally {
+                setIsLoading(false);
+            }
         } else if (data.intent === 'CREATE_CUSTOMER') {
             try {
                 if (!owner.ownerId) {
@@ -665,6 +747,7 @@ const SaleBot = () => {
                                                 {msg.parsedData.intent === 'CREATE_ORDER' ? 'Thông tin Lên Đơn' : 
                                                  msg.parsedData.intent === 'CREATE_PRODUCT' ? 'Thông tin Sản Phẩm' : 
                                                  msg.parsedData.intent === 'CREATE_PAYMENT' ? 'Thông tin Thu Công Nợ' :
+                                                 msg.parsedData.intent === 'INVENTORY_ACTION' ? 'Thông tin Phiếu Kho' :
                                                  'Thông tin Khách Hàng'}
                                             </span>
                                         </div>
@@ -780,7 +863,25 @@ const SaleBot = () => {
                                             </div>
                                         )}
 
-                                        {['CREATE_ORDER', 'CREATE_CUSTOMER', 'UPDATE_CUSTOMER', 'CREATE_PRODUCT', 'CREATE_PAYMENT'].includes(msg.parsedData.intent) && 
+                                        {msg.parsedData.intent === 'INVENTORY_ACTION' && msg.parsedData.products && (
+                                            <div className="mb-3">
+                                                <p className="text-[10px] text-slate-500 uppercase font-bold mb-2">
+                                                    Danh sách mặt hàng ({msg.parsedData.inventory_action?.type === 'export' ? 'Xuất kho' : 'Nhập kho'}):
+                                                </p>
+                                                <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800 overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
+                                                    {msg.parsedData.products.map((p: any, idx: number) => (
+                                                        <div key={idx} className="p-3 flex items-center justify-between">
+                                                            <div className="flex flex-col gap-0.5 max-w-[70%]">
+                                                                <p className="text-sm font-bold text-slate-800 dark:text-slate-200 line-clamp-1">{p.name}</p>
+                                                            </div>
+                                                            <span className="text-sm font-black text-[#1A237E] dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 px-2 py-1 rounded-lg">x{p.quantity}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {['CREATE_ORDER', 'CREATE_CUSTOMER', 'UPDATE_CUSTOMER', 'CREATE_PRODUCT', 'CREATE_PAYMENT', 'INVENTORY_ACTION'].includes(msg.parsedData.intent) && 
                                         (!msg.parsedData.missing_info || msg.parsedData.missing_info.length === 0) && (
                                             <button 
                                                 onClick={() => handleAction(msg.parsedData)}
@@ -790,6 +891,7 @@ const SaleBot = () => {
                                                  msg.parsedData.intent === 'UPDATE_CUSTOMER' ? 'Xác Nhận Cập Nhật' : 
                                                  msg.parsedData.intent === 'CREATE_PRODUCT' ? `Tạo ${msg.parsedData.products_to_create?.length || ''} Sản Phẩm Mới` :
                                                  msg.parsedData.intent === 'CREATE_PAYMENT' ? 'Đi tới Form Phiếu Thu' :
+                                                 msg.parsedData.intent === 'INVENTORY_ACTION' ? 'Xác Nhận & Tạo Phiếu Kho' :
                                                  'Tiếp Tục Lên Đơn'}
                                             </button>
                                         )}

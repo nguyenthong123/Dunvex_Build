@@ -24,7 +24,13 @@ const MobileNav = () => {
 					return (
 						<div key={`nav-${idx}`} className="flex-1 relative flex flex-col items-center justify-center h-full">
 							<button
-								onClick={() => navigate(item.path)}
+								onClick={() => {
+									if (item.path.startsWith('event:')) {
+										window.dispatchEvent(new CustomEvent(item.path.split(':')[1]));
+									} else {
+										navigate(item.path);
+									}
+								}}
 								className="absolute -top-7 w-14 h-14 bg-gradient-to-br from-[#FF6D00] to-[#FF9100] text-white rounded-full shadow-[0_8px_25px_rgba(255,109,0,0.4)] flex items-center justify-center border-4 border-white dark:border-slate-900 active:scale-90 transition-all z-10"
 							>
 								<span className="material-symbols-outlined text-2xl font-black">{item.icon}</span>
@@ -42,12 +48,12 @@ const MobileNav = () => {
 						onClick={() => {
 							const isSearchBtn = item.path.includes('search=focus');
 							if (isSearchBtn) {
-								const searchablePaths = ['/customers', '/debts', '/orders', '/inventory', '/price-list'];
+								const searchablePaths = ['/customers', '/debts', '/orders', '/inventory', '/price-list', '/products'];
 								const isSearchable = searchablePaths.some(p => currentPath.startsWith(p));
 								if (isSearchable) {
 									window.dispatchEvent(new CustomEvent('open-mobile-search'));
 								} else {
-									navigate('/inventory?search=focus');
+									navigate('/products?search=focus');
 								}
 							} else {
 								navigate(item.path);

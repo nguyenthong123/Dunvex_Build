@@ -47,6 +47,15 @@ const CustomerList = () => {
 		return () => window.removeEventListener('open-mobile-search', handleOpenSearch);
 	}, []);
 
+	useEffect(() => {
+		const handleOpenAdd = () => {
+			setSelectedCustomer(undefined);
+			setShowAddForm(true);
+		};
+		window.addEventListener('open-mobile-add', handleOpenAdd);
+		return () => window.removeEventListener('open-mobile-add', handleOpenAdd);
+	}, []);
+
 	// Enhanced Search Functions
 	const normalizeText = (text: any) => text ? String(text).normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase() : '';
 	const removeAccents = (str: any) => {

@@ -57,12 +57,12 @@ const InventoryMobileGrid: React.FC<InventoryMobileGridProps> = ({
 					paginatedProducts.map((product) => (
 						<div key={product.id} className="bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-slate-800 flex flex-col justify-between" onClick={() => openDetail(product)}>
 							<div className="flex justify-between items-start mb-4">
-								<div className="flex items-center gap-3">
+								<div className="flex items-center gap-3 flex-1 min-w-0">
 									<div className="size-14 rounded-xl bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 flex items-center justify-center overflow-hidden border border-gray-100 dark:border-slate-700 shrink-0">
 										{product.imageUrl ? <img src={getImageUrl(product.imageUrl)} alt={product.name} className="size-full object-cover" /> : <span className="material-symbols-outlined text-2xl">package_2</span>}
 									</div>
-									<div className="min-w-0">
-										<h4 className="font-black text-slate-900 dark:text-white truncate">{product.name}</h4>
+									<div className="flex-1 min-w-0">
+										<h4 className="font-black text-slate-900 dark:text-white line-clamp-2 whitespace-normal break-words">{product.name}</h4>
 										<p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{product.category}</p>
 										<p className="text-[10px] font-black text-blue-500 uppercase mt-1">SKU: {product.sku || 'N/A'}</p>
 									</div>
@@ -90,7 +90,7 @@ const InventoryMobileGrid: React.FC<InventoryMobileGridProps> = ({
 						<div key={product.groupKey || product.id} className="flex flex-col gap-2">
 							<div className="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-gray-200 dark:border-slate-800" onClick={() => openDetail(product)}>
 								<div className="flex justify-between items-start mb-3">
-									<div className="flex items-center gap-3 min-w-0">
+									<div className="flex items-center gap-3 flex-1 min-w-0">
 										<div className="size-12 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center overflow-hidden border border-slate-100 dark:border-slate-700 shrink-0">
 											{product.imageUrl ? (
 												<img src={getImageUrl(product.imageUrl)} alt="" className="size-full object-cover" />
@@ -98,11 +98,11 @@ const InventoryMobileGrid: React.FC<InventoryMobileGridProps> = ({
 												<span className="material-symbols-outlined text-slate-300">image</span>
 											)}
 										</div>
-										<div className="min-w-0">
+										<div className="flex-1 min-w-0">
 											<p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">
 												SKU: {product.sku || '#' + (product.id || '').slice(-6).toUpperCase()}
 											</p>
-											<h4 className="font-black text-slate-900 dark:text-white text-base leading-tight">
+											<h4 className="font-black text-slate-900 dark:text-white text-base leading-tight line-clamp-2 whitespace-normal break-words">
 												{product.name}
 											</h4>
 										</div>

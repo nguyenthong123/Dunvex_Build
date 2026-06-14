@@ -12,6 +12,7 @@ const AppSettings = lazy(() => import('./views/AppSettings'));
 const Login = lazy(() => import('./views/Login'));
 const CustomerList = lazy(() => import('./views/CustomerList'));
 const ProductList = lazy(() => import('./views/ProductList'));
+const InventoryPage = lazy(() => import('./views/InventoryPage'));
 const OrderList = lazy(() => import('./views/OrderList'));
 const Checkin = lazy(() => import('./views/Checkin'));
 const Attendance = lazy(() => import('./views/Attendance'));
@@ -92,8 +93,12 @@ function App() {
 							element={currentUser ? <MainLayout><CustomerList /></MainLayout> : <Navigate to="/login" />}
 						/>
 						<Route
-							path="/inventory"
+							path="/products"
 							element={currentUser ? <MainLayout><ProductList /></MainLayout> : <Navigate to="/login" />}
+						/>
+						<Route
+							path="/inventory"
+							element={currentUser ? <MainLayout><InventoryPage /></MainLayout> : <Navigate to="/login" />}
 						/>
 						<Route
 							path="/orders"

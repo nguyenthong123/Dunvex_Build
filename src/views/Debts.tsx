@@ -56,6 +56,15 @@ const Debts: React.FC = () => {
 		window.addEventListener('open-mobile-search', handleOpenSearch);
 		return () => window.removeEventListener('open-mobile-search', handleOpenSearch);
 	}, []);
+
+	useEffect(() => {
+		const handleOpenAdd = () => {
+			setSelectedCustomer(null);
+			setShowPaymentForm(true);
+		};
+		window.addEventListener('open-mobile-add', handleOpenAdd);
+		return () => window.removeEventListener('open-mobile-add', handleOpenAdd);
+	}, []);
 	const [fromDate, setFromDate] = useState('');
 	const [toDate, setToDate] = useState('');
 	const [statusFilter, setStatusFilter] = useState('Đơn chốt');

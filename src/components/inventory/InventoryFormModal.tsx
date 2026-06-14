@@ -200,10 +200,13 @@ const InventoryFormModal: React.FC<InventoryFormModalProps> = ({
 
 						<div className="grid grid-cols-2 gap-4">
 							<div>
-								<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">Số lượng tồn</label>
+								<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest">
+									{isEdit ? 'Tồn kho (Không thể sửa trực tiếp)' : 'Số dư đầu kỳ (Tồn kho)'}
+								</label>
 								<input
 									type="number"
-									className="w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 text-slate-900 dark:text-white font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 transition-all outline-none"
+									disabled={isEdit}
+									className={`w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl py-3.5 px-4 font-bold transition-all outline-none ${isEdit ? 'text-slate-400 cursor-not-allowed opacity-70' : 'text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500'}`}
 									value={formData.stock === 0 ? '' : formData.stock}
 									onChange={(e) => setFormData({ ...formData, stock: e.target.value === '' ? 0 : Number(e.target.value) })}
 								/>

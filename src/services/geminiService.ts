@@ -326,7 +326,14 @@ Hãy trả lời dạng JSON theo schema, với intent phù hợp và message m�
 
     try {
         if (USE_PROXY) {
-            return await callVisionViaProxy(prompt, images);
+            try {
+                return await callVisionViaProxy(prompt, images);
+            } catch (proxyErr: any) {
+                // 🔄 Fallback: gọi thẳng SDK nếu proxy timeout hoặc lỗi
+                console.warn('Vision proxy failed, falling back to SDK:', proxyErr.message);
+                if (apiKey) return await callVisionViaSDK(prompt, images);
+                throw proxyErr;
+            }
         }
         return await callVisionViaSDK(prompt, images);
     } catch (error: any) {

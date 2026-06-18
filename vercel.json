@@ -1,4 +1,9 @@
 {
+	"functions": {
+		"api/gemini-vision.ts": {
+			"maxDuration": 30
+		}
+	},
 	"headers": [
 		{
 			"source": "/(index\\.html|sw\\.js|manifest\\.webmanifest)",

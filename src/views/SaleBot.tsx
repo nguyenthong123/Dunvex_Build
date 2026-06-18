@@ -177,6 +177,37 @@ const SaleBot = () => {
         await processTextMessage(msg);
     };
 
+    // 🖼️ Resize ảnh trước khi gửi (tránh vượt Vercel body limit 4.5MB)
+    const resizeImage = (file: File, maxWidth: number, quality: number): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    let { width, height } = img;
+                    if (width > maxWidth) {
+                        height = Math.round((height * maxWidth) / width);
+                        width = maxWidth;
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx?.drawImage(img, 0, 0, width, height);
+                    const base64 = canvas.toDataURL('image/jpeg', quality).split(',')[1];
+                    resolve(base64);
+                };
+                img.onerror = () => {
+                    // Fallback: gửi nguyên gốc nếu resize thất bại
+                    resolve((e.target?.result as string).split(',')[1]);
+                };
+                img.src = e.target?.result as string;
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    };
+
     // 📸 Xử lý gửi ảnh (hỗ trợ nhiều ảnh)
     const handleImageSend = async (files?: FileList | null) => {
         const fileList = files || fileInputRef.current?.files;
@@ -188,12 +219,9 @@ const SaleBot = () => {
 
         for (const file of imageFiles) {
             fileNames.push(file.name);
-            const base64 = await new Promise<string>((resolve) => {
-                const reader = new FileReader();
-                reader.onload = (e) => resolve((e.target?.result as string).split(',')[1]);
-                reader.readAsDataURL(file);
-            });
-            imageData.push({ base64, mimeType: file.type });
+            // 🔧 Resize ảnh trước khi gửi để tránh vượt body limit (max 1200px, quality 0.7)
+            const base64 = await resizeImage(file, 1200, 0.7);
+            imageData.push({ base64, mimeType: 'image/jpeg' });
         }
 
         const previewText = imageFiles.length > 1 

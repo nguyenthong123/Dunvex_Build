@@ -416,6 +416,115 @@ const SaleBot = () => {
     const executeAction = async (data: any) => {
         if (data.intent === 'CREATE_ORDER') {
             navigate('/quick-order', { state: { prefill: data } });
+        } else if (data.intent === 'UPDATE_ORDER') {
+            // 🔄 Thêm sản phẩm vào đơn hàng cũ theo ID
+            try {
+                if (!owner.ownerId) {
+                    alert("Không thể xác thực quyền truy cập.");
+                    return;
+                }
+                if (!data.order_id) {
+                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: '❌ Vui lòng cung cấp ID đơn hàng cần sửa.' }]);
+                    return;
+                }
+                if (!data.products || data.products.length === 0) {
+                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: '❌ Vui lòng cho biết sản phẩm cần thêm vào đơn.' }]);
+                    return;
+                }
+                setIsLoading(true);
+
+                // 1. Tìm đơn hàng theo ID
+                const orderRef = doc(db, 'orders', data.order_id.trim().toUpperCase());
+                const orderSnap = await getDoc(orderRef);
+                if (!orderSnap.exists()) {
+                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: `❌ Không tìm thấy đơn hàng với ID **${data.order_id}**. Anh/chị kiểm tra lại ID nhé!` }]);
+                    setIsLoading(false);
+                    return;
+                }
+                const existingOrder = orderSnap.data();
+
+                // 2. Tìm sản phẩm khớp trong kho
+                const qProd = query(collection(db, 'products'), where('ownerId', '==', owner.ownerId));
+                const prodSnap = await getDocs(qProd);
+                const allProducts = prodSnap.docs.map(d => ({ id: d.id, ...d.data() as any }));
+
+                const existingItems: any[] = existingOrder.items || [];
+                const newItems: any[] = [];
+                const notFound: string[] = [];
+
+                for (const aiProd of data.products) {
+                    const aiName = (aiProd.name || '').toLowerCase().trim();
+                    let matched = allProducts.find(p => (p.name || '').toLowerCase() === aiName);
+                    if (!matched) matched = allProducts.find(p => (p.name || '').toLowerCase().includes(aiName));
+                    
+                    if (matched) {
+                        const qty = Number(aiProd.quantity) || 1;
+                        const price = Number(matched.price || matched.retail_price || 0);
+                        const cost = Number(matched.cost || matched.import_price || 0);
+                        const weight = Number(matched.weight || 0);
+                        newItems.push({
+                            productId: matched.id,
+                            name: matched.name,
+                            sku: matched.sku || '',
+                            unit: matched.unit || 'cái',
+                            quantity: qty,
+                            price: price,
+                            cost: cost,
+                            weight: weight,
+                            stockBatch: matched.stockBatch || null
+                        });
+                    } else {
+                        notFound.push(aiProd.name);
+                    }
+                }
+
+                if (newItems.length === 0) {
+                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: `❌ Không tìm thấy sản phẩm nào trong kho khớp với yêu cầu.` }]);
+                    setIsLoading(false);
+                    return;
+                }
+
+                // 3. Merge items (cộng dồn nếu trùng productId)
+                const mergedItems = [...existingItems];
+                for (const ni of newItems) {
+                    const existingIdx = mergedItems.findIndex((ei: any) => ei.productId === ni.productId);
+                    if (existingIdx >= 0) {
+                        mergedItems[existingIdx].quantity += ni.quantity;
+                    } else {
+                        mergedItems.push(ni);
+                    }
+                }
+
+                // 4. Tính lại totals
+                const newSubTotal = mergedItems.reduce((sum: number, i: any) => sum + (i.quantity * (Number(i.price) || 0)), 0);
+                const newTotalWeight = mergedItems.reduce((sum: number, i: any) => sum + (i.quantity * (Number(i.weight) || 0)), 0);
+                const newTotalCost = mergedItems.reduce((sum: number, i: any) => sum + (i.quantity * (Number(i.cost) || 0)), 0);
+                const newTotal = newSubTotal + Number(existingOrder.adjustmentValue || 0) - Number(existingOrder.discountValue || 0);
+
+                // 5. Update Firestore
+                await updateDoc(orderRef, {
+                    items: mergedItems,
+                    subTotal: newSubTotal,
+                    totalAmount: newTotal,
+                    totalWeight: newTotalWeight,
+                    totalCost: newTotalCost,
+                    updatedAt: serverTimestamp()
+                });
+
+                // 6. Thông báo thành công
+                const itemsList = newItems.map((i: any) => `${i.name} x${i.quantity}`).join(', ');
+                let msg = `✅ Đã thêm **${itemsList}** vào đơn **${data.order_id}** (${existingOrder.customerName || 'Khách'}).\n\n📊 Tổng mới: **${newTotal.toLocaleString('vi-VN')}đ** (${mergedItems.length} mặt hàng)`;
+                if (notFound.length > 0) {
+                    msg += `\n\n⚠️ Không tìm thấy: ${notFound.join(', ')}`;
+                }
+                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: msg }]);
+
+            } catch (err) {
+                console.error('UPDATE_ORDER error:', err);
+                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: '❌ Lỗi khi cập nhật đơn hàng. Vui lòng thử lại.' }]);
+            } finally {
+                setIsLoading(false);
+            }
         } else if (data.intent === 'INVENTORY_ACTION') {
             try {
                 if (!owner.ownerId) {
@@ -898,6 +1007,7 @@ const SaleBot = () => {
                                             <CheckCircle2 size={18} className="text-green-500" />
                                             <span className="text-xs font-black uppercase text-slate-800 dark:text-white">
                                                 {msg.parsedData.intent === 'CREATE_ORDER' ? 'Thông tin Lên Đơn' : 
+                                                 msg.parsedData.intent === 'UPDATE_ORDER' ? '📝 Thêm vào Đơn Cũ' :
                                                  msg.parsedData.intent === 'CREATE_PRODUCT' ? 'Thông tin Sản Phẩm' : 
                                                  msg.parsedData.intent === 'CREATE_PAYMENT' ? 'Thông tin Thu Công Nợ' :
                                                  msg.parsedData.intent === 'INVENTORY_ACTION' ? 'Thông tin Phiếu Kho' :
@@ -923,6 +1033,13 @@ const SaleBot = () => {
                                                         <span className="material-symbols-outlined text-[14px]">my_location</span> Dùng vị trí hiện tại
                                                     </p>
                                                 )}
+                                            </div>
+                                        )}
+                                        
+                                        {msg.parsedData.order_id && msg.parsedData.intent === 'UPDATE_ORDER' && (
+                                            <div className="mb-3 bg-amber-50 dark:bg-amber-950/30 p-2 px-3 rounded-lg border border-amber-200 dark:border-amber-900">
+                                                <p className="text-[10px] text-amber-700 dark:text-amber-400 font-bold uppercase">📝 Cập nhật đơn hàng</p>
+                                                <p className="text-xs text-amber-600 dark:text-amber-300 mt-0.5">ID: <span className="font-mono font-bold">{msg.parsedData.order_id}</span></p>
                                             </div>
                                         )}
                                         
@@ -1034,7 +1151,7 @@ const SaleBot = () => {
                                             </div>
                                         )}
 
-                                        {['CREATE_ORDER', 'CREATE_CUSTOMER', 'UPDATE_CUSTOMER', 'CREATE_PRODUCT', 'CREATE_PAYMENT', 'INVENTORY_ACTION'].includes(msg.parsedData.intent) && 
+                                        {['CREATE_ORDER', 'UPDATE_ORDER', 'CREATE_CUSTOMER', 'UPDATE_CUSTOMER', 'CREATE_PRODUCT', 'CREATE_PAYMENT', 'INVENTORY_ACTION'].includes(msg.parsedData.intent) && 
                                         (!msg.parsedData.missing_info || msg.parsedData.missing_info.length === 0) && (
                                             <button 
                                                 onClick={() => handleAction(msg.parsedData)}
@@ -1042,6 +1159,7 @@ const SaleBot = () => {
                                             >
                                                 {msg.parsedData.intent === 'CREATE_CUSTOMER' ? 'Lưu Khách Hàng Mới' : 
                                                  msg.parsedData.intent === 'UPDATE_CUSTOMER' ? 'Xác Nhận Cập Nhật' : 
+                                                 msg.parsedData.intent === 'UPDATE_ORDER' ? '🔄 Thêm vào Đơn' :
                                                  msg.parsedData.intent === 'CREATE_PRODUCT' ? `Tạo ${msg.parsedData.products_to_create?.length || ''} Sản Phẩm Mới` :
                                                  msg.parsedData.intent === 'CREATE_PAYMENT' ? 'Đi tới Form Phiếu Thu' :
                                                  msg.parsedData.intent === 'INVENTORY_ACTION' ? 'Xác Nhận & Tạo Phiếu Kho' :
@@ -1167,6 +1285,7 @@ const SaleBot = () => {
                                 <div className="text-xs font-black text-[#FF6D00] uppercase tracking-widest">
                                     {confirmAction.intent === 'CREATE_CUSTOMER' ? '🆕 Tạo khách hàng mới' :
                                      confirmAction.intent === 'CREATE_ORDER' ? '🛒 Lên đơn hàng' :
+                                     confirmAction.intent === 'UPDATE_ORDER' ? '🔄 Cập nhật đơn hàng' :
                                      confirmAction.intent === 'CREATE_PRODUCT' ? '📦 Tạo sản phẩm mới' :
                                      confirmAction.intent === 'CREATE_PAYMENT' ? '💰 Thu công nợ' :
                                      confirmAction.intent === 'INVENTORY_ACTION' ? '📊 Phiếu kho' :

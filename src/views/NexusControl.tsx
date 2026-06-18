@@ -113,6 +113,7 @@ const NexusControl = () => {
 	});
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 	const [searchQuery, setSearchQuery] = useState('');
+	const isRunningRef = useRef(false); // 🛡️ Guard chạy chồng lấn
 
 	// Config Tab States
 	const [paymentConfig, setPaymentConfig] = useState({
@@ -220,17 +221,16 @@ const NexusControl = () => {
 
 				const anomalies: any[] = [];
 				Object.entries(userActionCounts).forEach(([ownerId, actions]) => {
-					if (actions.length >= 5) { // Threshold: 5 actions in 1 minute
-						// Check frequency
+					if (actions.length >= 10) { // 🟡 Threshold: 10 actions (tăng từ 5)
 						const times = actions.map(a => a.createdAt?.toMillis ? a.createdAt.toMillis() : 0).sort();
 						const span = times[times.length - 1] - times[0];
-						if (span < 15000) { // 5 actions in 15 seconds = Suspicious
+						if (span < 30000) { // 🟡 30 giây (tăng từ 15s)
 							anomalies.push({
 								ownerId,
 								email: actions[0].user,
 								severity: 'high',
-								reason: 'POCKET_CLICK_DETECTED',
-								details: `Phát hiện ${actions.length} thao tác trong ${Math.round(span / 1000)}s - Có thể do cấn máy.`
+								reason: 'RAPID_ACTIONS_DETECTED',
+								details: `Phát hiện ${actions.length} thao tác trong ${Math.round(span / 1000)}s — Nghi ngờ thao tác nhanh bất thường.`
 							});
 
 							// AUTO LOCK if enabled
@@ -281,7 +281,7 @@ const NexusControl = () => {
 					manualLockSheets: true,
 					manualLockAi: true,
 					aiLockedAt: serverTimestamp(),
-					aiLockReason: 'POCKET_CLICK_PREVENTION'
+					aiLockReason: 'RAPID_ACTIONS_PREVENTION'
 				}, { merge: true });
 
 				// 🔍 AI Verification Step
@@ -291,10 +291,8 @@ const NexusControl = () => {
 				// Notify User via Bell
 				await addDoc(collection(db, 'notifications'), {
 					userId: ownerId,
-					title: isLocked ? '🔒 NEXUS AI: ĐÃ XÁC NHẬN KHÓA AN TOÀN' : '⚠️ CẢNH BÁO BẢO MẬT (NEXUS AI)',
-					body: isLocked 
-						? 'Hệ thống phát hiện thao tác nhanh bất thường. AI đã chủ động khóa và XÁC NHẬN KHÓA THÀNH CÔNG toàn bộ tính năng quan trọng để bảo vệ dữ liệu của bạn.'
-						: 'Hệ thống phát hiện thao tác nhanh bất thường. Đang tiến hành khóa các chức năng, vui lòng kiểm tra lại.',
+					title: '🔒 NEXUS AI: PHÁT HIỆN THAO TÁC NHANH',
+					body: 'Hệ thống phát hiện thao tác nhanh bất thường. AI đã chủ động tạm khoá tính năng trong 30 phút để bảo vệ dữ liệu. Tính năng sẽ tự động mở lại sau 30 phút.',
 					type: 'alert',
 					priority: 'high',
 					read: false,
@@ -332,176 +330,74 @@ const NexusControl = () => {
 		customersRef.current = customers;
 	}, [customers]);
 
-	useEffect(() => {
-		if (isAiActive) {
-			const interval = setInterval(() => {
-				runAutonomousCycle(customersRef.current, requests);
-			}, 30000); // Check every 30 seconds
-
-			// Initial evaluation
-			runAutonomousCycle(customersRef.current, requests);
-
-			return () => clearInterval(interval);
-		}
-	}, [isAiActive, requests]);
-
+	// ✅ CHỈ 1 interval duy nhất — guard chặn chạy chồng lấn
 	const runAutonomousCycle = async (currentCustomers: any[], currentRequests: any[]) => {
 		if (!isAiActive) return;
-
-		console.log("Nexus AI: Starting autonomous management cycle...");
-
-		// 0. AUTO-APPROVE PENDING PAYMENT REQUESTS (TRUST MODEL)
-		const pendingRequests = currentRequests.filter(r => r.status === 'pending');
-		for (const req of pendingRequests) {
-			try {
-				await updateDoc(doc(db, 'payment_requests', req.id), {
-					status: 'approved',
-					handledAt: serverTimestamp(),
-					handledBy: 'Nexus_AI_Bot'
-				});
-
-				const isYearly = req.planId === 'premium_yearly';
-				const expireDate = new Date();
-				if (isYearly) {
-					expireDate.setFullYear(expireDate.getFullYear() + 1);
-				} else {
-					expireDate.setMonth(expireDate.getMonth() + 1);
-				}
-
-				await setDoc(doc(db, 'settings', req.ownerId), {
-					subscriptionStatus: 'active',
-					isPro: true,
-					planId: req.planId,
-					paymentConfirmedAt: serverTimestamp(),
-					subscriptionExpiresAt: expireDate,
-					manualLockOrders: false,
-					manualLockDebts: false,
-					manualLockSheets: false,
-					manualLockAi: false
-				}, { merge: true });
-
-				await addDoc(collection(db, 'ai_actions'), {
-					type: 'provisioning',
-					targetEmail: req.userEmail,
-					targetId: req.ownerId,
-					details: `Chấp nhận thanh toán tự động (Trust Model) cho gói ${req.planName || req.planId}. Đã mở khóa tính năng.`,
-					timestamp: serverTimestamp()
-				});
-
-				await addDoc(collection(db, 'notifications'), {
-					userId: req.ownerId,
-					title: '⚡ NEXUS AI: ĐÃ XÁC NHẬN YÊU CẦU',
-					body: `Yêu cầu kích hoạt gói ${req.planName || req.planId} đã được AI tự động duyệt. Tất cả tính năng đã được mở khóa! Vui lòng đảm bảo giao dịch đã hoàn tất.`,
-					type: 'success',
-					priority: 'high',
-					read: false,
-					createdAt: serverTimestamp()
-				});
-				
-			} catch (e) {
-				console.error("AI Auto Approve Error:", e);
-			}
-		}
-		
-		if (currentCustomers.length === 0) return;
-		
-		const processPromises = currentCustomers.map(async (customer) => {
-			// CRITICAL: NEVER process the Super Admin account
-			if (customer.email === NEXUS_ADMIN_EMAIL) return;
-
-			const status = getEffectiveStatus(customer);
-			
-			// 1. AUTO-PROVISIONING FOR NEW USERS (ADMINS/OWNERS)
-			const isNewOwner = !customer.planId && !customer.isAiProcessed;
-			
-			if (isNewOwner) {
-				try {
-					const userCreatedDate = customer.createdAt?.toDate ? customer.createdAt.toDate() : new Date();
-					const expireDate = new Date(userCreatedDate.getTime());
+		if (isRunningRef.current) { console.log("Nexus AI: skipped (running)"); return; }
+		isRunningRef.current = true;
+		try {
+			console.log("Nexus AI: Starting cycle...");
+			if (currentCustomers.length === 0) return;
+			const processPromises = currentCustomers.map(async (customer) => {
+				if (customer.email === NEXUS_ADMIN_EMAIL) return;
+				const status = getEffectiveStatus(customer);
+				const now = new Date();
+				// 1. Provision new users
+				if (!customer.planId && !customer.isAiProcessed) {
+					const expireDate = new Date();
 					expireDate.setDate(expireDate.getDate() + 60);
-
-					await setDoc(doc(db, 'settings', customer.uid), {
-						planId: 'free',
-						isPro: false,
-						subscriptionStatus: 'trial',
-						paymentConfirmedAt: customer.createdAt || serverTimestamp(),
-						subscriptionExpiresAt: expireDate,
-						isAiProcessed: true
-					}, { merge: true });
-
-					await addDoc(collection(db, 'ai_actions'), {
-						type: 'provisioning',
-						targetEmail: customer.email,
-						targetId: customer.uid,
-						details: 'Tự động kích hoạt gói dùng thử (FREE 60 ngày) cho người dùng mới.',
-						timestamp: serverTimestamp()
-					});
-				} catch (e) { console.error("Auto Provision Error:", e); }
-			}
-
-			// 2. AUTO-ENFORCEMENT FOR EXPIRED USERS
-			if (status.isExpired && (!customer.manualLockOrders || !customer.manualLockDebts || !customer.manualLockSheets || !customer.manualLockAi || customer.subscriptionStatus !== 'expired')) {
-				try {
-					await setDoc(doc(db, 'settings', customer.uid), {
-						manualLockOrders: true,
-						manualLockDebts: true,
-						manualLockSheets: true,
-						manualLockAi: true,
-						subscriptionStatus: 'expired',
-						isPro: false
-					}, { merge: true });
-
-					// 🔍 AI Verification Step
-					const verifySnap = await getDoc(doc(db, 'settings', customer.uid));
-					const isLocked = verifySnap.exists() && verifySnap.data().manualLockOrders && verifySnap.data().manualLockDebts && verifySnap.data().manualLockSheets && verifySnap.data().manualLockAi;
-
-					if (isLocked) {
-						await addDoc(collection(db, 'notifications'), {
-							userId: customer.uid,
-							title: '🔒 HỆ THỐNG NEXUS AI: ĐÃ XÁC NHẬN KHÓA',
-							body: 'Gói của bạn đã hết hạn. AI đã chủ động khóa và XÁC NHẬN KHÓA THÀNH CÔNG các tính năng theo chính sách. Vui lòng liên hệ Admin.',
-							type: 'alert',
-							priority: 'high',
-							read: false,
-							createdAt: serverTimestamp()
-						});
-					}
-
-					await addDoc(collection(db, 'ai_actions'), {
-						type: 'enforcement',
-						targetEmail: customer.email,
-						targetId: customer.uid,
-						details: isLocked 
-							? 'Tự động ngắt TẤT CẢ tính năng do hết hạn (ĐÃ XÁC NHẬN KHÓA THÀNH CÔNG).'
-							: 'Tự động ngắt tính năng do hết hạn (Không thể xác minh khóa).',
-						timestamp: serverTimestamp()
-					});
-
-					await addDoc(collection(db, 'notifications'), {
-						userId: customer.uid,
-						title: '🔒 TỰ ĐỘNG KHÓA VÀ THU HỒI GÓI (HẾT HẠN)',
-						body: 'Gói dịch vụ cũ của bạn đã hết hạn. Hệ thống AI đã tự động cập nhật trạng thái gói và khóa các tính năng (Đơn hàng, Công nợ, Sheet, AI) để bảo vệ dữ liệu. Vui lòng thực hiện thanh toán gia hạn để tự động kích hoạt lại.',
-						type: 'lock',
-						priority: 'high',
-						read: false,
-						createdAt: serverTimestamp()
-					});
-				} catch (e) {
-					console.error("Auto Enforcement Error:", e);
+					await setDoc(doc(db, 'settings', customer.uid), { planId: 'free', isPro: false, subscriptionStatus: 'trial', subscriptionExpiresAt: expireDate, graceUntil: null, isAiProcessed: true }, { merge: true });
 				}
-			}
-		});
-
-		await Promise.all(processPromises);
-		
-		console.log("Nexus AI: Cycle complete.");
+				// 2. Grace period
+				if (status.isExpired) {
+					const expireAt = parseExpireDate(customer.subscriptionExpiresAt);
+					const graceUntil = parseExpireDate(customer.graceUntil);
+					if (!graceUntil && expireAt) {
+						const graceEnd = new Date(expireAt.getTime());
+						graceEnd.setDate(graceEnd.getDate() + 3);
+						if (now < graceEnd) {
+							await setDoc(doc(db, 'settings', customer.uid), { graceUntil: graceEnd, subscriptionStatus: 'grace' }, { merge: true });
+							await addDoc(collection(db, 'notifications'), { userId: customer.uid, title: '⚠️ GÓI ĐÃ HẾT HẠN — 3 NGÀY ÂN HẠN', body: `Gói đã hết hạn. Bạn có 3 ngày (đến ${graceEnd.toLocaleDateString('vi-VN')}) để gia hạn trước khi bị khoá.`, type: 'warning', priority: 'high', read: false, createdAt: serverTimestamp() });
+							return;
+						}
+					}
+					if (graceUntil && now >= graceUntil) { await hardLockUser(customer); return; }
+				}
+				// 3. Auto-unlock after 30 min
+				if (customer.manualLockAi && customer.aiLockedAt) {
+					const lockedAt = parseExpireDate(customer.aiLockedAt);
+					if (lockedAt && (now.getTime() - lockedAt.getTime()) > 30 * 60 * 1000) {
+						await setDoc(doc(db, 'settings', customer.uid), { manualLockOrders: false, manualLockDebts: false, manualLockSheets: false, manualLockAi: false, aiLockedAt: null, aiLockReason: null }, { merge: true });
+						await addDoc(collection(db, 'notifications'), { userId: customer.uid, title: '🔓 TỰ ĐỘNG MỞ KHOÁ', body: 'Hệ thống đã tự mở khoá sau 30 phút.', type: 'unlock', read: false, createdAt: serverTimestamp() });
+					}
+				}
+			});
+			await Promise.all(processPromises);
+		} finally {
+			isRunningRef.current = false;
+		}
 	};
 
-	// Run cycle when customers change or AI is toggled
+	const hardLockUser = async (customer: any) => {
+		if (customer.manualLockOrders && customer.manualLockDebts && customer.manualLockSheets && customer.manualLockAi) return;
+		await setDoc(doc(db, 'settings', customer.uid), { manualLockOrders: true, manualLockDebts: true, manualLockSheets: true, manualLockAi: true, subscriptionStatus: 'expired', isPro: false, graceUntil: null }, { merge: true });
+		await addDoc(collection(db, 'notifications'), { userId: customer.uid, title: '🔒 TÍNH NĂNG ĐÃ BỊ KHOÁ', body: 'Gói đã hết hạn. Vui lòng gia hạn để tiếp tục.', type: 'lock', priority: 'high', read: false, createdAt: serverTimestamp() });
+	};
+
+	const parseExpireDate = (val: any): Date | null => {
+		if (!val) return null;
+		if (val.toDate) return val.toDate();
+		if (val.seconds) return new Date(val.seconds * 1000);
+		if (val instanceof Date) return val;
+		return null;
+	};
+
+	// Interval 30 giây
 	useEffect(() => {
-		const timeout = setTimeout(() => runAutonomousCycle(customers, requests), 5000); // Wait 5s for data to settle
-		return () => clearTimeout(timeout);
-	}, [customers.length, isAiActive, requests.length]);
+		if (!isAiActive) return;
+		const interval = setInterval(() => runAutonomousCycle(customersRef.current, requests), 30000);
+		return () => clearInterval(interval);
+	}, [isAiActive]);
 
 	const handleUpdatePlan = async (ownerId: string, newPlan: string) => {
 		if (!window.confirm(`Xác nhận hành động: ${newPlan === 'cancel_payment' ? 'HUỶ ĐĂNG KÝ VÀ KHÓA' : newPlan}?`)) return;

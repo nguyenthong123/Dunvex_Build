@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { parseSaleMessage, analyzeImage } from '../services/geminiService';
-import { BotMessageSquare, Send, Sparkles, User, AlertCircle, CheckCircle2, Package, Camera, Mic, MicOff, X, ImagePlus } from 'lucide-react';
+import { BotMessageSquare, Send, Sparkles, User, AlertCircle, CheckCircle2, Package, Camera, Mic, MicOff, X, ImagePlus, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { db, auth } from '../services/firebase';
 import { collection, query, where, getDocs, addDoc, serverTimestamp, updateDoc, doc, Timestamp, increment, setDoc, getDoc } from 'firebase/firestore';
@@ -828,6 +828,20 @@ const SaleBot = () => {
             alert('Hành động chưa được hỗ trợ.');
         }
     };
+
+    // 🔒 Check AI lock from Nexus
+    if (owner.manualLockAi || (owner.settingsData && owner.settingsData.manualLockAi)) {
+        return (
+            <div className="absolute inset-0 pt-14 lg:pt-0 pb-20 lg:pb-0 z-40 bg-white dark:bg-slate-900 flex flex-col items-center justify-center p-8">
+                <div className="bg-rose-500/10 p-6 rounded-full text-rose-500 mb-6 border border-rose-500/20">
+                    <Lock size={64} />
+                </div>
+                <h2 className="text-2xl font-black text-slate-800 dark:text-white uppercase mb-3">Trợ lý AI bị khoá</h2>
+                <p className="text-slate-500 text-center max-w-sm mb-2">Quản trị viên đã tạm thời khoá Trợ lý AI cho tài khoản của bạn.</p>
+                <p className="text-xs text-slate-400 text-center">Vui lòng liên hệ Admin để mở khoá.</p>
+            </div>
+        );
+    }
 
     return (
         <div className="absolute inset-0 pt-14 lg:pt-0 pb-20 lg:pb-0 z-40 bg-white dark:bg-slate-900 flex flex-col">

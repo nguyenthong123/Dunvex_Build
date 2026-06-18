@@ -18,6 +18,8 @@ export interface OwnerState {
 	manualLockOrders?: boolean;
 	manualLockDebts?: boolean;
 	manualLockSheets?: boolean;
+	manualLockAi?: boolean;
+	settingsData?: any; // Raw settings for direct access
 	systemConfig: {
 		lock_free_orders: boolean;
 		lock_free_debts: boolean;
@@ -76,6 +78,7 @@ export const useOwner = () => {
 			let manualLockOrders = userData.manualLockOrders || false;
 			let manualLockDebts = userData.manualLockDebts || false;
 			let manualLockSheets = userData.manualLockSheets || false;
+			let manualLockAi = userData.manualLockAi || false;
 
 			if (settingsData) {
 				subscriptionStatus = settingsData.subscriptionStatus || 'trial';
@@ -102,6 +105,7 @@ export const useOwner = () => {
 				manualLockOrders = settingsData.manualLockOrders ?? manualLockOrders;
 				manualLockDebts = settingsData.manualLockDebts ?? manualLockDebts;
 				manualLockSheets = settingsData.manualLockSheets ?? manualLockSheets;
+				manualLockAi = settingsData.manualLockAi ?? manualLockAi;
 			}
 
 			// Info from System Config (Must have defaults)
@@ -126,6 +130,8 @@ export const useOwner = () => {
 				manualLockOrders,
 				manualLockDebts,
 				manualLockSheets,
+				manualLockAi,
+				settingsData: settingsData || null,
 				systemConfig
 			});
 		};

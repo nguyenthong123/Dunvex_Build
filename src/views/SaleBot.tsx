@@ -577,6 +577,19 @@ const SaleBot = () => {
                     return;
                 }
 
+                // 🔴 BẮT BUỘC: Kiểm tra danh mục cho từng sản phẩm
+                const missingCategory = productsToCreate.filter((p: any) => !p.category || p.category.trim() === '');
+                if (missingCategory.length > 0) {
+                    const names = missingCategory.map((p: any) => p.name).join(', ');
+                    setMessages(prev => [...prev, {
+                        id: Date.now().toString(),
+                        role: 'bot',
+                        content: `⚠️ **Thiếu danh mục** cho: ${names}\n\nAnh/chị vui lòng cho em biết danh mục của sản phẩm này (VD: Sơn, Nhựa và phụ kiện, Vật liệu xây dựng...).\n\n💡 Gõ: \"sửa danh mục ${missingCategory[0].name} thành [tên danh mục]\"`
+                    }]);
+                    setIsLoading(false);
+                    return;
+                }
+
                 let successCount = 0;
                 let firstProductName = "";
 
@@ -590,7 +603,7 @@ const SaleBot = () => {
                     const productData = {
                         name: pInfo.name,
                         sku: generatedSku,
-                        category: pInfo.category || 'Chưa phân loại',
+                        category: pInfo.category,
                         priceImport: pInfo.import_price || 0,
                         priceSell: pInfo.retail_price || 0,
                         stock: 0,
@@ -1103,6 +1116,16 @@ const SaleBot = () => {
                                         <span className="font-bold">📋 Sản phẩm:</span>
                                         {confirmAction.products.map((p: any, i: number) => (
                                             <span key={i} className="ml-1 text-slate-600 dark:text-slate-400">{p.name} x{p.quantity}{i < confirmAction.products.length - 1 ? ', ' : ''}</span>
+                                        ))}
+                                    </div>
+                                )}
+                                {confirmAction.products_to_create?.length > 0 && (
+                                    <div className="text-sm space-y-1">
+                                        <span className="font-bold">📦 Sản phẩm mới:</span>
+                                        {confirmAction.products_to_create.map((p: any, i: number) => (
+                                            <div key={i} className="ml-2 text-xs text-slate-600 dark:text-slate-400">
+                                                • {p.name}{p.category ? ` — ${p.category}` : ' ⚠️ Thiếu danh mục!'} {p.retail_price ? `(${p.retail_price.toLocaleString('vi-VN')}đ)` : ''}
+                                            </div>
                                         ))}
                                     </div>
                                 )}

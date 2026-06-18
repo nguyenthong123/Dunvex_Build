@@ -127,6 +127,11 @@ service cloud.firestore {
       allow read, update, delete: if isAuthed() && (resource == null || resource.data.ownerId == request.auth.uid || getUserData().ownerId == resource.data.ownerId);
       allow create: if isAuthed() && (request.resource.data.ownerId == request.auth.uid || getUserData().ownerId == request.resource.data.ownerId);
     }
+    // 👤 Hồ sơ cá nhân — mỗi user chỉ đọc/ghi profile của chính mình
+    match /profiles/{userId} {
+      allow read, write: if isAuthed() && request.auth.uid == userId;
+    }
+
     match /notifications/{docId} { 
       allow read, update, delete: if isAuthed() && (
         (resource != null && resource.data.userId == request.auth.uid) ||

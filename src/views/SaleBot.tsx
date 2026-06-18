@@ -1210,7 +1210,7 @@ const SaleBot = () => {
     // 🔒 Check AI lock from Nexus
     if (owner.manualLockAi || (owner.settingsData && owner.settingsData.manualLockAi)) {
         return (
-            <div className="absolute inset-0 pt-14 lg:pt-0 pb-20 lg:pb-0 z-40 bg-white dark:bg-slate-900 flex flex-col items-center justify-center p-8">
+            <div className="absolute inset-0 pt-14 lg:pt-0 pb-24 lg:pb-0 z-40 bg-white dark:bg-slate-900 flex flex-col items-center justify-center p-8">
                 <div className="bg-rose-500/10 p-6 rounded-full text-rose-500 mb-6 border border-rose-500/20">
                     <Lock size={64} />
                 </div>
@@ -1222,7 +1222,7 @@ const SaleBot = () => {
     }
 
     return (
-        <div className="absolute inset-0 pt-14 lg:pt-0 pb-20 lg:pb-0 z-40 bg-white dark:bg-slate-900 flex flex-col">
+        <div className="absolute inset-0 pt-14 lg:pt-0 pb-24 lg:pb-0 z-40 bg-white dark:bg-slate-900 flex flex-col">
             <div className="w-full flex flex-col h-full overflow-hidden relative">
                 
                 {/* Header */}
@@ -1240,7 +1240,7 @@ const SaleBot = () => {
                 </div>
 
                 {/* Chat Area */}
-                <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar bg-slate-50 dark:bg-slate-900/50">
+                <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-6 space-y-6 custom-scrollbar bg-slate-50 dark:bg-slate-900/50">
                     {messages.map((msg) => (
                         <div key={msg.id} className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
                             <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 shadow-sm ${msg.role === 'user' ? 'bg-[#FF6D00] text-white' : 'bg-indigo-100 dark:bg-indigo-900/40 text-[#1A237E] dark:text-indigo-400'}`}>
@@ -1474,7 +1474,7 @@ const SaleBot = () => {
                     </div>
                 )}
 
-                <div className="p-4 md:p-6 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shrink-0">
+                <div className="p-4 md:p-6 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shrink-0 z-10 relative">
                     <form onSubmit={handleSend} className="relative flex items-center gap-2">
                         {/* 📸 Photo library button */}
                         <input

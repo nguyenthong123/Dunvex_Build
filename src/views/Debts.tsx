@@ -1687,7 +1687,8 @@ const Debts: React.FC = () => {
 							{/* DATE FILTER BAR FOR STATEMENT - REMOVED AS PER USER REQUEST */}
 
 							{/* SCROLLABLE DOCUMENT AREA */}
-							<div id="debt-statement-container" className="flex-1 overflow-y-auto px-4 py-4 scroll-smooth custom-scrollbar" style={{ zoom: statementZoom }}>
+							<div id="debt-statement-container" className="flex-1 overflow-auto scroll-smooth custom-scrollbar">
+								<div className="min-w-0 w-fit mx-auto px-4 py-4" style={{ zoom: statementZoom }}>
 
 										{/* 2. Customer & Cycle Info Grid */}
 										{(() => {
@@ -1948,7 +1949,7 @@ const Debts: React.FC = () => {
 												</>
 											);
 										})()}
-									
+								</div>
 							{/* Bottom Floating Toolbar */}
 							<div className="flex-none bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-3 sm:px-4 py-2.5 sm:py-3 border-t border-slate-200/50 flex items-center justify-center gap-2 sm:gap-3 z-20 print:hidden">
 								<div className="flex items-center gap-0.5 sm:gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl px-1.5 sm:px-2 py-1 sm:py-1.5">

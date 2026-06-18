@@ -1098,8 +1098,8 @@ const SaleBot = () => {
 
                 {/* 🛡️ Confirmation Dialog */}
                 {confirmAction && (
-                    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
-                        <div className="bg-white dark:bg-slate-900 w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl p-6 animate-in slide-in-from-bottom-full sm:zoom-in-95 duration-300">
+                    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                        <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl shadow-2xl p-6 animate-in zoom-in-95 duration-200 max-h-[85vh] overflow-y-auto">
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="text-lg font-black text-[#1A237E] dark:text-indigo-400 uppercase">Xác nhận thao tác</h3>
                                 <button onClick={() => setConfirmAction(null)} className="size-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500">

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Phone, Mail, Save, ArrowLeft, Shield, CheckCircle2 } from 'lucide-react';
+import { User, Phone, Mail, Save, ArrowLeft, Shield, CheckCircle2, MapPin } from 'lucide-react';
 import { auth, db } from '../services/firebase';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
 
@@ -185,6 +185,94 @@ const Profile = () => {
                     </p>
                 </div>
             </div>
+
+            {/* 📍 Lịch sử chấm công */}
+            <div className="mt-8 border-t border-slate-100 dark:border-slate-800 pt-6">
+                <CheckinHistory />
+            </div>
+        </div>
+    );
+};
+
+// ==================== LỊCH SỬ CHẤM CÔNG CÁ NHÂN ====================
+const CheckinHistory = () => {
+    const [checkins, setCheckins] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (!auth.currentUser?.uid) return;
+        loadCheckins();
+    }, [auth.currentUser?.uid]);
+
+    const loadCheckins = async () => {
+        setLoading(true);
+        try {
+            const q = query(
+                collection(db, 'checkins'),
+                where('userEmail', '==', auth.currentUser?.email || ''),
+                orderBy('createdAt', 'desc'),
+                limit(50)
+            );
+            const snap = await getDocs(q);
+            setCheckins(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
+        } catch (e) {
+            console.error('Checkin history error:', e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const formatDate = (d: any) => {
+        const dt = d?.toDate?.() || new Date(d);
+        return dt.toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
+    };
+
+    const formatTime = (d: any) => {
+        const dt = d?.toDate?.() || new Date(d);
+        return dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    };
+
+    const purposeLabel = (p: string) => {
+        if (!p) return 'Không rõ';
+        if (p.includes('Check-in')) return '🏢 Vào ca';
+        if (p.includes('Hiện trường') || p.includes('checkin')) return '🏗️ Hiện trường';
+        if (p.includes('Gặp') || p.includes('Khảo sát')) return '🤝 Gặp KH';
+        return p;
+    };
+
+    return (
+        <div>
+            <h3 className="text-sm font-black uppercase text-slate-700 dark:text-slate-300 mb-4 flex items-center gap-2">
+                <MapPin size={16} className="text-indigo-500" /> Lịch sử chấm công
+            </h3>
+            {loading ? (
+                <div className="text-center py-6 text-slate-400 text-xs">Đang tải...</div>
+            ) : checkins.length === 0 ? (
+                <div className="text-center py-6 text-slate-400 text-xs">Chưa có lịch sử chấm công</div>
+            ) : (
+                <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
+                    {checkins.map((c, i) => (
+                        <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50">
+                            <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center shrink-0">
+                                <MapPin size={14} className="text-indigo-500" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">
+                                    {purposeLabel(c.purpose)}
+                                </p>
+                                <p className="text-[10px] text-slate-400">
+                                    {c.customerName || c.customerBusinessName || 'Vãng lai'}
+                                    {c.note ? ` — "${c.note}"` : ''}
+                                </p>
+                            </div>
+                            <div className="text-right shrink-0">
+                                <p className="text-[10px] font-bold text-slate-500">{formatDate(c.createdAt)}</p>
+                                <p className="text-[9px] text-slate-400">{formatTime(c.createdAt)}</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 };

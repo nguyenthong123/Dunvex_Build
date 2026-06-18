@@ -29,6 +29,7 @@ import ReloadPrompt from './components/ReloadPrompt';
 import { ToastProvider } from './components/shared/Toast';
 import OfflineBanner from './components/shared/OfflineBanner';
 
+import ErrorBoundary from './components/ErrorBoundary';
 
 const LoadingBar = () => (
 	<div className="fixed top-0 left-0 right-0 h-1 z-[9999] overflow-hidden bg-white/10">
@@ -71,7 +72,8 @@ function App() {
 	}
 
 	return (
-		<ToastProvider>
+		<ErrorBoundary>
+			<ToastProvider>
 			<div className="min-h-screen bg-[#f8f9fb] transition-colors duration-300 dark:bg-slate-950">
 				<Suspense fallback={<LoadingBar />}>
 					<Routes>
@@ -172,6 +174,7 @@ function App() {
 
 			</div>
 		</ToastProvider>
+		</ErrorBoundary>
 	);
 }
 

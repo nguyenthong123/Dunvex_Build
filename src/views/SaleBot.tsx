@@ -32,6 +32,7 @@ const SaleBot = () => {
     // 🎙️ Voice recording
     const [isRecording, setIsRecording] = useState(false);
     const [imagePreviews, setImagePreviews] = useState<{name: string; url: string}[]>([]);
+    const imageUrlsRef = useRef<string[]>([]);
     const recognitionRef = useRef<any>(null);
 
     const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -236,6 +237,9 @@ const SaleBot = () => {
         setMessages(newMessages);
         setInput('');
         setIsLoading(true);
+        // 🧹 Cleanup old blob URLs
+        imageUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
+        imageUrlsRef.current = [];
         setImagePreviews([]);
 
         try {
@@ -1453,7 +1457,13 @@ const SaleBot = () => {
                             <div key={idx} className="relative shrink-0">
                                 <img src={preview.url} alt={preview.name} className="h-16 w-16 object-cover rounded-lg border border-slate-200" />
                                 <button 
-                                    onClick={() => setImagePreviews(prev => prev.filter((_, i) => i !== idx))}
+                                    onClick={() => {
+                                        if (imageUrlsRef.current[idx]) {
+                                            URL.revokeObjectURL(imageUrlsRef.current[idx]);
+                                            imageUrlsRef.current.splice(idx, 1);
+                                        }
+                                        setImagePreviews(prev => prev.filter((_, i) => i !== idx));
+                                    }}
                                     className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] shadow"
                                 >×</button>
                             </div>
@@ -1475,10 +1485,14 @@ const SaleBot = () => {
                             onChange={(e) => {
                                 const files = e.target.files;
                                 if (files && files.length > 0) {
-                                    const previews = Array.from(files).map(f => ({
-                                        name: f.name,
-                                        url: URL.createObjectURL(f)
-                                    }));
+                                    // 🧹 Revoke old blob URLs
+                                    imageUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
+                                    imageUrlsRef.current = [];
+                                    const previews = Array.from(files).map(f => {
+                                        const url = URL.createObjectURL(f);
+                                        imageUrlsRef.current.push(url);
+                                        return { name: f.name, url };
+                                    });
                                     setImagePreviews(previews);
                                 }
                             }}

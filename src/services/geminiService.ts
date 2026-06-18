@@ -187,70 +187,140 @@ function buildPrompt(message: string, context?: string, chatHistory?: any[]): st
     return prompt;
 }
 
+
+// ⏱️ Timeout + Retry utilities
+const FETCH_TIMEOUT = 25000; // 25s cho proxy
+const SDK_TIMEOUT = 20000;   // 20s cho SDK
+const MAX_RETRIES = 2;       // Retry 2 lần (tổng 3 attempts)
+const RETRY_DELAYS = [1000, 3000, 5000]; // ms giữa các lần retry
+
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const res = await fetch(url, { ...options, signal: controller.signal });
+        return res;
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+async function retryWithBackoff<T>(fn: () => Promise<T>, retries: number = MAX_RETRIES, delays: number[] = RETRY_DELAYS): Promise<T> {
+    let lastError: any;
+    for (let i = 0; i <= retries; i++) {
+        try {
+            return await fn();
+        } catch (err: any) {
+            lastError = err;
+            // Không retry nếu là lỗi ko recoverable (400, 401, 403)
+            if (err.name === 'AbortError' || err.message?.includes('timeout')) {
+                console.warn(`⏱️ Attempt ${i + 1}/${retries + 1} timed out`);
+            } else if (err.status === 400 || err.status === 401 || err.status === 403) {
+                throw err; // No retry for client errors
+            }
+            if (i < retries) {
+                const delay = delays[i] || delays[delays.length - 1];
+                console.warn(`🔄 Retry ${i + 1}/${retries} in ${delay}ms...`);
+                await new Promise(r => setTimeout(r, delay));
+            }
+        }
+    }
+    throw lastError;
+}
+
 // 🔐 Gọi qua Vercel proxy (bảo mật, key nằm server-side)
 async function callViaProxy(prompt: string): Promise<any> {
-    const res = await fetch('/api/gemini-proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
+    return retryWithBackoff(async () => {
+        const res = await fetchWithTimeout('/api/gemini-proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt }),
+        }, FETCH_TIMEOUT);
+
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+            const error: any = new Error(err.error || `Proxy error: ${res.status}`);
+            error.status = res.status;
+            throw error;
+        }
+
+        const data = await res.json();
+        return JSON.parse(data.text || '{}');
     });
-
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-        throw new Error(err.error || `Proxy error: ${res.status}`);
-    }
-
-    const data = await res.json();
-    return JSON.parse(data.text || '{}');
 }
 
 // 🏠 Fallback: gọi trực tiếp SDK (local dev)
 async function callViaSDK(prompt: string): Promise<any> {
-    const model = getSDKModel();
-    if (!model) throw new Error("Gemini SDK not available (no API key)");
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-    return JSON.parse(text);
+    return retryWithBackoff(async () => {
+        const model = getSDKModel();
+        if (!model) throw new Error("Gemini SDK not available (no API key)");
+        
+        // SDK không có AbortController built-in, dùng Promise.race
+        const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('SDK call timed out')), SDK_TIMEOUT)
+        );
+        
+        const resultPromise = model.generateContent(prompt).then((result: any) => {
+            const text = result.response.text();
+            return JSON.parse(text);
+        });
+        
+        return Promise.race([resultPromise, timeoutPromise]);
+    });
 }
 
 // 📸 Phân tích ảnh qua Gemini Vision
 async function callVisionViaProxy(prompt: string, images: { base64: string; mimeType: string }[]): Promise<any> {
-    const res = await fetch('/api/gemini-vision', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, images }),
+    return retryWithBackoff(async () => {
+        const res = await fetchWithTimeout('/api/gemini-vision', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt, images }),
+        }, FETCH_TIMEOUT);
+
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+            const error: any = new Error(err.error || `Vision proxy error: ${res.status}`);
+            error.status = res.status;
+            throw error;
+        }
+
+        const data = await res.json();
+        return JSON.parse(data.text || '{}');
     });
-
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-        throw new Error(err.error || `Vision proxy error: ${res.status}`);
-    }
-
-    const data = await res.json();
-    return JSON.parse(data.text || '{}');
 }
 
 // 🎙️ Phân tích ảnh qua SDK (fallback)
 async function callVisionViaSDK(prompt: string, images: { base64: string; mimeType: string }[]): Promise<any> {
-    if (!_genAI && apiKey) {
-        _genAI = new GoogleGenerativeAI(apiKey);
-    }
-    if (!_genAI) throw new Error("Gemini SDK not available");
+    return retryWithBackoff(async () => {
+        if (!_genAI && apiKey) {
+            _genAI = new GoogleGenerativeAI(apiKey);
+        }
+        if (!_genAI) throw new Error("Gemini SDK not available");
 
-    const model = _genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    const parts: any[] = [{ text: prompt }];
-    for (const img of images) {
-        parts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } });
-    }
-    const result = await model.generateContent(parts);
-    let text = result.response.text();
-    // 🔧 Strip markdown code blocks nếu Gemini bọc trong ```json
-    text = text.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
-    try {
-        return JSON.parse(text);
-    } catch {
-        return { intent: "UNKNOWN", message: text };
-    }
+        const model = _genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        const parts: any[] = [{ text: prompt }];
+        for (const img of images) {
+            parts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } });
+        }
+
+        const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Vision SDK call timed out')), SDK_TIMEOUT)
+        );
+
+        const resultPromise = model.generateContent(parts).then((result: any) => {
+            let text = result.response.text();
+            // 🔧 Strip markdown code blocks nếu Gemini bọc trong ```json
+            text = text.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
+            try {
+                return JSON.parse(text);
+            } catch {
+                return { intent: "UNKNOWN", message: text };
+            }
+        });
+
+        return Promise.race([resultPromise, timeoutPromise]);
+    });
 }
 
 // ==================== EXPORTED FUNCTIONS ====================

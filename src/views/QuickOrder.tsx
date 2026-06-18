@@ -722,6 +722,16 @@ const QuickOrder = () => {
 		// Profit = subTotal (gross revenue) - cost - discount (shipping is pass-through, not profit)
 		const totalProfitFinal = subTotal - totalCostFinal - Number(discountAmt);
 
+			// 📱 Lấy SĐT nhân viên từ profile (nếu có)
+			let staffPhone = '';
+			try {
+				const profileRef = doc(db, 'profiles', auth.currentUser?.uid || '');
+				const profileSnap = await getDoc(profileRef);
+				if (profileSnap.exists()) {
+					staffPhone = profileSnap.data().phone || '';
+				}
+			} catch (e) { /* bỏ qua nếu chưa có profile */ }
+
 			const orderData: any = {
 				customerName: finalCustomer?.name || searchCustomerQuery || 'Khách vãng lai',
 				customerId: finalCustomer?.id || null,
@@ -743,6 +753,7 @@ const QuickOrder = () => {
 				ownerEmail: owner.ownerEmail,
 				createdBy: auth.currentUser?.uid || '',
 				createdByEmail: auth.currentUser?.email || '',
+				createdByPhone: staffPhone,
 			};
 
 			if (id) {

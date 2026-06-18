@@ -173,6 +173,7 @@ export const useNavigationConfig = () => {
 		{ icon: 'settings', label: 'Cài đặt', path: '/settings' },                                            // 12
 		{ icon: 'smart_toy', label: 'Trợ lý AI', path: '/sale-bot' },                                         // 13 (NEW)
 		{ icon: 'security', label: 'Nexus Control', path: '/nexus-control', permissionKey: 'nexus_control' }, // 14
+		{ icon: 'person', label: 'Hồ sơ', path: '/profile' },                                              // 15
 	];
 
 	// Xử lý Dynamic Menu cho Mobile - Giờ đây đã được ổn định hóa và kiểm tra quyền

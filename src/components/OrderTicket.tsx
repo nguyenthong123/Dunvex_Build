@@ -354,7 +354,7 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose }) => {
 										<div className="flex items-center gap-5">
 											<div className="flex items-center gap-1.5 text-gray-700">
 												<Phone size={12} className="text-[#f27121]" />
-												<span className="text-xs font-black">{companyInfo?.phone || '0988765444'}</span>
+												<span className="text-xs font-black">{order.createdByPhone || companyInfo?.phone || '0988765444'}</span>
 											</div>
 											<div className="flex items-center gap-1.5 text-gray-700">
 												<Mail size={12} className="text-[#f27121]" />

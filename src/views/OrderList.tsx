@@ -30,28 +30,18 @@ const OrderList = () => {
 
 		const isAdmin = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
 
-		let q;
 		console.log("OrderList Query Executing with ownerId:", owner.ownerId, "uid:", auth.currentUser?.uid, "isAdmin:", isAdmin);
-		if (isAdmin) {
-			q = query(
-				collection(db, 'orders'),
-				where('ownerId', '==', owner.ownerId),
-				limit(500)
-			);
-		} else {
-			q = query(
-				collection(db, 'orders'),
-				where('ownerId', '==', owner.ownerId),
-				where('createdByEmail', '==', auth.currentUser?.email),
-				limit(500)
-			);
-		}
+		// 🔓 Dùng chung: Admin & Nhân viên đều thấy toàn bộ đơn hàng
+		const q = query(
+			collection(db, 'orders'),
+			where('ownerId', '==', owner.ownerId),
+			limit(500)
+		);
 
 		const unsubscribe = onSnapshot(q, (snapshot: any) => {
 			const docs = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
-			const filteredByRole = isAdmin ? docs : docs.filter((o: any) => o.createdByEmail === auth.currentUser?.email);
 
-			const sortedDocs = [...filteredByRole].sort((a, b) => {
+			const sortedDocs = [...docs].sort((a, b) => {
 				const dateA = a.createdAt?.seconds || 0;
 				const dateB = b.createdAt?.seconds || 0;
 				return dateB - dateA;

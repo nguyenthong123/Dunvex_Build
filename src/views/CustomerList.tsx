@@ -212,21 +212,11 @@ const CustomerList = () => {
 	useEffect(() => {
 		if (owner.loading || !owner.ownerId) return;
 
-		const isAdmin = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
-
-		let q;
-		if (isAdmin) {
-			q = query(
-				collection(db, 'customers'),
-				where('ownerId', '==', owner.ownerId)
-			);
-		} else {
-			q = query(
-				collection(db, 'customers'),
-				where('ownerId', '==', owner.ownerId),
-				where('createdByEmail', '==', auth.currentUser?.email)
-			);
-		}
+		// 🔓 Dùng chung: Admin & Nhân viên đều thấy toàn bộ danh sách khách hàng
+		const q = query(
+			collection(db, 'customers'),
+			where('ownerId', '==', owner.ownerId)
+		);
 
 		const unsubscribe = onSnapshot(q, (snapshot: any) => {
 			const docs = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));

@@ -387,22 +387,20 @@ const Debts: React.FC = () => {
 		qPayments = query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId), orderBy('createdAt', 'desc'), limit(500));
 		qCustomers = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
 
+		// 🔓 Dùng chung: Admin & Nhân viên đều thấy toàn bộ
 		const unsubOrders = onSnapshot(qOrders, (snapshot) => {
 			const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-			const filtered = isAdmin ? docs : docs.filter((o: any) => o.createdByEmail === auth.currentUser?.email);
-			setOrders(filtered);
+			setOrders(docs);
 		});
 
 		const unsubPayments = onSnapshot(qPayments, (snapshot) => {
 			const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-			const filtered = isAdmin ? docs : docs.filter((p: any) => p.createdByEmail === auth.currentUser?.email);
-			setPayments(filtered);
+			setPayments(docs);
 		});
 
 		const unsubCustomers = onSnapshot(qCustomers, (snapshot) => {
 			const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-			const filtered = isAdmin ? docs : docs.filter((c: any) => c.createdByEmail === auth.currentUser?.email);
-			setCustomers(filtered);
+			setCustomers(docs);
 			setLoading(false);
 		});
 

@@ -91,19 +91,11 @@ const QuickOrder = () => {
 			setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
 		});
 
-		let qCusts;
-		if (isAdmin) {
-			qCusts = query(
-				collection(db, 'customers'),
-				where('ownerId', '==', owner.ownerId)
-			);
-		} else {
-			qCusts = query(
-				collection(db, 'customers'),
-				where('ownerId', '==', owner.ownerId),
-				where('createdByEmail', '==', auth.currentUser?.email)
-			);
-		}
+		// 🔓 Dùng chung: Admin & Nhân viên đều thấy toàn bộ khách hàng
+		const qCusts = query(
+			collection(db, 'customers'),
+			where('ownerId', '==', owner.ownerId)
+		);
 
 		const unsubCusts = onSnapshot(qCusts, (snap) => {
 			setCustomers(snap.docs.map(d => ({ id: d.id, ...d.data() })));

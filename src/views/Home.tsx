@@ -73,20 +73,17 @@ const Home = () => {
 
 		const unsubOrders = onSnapshot(qOrders, (snap) => {
 			const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-			const filtered = isAdmin ? docs : docs.filter((o: any) => o.createdByEmail === auth.currentUser?.email);
-			setOrders(filtered);
+			setOrders(docs);
 		}, (err: any) => console.error("Home: Orders Error:", err));
 
 		const unsubCust = onSnapshot(qCust, (snap) => {
 			const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-			const filtered = isAdmin ? docs : docs.filter((c: any) => c.createdByEmail === auth.currentUser?.email);
-			setCustomers(filtered);
+			setCustomers(docs);
 		}, (err: any) => console.error("Home: Customers Error:", err));
 
 		const unsubPay = onSnapshot(qPay, (snap) => {
 			const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-			const filtered = isAdmin ? docs : docs.filter((p: any) => p.createdByEmail === auth.currentUser?.email);
-			setPayments(filtered);
+			setPayments(docs);
 		}, (err: any) => console.error("Home: Payments Error:", err));
 
 		const unsubProd = onSnapshot(qProd, (snap) => {

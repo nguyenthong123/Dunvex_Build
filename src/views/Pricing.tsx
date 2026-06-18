@@ -110,6 +110,10 @@ const Pricing = () => {
 
 	const handleSelectPlan = (plan: any) => {
 		setSelectedPlan(plan);
+		if (!plan.price || Number(plan.price) === 0) {
+			handleActivateFreeTrial(plan);
+			return;
+		}
 		if (auth.currentUser?.email) {
 			setTransferCode(generateTransferCode(auth.currentUser.email));
 		}
@@ -118,6 +122,24 @@ const Pricing = () => {
 		setPromoCode('');
 		setPromoError('');
 		setStep(2);
+	};
+
+	const handleActivateFreeTrial = async (plan: any) => {
+		setLoading(true);
+		try {
+			const expireDate = new Date();
+			expireDate.setDate(expireDate.getDate() + (plan.durationDays || 60));
+			await setDoc(doc(db, 'settings', auth.currentUser?.uid || ''), {
+				planId: plan.id, isPro: false, subscriptionStatus: 'trial',
+				subscriptionExpiresAt: expireDate, graceUntil: null,
+				manualLockOrders: false, manualLockDebts: false,
+				manualLockSheets: false, manualLockAi: false
+			}, { merge: true });
+			showToast('🎉 Dùng thử ' + (plan.durationDays || 60) + ' ngày đã kích hoạt!', 'success');
+			setTimeout(() => navigate('/'), 1500);
+		} catch (e: any) {
+			showToast('Lỗi: ' + (e.message || 'Không kích hoạt được'), 'error');
+		} finally { setLoading(false); }
 	};
 
 	const handleApplyPromo = async () => {
@@ -350,7 +372,7 @@ const Pricing = () => {
 											? 'bg-amber-500 text-white hover:bg-amber-600 shadow-amber-500/20'
 											: 'bg-[#1A237E] text-white hover:bg-blue-800 shadow-blue-900/20'}`}
 									>
-										Chọn Gói Này
+										{plan.price === 0 ? "🚀 Dùng Thử Miễn Phí" : "Chọn Gói Này"}
 									</button>
 								</div>
 							))}

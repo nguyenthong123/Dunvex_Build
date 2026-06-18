@@ -599,6 +599,14 @@ const NexusControl = () => {
 				priority: 'high'
 			});
 
+			// 📢 Thông báo cho admin về gói đăng ký mới
+			await createAdminNotification(request.ownerId, {
+				title: `💰 GÓI MỚI: ${request.planName || request.planId}`,
+				body: `${request.userEmail} vừa đăng ký gói ${request.planName || request.planId} — ${request.amount.toLocaleString('vi-VN')}đ. Đã được duyệt & kích hoạt.`,
+				type: 'subscription',
+				priority: 'high'
+			});
+
 			showToast("Đã duyệt thanh toán và kích hoạt tài khoản!", "success");
 		} catch (error) {
 			console.error("Approve Payment Error:", error);
@@ -694,6 +702,7 @@ const NexusControl = () => {
 				price: Number(editingAddon.price),
 				description: editingAddon.description || '',
 				icon: editingAddon.icon || 'Zap',
+				durationDays: Number(editingAddon.durationDays) || 30,
 				features: typeof editingAddon.features === 'string' ? editingAddon.features.split('\n').filter((f: string) => f.trim() !== '') : (editingAddon.features || []),
 				bgClass: editingAddon.bgClass || 'bg-slate-50 dark:bg-slate-800',
 				textClass: editingAddon.textClass || 'text-slate-500',
@@ -1320,9 +1329,20 @@ const NexusControl = () => {
 													<input type="text" className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white" value={editingAddon.description} onChange={e => setEditingAddon({...editingAddon, description: e.target.value})} />
 												</div>
 												<div className="md:col-span-2">
-													<label className="block text-xs font-bold text-slate-500 uppercase mb-2">Tính năng nổi bật (Mỗi dòng 1 tính năng)</label>
-													<textarea rows={3} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white" value={typeof editingAddon.features === 'string' ? editingAddon.features : editingAddon.features?.join('\n')} onChange={e => setEditingAddon({...editingAddon, features: e.target.value})} />
-												</div>
+												<label className="block text-xs font-bold text-slate-500 uppercase mb-2">⏱️ Thời hạn gói</label>
+												<select
+													className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white"
+													value={editingAddon.durationDays || 30}
+													onChange={e => setEditingAddon({...editingAddon, durationDays: Number(e.target.value)})}
+												>
+													<option value={7}>7 ngày (Dùng thử ngắn)</option>
+													<option value={30}>30 ngày (1 tháng)</option>
+													<option value={60}>60 ngày (2 tháng)</option>
+													<option value={90}>90 ngày (3 tháng)</option>
+													<option value={180}>180 ngày (6 tháng)</option>
+													<option value={365}>365 ngày (1 năm)</option>
+												</select>
+											</div>
 												<div className="md:col-span-2">
 													<label className="block text-xs font-bold text-slate-500 uppercase mb-2">Màu sắc chủ đạo (Theme)</label>
 													<select 
@@ -1364,7 +1384,12 @@ const NexusControl = () => {
 														</h5>
 														<span className="font-bold text-sm bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded-md text-slate-700 dark:text-slate-300">{addon.price.toLocaleString()}đ</span>
 													</div>
-													<p className="text-xs text-slate-500 dark:text-slate-400 mb-4">{addon.description}</p>
+													<p className="text-xs text-slate-500 dark:text-slate-400 mb-2">{addon.description}</p>
+												{addon.durationDays ? (
+													<span className="inline-block bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[10px] font-black px-2 py-0.5 rounded-md mb-2">⏱️ {addon.durationDays} ngày</span>
+												) : addon.features?.length > 0 && (
+													<span className="inline-block bg-slate-100 dark:bg-slate-700 text-slate-500 text-[10px] font-bold px-2 py-0.5 rounded-md mb-2">{addon.features.length} tính năng</span>
+												)}
 													<p className="text-[10px] font-black uppercase text-slate-400 mb-1">ID: {addon.id}</p>
 												</div>
 												<div className="flex gap-2 mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">

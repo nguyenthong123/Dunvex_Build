@@ -1700,7 +1700,7 @@ const Debts: React.FC = () => {
 							{/* DATE FILTER BAR FOR STATEMENT - REMOVED AS PER USER REQUEST */}
 
 							{/* SCROLLABLE DOCUMENT AREA */}
-							<div id="debt-statement-container" className="flex-1 overflow-y-auto bg-slate-900/20 py-12 flex items-start justify-center scroll-smooth custom-scrollbar">
+							<div id="debt-statement-container" className="flex-1 overflow-y-auto flex items-start justify-center scroll-smooth custom-scrollbar">
 
 								{/* THE PAPER SHEET - Scalable Wrapper */}
 								<div
@@ -1714,7 +1714,7 @@ const Debts: React.FC = () => {
 								>
 									<div
 										id="debt-statement-paper"
-										className="bg-white w-[800px] min-h-[1141px] p-16 mb-20 flex flex-col font-['Inter', sans-serif] relative text-sm text-slate-900"
+										className="bg-white w-[800px] min-h-[1141px] px-10 py-12 mb-10 flex flex-col font-['Inter', sans-serif] relative text-sm text-slate-900"
 									>
 
 										{/* 2. Customer & Cycle Info Grid */}
@@ -1979,8 +1979,8 @@ const Debts: React.FC = () => {
 									</div>
 								</div>
 							{/* Bottom Floating Toolbar */}
-							<div className="flex-none bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-4 py-2.5 border-t border-slate-200/50 flex items-center justify-between z-20 print:hidden">
-								<div className="hidden sm:flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-lg px-2 py-1">
+							<div className="flex-none bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-4 py-2.5 border-t border-slate-200/50 flex items-center justify-center gap-2 z-20 print:hidden">
+								<div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-lg px-2 py-1">
 									<button onClick={() => setStatementZoom(prev => Math.max(0.5, prev - 0.1))} className="size-7 rounded-md hover:bg-white dark:hover:bg-slate-700 text-slate-500 transition-all flex items-center justify-center" title="Thu nhỏ">
 										<span className="material-symbols-outlined text-base">zoom_out</span>
 									</button>
@@ -1991,7 +1991,7 @@ const Debts: React.FC = () => {
 									<div className="w-px h-3 bg-slate-300 dark:bg-slate-700 mx-0.5"></div>
 									<button onClick={() => { const c = document.getElementById('debt-statement-container'); const p = document.getElementById('debt-statement-paper'); if (c && p) setStatementZoom(Math.min(1, (c.clientHeight - 80) / p.clientHeight)); }} className="px-2 py-1 rounded-md hover:bg-white dark:hover:bg-slate-700 text-slate-500 text-[10px] font-black uppercase transition-all">Vừa</button>
 								</div>
-								<button onClick={handlePrintStatement} className="h-9 px-5 rounded-lg bg-indigo-600 text-white flex items-center gap-2 font-bold text-xs uppercase hover:bg-indigo-700 transition-all shadow-sm active:scale-95">
+								<button onClick={handlePrintStatement} className="h-9 px-5 rounded-lg bg-[#FF6D00] text-white flex items-center gap-2 font-bold text-xs uppercase hover:bg-orange-600 transition-all shadow-sm active:scale-95">
 									<Printer size={14} /> In phiếu
 								</button>
 							</div>

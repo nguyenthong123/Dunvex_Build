@@ -494,13 +494,13 @@ const Debts: React.FC = () => {
 		// Inclusion of 'Đơn chốt' as current debt
 		const confirmedStatuses = ['Đơn chốt'];
 		const debtOrders = customerOrders.filter(o => confirmedStatuses.includes(o.status));
-		// USE CACHED DEBT INSTEAD OF CALCULATING FROM SCRATCH
-		const debt = typeof c.debt === 'number' ? c.debt : 0;
-		// WE STILL KEEP WAITED FOR DISPLAY, BUT DEBT IS EXACT
 		const totalWaited = debtOrders.reduce((sum: any, o: any) => sum + (o.totalAmount || 0), 0);
 		const totalPaid = customerPayments.reduce((sum: any, p: any) => sum + (p.amount || 0), 0);
-		// Note: waited calculation is approximate based on limit(500) now, but debt is exact from DB.
-		const currentDebt = debt;
+		// Calculate debt from fetched data for consistency with displayed totals
+		const calcDebt = totalWaited - totalPaid;
+		// Fallback to cached debt if fetched data is incomplete (e.g. 500 order limit)
+		const cachedDebt = typeof c.debt === 'number' ? c.debt : 0;
+		const currentDebt = Math.max(calcDebt, cachedDebt);
 
 		// Column display values based on status filter
 		let displayTotalOrders = 0;

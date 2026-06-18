@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-// Server-side only
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+// Server-side only — ưu tiên GEMINI_API_KEY, fallback VITE_GEMINI_API_KEY
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {

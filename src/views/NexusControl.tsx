@@ -347,11 +347,19 @@ const NexusControl = () => {
 				if (customer.email === NEXUS_ADMIN_EMAIL) return;
 				const status = getEffectiveStatus(customer);
 				const now = new Date();
-				// 1. Provision new users
+				// 1. Provision new users - dùng gói trial từ subscription_packages
 				if (!customer.planId && !customer.isAiProcessed) {
 					const expireDate = new Date();
-					expireDate.setDate(expireDate.getDate() + 60);
-					await setDoc(doc(db, 'settings', customer.uid), { planId: 'free', isPro: false, subscriptionStatus: 'trial', subscriptionExpiresAt: expireDate, graceUntil: null, isAiProcessed: true }, { merge: true });
+					// Tìm gói trial/free trong subscription_packages để lấy durationDays
+					let trialDays = 60; // mặc định 60 ngày
+					try {
+						const pkgSnap = await getDoc(doc(db, 'subscription_packages', 'free_trial'));
+						if (pkgSnap.exists() && pkgSnap.data().price === 0) {
+							trialDays = Number(pkgSnap.data().durationDays) || 60;
+						}
+					} catch (e) { /* fallback 60 ngày */ }
+					expireDate.setDate(expireDate.getDate() + trialDays);
+					await setDoc(doc(db, 'settings', customer.uid), { planId: 'free_trial', isPro: false, subscriptionStatus: 'trial', subscriptionExpiresAt: expireDate, graceUntil: null, isAiProcessed: true }, { merge: true });
 				}
 				// 2. Grace period
 				if (status.isExpired) {
@@ -558,13 +566,20 @@ const NexusControl = () => {
 					hasAIAssistant: true
 				}, { merge: true });
 			} else {
-				const isYearly = planId === 'premium_yearly' || planId === 'addon_yearly';
 				const expireDate = new Date();
-				if (isYearly) {
-					expireDate.setFullYear(expireDate.getFullYear() + 1);
-				} else {
-					expireDate.setMonth(expireDate.getMonth() + 1);
-				}
+				// Đọc durationDays từ gói trong subscription_packages
+				let durDays = 30; // mặc định 30 ngày
+				try {
+					const planSnap = await getDoc(doc(db, 'subscription_packages', request.planId));
+					if (planSnap.exists() && planSnap.data().durationDays) {
+						durDays = Number(planSnap.data().durationDays);
+					} else {
+						// Fallback cũ nếu gói không có durationDays
+						const isYearly = planId === 'premium_yearly' || planId === 'addon_yearly';
+						durDays = isYearly ? 365 : 30;
+					}
+				} catch (e) { /* fallback */ }
+				expireDate.setDate(expireDate.getDate() + durDays);
 
 				await setDoc(doc(db, 'settings', request.ownerId), {
 					subscriptionStatus: 'active',

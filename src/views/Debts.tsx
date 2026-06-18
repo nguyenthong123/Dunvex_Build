@@ -763,8 +763,8 @@ const Debts: React.FC = () => {
 				});
 			}
 
-			// Update Debt
-			if (paymentData.customerId && diffAmount !== 0) {
+			// Update Debt (chỉ cho khách có thật, bỏ qua "Khách vãng lai")
+			if (paymentData.customerId && diffAmount !== 0 && !paymentData.customerId.startsWith('guest_')) {
 				batch.update(doc(db, 'customers', paymentData.customerId), {
 					debt: increment(-diffAmount)
 				});
@@ -824,7 +824,7 @@ const Debts: React.FC = () => {
 			// Optimistic local state update for immediate feedback
 			setPayments(prev => prev.filter(p => p.id !== id));
 
-			if (paymentToDelete && paymentToDelete.customerId) {
+			if (paymentToDelete && paymentToDelete.customerId && !String(paymentToDelete.customerId).startsWith('guest_')) {
 				const batch = writeBatch(db);
 				batch.delete(doc(db, 'payments', id));
 				batch.update(doc(db, 'customers', paymentToDelete.customerId), {

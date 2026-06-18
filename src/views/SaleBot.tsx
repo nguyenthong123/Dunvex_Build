@@ -520,11 +520,11 @@ const SaleBot = () => {
                     }
                 }
 
-                // 4. Tính lại totals
-                const newSubTotal = mergedItems.reduce((sum: number, i: any) => sum + (i.quantity * (Number(i.price) || 0)), 0);
-                const newTotalWeight = mergedItems.reduce((sum: number, i: any) => sum + (i.quantity * (Number(i.weight) || 0)), 0);
-                const newTotalCost = mergedItems.reduce((sum: number, i: any) => sum + (i.quantity * (Number(i.cost) || 0)), 0);
-                const newTotal = newSubTotal + Number(existingOrder.adjustmentValue || 0) - Number(existingOrder.discountValue || 0);
+                // 4. Tính lại totals (chống NaN)
+                const newSubTotal = mergedItems.reduce((sum: number, i: any) => sum + ((Number(i.quantity) || 0) * (Number(i.price) || 0)), 0);
+                const newTotalWeight = mergedItems.reduce((sum: number, i: any) => sum + ((Number(i.quantity) || 0) * (Number(i.weight) || 0)), 0);
+                const newTotalCost = mergedItems.reduce((sum: number, i: any) => sum + ((Number(i.quantity) || 0) * (Number(i.cost) || 0)), 0);
+                const newTotal = newSubTotal + (Number(existingOrder.adjustmentValue) || 0) - (Number(existingOrder.discountValue) || 0);
 
                 // 5. Update Firestore (dùng full document ID đã match)
                 await updateDoc(doc(db, 'orders', matchedOrderId), {
@@ -538,7 +538,7 @@ const SaleBot = () => {
 
                 // 6. Thông báo thành công
                 const itemsList = newItems.map((i: any) => `${i.name} x${i.quantity}`).join(', ');
-                let msg = `✅ Đã thêm **${itemsList}** vào đơn **#${matchedOrderId.slice(0, 8).toUpperCase()}** (${existingOrder.customerName || 'Khách'}).\n\n📊 Tổng mới: **${newTotal.toLocaleString('vi-VN')}đ** (${mergedItems.length} mặt hàng)`;
+                let msg = `✅ Đã thêm **${itemsList}** vào đơn **#${matchedOrderId.slice(0, 8).toUpperCase()}** (${existingOrder.customerName || 'Khách'}).\n\n📊 Tổng mới: **${(newTotal || 0).toLocaleString('vi-VN')}đ** (${mergedItems.length} mặt hàng)\n\n💡 Gõ "check đơn ${matchedOrderId.slice(0, 8).toUpperCase()}" để xem lại đơn hàng.`;
                 if (notFound.length > 0) {
                     msg += `\n\n⚠️ Không tìm thấy: ${notFound.join(', ')}`;
                 }
@@ -547,6 +547,69 @@ const SaleBot = () => {
             } catch (err) {
                 console.error('UPDATE_ORDER error:', err);
                 setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: '❌ Lỗi khi cập nhật đơn hàng. Vui lòng thử lại.' }]);
+            } finally {
+                setIsLoading(false);
+            }
+        } else if (data.intent === 'REVIEW_ORDER') {
+            // 🔍 Xem chi tiết đơn hàng theo ID
+            try {
+                if (!owner.ownerId || !data.order_id) {
+                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: '❌ Vui lòng cung cấp ID đơn hàng cần xem.' }]);
+                    return;
+                }
+                setIsLoading(true);
+                
+                const searchId = data.order_id.trim().toUpperCase();
+                const qOrders = query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId));
+                const ordersSnap = await getDocs(qOrders);
+                
+                // Match exact hoặc prefix
+                let matched: any = null;
+                const exactMatch = ordersSnap.docs.find(d => d.id === searchId || d.id.toUpperCase() === searchId);
+                if (exactMatch) {
+                    matched = { id: exactMatch.id, ...exactMatch.data() };
+                } else {
+                    const prefixMatches = ordersSnap.docs.filter(d => d.id.toUpperCase().startsWith(searchId));
+                    if (prefixMatches.length === 1) {
+                        matched = { id: prefixMatches[0].id, ...prefixMatches[0].data() };
+                    } else if (prefixMatches.length > 1) {
+                        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: `⚠️ Tìm thấy **${prefixMatches.length}** đơn trùng prefix **${searchId}**. Nhập ID đầy đủ nhé!` }]);
+                        setIsLoading(false);
+                        return;
+                    }
+                }
+                
+                if (!matched) {
+                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: `❌ Không tìm thấy đơn hàng với ID **${searchId}**.` }]);
+                    setIsLoading(false);
+                    return;
+                }
+                
+                // Format hiển thị
+                const items = matched.items || [];
+                const itemsList = items.map((i: any, idx: number) => {
+                    const price = Number(i.price) || 0;
+                    const qty = Number(i.quantity) || 0;
+                    const total = price * qty;
+                    return `${idx + 1}. ${i.name || 'SP'}: ${qty} x ${price.toLocaleString('vi-VN')}đ = **${total.toLocaleString('vi-VN')}đ**`;
+                }).join('\n');
+                
+                const subTotal = Number(matched.subTotal) || 0;
+                const totalAmount = Number(matched.totalAmount) || 0;
+                
+                const msg = `📋 **Đơn hàng #${matched.id.slice(0, 8).toUpperCase()}**\n` +
+                    `👤 KH: **${matched.customerName || 'N/A'}** | 📞 ${matched.customerPhone || 'N/A'}\n` +
+                    `📅 ${matched.orderDate || 'N/A'} | 📌 ${matched.status || 'N/A'}\n` +
+                    `\n📦 **${items.length} mặt hàng:**\n${itemsList}\n` +
+                    `\n💰 Tạm tính: **${subTotal.toLocaleString('vi-VN')}đ**` +
+                    (matched.adjustmentValue ? ` + VC: ${Number(matched.adjustmentValue).toLocaleString('vi-VN')}đ` : '') +
+                    (matched.discountValue ? ` - CK: ${Number(matched.discountValue).toLocaleString('vi-VN')}đ` : '') +
+                    `\n🟰 **Tổng: ${totalAmount.toLocaleString('vi-VN')}đ**`;
+                
+                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: msg }]);
+            } catch (err) {
+                console.error('REVIEW_ORDER error:', err);
+                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: '❌ Lỗi khi xem đơn hàng.' }]);
             } finally {
                 setIsLoading(false);
             }
@@ -1033,6 +1096,7 @@ const SaleBot = () => {
                                             <span className="text-xs font-black uppercase text-slate-800 dark:text-white">
                                                 {msg.parsedData.intent === 'CREATE_ORDER' ? 'Thông tin Lên Đơn' : 
                                                  msg.parsedData.intent === 'UPDATE_ORDER' ? '📝 Thêm vào Đơn Cũ' :
+                                                 msg.parsedData.intent === 'REVIEW_ORDER' ? '📋 Xem Đơn Hàng' :
                                                  msg.parsedData.intent === 'CREATE_PRODUCT' ? 'Thông tin Sản Phẩm' : 
                                                  msg.parsedData.intent === 'CREATE_PAYMENT' ? 'Thông tin Thu Công Nợ' :
                                                  msg.parsedData.intent === 'INVENTORY_ACTION' ? 'Thông tin Phiếu Kho' :
@@ -1061,10 +1125,12 @@ const SaleBot = () => {
                                             </div>
                                         )}
                                         
-                                        {msg.parsedData.order_id && msg.parsedData.intent === 'UPDATE_ORDER' && (
-                                            <div className="mb-3 bg-amber-50 dark:bg-amber-950/30 p-2 px-3 rounded-lg border border-amber-200 dark:border-amber-900">
-                                                <p className="text-[10px] text-amber-700 dark:text-amber-400 font-bold uppercase">📝 Cập nhật đơn hàng</p>
-                                                <p className="text-xs text-amber-600 dark:text-amber-300 mt-0.5">ID: <span className="font-mono font-bold">{msg.parsedData.order_id}</span></p>
+                                        {msg.parsedData.order_id && (msg.parsedData.intent === 'UPDATE_ORDER' || msg.parsedData.intent === 'REVIEW_ORDER') && (
+                                            <div className={`mb-3 p-2 px-3 rounded-lg border ${msg.parsedData.intent === 'REVIEW_ORDER' ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900' : 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900'}`}>
+                                                <p className={`text-[10px] font-bold uppercase ${msg.parsedData.intent === 'REVIEW_ORDER' ? 'text-blue-700 dark:text-blue-400' : 'text-amber-700 dark:text-amber-400'}`}>
+                                                    {msg.parsedData.intent === 'REVIEW_ORDER' ? '📋 Xem đơn hàng' : '📝 Cập nhật đơn hàng'}
+                                                </p>
+                                                <p className={`text-xs mt-0.5 ${msg.parsedData.intent === 'REVIEW_ORDER' ? 'text-blue-600 dark:text-blue-300' : 'text-amber-600 dark:text-amber-300'}`}>ID: <span className="font-mono font-bold">{msg.parsedData.order_id}</span></p>
                                             </div>
                                         )}
                                         
@@ -1176,7 +1242,7 @@ const SaleBot = () => {
                                             </div>
                                         )}
 
-                                        {['CREATE_ORDER', 'UPDATE_ORDER', 'CREATE_CUSTOMER', 'UPDATE_CUSTOMER', 'CREATE_PRODUCT', 'CREATE_PAYMENT', 'INVENTORY_ACTION'].includes(msg.parsedData.intent) && 
+                                        {['CREATE_ORDER', 'UPDATE_ORDER', 'REVIEW_ORDER', 'CREATE_CUSTOMER', 'UPDATE_CUSTOMER', 'CREATE_PRODUCT', 'CREATE_PAYMENT', 'INVENTORY_ACTION'].includes(msg.parsedData.intent) && 
                                         (!msg.parsedData.missing_info || msg.parsedData.missing_info.length === 0) && (
                                             <button 
                                                 onClick={() => handleAction(msg.parsedData)}
@@ -1185,6 +1251,7 @@ const SaleBot = () => {
                                                 {msg.parsedData.intent === 'CREATE_CUSTOMER' ? 'Lưu Khách Hàng Mới' : 
                                                  msg.parsedData.intent === 'UPDATE_CUSTOMER' ? 'Xác Nhận Cập Nhật' : 
                                                  msg.parsedData.intent === 'UPDATE_ORDER' ? '🔄 Thêm vào Đơn' :
+                                                 msg.parsedData.intent === 'REVIEW_ORDER' ? '📋 Xem Đơn Hàng' :
                                                  msg.parsedData.intent === 'CREATE_PRODUCT' ? `Tạo ${msg.parsedData.products_to_create?.length || ''} Sản Phẩm Mới` :
                                                  msg.parsedData.intent === 'CREATE_PAYMENT' ? 'Đi tới Form Phiếu Thu' :
                                                  msg.parsedData.intent === 'INVENTORY_ACTION' ? 'Xác Nhận & Tạo Phiếu Kho' :
@@ -1311,6 +1378,7 @@ const SaleBot = () => {
                                     {confirmAction.intent === 'CREATE_CUSTOMER' ? '🆕 Tạo khách hàng mới' :
                                      confirmAction.intent === 'CREATE_ORDER' ? '🛒 Lên đơn hàng' :
                                      confirmAction.intent === 'UPDATE_ORDER' ? '🔄 Cập nhật đơn hàng' :
+                                     confirmAction.intent === 'REVIEW_ORDER' ? '📋 Xem đơn hàng' :
                                      confirmAction.intent === 'CREATE_PRODUCT' ? '📦 Tạo sản phẩm mới' :
                                      confirmAction.intent === 'CREATE_PAYMENT' ? '💰 Thu công nợ' :
                                      confirmAction.intent === 'INVENTORY_ACTION' ? '📊 Phiếu kho' :

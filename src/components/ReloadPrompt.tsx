@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 
 const ReloadPrompt: React.FC = () => {
@@ -9,17 +9,55 @@ const ReloadPrompt: React.FC = () => {
 	} = useRegisterSW({
 		onRegistered(r: ServiceWorkerRegistration | undefined) {
 			console.log('SW Registered: ', r)
-			// Kiểm tra bản cập nhật mỗi 1 giờ
+			// 🔄 Kiểm tra bản cập nhật mỗi 5 phút (thay vì 1 giờ)
 			if (r) {
 				setInterval(() => {
 					r.update().catch(console.error);
-				}, 60 * 60 * 1000);
+				}, 5 * 60 * 1000);
+				// Kiểm tra ngay lập tức sau khi register
+				setTimeout(() => r.update().catch(console.error), 3000);
 			}
 		},
 		onRegisterError(error: any) {
 			console.log('SW registration error', error)
 		},
 	})
+
+	// 📱 iOS Safari fallback: tự kiểm tra version bằng fetch
+	const [iosUpdateAvailable, setIosUpdateAvailable] = useState(false);
+	const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+		(navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+	useEffect(() => {
+		// Fallback check cho iOS hoặc khi SW không detect được update
+		const checkVersion = async () => {
+			try {
+				const res = await fetch('/index.html?t=' + Date.now(), { cache: 'no-store' });
+				const html = await res.text();
+				// 🔍 Tìm JS bundle hash trong HTML (VD: index-abc123.js)
+				const match = html.match(/assets\/index-[\w-]+\.js/);
+				if (match && match[0]) {
+					const deployedBundle = match[0];
+					// So sánh với bundle hiện tại đã load
+					const currentScripts = Array.from(document.querySelectorAll('script[src]'))
+						.map(s => s.getAttribute('src') || '')
+						.filter(src => src.includes('/assets/index-'));
+					
+					if (currentScripts.length > 0 && !currentScripts.some(s => s.includes(deployedBundle)) && !needRefresh) {
+						console.log('📱 New version detected via bundle hash! Deployed:', deployedBundle);
+						setIosUpdateAvailable(true);
+					}
+				}
+			} catch (e) { /* ignore */ }
+		};
+
+		if (isIOS) {
+			// iOS: check version mỗi 2 phút
+			checkVersion();
+			const interval = setInterval(checkVersion, 2 * 60 * 1000);
+			return () => clearInterval(interval);
+		}
+	}, [isIOS, needRefresh]);
 
 	// Tự động cập nhật thông minh (Smart Auto-Update)
 	useEffect(() => {
@@ -69,6 +107,20 @@ const ReloadPrompt: React.FC = () => {
 
 	const handleUpdate = () => {
 		setIsUpdating(true);
+		// 📱 iOS: force bỏ cache trước khi reload
+		if (isIOS) {
+			// Xoá SW cache nếu có
+			if ('caches' in window) {
+				caches.keys().then(names => {
+					names.forEach(name => caches.delete(name));
+				});
+			}
+			// Force reload bypass cache
+			setTimeout(() => {
+				window.location.href = window.location.href.split('?')[0] + '?v=' + Date.now();
+			}, 500);
+			return;
+		}
 		updateServiceWorker(true);
 		// Fallback: Ép tải lại trang sau 1.5s nếu Service Worker bị kẹt không tự reload
 		setTimeout(() => {
@@ -78,15 +130,18 @@ const ReloadPrompt: React.FC = () => {
 
 	return (
 		<div className="fixed bottom-20 right-4 z-[200]">
-			{(offlineReady || needRefresh) && (
+			{(offlineReady || needRefresh || iosUpdateAvailable) && (
 				<div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 animate-in slide-in-from-bottom-5 duration-300">
 					<div className="mb-4">
 						<p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">
 							{offlineReady ? 'Ứng dụng đã sẵn sàng chạy Offline' : 'Đã có bản cập nhật mới'}
 						</p>
+						{iosUpdateAvailable && (
+							<p className="text-[10px] text-slate-400 mt-1">📱 Phiên bản mới đã được phát hiện. Vui lòng cập nhật.</p>
+						)}
 					</div>
 					<div className="flex gap-2">
-						{needRefresh && (
+						{(needRefresh || iosUpdateAvailable) && (
 							<button
 								onClick={handleUpdate}
 								disabled={isUpdating}
@@ -96,7 +151,7 @@ const ReloadPrompt: React.FC = () => {
 							</button>
 						)}
 						<button
-							onClick={() => close()}
+							onClick={() => { close(); setIosUpdateAvailable(false); }}
 							disabled={isUpdating}
 							className="px-5 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all disabled:opacity-50"
 						>

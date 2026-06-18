@@ -433,15 +433,40 @@ const SaleBot = () => {
                 }
                 setIsLoading(true);
 
-                // 1. Tìm đơn hàng theo ID
-                const orderRef = doc(db, 'orders', data.order_id.trim().toUpperCase());
-                const orderSnap = await getDoc(orderRef);
-                if (!orderSnap.exists()) {
-                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: `❌ Không tìm thấy đơn hàng với ID **${data.order_id}**. Anh/chị kiểm tra lại ID nhé!` }]);
+                // 1. Tìm đơn hàng theo ID (hỗ trợ cả ID đầy đủ và ID rút gọn 8 ký tự)
+                const searchId = data.order_id.trim().toUpperCase();
+                const qOrders = query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId));
+                const ordersSnap = await getDocs(qOrders);
+                
+                // Tìm khớp chính xác hoặc prefix (ID rút gọn từ phiếu giao hàng)
+                let matchedOrder: any = null;
+                let matchedOrderId = '';
+                
+                // Try exact match first
+                const exactMatch = ordersSnap.docs.find(d => d.id === searchId || d.id.toUpperCase() === searchId);
+                if (exactMatch) {
+                    matchedOrder = exactMatch.data();
+                    matchedOrderId = exactMatch.id;
+                } else {
+                    // Try prefix match (VD: user gõ ED3A2B1C, doc ID là ed3a2b1cxxxxxxxx)
+                    const prefixMatches = ordersSnap.docs.filter(d => d.id.toUpperCase().startsWith(searchId));
+                    if (prefixMatches.length === 1) {
+                        matchedOrder = prefixMatches[0].data();
+                        matchedOrderId = prefixMatches[0].id;
+                    } else if (prefixMatches.length > 1) {
+                        const ids = prefixMatches.map(d => d.id.slice(0, 8).toUpperCase()).join(', ');
+                        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: `⚠️ Tìm thấy **${prefixMatches.length}** đơn hàng trùng prefix **${searchId}**: ${ids}. Anh/chị vui lòng nhập đầy đủ ID chính xác nhé!` }]);
+                        setIsLoading(false);
+                        return;
+                    }
+                }
+
+                if (!matchedOrder) {
+                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: `❌ Không tìm thấy đơn hàng với ID **${searchId}**.\n\n💡 Lưu ý: ID trên phiếu giao hàng là 8 ký tự đầu của mã đơn. Nếu không tìm thấy, anh/chị kiểm tra lại hoặc dùng ID đầy đủ nhé!` }]);
                     setIsLoading(false);
                     return;
                 }
-                const existingOrder = orderSnap.data();
+                const existingOrder = matchedOrder;
 
                 // 2. Tìm sản phẩm khớp trong kho
                 const qProd = query(collection(db, 'products'), where('ownerId', '==', owner.ownerId));
@@ -501,8 +526,8 @@ const SaleBot = () => {
                 const newTotalCost = mergedItems.reduce((sum: number, i: any) => sum + (i.quantity * (Number(i.cost) || 0)), 0);
                 const newTotal = newSubTotal + Number(existingOrder.adjustmentValue || 0) - Number(existingOrder.discountValue || 0);
 
-                // 5. Update Firestore
-                await updateDoc(orderRef, {
+                // 5. Update Firestore (dùng full document ID đã match)
+                await updateDoc(doc(db, 'orders', matchedOrderId), {
                     items: mergedItems,
                     subTotal: newSubTotal,
                     totalAmount: newTotal,
@@ -513,7 +538,7 @@ const SaleBot = () => {
 
                 // 6. Thông báo thành công
                 const itemsList = newItems.map((i: any) => `${i.name} x${i.quantity}`).join(', ');
-                let msg = `✅ Đã thêm **${itemsList}** vào đơn **${data.order_id}** (${existingOrder.customerName || 'Khách'}).\n\n📊 Tổng mới: **${newTotal.toLocaleString('vi-VN')}đ** (${mergedItems.length} mặt hàng)`;
+                let msg = `✅ Đã thêm **${itemsList}** vào đơn **#${matchedOrderId.slice(0, 8).toUpperCase()}** (${existingOrder.customerName || 'Khách'}).\n\n📊 Tổng mới: **${newTotal.toLocaleString('vi-VN')}đ** (${mergedItems.length} mặt hàng)`;
                 if (notFound.length > 0) {
                     msg += `\n\n⚠️ Không tìm thấy: ${notFound.join(', ')}`;
                 }

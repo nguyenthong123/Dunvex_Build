@@ -243,8 +243,9 @@ async function callVisionViaSDK(prompt: string, images: { base64: string; mimeTy
         parts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } });
     }
     const result = await model.generateContent(parts);
-    const text = result.response.text();
-    // Try to parse as JSON, fallback to raw text
+    let text = result.response.text();
+    // 🔧 Strip markdown code blocks nếu Gemini bọc trong ```json
+    text = text.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
     try {
         return JSON.parse(text);
     } catch {

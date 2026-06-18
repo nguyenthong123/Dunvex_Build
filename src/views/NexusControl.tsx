@@ -707,8 +707,8 @@ const NexusControl = () => {
 
 	const handleSaveAddon = async (e: React.FormEvent) => {
 		e.preventDefault();
-		if (!editingAddon.id || !editingAddon.name || !editingAddon.price) {
-			showToast("Vui lòng điền đủ mã, tên và giá gói", "error");
+		if (!editingAddon.id || !editingAddon.name || (editingAddon.price === undefined || editingAddon.price === null || editingAddon.price === '')) {
+			showToast("Vui lòng điền ID, tên và giá gói (0đ = miễn phí)", "error");
 			return;
 		}
 		try {

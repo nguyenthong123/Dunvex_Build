@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Check, Zap, Crown, Rocket, ShieldCheck, ArrowLeft, CreditCard, QrCode, Lock, Settings, Mail, X, Save, Download, Database, Activity, Shield } from 'lucide-react';
 import { auth, db } from '../services/firebase';
-import { collection, addDoc, serverTimestamp, query, where, limit, getDocs, doc, updateDoc, increment, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, limit, getDocs, doc, updateDoc, setDoc, increment, onSnapshot } from 'firebase/firestore';
 import { useEffect } from 'react';
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
@@ -321,10 +321,16 @@ const Pricing = () => {
 									</div>
 
 									<div className="mb-8 flex items-baseline gap-2">
-										<span className="text-4xl font-black text-slate-900 dark:text-white">
-											{new Intl.NumberFormat('vi-VN').format(plan.price)}
-										</span>
-										<span className="text-slate-400 dark:text-slate-500 font-bold uppercase text-xs">/ {plan.period || 'gói'}</span>
+										{plan.price === 0 ? (
+											<span className="text-4xl font-black text-emerald-500">MIỄN PHÍ</span>
+										) : (
+											<>
+												<span className="text-4xl font-black text-slate-900 dark:text-white">
+													{new Intl.NumberFormat('vi-VN').format(plan.price)}
+												</span>
+												<span className="text-slate-400 dark:text-slate-500 font-bold uppercase text-xs">/ {plan.period || 'gói'}</span>
+											</>
+										)}
 									</div>
 
 									<div className="space-y-4 mb-10">
@@ -340,7 +346,7 @@ const Pricing = () => {
 
 									<button
 										onClick={() => handleSelectPlan(plan)}
-										className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest transition-all shadow-lg ${plan.recommended
+										className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest transition-all shadow-lg ${plan.price === 0 ? 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-emerald-500/20' : plan.recommended
 											? 'bg-amber-500 text-white hover:bg-amber-600 shadow-amber-500/20'
 											: 'bg-[#1A237E] text-white hover:bg-blue-800 shadow-blue-900/20'}`}
 									>

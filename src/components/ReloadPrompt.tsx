@@ -28,23 +28,35 @@ const ReloadPrompt: React.FC = () => {
 	const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
 		(navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
+	// Lưu bundle hash hiện tại khi load trang
+	const getCurrentBundleHash = () => {
+		const scripts = Array.from(document.querySelectorAll('script[src]'))
+			.map(s => s.getAttribute('src') || '')
+			.filter(src => src.includes('/assets/index-'));
+		return scripts[0] || '';
+	};
+
 	useEffect(() => {
-		// Fallback check cho iOS hoặc khi SW không detect được update
+		// Lưu hash hiện tại vào localStorage lần đầu
+		const currentHash = getCurrentBundleHash();
+		if (currentHash) {
+			const storedHash = localStorage.getItem('pwa_current_bundle');
+			if (storedHash !== currentHash) {
+				localStorage.setItem('pwa_current_bundle', currentHash);
+			}
+		}
+
 		const checkVersion = async () => {
 			try {
 				const res = await fetch('/index.html?t=' + Date.now(), { cache: 'no-store' });
 				const html = await res.text();
-				// 🔍 Tìm JS bundle hash trong HTML (VD: index-abc123.js)
 				const match = html.match(/assets\/index-[\w-]+\.js/);
 				if (match && match[0]) {
 					const deployedBundle = match[0];
-					// So sánh với bundle hiện tại đã load
-					const currentScripts = Array.from(document.querySelectorAll('script[src]'))
-						.map(s => s.getAttribute('src') || '')
-						.filter(src => src.includes('/assets/index-'));
-					
-					if (currentScripts.length > 0 && !currentScripts.some(s => s.includes(deployedBundle)) && !needRefresh) {
-						console.log('📱 New version detected via bundle hash! Deployed:', deployedBundle);
+					const storedBundle = localStorage.getItem('pwa_current_bundle');
+					// Chỉ báo update nếu deployed KHÁC stored (đã lưu từ lần load trước)
+					if (storedBundle && deployedBundle !== storedBundle && !needRefresh) {
+						console.log('📱 New version! Stored:', storedBundle, 'Deployed:', deployedBundle);
 						setIosUpdateAvailable(true);
 					}
 				}
@@ -52,7 +64,6 @@ const ReloadPrompt: React.FC = () => {
 		};
 
 		if (isIOS) {
-			// iOS: check version mỗi 2 phút
 			checkVersion();
 			const interval = setInterval(checkVersion, 2 * 60 * 1000);
 			return () => clearInterval(interval);
@@ -109,6 +120,8 @@ const ReloadPrompt: React.FC = () => {
 		setIsUpdating(true);
 		// 📱 iOS: force bỏ cache trước khi reload
 		if (isIOS) {
+			// Lưu hash deployed vào localStorage trước khi reload
+			localStorage.setItem('pwa_updated', 'true');
 			// Xoá SW cache nếu có
 			if ('caches' in window) {
 				caches.keys().then(names => {

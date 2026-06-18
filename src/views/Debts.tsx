@@ -498,9 +498,7 @@ const Debts: React.FC = () => {
 		const totalPaid = customerPayments.reduce((sum: any, p: any) => sum + (p.amount || 0), 0);
 		// Calculate debt from fetched data for consistency with displayed totals
 		const calcDebt = totalWaited - totalPaid;
-		// Fallback to cached debt if fetched data is incomplete (e.g. 500 order limit)
-		const cachedDebt = typeof c.debt === 'number' ? c.debt : 0;
-		const currentDebt = Math.max(calcDebt, cachedDebt);
+		const currentDebt = calcDebt;
 
 		// Column display values based on status filter
 		let displayTotalOrders = 0;

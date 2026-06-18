@@ -21,9 +21,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { prompt, imageBase64, mimeType } = req.body;
-    if (!prompt || !imageBase64) {
-      return res.status(400).json({ error: 'Missing prompt or imageBase64' });
+    const { prompt, images, imageBase64, mimeType } = req.body;
+    
+    // Hỗ trợ cả single image (cũ) và multi images (mới)
+    let parts: any[] = [{ text: prompt }];
+    
+    if (images && Array.isArray(images)) {
+      // Multi-image mode
+      for (const img of images) {
+        parts.push({ inline_data: { mime_type: img.mimeType || 'image/jpeg', data: img.base64 } });
+      }
+    } else if (imageBase64) {
+      // Single image mode (backward compatible)
+      parts.push({ inline_data: { mime_type: mimeType || 'image/jpeg', data: imageBase64 } });
+    } else {
+      return res.status(400).json({ error: 'Missing images or imageBase64' });
     }
 
     const response = await fetch(
@@ -34,10 +46,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         body: JSON.stringify({
           contents: [
             {
-              parts: [
-                { text: prompt },
-                { inline_data: { mime_type: mimeType || 'image/jpeg', data: imageBase64 } },
-              ],
+              parts: parts,
             },
           ],
           generationConfig: {

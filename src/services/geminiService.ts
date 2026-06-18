@@ -205,11 +205,11 @@ async function callViaSDK(prompt: string): Promise<any> {
 }
 
 // 📸 Phân tích ảnh qua Gemini Vision
-async function callVisionViaProxy(prompt: string, imageBase64: string, mimeType: string): Promise<any> {
+async function callVisionViaProxy(prompt: string, images: { base64: string; mimeType: string }[]): Promise<any> {
     const res = await fetch('/api/gemini-vision', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, imageBase64, mimeType }),
+        body: JSON.stringify({ prompt, images }),
     });
 
     if (!res.ok) {
@@ -222,17 +222,18 @@ async function callVisionViaProxy(prompt: string, imageBase64: string, mimeType:
 }
 
 // 🎙️ Phân tích ảnh qua SDK (fallback)
-async function callVisionViaSDK(prompt: string, imageBase64: string, mimeType: string): Promise<any> {
+async function callVisionViaSDK(prompt: string, images: { base64: string; mimeType: string }[]): Promise<any> {
     if (!_genAI && apiKey) {
         _genAI = new GoogleGenerativeAI(apiKey);
     }
     if (!_genAI) throw new Error("Gemini SDK not available");
 
     const model = _genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    const result = await model.generateContent([
-        { text: prompt },
-        { inlineData: { mimeType, data: imageBase64 } }
-    ]);
+    const parts: any[] = [{ text: prompt }];
+    for (const img of images) {
+        parts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } });
+    }
+    const result = await model.generateContent(parts);
     const text = result.response.text();
     // Try to parse as JSON, fallback to raw text
     try {
@@ -290,30 +291,33 @@ export const parseSaleMessage = async (message: string, context?: string, chatHi
  * @param context - Dữ liệu tham khảo hệ thống
  */
 export const analyzeImage = async (
-    imageBase64: string,
-    mimeType: string,
+    images: { base64: string; mimeType: string }[],
     message?: string,
     context?: string
 ) => {
     const prompt = `${SYSTEM_PROMPT}
 
 NGỮ CẢNH ĐẶC BIỆT CHO ẢNH:
-Bạn đang xem một bức ảnh do người dùng gửi. Hãy quan sát kỹ:
+Bạn đang xem ${images.length > 1 ? images.length + ' bức ảnh' : 'một bức ảnh'} do người dùng gửi. 
+${images.length > 1 ? '⚠️ QUAN TRỌNG: Đây là CÁC PHẦN CỦA CÙNG 1 ĐƠN HÀNG. Hãy gộp tất cả sản phẩm từ các ảnh thành 1 đơn duy nhất. Trùng sản phẩm thì cộng dồn số lượng.' : ''}
+Hãy quan sát kỹ:
 - Nếu ảnh chứa DANH SÁCH SẢN PHẨM / BÁO GIÁ / HOÁ ĐƠN: Trích xuất tất cả sản phẩm trong ảnh.
 - Nếu ảnh chứa THÔNG TIN KHÁCH HÀNG (danh thiếp, bảng hiệu, giấy tờ): Trích xuất tên, SĐT, địa chỉ.
 - Nếu ảnh chứa CÔNG TRÌNH / HIỆN TRƯỜNG: Mô tả ngắn gọn và tạo khách hàng nếu có thông tin.
 - Nếu ảnh chứa SẢN PHẨM CỤ THỂ: Nhận diện và tra cứu trong dữ liệu tham khảo.
 
-${context ? `\nDỮ LIỆU THAM KHẢO TỪ HỆ THỐNG:\n${context}\n` : ''}
+${context ? `\nDỮ LIỆU THAM KHẢO TỪ HỆ THỐNG (dùng để map tên + giá → danh mục chính xác):\n${context}\n` : ''}
 ${message ? `\nTin nhắn kèm theo: "${message}"` : ''}
+
+⚠️ QUY TẮC MAP DANH MỤC: Với mỗi sản phẩm, dùng TÊN và ĐƠN GIÁ để tìm sản phẩm khớp nhất trong dữ liệu tham khảo, rồi lấy category từ đó. Nếu không tìm thấy sản phẩm khớp, dùng category của sản phẩm có tên gần giống nhất.
 
 Hãy trả lời dạng JSON theo schema, với intent phù hợp và message mô tả những gì bạn thấy trong ảnh.`;
 
     try {
         if (USE_PROXY) {
-            return await callVisionViaProxy(prompt, imageBase64, mimeType);
+            return await callVisionViaProxy(prompt, images);
         }
-        return await callVisionViaSDK(prompt, imageBase64, mimeType);
+        return await callVisionViaSDK(prompt, images);
     } catch (error: any) {
         console.error("Vision API Error:", error);
         if (error.message?.includes('429') || error.message?.includes('exhausted')) {

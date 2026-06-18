@@ -31,6 +31,7 @@ const SaleBot = () => {
     const [confirmAction, setConfirmAction] = useState<any>(null);
     // 🎙️ Voice recording
     const [isRecording, setIsRecording] = useState(false);
+    const [imagePreviews, setImagePreviews] = useState<{name: string; url: string}[]>([]);
     const recognitionRef = useRef<any>(null);
 
     const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -175,45 +176,57 @@ const SaleBot = () => {
         setInput('');
     };
 
-    // 📸 Xử lý gửi ảnh
-    const handleImageSend = async () => {
-        const file = fileInputRef.current?.files?.[0];
-        if (!file) return;
+    // 📸 Xử lý gửi ảnh (hỗ trợ nhiều ảnh)
+    const handleImageSend = async (files?: FileList | null) => {
+        const fileList = files || fileInputRef.current?.files;
+        if (!fileList || fileList.length === 0) return;
 
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            const base64 = (e.target?.result as string).split(',')[1];
-            const mimeType = file.type;
+        const imageFiles = Array.from(fileList);
+        const imageData: { base64: string; mimeType: string }[] = [];
+        const fileNames: string[] = [];
 
-            const newMessages = [...messages, {
+        for (const file of imageFiles) {
+            fileNames.push(file.name);
+            const base64 = await new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve((e.target?.result as string).split(',')[1]);
+                reader.readAsDataURL(file);
+            });
+            imageData.push({ base64, mimeType: file.type });
+        }
+
+        const previewText = imageFiles.length > 1 
+            ? `📸 [${imageFiles.length} ảnh: ${fileNames.join(', ')}]`
+            : `📸 [Ảnh: ${fileNames[0]}]`;
+
+        const newMessages = [...messages, {
+            id: Date.now().toString(),
+            role: 'user' as const,
+            content: `${previewText}${input ? ' - ' + input : ''}`
+        }];
+        setMessages(newMessages);
+        setInput('');
+        setIsLoading(true);
+        setImagePreviews([]);
+
+        try {
+            const data = await analyzeImage(imageData, input || undefined, productsStr);
+            setMessages(prev => [...prev, {
                 id: Date.now().toString(),
-                role: 'user' as const,
-                content: `📸 [Ảnh: ${file.name}]${input ? ' - ' + input : ''}`
-            }];
-            setMessages(newMessages);
-            setInput('');
-            setIsLoading(true);
-
-            try {
-                const data = await analyzeImage(base64, mimeType, input || undefined, productsStr);
-                setMessages(prev => [...prev, {
-                    id: Date.now().toString(),
-                    role: 'bot',
-                    content: data.message || 'Em đã phân tích xong ảnh!',
-                    parsedData: data
-                }]);
-            } catch (err: any) {
-                setMessages(prev => [...prev, {
-                    id: Date.now().toString(),
-                    role: 'bot',
-                    content: `❌ ${err.message || 'Lỗi phân tích ảnh'}`
-                }]);
-            } finally {
-                setIsLoading(false);
-                if (fileInputRef.current) fileInputRef.current.value = '';
-            }
-        };
-        reader.readAsDataURL(file);
+                role: 'bot',
+                content: data.message || (imageFiles.length > 1 ? 'Em đã gộp các ảnh thành 1 đơn!' : 'Em đã phân tích xong ảnh!'),
+                parsedData: data
+            }]);
+        } catch (err: any) {
+            setMessages(prev => [...prev, {
+                id: Date.now().toString(),
+                role: 'bot',
+                content: `❌ ${err.message || 'Lỗi phân tích ảnh'}`
+            }]);
+        } finally {
+            setIsLoading(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
     };
 
     // 🎙️ Voice input (Web Speech API)
@@ -1057,6 +1070,24 @@ const SaleBot = () => {
                 </div>
 
                 {/* Input Area */}
+                {/* 🔍 Xem trước ảnh đã chọn */}
+                {imagePreviews.length > 0 && (
+                    <div className="px-4 pt-3 flex gap-2 overflow-x-auto shrink-0 bg-white dark:bg-slate-900">
+                        {imagePreviews.map((preview, idx) => (
+                            <div key={idx} className="relative shrink-0">
+                                <img src={preview.url} alt={preview.name} className="h-16 w-16 object-cover rounded-lg border border-slate-200" />
+                                <button 
+                                    onClick={() => setImagePreviews(prev => prev.filter((_, i) => i !== idx))}
+                                    className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] shadow"
+                                >×</button>
+                            </div>
+                        ))}
+                        <div className="text-[10px] text-slate-400 flex items-center ml-1 whitespace-nowrap">
+                            {imagePreviews.length} ảnh — bot sẽ gộp thành 1 đơn
+                        </div>
+                    </div>
+                )}
+
                 <div className="p-4 md:p-6 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shrink-0">
                     <form onSubmit={handleSend} className="relative flex items-center gap-2">
                         {/* 📸 Camera button */}
@@ -1064,8 +1095,19 @@ const SaleBot = () => {
                             ref={fileInputRef}
                             type="file"
                             accept="image/*"
+                            capture="environment"
+                            multiple
+                            onChange={(e) => {
+                                const files = e.target.files;
+                                if (files && files.length > 0) {
+                                    const previews = Array.from(files).map(f => ({
+                                        name: f.name,
+                                        url: URL.createObjectURL(f)
+                                    }));
+                                    setImagePreviews(previews);
+                                }
+                            }}
                             className="hidden"
-                            onChange={() => handleSend()}
                         />
                         <button
                             type="button"

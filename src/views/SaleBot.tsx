@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { parseSaleMessage, analyzeImage } from '../services/geminiService';
-import { BotMessageSquare, Send, Sparkles, User, AlertCircle, CheckCircle2, Package, Camera, Mic, MicOff, X, ImagePlus, Lock } from 'lucide-react';
+import { BotMessageSquare, Send, Sparkles, User, AlertCircle, CheckCircle2, Package, Camera, Mic, MicOff, X, ImagePlus, Lock, Image } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { db, auth } from '../services/firebase';
 import { collection, query, where, getDocs, addDoc, serverTimestamp, updateDoc, doc, Timestamp, increment, setDoc, getDoc } from 'firebase/firestore';
@@ -1438,12 +1438,11 @@ const SaleBot = () => {
 
                 <div className="p-4 md:p-6 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shrink-0">
                     <form onSubmit={handleSend} className="relative flex items-center gap-2">
-                        {/* 📸 Camera button */}
+                        {/* 📸 Photo library button */}
                         <input
                             ref={fileInputRef}
                             type="file"
                             accept="image/*"
-                            capture="environment"
                             multiple
                             onChange={(e) => {
                                 const files = e.target.files;
@@ -1462,9 +1461,9 @@ const SaleBot = () => {
                             onClick={() => fileInputRef.current?.click()}
                             disabled={isLoading}
                             className="size-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 hover:bg-indigo-100 hover:text-indigo-600 dark:hover:bg-indigo-900/40 dark:hover:text-indigo-400 transition-colors shrink-0"
-                            title="Gửi ảnh"
+                            title="Chọn ảnh từ thư viện"
                         >
-                            <Camera size={18} />
+                            <Image size={18} />
                         </button>
 
                         <textarea

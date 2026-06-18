@@ -177,7 +177,7 @@ const Debts: React.FC = () => {
 	};
 
 	const handlePrintStatement = () => {
-		const printContent = document.getElementById('debt-statement-paper');
+		const printContent = document.getElementById('debt-statement-container');
 		if (!printContent) return;
 
 		const printWindow = window.open('', '_blank', 'width=1000,height=1000');
@@ -230,7 +230,7 @@ const Debts: React.FC = () => {
 							display: flex; justify-content: center;
 							font-family: 'Inter', 'Manrope', sans-serif !important;
 						}
-						#debt-statement-paper {
+						#debt-statement-container {
 							margin: 0 !important;
 							box-shadow: none !important;
 							border: none !important;
@@ -248,7 +248,7 @@ const Debts: React.FC = () => {
 						}
 						@media print {
 							body { background: white; margin: 0; padding: 0; }
-							#debt-statement-paper { margin: 0 !important; }
+							#debt-statement-container { margin: 0 !important; }
 							@page { size: A4; margin: 0; }
 						}
 					</style>
@@ -1698,22 +1698,7 @@ const Debts: React.FC = () => {
 							{/* DATE FILTER BAR FOR STATEMENT - REMOVED AS PER USER REQUEST */}
 
 							{/* SCROLLABLE DOCUMENT AREA */}
-							<div id="debt-statement-container" className="flex-1 overflow-y-auto flex items-start justify-center scroll-smooth custom-scrollbar">
-
-								{/* THE PAPER SHEET - Scalable Wrapper */}
-								<div
-									style={{
-										width: '800px',
-										transform: `scale(${statementScale * statementZoom})`,
-										transformOrigin: 'top center',
-										marginBottom: (statementScale * statementZoom) < 1 ? `-${(1 - (statementScale * statementZoom)) * 1700}px` : '100px'
-									}}
-									className="flex-shrink-0 print-scale transition-transform duration-200"
-								>
-									<div
-										id="debt-statement-paper"
-										className="bg-white w-[800px] min-h-[1141px] px-10 py-12 mb-10 flex flex-col font-['Inter', sans-serif] relative text-sm text-slate-900"
-									>
+							<div id="debt-statement-container" className="flex-1 overflow-y-auto px-4 py-4 scroll-smooth custom-scrollbar">
 
 										{/* 2. Customer & Cycle Info Grid */}
 										{(() => {
@@ -1974,23 +1959,11 @@ const Debts: React.FC = () => {
 												</>
 											);
 										})()}
-									</div>
-								</div>
+									
 							{/* Bottom Floating Toolbar */}
-							<div className="flex-none bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-4 py-2.5 border-t border-slate-200/50 flex items-center justify-center gap-2 z-20 print:hidden">
-								<div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-lg px-2 py-1">
-									<button onClick={() => setStatementZoom(prev => Math.max(0.5, prev - 0.1))} className="size-7 rounded-md hover:bg-white dark:hover:bg-slate-700 text-slate-500 transition-all flex items-center justify-center" title="Thu nhỏ">
-										<span className="material-symbols-outlined text-base">zoom_out</span>
-									</button>
-									<span className="text-[10px] font-black w-10 text-center text-slate-500 tabular-nums">{Math.round(statementZoom * 100)}%</span>
-									<button onClick={() => setStatementZoom(prev => Math.min(1.5, prev + 0.1))} className="size-7 rounded-md hover:bg-white dark:hover:bg-slate-700 text-slate-500 transition-all flex items-center justify-center" title="Phóng to">
-										<span className="material-symbols-outlined text-base">zoom_in</span>
-									</button>
-									<div className="w-px h-3 bg-slate-300 dark:bg-slate-700 mx-0.5"></div>
-									<button onClick={() => { const c = document.getElementById('debt-statement-container'); const p = document.getElementById('debt-statement-paper'); if (c && p) setStatementZoom(Math.min(1, (c.clientHeight - 80) / p.clientHeight)); }} className="px-2 py-1 rounded-md hover:bg-white dark:hover:bg-slate-700 text-slate-500 text-[10px] font-black uppercase transition-all">Vừa</button>
-								</div>
-								<button onClick={handlePrintStatement} className="h-9 px-5 rounded-lg bg-[#FF6D00] text-white flex items-center gap-2 font-bold text-xs uppercase hover:bg-orange-600 transition-all shadow-sm active:scale-95">
-									<Printer size={14} /> In phiếu
+							<div className="flex-none bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-4 py-3 border-t border-slate-200/50 flex items-center justify-end gap-3 z-20 print:hidden">
+								<button onClick={handlePrintStatement} className="h-10 px-5 rounded-xl bg-[#FF6D00] text-white flex items-center gap-2 font-bold text-xs uppercase hover:bg-orange-600 transition-all shadow-sm active:scale-95">
+									<Printer size={16} /> In phiếu
 								</button>
 							</div>
 							</div>

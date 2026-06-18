@@ -1681,40 +1681,20 @@ const Debts: React.FC = () => {
 				((owner.isPro || !owner.systemConfig.lock_free_debts) && !owner.manualLockDebts) ? (
 					<div id="debt-statement-modal" className="fixed inset-0 z-[160] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-0 md:p-4">
 						<div className="bg-transparent w-full max-w-5xl max-h-screen md:max-h-[95vh] relative flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
-							{/* MODAL HEADER - STICKY FOR UI BUT HIDDEN FOR SCREENSHOT ONCE SCROLLED */}
-							<div className="flex-none bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-8 py-5 border-b border-white/10 flex items-center justify-between z-20 md:rounded-t-[2.5rem] print:hidden shadow-lg">
-								<div className="flex items-center gap-6">
-									<div className="flex items-center gap-2">
-										<div className="size-10 bg-indigo-50 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center">
-											<History size={20} />
-										</div>
-										<div>
-											<h3 className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white">Chi tiết công nợ</h3>
-											<p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest mt-0.5">{selectedCustomer.name}</p>
-										</div>
+							{/* MODAL HEADER - CLEAN */}
+							<div className="flex-none bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-6 py-3 border-b border-slate-200/50 flex items-center justify-between z-20 md:rounded-t-[2.5rem] print:hidden">
+								<div className="flex items-center gap-3">
+									<div className="size-9 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center">
+										<History size={18} />
 									</div>
-
-									{/* Zoom Controls */}
-									<div className="hidden lg:flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-lg px-2 py-1">
-										<button onClick={() => setStatementZoom(prev => Math.max(0.5, prev - 0.1))} className="size-7 rounded-md hover:bg-white text-slate-500 transition-all flex items-center justify-center" title="Thu nhỏ">
-											<span className="material-symbols-outlined text-base">zoom_out</span>
-										</button>
-										<span className="text-[10px] font-black w-10 text-center text-slate-500 tabular-nums">{Math.round(statementZoom * 100)}%</span>
-										<button onClick={() => setStatementZoom(prev => Math.min(1.5, prev + 0.1))} className="size-7 rounded-md hover:bg-white text-slate-500 transition-all flex items-center justify-center" title="Phóng to">
-											<span className="material-symbols-outlined text-base">zoom_in</span>
-										</button>
-										<div className="w-px h-3 bg-slate-300 mx-0.5"></div>
-										<button onClick={() => { const c = document.getElementById('debt-statement-container'); const p = document.getElementById('debt-statement-paper'); if (c && p) setStatementZoom(Math.min(1, (c.clientHeight - 80) / p.clientHeight)); }} className="px-2 py-1 rounded-md hover:bg-white text-slate-500 text-[9px] font-black uppercase transition-all">Vừa</button>
+									<div>
+										<h3 className="text-sm font-black uppercase tracking-tight text-slate-800">Chi tiết công nợ</h3>
+										<p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{selectedCustomer.name}</p>
 									</div>
 								</div>
-								<div className="flex items-center gap-2">
-									<button onClick={handlePrintStatement} className="h-10 px-4 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center gap-2 font-bold text-xs uppercase hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">
-										<Printer size={16} /> <span className="hidden md:inline">In phiếu</span>
-									</button>
-									<button onClick={() => setShowStatement(false)} className="size-10 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center transition-colors">
-										<X size={20} />
-									</button>
-								</div>
+								<button onClick={() => setShowStatement(false)} className="size-8 rounded-full bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600 flex items-center justify-center transition-colors">
+									<X size={16} />
+								</button>
 							</div>
 
 							{/* DATE FILTER BAR FOR STATEMENT - REMOVED AS PER USER REQUEST */}
@@ -1734,7 +1714,7 @@ const Debts: React.FC = () => {
 								>
 									<div
 										id="debt-statement-paper"
-										className="bg-white w-[800px] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] min-h-[1141px] p-16 mb-20 flex flex-col font-['Inter', sans-serif] relative text-sm text-slate-900"
+										className="bg-white w-[800px] min-h-[1141px] p-16 mb-20 flex flex-col font-['Inter', sans-serif] relative text-sm text-slate-900"
 									>
 
 										{/* 2. Customer & Cycle Info Grid */}
@@ -1980,6 +1960,23 @@ const Debts: React.FC = () => {
 										})()}
 									</div>
 								</div>
+							{/* Bottom Floating Toolbar */}
+							<div className="flex-none bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-4 py-2.5 border-t border-slate-200/50 flex items-center justify-between z-20 print:hidden">
+								<div className="hidden sm:flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-lg px-2 py-1">
+									<button onClick={() => setStatementZoom(prev => Math.max(0.5, prev - 0.1))} className="size-7 rounded-md hover:bg-white dark:hover:bg-slate-700 text-slate-500 transition-all flex items-center justify-center" title="Thu nhỏ">
+										<span className="material-symbols-outlined text-base">zoom_out</span>
+									</button>
+									<span className="text-[10px] font-black w-10 text-center text-slate-500 tabular-nums">{Math.round(statementZoom * 100)}%</span>
+									<button onClick={() => setStatementZoom(prev => Math.min(1.5, prev + 0.1))} className="size-7 rounded-md hover:bg-white dark:hover:bg-slate-700 text-slate-500 transition-all flex items-center justify-center" title="Phóng to">
+										<span className="material-symbols-outlined text-base">zoom_in</span>
+									</button>
+									<div className="w-px h-3 bg-slate-300 dark:bg-slate-700 mx-0.5"></div>
+									<button onClick={() => { const c = document.getElementById('debt-statement-container'); const p = document.getElementById('debt-statement-paper'); if (c && p) setStatementZoom(Math.min(1, (c.clientHeight - 80) / p.clientHeight)); }} className="px-2 py-1 rounded-md hover:bg-white dark:hover:bg-slate-700 text-slate-500 text-[10px] font-black uppercase transition-all">Vừa</button>
+								</div>
+								<button onClick={handlePrintStatement} className="h-9 px-5 rounded-lg bg-indigo-600 text-white flex items-center gap-2 font-bold text-xs uppercase hover:bg-indigo-700 transition-all shadow-sm active:scale-95">
+									<Printer size={14} /> In phiếu
+								</button>
+							</div>
 							</div>
 						</div>
 					</div>

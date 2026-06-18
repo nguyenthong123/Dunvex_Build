@@ -338,6 +338,10 @@ const NexusControl = () => {
 		try {
 			console.log("Nexus AI: Starting cycle...");
 			if (currentCustomers.length === 0) return;
+			
+			// 0. Check bank transfer matches (mỗi 5 phút)
+			await checkBankTransferMatches();
+			
 			const processPromises = currentCustomers.map(async (customer) => {
 				if (customer.email === NEXUS_ADMIN_EMAIL) return;
 				const status = getEffectiveStatus(customer);
@@ -376,6 +380,27 @@ const NexusControl = () => {
 		} finally {
 			isRunningRef.current = false;
 		}
+	};
+
+	// 💰 Check bank transfer matches from AppScript (auto-confirm payments)
+	const checkBankTransferMatches = async () => {
+		const lastCheck = localStorage.getItem('nexus_last_bank_check');
+		const now = Date.now();
+		if (lastCheck && now - parseInt(lastCheck) < 5 * 60 * 1000) return; // Mỗi 5 phút
+		
+		try {
+			const appscriptUrl = 'https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec';
+			const res = await fetch(`${appscriptUrl}?token=dunvex-nexus-2026&action=check_transfers`, { method: 'GET' });
+			if (res.ok) {
+				const data = await res.json();
+				if (data.matches > 0) {
+					console.log(`Nexus: AppScript found ${data.matches} bank transfer matches`);
+				}
+			}
+		} catch (e) {
+			// AppScript might not be deployed yet — silent fail
+		}
+		localStorage.setItem('nexus_last_bank_check', now.toString());
 	};
 
 	const hardLockUser = async (customer: any) => {
@@ -739,6 +764,14 @@ const NexusControl = () => {
 						>
 							<Bot size={14} />
 							Đồng bộ AI
+						</button>
+						<button 
+							onClick={checkBankTransferMatches}
+							className="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20 flex items-center gap-2 transition-all active:scale-95"
+							title="Kiểm tra email ngân hàng đối chiếu chuyển khoản"
+						>
+							<CreditCard size={14} />
+							Check Bank
 						</button>
 					</div>
 

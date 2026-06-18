@@ -308,10 +308,11 @@ export const analyzeImage = async (
 
 NGỮ CẢNH ĐẶC BIỆT CHO ẢNH:
 Bạn đang xem ${images.length > 1 ? images.length + ' bức ảnh' : 'một bức ảnh'} do người dùng gửi. 
-${images.length > 1 ? '⚠️ QUAN TRỌNG - GỘP ĐƠN: Đây là NHIỀU PHIẾU GIAO HÀNG KHÁC NHAU. Hãy trích xuất TẤT CẢ sản phẩm từ TẤT CẢ các ảnh và gộp thành 1 đơn hàng MỚI (intent=CREATE_ORDER). CỘNG DỒN tất cả phí vận chuyển (shipping_fee) và chiết khấu (discount_amount) từ từng phiếu. Sản phẩm trùng tên → CỘNG DỒN số lượng. ĐỌC SỐ CHÍNH XÁC từ ảnh, không tự ý thay đổi. TUYỆT ĐỐI KHÔNG ghép ID đơn hàng lại với nhau. Chỉ dùng intent CREATE_ORDER, không dùng REVIEW_ORDER.' : ''}
+${images.length > 1 ? '⚠️ QUAN TRỌNG - GỘP ĐƠN: Đây là NHIỀU PHIẾU GIAO HÀNG KHÁC NHAU. Hãy trích xuất TẤT CẢ sản phẩm từ TẤT CẢ các ảnh và gộp thành 1 đơn hàng MỚI (intent=CREATE_ORDER). CỘNG DỒN tất cả phí vận chuyển (shipping_fee) và chiết khấu (discount_amount) từ từng phiếu. TUYỆT ĐỐI KHÔNG cộng dồn số lượng sản phẩm trùng tên — giữ nguyên từng dòng riêng biệt. Nếu 2 phiếu cùng có "tấm Anh Kim", ghi 2 dòng riêng, mỗi dòng số lượng riêng. ĐỌC SỐ CHÍNH XÁC từ ảnh, không tự ý thay đổi. TUYỆT ĐỐI KHÔNG ghép ID đơn hàng lại với nhau. Chỉ dùng intent CREATE_ORDER.' : ''}
 Hãy quan sát kỹ:
 - Nếu ảnh chứa DANH SÁCH SẢN PHẨM / PHIẾU GIAO HÀNG / HOÁ ĐƠN: Trích xuất TẤT CẢ sản phẩm với tên, số lượng. Nếu thấy ĐƠN GIÁ trong ảnh thì ghi vào category. Trích xuất phí vận chuyển (shipping_fee), chiết khấu (discount_amount), tổng tiền nếu có. Nếu có nhiều phiếu (nhiều ảnh), CỘNG DỒN phí vận chuyển và chiết khấu từ tất cả các phiếu.
 - ⚠️ ĐỌC SỐ CỰC KỲ CẨN THẬN: Đọc đúng từng chữ số trong ảnh. Nếu thấy "115" thì ghi 115, KHÔNG được nhân đôi hay suy diễn. Kiểm tra kỹ từng con số trước khi xuất JSON.
+- ⚠️ KHÔNG GỘP SỐ LƯỢNG: Nếu cùng 1 sản phẩm xuất hiện ở nhiều ảnh, ghi thành các dòng RIÊNG BIỆT trong mảng products. VD: ảnh 1 có "tấm Anh Kim x115", ảnh 2 có "tấm Anh Kim x115" → mảng products có 2 phần tử riêng, mỗi cái x115. KHÔNG gộp thành x230.
 - Nếu ảnh chứa THÔNG TIN KHÁCH HÀNG (danh thiếp, bảng hiệu, giấy tờ): Trích xuất tên, SĐT, địa chỉ.
 - TUYỆT ĐỐI KHÔNG trích xuất mã đơn hàng (ID) từ ảnh làm order_id. Nếu thấy mã đơn (VD: #ABC123, ID: XYZ), hãy BỎ QUA.
 - Nếu người dùng nói "gộp đơn", "gom đơn" → intent LUÔN là CREATE_ORDER, không REVIEW_ORDER hay UPDATE_ORDER.

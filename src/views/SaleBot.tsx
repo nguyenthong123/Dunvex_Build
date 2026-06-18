@@ -182,7 +182,7 @@ const SaleBot = () => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (e) => {
-                const img = new Image();
+                const img = document.createElement('img');
                 img.onload = () => {
                     let { width, height } = img;
                     if (width > maxWidth) {

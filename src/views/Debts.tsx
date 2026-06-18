@@ -1765,8 +1765,8 @@ const Debts: React.FC = () => {
 												<>
 													{/* 1. Paper Header */}
 													<header className="mb-8 text-center">
-														<h1 className="text-2xl font-black text-slate-900 uppercase tracking-[3px] mb-3">Chi tiết Công Nợ</h1>
-														<div className="flex justify-center items-center gap-6 text-xs flex-wrap">
+														<h1 className="text-xl sm:text-2xl font-black text-slate-900 uppercase tracking-[3px] mb-3">Chi tiết Công Nợ</h1>
+														<div className="flex justify-center items-center gap-3 sm:gap-6 text-[10px] sm:text-xs flex-wrap">
 															<div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 rounded-lg">
 																<span className="text-slate-400 font-bold uppercase tracking-widest text-[9px]">Mã</span>
 																<span className="font-mono font-bold text-[#1A237E] text-sm">#{selectedCustomer.id?.slice(-6).toUpperCase()}</span>
@@ -1784,15 +1784,15 @@ const Debts: React.FC = () => {
 													</header>
 
 													{/* 4. Summary Card — Stitch style: big centered number + breakdown below */}
-													<div className="rounded-2xl bg-white border border-slate-200 shadow-sm mb-8 overflow-hidden">
-														<div className="px-6 pt-6 pb-4 text-center">
+													<div className="rounded-2xl bg-white border border-slate-200 shadow-sm mb-6 sm:mb-8 overflow-hidden">
+														<div className="px-4 sm:px-6 pt-5 sm:pt-6 pb-3 sm:pb-4 text-center">
 															<p className="text-[10px] font-black text-slate-400 uppercase tracking-[2px] mb-2">Tổng công nợ hiện tại</p>
 															<div className="flex items-center justify-center gap-3">
-																<span className="material-symbols-outlined text-4xl text-[#FF6D00]">account_balance_wallet</span>
-																<p className="font-black text-[#FF6D00] text-4xl tracking-tight tabular-nums">{formatPrice(closingBalance)}</p>
+																<span className="material-symbols-outlined text-3xl sm:text-4xl text-[#FF6D00]">account_balance_wallet</span>
+																<p className="font-black text-[#FF6D00] text-3xl sm:text-4xl tracking-tight tabular-nums">{formatPrice(closingBalance)}</p>
 															</div>
 														</div>
-														<div className="bg-slate-50 px-6 py-3 flex justify-center gap-12 text-xs border-t border-slate-100">
+														<div className="bg-slate-50 px-4 sm:px-6 py-3 flex justify-center gap-8 sm:gap-12 text-xs border-t border-slate-100">
 															<div>
 																<span className="text-slate-400 uppercase tracking-wider text-[9px] font-black">Phát sinh</span>
 																<p className="font-bold text-slate-700 tabular-nums">{formatPrice(debitIncrease)}</p>
@@ -1806,12 +1806,12 @@ const Debts: React.FC = () => {
 													</div>
 
 
-<section className="mb-8">
+<section className="mb-6 sm:mb-8">
 								<div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
 									{/* Top: Name + Badge */}
-									<div className="px-6 py-4 flex items-center justify-between gap-3">
+									<div className="px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3">
 										<div>
-											<span className="font-black text-slate-900 text-lg uppercase tracking-tight">
+											<span className="font-black text-slate-900 text-base sm:text-lg uppercase tracking-tight">
 												{selectedCustomer.businessName || selectedCustomer.name}
 											</span>
 											<p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
@@ -1823,7 +1823,7 @@ const Debts: React.FC = () => {
 										</span>
 									</div>
 									{/* Bottom: Details in gray box */}
-									<div className="bg-slate-50 px-6 py-4 flex flex-wrap gap-x-8 gap-y-2 border-t border-slate-100">
+									<div className="bg-slate-50 px-4 sm:px-6 py-3 sm:py-4 flex flex-wrap gap-x-6 sm:gap-x-8 gap-y-2 border-t border-slate-100">
 										<div className="flex items-center gap-2 text-xs text-slate-600">
 											<span className="material-symbols-outlined text-base text-slate-400">calendar_today</span>
 											<span className="font-medium">{new Date().toLocaleDateString('vi-VN')}</span>
@@ -1846,43 +1846,43 @@ const Debts: React.FC = () => {
 
 													{/* 2. List of Orders (Includes Opening Balance) */}
 													<div className="mb-10">
-														<div className="bg-[#1A237E] rounded-t-2xl px-6 py-3.5 flex items-center gap-3">
-															<span className="material-symbols-outlined text-white text-lg">receipt_long</span>
-															<h3 className="text-white font-black text-sm uppercase tracking-[2px]">Danh sách đơn hàng</h3>
+														<div className="bg-[#1A237E] rounded-t-2xl px-4 sm:px-6 py-3 sm:py-3.5 flex items-center gap-2 sm:gap-3">
+															<span className="material-symbols-outlined text-white text-base sm:text-lg">receipt_long</span>
+															<h3 className="text-white font-black text-xs sm:text-sm uppercase tracking-[2px]">Danh sách đơn hàng</h3>
 														</div>
 														<div className="border-x border-b border-slate-200 rounded-b-2xl overflow-x-auto custom-scrollbar">
-															<table className="w-full text-sm border-collapse min-w-[600px]">
-																<thead className="bg-slate-100 text-slate-500 font-black uppercase tracking-widest text-[10px]">
+															<table className="w-full text-xs sm:text-sm border-collapse min-w-[480px] sm:min-w-[600px]">
+																<thead className="bg-slate-100 text-slate-500 font-black uppercase tracking-widest text-[9px] sm:text-[10px]">
 																	<tr>
-																		<th className="py-4 px-6 text-left w-1/4 border-r border-white/10">Ngày</th>
-																		<th className="py-4 px-6 text-left w-1/4 border-r border-white/10">Mã đơn</th>
-																		<th className="py-4 px-6 text-right w-1/2">Giá trị giao dịch</th>
+																		<th className="py-3 sm:py-4 px-3 sm:px-6 text-left w-1/4 border-r border-white/10">Ngày</th>
+																		<th className="py-3 sm:py-4 px-3 sm:px-6 text-left w-1/4 border-r border-white/10">Mã đơn</th>
+																		<th className="py-3 sm:py-4 px-3 sm:px-6 text-right w-1/2">Giá trị giao dịch</th>
 																	</tr>
 																</thead>
 																<tbody className="text-slate-900 divide-y-2 divide-slate-200">
 																	{/* Opening Balance Row */}
 																	<tr className="bg-amber-50/50 font-black text-slate-900">
-																		<td className="py-4 px-6 border-r border-slate-100 italic text-slate-400">---</td>
-																		<td className="py-4 px-6 uppercase text-[#d97706] tracking-widest text-[10px] border-r border-slate-100">DƯ NỢ ĐẦU KỲ</td>
-																		<td className="py-4 px-6 text-right text-lg">{formatPrice(openingBalance)}</td>
+																		<td className="py-3 sm:py-4 px-3 sm:px-6 border-r border-slate-100 italic text-slate-400">---</td>
+																		<td className="py-3 sm:py-4 px-3 sm:px-6 uppercase text-[#d97706] tracking-widest text-[9px] sm:text-[10px] border-r border-slate-100">DƯ NỢ ĐẦU KỲ</td>
+																		<td className="py-3 sm:py-4 px-3 sm:px-6 text-right text-base sm:text-lg">{formatPrice(openingBalance)}</td>
 																	</tr>
 																	{/* Order Rows */}
 																	{cycleTx.filter(t => t.txType === 'order').map((order, idx) => (
 																		<tr key={`ord-${idx}`} className="hover:bg-slate-50 font-black">
-																			<td className="py-4 px-6 border-r border-slate-200">{formatDate(order.orderDate || order.createdAt)}</td>
-																			<td className="py-4 px-6 font-bold text-[#1A237E] border-r border-slate-200 tracking-tight">#{order.id?.slice(0, 8).toUpperCase()}</td>
-																			<td className="py-4 px-6 text-right text-base">{formatPrice(order.totalAmount)}</td>
+																			<td className="py-3 sm:py-4 px-3 sm:px-6 border-r border-slate-200 text-xs sm:text-sm">{formatDate(order.orderDate || order.createdAt)}</td>
+																			<td className="py-3 sm:py-4 px-3 sm:px-6 font-bold text-[#1A237E] border-r border-slate-200 tracking-tight text-xs sm:text-sm">#{order.id?.slice(0, 8).toUpperCase()}</td>
+																			<td className="py-3 sm:py-4 px-3 sm:px-6 text-right text-sm sm:text-base">{formatPrice(order.totalAmount)}</td>
 																		</tr>
 																	))}
 																	{cycleTx.filter(t => t.txType === 'order').length === 0 && (
 																		<tr>
-																			<td colSpan={3} className="py-4 text-center text-slate-400 italic text-xs">Không có đơn hàng mới trong kỳ</td>
+																			<td colSpan={3} className="py-3 text-center text-slate-400 italic text-xs">Không có đơn hàng mới trong kỳ</td>
 																		</tr>
 																	)}
 																	{/* Total Row */}
 																	<tr className="bg-[#1A237E] font-black">
-																			<td colSpan={2} className="py-4 px-6 uppercase text-white text-xs tracking-[2px] border-r border-white/10">Tổng cộng</td>
-																			<td className="py-4 px-6 text-right text-xl text-white leading-none">{formatPrice(openingBalance + debitIncrease)}</td>
+																			<td colSpan={2} className="py-3 sm:py-4 px-3 sm:px-6 uppercase text-white text-[10px] sm:text-xs tracking-[2px] border-r border-white/10">Tổng cộng</td>
+																			<td className="py-3 sm:py-4 px-3 sm:px-6 text-right text-lg sm:text-xl text-white leading-none">{formatPrice(openingBalance + debitIncrease)}</td>
 																	</tr>
 																</tbody>
 															</table>
@@ -1891,37 +1891,37 @@ const Debts: React.FC = () => {
 
 													{/* 3. Payment History */}
 													<div className="mb-12">
-														<div className="bg-slate-700 rounded-t-2xl px-6 py-3.5 flex items-center gap-3">
-															<span className="material-symbols-outlined text-emerald-400 text-lg">schedule</span>
-															<h3 className="text-white font-black text-sm uppercase tracking-[2px]">Lịch sử thanh toán</h3>
+														<div className="bg-slate-700 rounded-t-2xl px-4 sm:px-6 py-3 sm:py-3.5 flex items-center gap-2 sm:gap-3">
+															<span className="material-symbols-outlined text-emerald-400 text-base sm:text-lg">schedule</span>
+															<h3 className="text-white font-black text-xs sm:text-sm uppercase tracking-[2px]">Lịch sử thanh toán</h3>
 														</div>
 														<div className="border-x border-b border-slate-200 rounded-b-2xl overflow-x-auto custom-scrollbar">
-															<table className="w-full text-sm border-collapse min-w-[600px]">
-																<thead className="bg-slate-100 text-slate-500 font-black uppercase tracking-widest text-[10px]">
+															<table className="w-full text-xs sm:text-sm border-collapse min-w-[480px] sm:min-w-[600px]">
+																<thead className="bg-slate-100 text-slate-500 font-black uppercase tracking-widest text-[9px] sm:text-[10px]">
 																	<tr>
-																		<th className="py-4 px-6 text-left w-1/4 border-r border-white/10">Ngày</th>
-																		<th className="py-4 px-6 text-left w-1/2 border-r border-white/10">Nội dung</th>
-																		<th className="py-4 px-6 text-right w-1/4">Số tiền thu</th>
+																		<th className="py-3 sm:py-4 px-3 sm:px-6 text-left w-1/4 border-r border-white/10">Ngày</th>
+																		<th className="py-3 sm:py-4 px-3 sm:px-6 text-left w-1/2 border-r border-white/10">Nội dung</th>
+																		<th className="py-3 sm:py-4 px-3 sm:px-6 text-right w-1/4">Số tiền thu</th>
 																	</tr>
 																</thead>
 																<tbody className="text-slate-900 divide-y-2 divide-slate-200">
 																	{/* Payment Rows */}
 																	{cycleTx.filter(t => t.txType === 'payment').map((pay, idx) => (
 																		<tr key={`pay-${idx}`} className="hover:bg-slate-50 font-black">
-																			<td className="py-4 px-6 border-r border-slate-200">{formatDate(pay.date || pay.createdAt)}</td>
-																			<td className="py-4 px-6 border-r border-slate-200 uppercase tracking-tighter text-xs">{pay.note || 'Thanh toán công nợ'}</td>
-																			<td className="py-4 px-6 text-right text-lg text-emerald-700">{formatPrice(pay.amount)}</td>
+																			<td className="py-3 sm:py-4 px-3 sm:px-6 border-r border-slate-200 text-xs sm:text-sm">{formatDate(pay.date || pay.createdAt)}</td>
+																			<td className="py-3 sm:py-4 px-3 sm:px-6 border-r border-slate-200 uppercase tracking-tighter text-[10px] sm:text-xs">{pay.note || 'Thanh toán công nợ'}</td>
+																			<td className="py-3 sm:py-4 px-3 sm:px-6 text-right text-base sm:text-lg text-emerald-700">{formatPrice(pay.amount)}</td>
 																		</tr>
 																	))}
 																	{cycleTx.filter(t => t.txType === 'payment').length === 0 && (
 																		<tr>
-																			<td colSpan={3} className="py-4 text-center text-slate-400 italic text-xs">Chưa có thanh toán nào trong kỳ</td>
+																			<td colSpan={3} className="py-3 text-center text-slate-400 italic text-xs">Chưa có thanh toán nào trong kỳ</td>
 																		</tr>
 																	)}
 																	{/* Total Payment Row */}
 																	<tr className="bg-emerald-50 font-black">
-																			<td colSpan={2} className="py-4 px-6 uppercase text-emerald-800 text-xs tracking-[2px] border-r border-emerald-100">Tổng đã thanh toán</td>
-																			<td className="py-4 px-6 text-right text-xl text-emerald-700 leading-none">{formatPrice(creditDecrease)}</td>
+																			<td colSpan={2} className="py-3 sm:py-4 px-3 sm:px-6 uppercase text-emerald-800 text-[10px] sm:text-xs tracking-[2px] border-r border-emerald-100">Tổng đã thanh toán</td>
+																			<td className="py-3 sm:py-4 px-3 sm:px-6 text-right text-lg sm:text-xl text-emerald-700 leading-none">{formatPrice(creditDecrease)}</td>
 																	</tr>
 																</tbody>
 															</table>
@@ -1929,7 +1929,7 @@ const Debts: React.FC = () => {
 													</div>
 
 													{/* 5. Signatures */}
-													<div className="flex justify-between px-10 mb-8 items-end">
+													<div className="flex flex-col sm:flex-row justify-between px-4 sm:px-10 mb-8 items-center sm:items-end gap-8">
 														<div className="text-center">
 															<div className="w-40 mx-auto mb-16 border-t-2 border-dashed border-slate-300 pt-1"></div>
 															<p className="font-black text-slate-600 text-xs uppercase tracking-widest">Đại diện khách hàng</p>
@@ -1950,20 +1950,20 @@ const Debts: React.FC = () => {
 										})()}
 									
 							{/* Bottom Floating Toolbar */}
-							<div className="flex-none bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-4 py-3 border-t border-slate-200/50 flex items-center justify-center gap-3 z-20 print:hidden">
-								<div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl px-2 py-1.5">
-									<button onClick={() => setStatementZoom(prev => Math.max(0.5, prev - 0.05))} className="size-8 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-500 transition-all flex items-center justify-center" title="Thu nhỏ">
-										<span className="material-symbols-outlined text-lg">zoom_out</span>
+							<div className="flex-none bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-3 sm:px-4 py-2.5 sm:py-3 border-t border-slate-200/50 flex items-center justify-center gap-2 sm:gap-3 z-20 print:hidden">
+								<div className="flex items-center gap-0.5 sm:gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl px-1.5 sm:px-2 py-1 sm:py-1.5">
+									<button onClick={() => setStatementZoom(prev => Math.max(0.5, prev - 0.05))} className="size-7 sm:size-8 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-500 transition-all flex items-center justify-center" title="Thu nhỏ">
+										<span className="material-symbols-outlined text-base sm:text-lg">zoom_out</span>
 									</button>
-									<span className="text-[11px] font-black w-12 text-center text-slate-600 tabular-nums">{Math.round(statementZoom * 100)}%</span>
-									<button onClick={() => setStatementZoom(prev => Math.min(2, prev + 0.05))} className="size-8 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-500 transition-all flex items-center justify-center" title="Phóng to">
-										<span className="material-symbols-outlined text-lg">zoom_in</span>
+									<span className="text-[10px] sm:text-[11px] font-black w-10 sm:w-12 text-center text-slate-600 tabular-nums">{Math.round(statementZoom * 100)}%</span>
+									<button onClick={() => setStatementZoom(prev => Math.min(2, prev + 0.05))} className="size-7 sm:size-8 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-500 transition-all flex items-center justify-center" title="Phóng to">
+										<span className="material-symbols-outlined text-base sm:text-lg">zoom_in</span>
 									</button>
-									<div className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-0.5"></div>
-									<button onClick={() => setStatementZoom(1)} className="px-2 py-1 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-500 text-[10px] font-black uppercase transition-all">100%</button>
+									<div className="w-px h-3 sm:h-4 bg-slate-300 dark:bg-slate-700 mx-0.5"></div>
+									<button onClick={() => setStatementZoom(1)} className="px-1.5 sm:px-2 py-1 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-500 text-[9px] sm:text-[10px] font-black uppercase transition-all">100%</button>
 								</div>
-								<button onClick={handlePrintStatement} className="h-10 px-5 rounded-xl bg-[#FF6D00] text-white flex items-center gap-2 font-bold text-xs uppercase hover:bg-orange-600 transition-all shadow-sm active:scale-95">
-									<Printer size={16} /> In phiếu
+								<button onClick={handlePrintStatement} className="h-9 sm:h-10 px-4 sm:px-5 rounded-xl bg-[#FF6D00] text-white flex items-center gap-1.5 sm:gap-2 font-bold text-[10px] sm:text-xs uppercase hover:bg-orange-600 transition-all shadow-sm active:scale-95">
+									<Printer size={14} /> In phiếu
 								</button>
 							</div>
 							</div>

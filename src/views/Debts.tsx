@@ -1690,7 +1690,7 @@ const Debts: React.FC = () => {
 							<div id="debt-statement-container" className="flex-1 overflow-y-auto overflow-x-hidden scroll-smooth custom-scrollbar">
 								<div className="w-full max-w-full px-3 sm:px-4 py-3 sm:py-4 sm:w-fit sm:mx-auto" style={{ zoom: statementZoom, transformOrigin: 'top center' }}>
 
-										{/* 2. Customer & Cycle Info Grid */}
+										{/* 2. Customer Info */}
 										{(() => {
 											const startVal = statementFromDate || '0000-00-00';
 											const endVal = statementToDate || '9999-99-99';
@@ -1784,30 +1784,7 @@ const Debts: React.FC = () => {
 														</div>
 													</header>
 
-													{/* 4. Summary Card — Stitch style: big centered number + breakdown below */}
-													<div className="rounded-2xl bg-white border border-slate-200 shadow-sm mb-6 sm:mb-8 overflow-hidden">
-														<div className="px-4 sm:px-6 pt-5 sm:pt-6 pb-3 sm:pb-4 text-center">
-															<p className="text-[10px] font-black text-slate-400 uppercase tracking-[2px] mb-2">Tổng công nợ hiện tại</p>
-															<div className="flex items-center justify-center gap-3">
-																<span className="material-symbols-outlined text-3xl sm:text-4xl text-[#FF6D00]">account_balance_wallet</span>
-																<p className="font-black text-[#FF6D00] text-2xl sm:text-4xl tracking-tight tabular-nums break-all">{formatPrice(closingBalance)}</p>
-															</div>
-														</div>
-														<div className="bg-slate-50 px-4 sm:px-6 py-3 flex justify-center gap-8 sm:gap-12 text-xs border-t border-slate-100">
-															<div>
-																<span className="text-slate-400 uppercase tracking-wider text-[9px] font-black">Phát sinh</span>
-																<p className="font-bold text-slate-700 tabular-nums">{formatPrice(debitIncrease)}</p>
-															</div>
-															<div className="w-px bg-slate-200"></div>
-															<div>
-																<span className="text-slate-400 uppercase tracking-wider text-[9px] font-black">Đã trả</span>
-																<p className="font-bold text-emerald-600 tabular-nums">-{formatPrice(creditDecrease)}</p>
-															</div>
-														</div>
-													</div>
-
-
-<section className="mb-6 sm:mb-8">
+													<section className="mb-6 sm:mb-8">
 								<div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
 									{/* Top: Name + Badge */}
 									<div className="px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3">
@@ -1845,7 +1822,30 @@ const Debts: React.FC = () => {
 								</div>
 							</section>
 
-													{/* 2. List of Orders (Includes Opening Balance) */}
+
+{/* 3. Summary Card — Stitch style: big centered number + breakdown below */}
+													<div className="rounded-2xl bg-white border border-slate-200 shadow-sm mb-6 sm:mb-8 overflow-hidden">
+														<div className="px-4 sm:px-6 pt-5 sm:pt-6 pb-3 sm:pb-4 text-center">
+															<p className="text-[10px] font-black text-slate-400 uppercase tracking-[2px] mb-2">Tổng công nợ hiện tại</p>
+															<div className="flex items-center justify-center gap-3">
+																<span className="material-symbols-outlined text-3xl sm:text-4xl text-[#FF6D00]">account_balance_wallet</span>
+																<p className="font-black text-[#FF6D00] text-2xl sm:text-4xl tracking-tight tabular-nums break-all">{formatPrice(closingBalance)}</p>
+															</div>
+														</div>
+														<div className="bg-slate-50 px-4 sm:px-6 py-3 flex justify-center gap-8 sm:gap-12 text-xs border-t border-slate-100">
+															<div>
+																<span className="text-slate-400 uppercase tracking-wider text-[9px] font-black">Phát sinh</span>
+																<p className="font-bold text-slate-700 tabular-nums">{formatPrice(debitIncrease)}</p>
+															</div>
+															<div className="w-px bg-slate-200"></div>
+															<div>
+																<span className="text-slate-400 uppercase tracking-wider text-[9px] font-black">Đã trả</span>
+																<p className="font-bold text-emerald-600 tabular-nums">-{formatPrice(creditDecrease)}</p>
+															</div>
+														</div>
+													</div>
+
+													{/* 4. List of Orders (Includes Opening Balance) */}
 													<div className="mb-10">
 														<div className="bg-[#1A237E] rounded-t-2xl px-4 sm:px-6 py-3 sm:py-3.5 flex items-center gap-2 sm:gap-3">
 															<span className="material-symbols-outlined text-white text-base sm:text-lg">receipt_long</span>
@@ -1892,7 +1892,7 @@ const Debts: React.FC = () => {
 														</div>
 													</div>
 
-													{/* 3. Payment History */}
+													{/* 5. Payment History */}
 													<div className="mb-12">
 														<div className="bg-slate-700 rounded-t-2xl px-4 sm:px-6 py-3 sm:py-3.5 flex items-center gap-2 sm:gap-3">
 															<span className="material-symbols-outlined text-emerald-400 text-base sm:text-lg">schedule</span>

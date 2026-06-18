@@ -16,15 +16,18 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
     
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    // 🔧 Trả về rỗng nếu user chưa có doc → tránh null.ownerId crash
+    function getUserOwnerId() {
+      let data = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return data != null && data.ownerId != null ? data.ownerId : '';
     }
 
     // ── Business doc access (dùng chung cho mọi collection) ──
     function canWrite(existingDoc, incomingDoc) {
+      let owner = getUserOwnerId();
       return isAuthed() && (
-        (existingDoc == null || existingDoc.data.ownerId == request.auth.uid || getUserData().ownerId == existingDoc.data.ownerId) &&
-        (incomingDoc == null || incomingDoc.data.ownerId == request.auth.uid || getUserData().ownerId == incomingDoc.data.ownerId)
+        (existingDoc == null || existingDoc.data.ownerId == request.auth.uid || owner == existingDoc.data.ownerId) &&
+        (incomingDoc == null || incomingDoc.data.ownerId == request.auth.uid || owner == incomingDoc.data.ownerId)
       );
     }
 
@@ -67,20 +70,20 @@ service cloud.firestore {
       allow read, write: if isAuthed() && request.auth.uid == userId;
     }
 
-    // ── Notifications: fix bug resource == null ──
+    // ── Notifications ──
     match /notifications/{docId} {
       allow read: if isAuthed() && (
         resource == null ||
         resource.data.userId == request.auth.uid ||
-        getUserData().ownerId == resource.data.userId
+        getUserOwnerId() == resource.data.userId
       );
       allow create: if isAuthed() && (
         request.resource.data.userId == request.auth.uid ||
-        getUserData().ownerId == request.resource.data.userId
+        getUserOwnerId() == request.resource.data.userId
       );
       allow update, delete: if isAuthed() && resource != null && (
         resource.data.userId == request.auth.uid ||
-        getUserData().ownerId == resource.data.userId
+        getUserOwnerId() == resource.data.userId
       );
     }
 

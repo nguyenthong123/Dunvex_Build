@@ -1687,7 +1687,7 @@ const Debts: React.FC = () => {
 							{/* DATE FILTER BAR FOR STATEMENT - REMOVED AS PER USER REQUEST */}
 
 							{/* SCROLLABLE DOCUMENT AREA */}
-							<div id="debt-statement-container" className="flex-1 overflow-y-auto px-4 py-4 scroll-smooth custom-scrollbar">
+							<div id="debt-statement-container" className="flex-1 overflow-y-auto px-4 py-4 scroll-smooth custom-scrollbar" style={{ zoom: statementZoom }}>
 
 										{/* 2. Customer & Cycle Info Grid */}
 										{(() => {
@@ -1950,7 +1950,18 @@ const Debts: React.FC = () => {
 										})()}
 									
 							{/* Bottom Floating Toolbar */}
-							<div className="flex-none bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-4 py-3 border-t border-slate-200/50 flex items-center justify-end gap-3 z-20 print:hidden">
+							<div className="flex-none bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-4 py-3 border-t border-slate-200/50 flex items-center justify-center gap-3 z-20 print:hidden">
+								<div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl px-2 py-1.5">
+									<button onClick={() => setStatementZoom(prev => Math.max(0.5, prev - 0.05))} className="size-8 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-500 transition-all flex items-center justify-center" title="Thu nhỏ">
+										<span className="material-symbols-outlined text-lg">zoom_out</span>
+									</button>
+									<span className="text-[11px] font-black w-12 text-center text-slate-600 tabular-nums">{Math.round(statementZoom * 100)}%</span>
+									<button onClick={() => setStatementZoom(prev => Math.min(2, prev + 0.05))} className="size-8 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-500 transition-all flex items-center justify-center" title="Phóng to">
+										<span className="material-symbols-outlined text-lg">zoom_in</span>
+									</button>
+									<div className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-0.5"></div>
+									<button onClick={() => setStatementZoom(1)} className="px-2 py-1 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-500 text-[10px] font-black uppercase transition-all">100%</button>
+								</div>
 								<button onClick={handlePrintStatement} className="h-10 px-5 rounded-xl bg-[#FF6D00] text-white flex items-center gap-2 font-bold text-xs uppercase hover:bg-orange-600 transition-all shadow-sm active:scale-95">
 									<Printer size={16} /> In phiếu
 								</button>

@@ -394,11 +394,11 @@ const NexusControl = () => {
 			if (res.ok) {
 				const data = await res.json();
 				if (data.matches > 0) {
-					console.log(`Nexus: AppScript found ${data.matches} bank transfer matches`);
+					console.log(`Nexus: Auto-matched ${data.matches} bank transfers`, data.details);
 				}
 			}
 		} catch (e) {
-			// AppScript might not be deployed yet — silent fail
+			// AppScript có thể chưa bật Gmail API — silent fail
 		}
 		localStorage.setItem('nexus_last_bank_check', now.toString());
 	};

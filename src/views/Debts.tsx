@@ -1687,8 +1687,8 @@ const Debts: React.FC = () => {
 							{/* DATE FILTER BAR FOR STATEMENT - REMOVED AS PER USER REQUEST */}
 
 							{/* SCROLLABLE DOCUMENT AREA */}
-							<div id="debt-statement-container" className="flex-1 overflow-auto scroll-smooth custom-scrollbar">
-								<div className="min-w-0 w-fit mx-auto px-4 py-4" style={{ zoom: statementZoom }}>
+							<div id="debt-statement-container" className="flex-1 overflow-y-auto overflow-x-hidden scroll-smooth custom-scrollbar">
+								<div className="w-full max-w-full px-3 sm:px-4 py-3 sm:py-4 sm:w-fit sm:mx-auto" style={window.innerWidth < 640 ? {} : { zoom: statementZoom }}>
 
 										{/* 2. Customer & Cycle Info Grid */}
 										{(() => {
@@ -1767,7 +1767,7 @@ const Debts: React.FC = () => {
 													{/* 1. Paper Header */}
 													<header className="mb-8 text-center">
 														<h1 className="text-xl sm:text-2xl font-black text-slate-900 uppercase tracking-[3px] mb-3">Chi tiết Công Nợ</h1>
-														<div className="flex justify-center items-center gap-3 sm:gap-6 text-[10px] sm:text-xs flex-wrap">
+														<div className="flex justify-center items-center gap-2 sm:gap-6 text-[10px] sm:text-xs flex-wrap px-1">
 															<div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 rounded-lg">
 																<span className="text-slate-400 font-bold uppercase tracking-widest text-[9px]">Mã</span>
 																<span className="font-mono font-bold text-[#1A237E] text-sm">#{selectedCustomer.id?.slice(-6).toUpperCase()}</span>
@@ -1790,7 +1790,7 @@ const Debts: React.FC = () => {
 															<p className="text-[10px] font-black text-slate-400 uppercase tracking-[2px] mb-2">Tổng công nợ hiện tại</p>
 															<div className="flex items-center justify-center gap-3">
 																<span className="material-symbols-outlined text-3xl sm:text-4xl text-[#FF6D00]">account_balance_wallet</span>
-																<p className="font-black text-[#FF6D00] text-3xl sm:text-4xl tracking-tight tabular-nums">{formatPrice(closingBalance)}</p>
+																<p className="font-black text-[#FF6D00] text-2xl sm:text-4xl tracking-tight tabular-nums break-all">{formatPrice(closingBalance)}</p>
 															</div>
 														</div>
 														<div className="bg-slate-50 px-4 sm:px-6 py-3 flex justify-center gap-8 sm:gap-12 text-xs border-t border-slate-100">
@@ -1838,7 +1838,7 @@ const Debts: React.FC = () => {
 										{selectedCustomer.address && (
 											<div className="flex items-center gap-2 text-xs text-slate-600">
 												<span className="material-symbols-outlined text-base text-slate-400">location_on</span>
-												<span>{selectedCustomer.address}</span>
+												<span className="break-words leading-relaxed">{selectedCustomer.address}</span>
 											</div>
 										)}
 									</div>
@@ -1851,8 +1851,9 @@ const Debts: React.FC = () => {
 															<span className="material-symbols-outlined text-white text-base sm:text-lg">receipt_long</span>
 															<h3 className="text-white font-black text-xs sm:text-sm uppercase tracking-[2px]">Danh sách đơn hàng</h3>
 														</div>
-														<div className="border-x border-b border-slate-200 rounded-b-2xl overflow-x-auto custom-scrollbar">
-															<table className="w-full text-xs sm:text-sm border-collapse min-w-[480px] sm:min-w-[600px]">
+														<div className="border-x border-b border-slate-200 rounded-b-2xl overflow-x-auto custom-scrollbar -mx-3 sm:mx-0">
+															<div className="min-w-[360px] sm:min-w-[600px]">
+															<table className="w-full text-xs sm:text-sm border-collapse">
 																<thead className="bg-slate-100 text-slate-500 font-black uppercase tracking-widest text-[9px] sm:text-[10px]">
 																	<tr>
 																		<th className="py-3 sm:py-4 px-3 sm:px-6 text-left w-1/4 border-r border-white/10">Ngày</th>
@@ -1888,6 +1889,7 @@ const Debts: React.FC = () => {
 																</tbody>
 															</table>
 														</div>
+														</div>
 													</div>
 
 													{/* 3. Payment History */}
@@ -1896,8 +1898,9 @@ const Debts: React.FC = () => {
 															<span className="material-symbols-outlined text-emerald-400 text-base sm:text-lg">schedule</span>
 															<h3 className="text-white font-black text-xs sm:text-sm uppercase tracking-[2px]">Lịch sử thanh toán</h3>
 														</div>
-														<div className="border-x border-b border-slate-200 rounded-b-2xl overflow-x-auto custom-scrollbar">
-															<table className="w-full text-xs sm:text-sm border-collapse min-w-[480px] sm:min-w-[600px]">
+														<div className="border-x border-b border-slate-200 rounded-b-2xl overflow-x-auto custom-scrollbar -mx-3 sm:mx-0">
+															<div className="min-w-[360px] sm:min-w-[600px]">
+															<table className="w-full text-xs sm:text-sm border-collapse">
 																<thead className="bg-slate-100 text-slate-500 font-black uppercase tracking-widest text-[9px] sm:text-[10px]">
 																	<tr>
 																		<th className="py-3 sm:py-4 px-3 sm:px-6 text-left w-1/4 border-r border-white/10">Ngày</th>
@@ -1910,8 +1913,8 @@ const Debts: React.FC = () => {
 																	{cycleTx.filter(t => t.txType === 'payment').map((pay, idx) => (
 																		<tr key={`pay-${idx}`} className="hover:bg-slate-50 font-black">
 																			<td className="py-3 sm:py-4 px-3 sm:px-6 border-r border-slate-200 text-xs sm:text-sm">{formatDate(pay.date || pay.createdAt)}</td>
-																			<td className="py-3 sm:py-4 px-3 sm:px-6 border-r border-slate-200 uppercase tracking-tighter text-[10px] sm:text-xs">{pay.note || 'Thanh toán công nợ'}</td>
-																			<td className="py-3 sm:py-4 px-3 sm:px-6 text-right text-base sm:text-lg text-emerald-700">{formatPrice(pay.amount)}</td>
+																			<td className="py-3 sm:py-4 px-2 sm:px-6 border-r border-slate-200 uppercase tracking-tighter text-[10px] sm:text-xs">{pay.note || 'Thanh toán công nợ'}</td>
+																			<td className="py-3 sm:py-4 px-2 sm:px-6 text-right text-base sm:text-lg text-emerald-700">{formatPrice(pay.amount)}</td>
 																		</tr>
 																	))}
 																	{cycleTx.filter(t => t.txType === 'payment').length === 0 && (
@@ -1926,6 +1929,7 @@ const Debts: React.FC = () => {
 																	</tr>
 																</tbody>
 															</table>
+														</div>
 														</div>
 													</div>
 
@@ -1952,7 +1956,7 @@ const Debts: React.FC = () => {
 								</div>
 							{/* Bottom Floating Toolbar */}
 							<div className="flex-none bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-3 sm:px-4 py-2.5 sm:py-3 border-t border-slate-200/50 flex items-center justify-center gap-2 sm:gap-3 z-20 print:hidden">
-								<div className="flex items-center gap-0.5 sm:gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl px-1.5 sm:px-2 py-1 sm:py-1.5">
+								<div className="hidden sm:flex items-center gap-0.5 sm:gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl px-1.5 sm:px-2 py-1 sm:py-1.5">
 									<button onClick={() => setStatementZoom(prev => Math.max(0.5, prev - 0.05))} className="size-7 sm:size-8 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-500 transition-all flex items-center justify-center" title="Thu nhỏ">
 										<span className="material-symbols-outlined text-base sm:text-lg">zoom_out</span>
 									</button>
@@ -1963,7 +1967,7 @@ const Debts: React.FC = () => {
 									<div className="w-px h-3 sm:h-4 bg-slate-300 dark:bg-slate-700 mx-0.5"></div>
 									<button onClick={() => setStatementZoom(1)} className="px-1.5 sm:px-2 py-1 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-500 text-[9px] sm:text-[10px] font-black uppercase transition-all">100%</button>
 								</div>
-								<button onClick={handlePrintStatement} className="h-9 sm:h-10 px-4 sm:px-5 rounded-xl bg-[#FF6D00] text-white flex items-center gap-1.5 sm:gap-2 font-bold text-[10px] sm:text-xs uppercase hover:bg-orange-600 transition-all shadow-sm active:scale-95">
+								<button onClick={handlePrintStatement} className="flex-1 sm:flex-none h-10 sm:h-10 px-4 sm:px-5 rounded-xl bg-[#FF6D00] text-white flex items-center gap-1.5 sm:gap-2 font-bold text-[10px] sm:text-xs uppercase hover:bg-orange-600 transition-all shadow-sm active:scale-95">
 									<Printer size={14} /> In phiếu
 								</button>
 							</div>

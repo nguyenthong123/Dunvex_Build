@@ -317,11 +317,17 @@ const SaleBot = () => {
                 if ((!data.customer?.id || data.customer.id.length < 15) && data.customer?.name) {
                     const q = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
                     const snap = await getDocs(q);
-                    const queryName = data.customer.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                    const queryRaw = data.customer.name.toLowerCase();
+                    const queryName = queryRaw.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                     
+                    // 🔍 Tìm theo tên HOẶC số điện thoại
                     const matches = snap.docs.filter(d => {
                         const dbName = (d.data().name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-                        return dbName.includes(queryName) || queryName.includes(dbName);
+                        const dbPhone = (d.data().phone || '').replace(/[^0-9]/g, '');
+                        const queryDigits = queryRaw.replace(/[^0-9]/g, '');
+                        // Ưu tiên khớp tên, sau đó khớp SĐT
+                        return dbName.includes(queryName) || queryName.includes(dbName) ||
+                               (queryDigits.length >= 3 && dbPhone.includes(queryDigits));
                     });
                     
                     let found = null;

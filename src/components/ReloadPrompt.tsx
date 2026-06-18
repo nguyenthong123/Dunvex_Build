@@ -54,8 +54,10 @@ const ReloadPrompt: React.FC = () => {
 				if (match && match[0]) {
 					const deployedBundle = match[0];
 					const storedBundle = localStorage.getItem('pwa_current_bundle');
-					// Chỉ báo update nếu deployed KHÁC stored (đã lưu từ lần load trước)
-					if (storedBundle && deployedBundle !== storedBundle && !needRefresh) {
+					// Đã bị dismiss phiên bản này chưa?
+					const dismissedBundle = localStorage.getItem('pwa_dismissed_bundle');
+					// Chỉ báo update nếu deployed KHÁC stored và CHƯA bị dismiss
+					if (storedBundle && deployedBundle !== storedBundle && deployedBundle !== dismissedBundle && !needRefresh) {
 						console.log('📱 New version! Stored:', storedBundle, 'Deployed:', deployedBundle);
 						setIosUpdateAvailable(true);
 					}
@@ -65,7 +67,7 @@ const ReloadPrompt: React.FC = () => {
 
 		if (isIOS) {
 			checkVersion();
-			const interval = setInterval(checkVersion, 2 * 60 * 1000);
+			const interval = setInterval(checkVersion, 5 * 60 * 1000); // 5 phút thay vì 2
 			return () => clearInterval(interval);
 		}
 	}, [isIOS, needRefresh]);
@@ -120,6 +122,8 @@ const ReloadPrompt: React.FC = () => {
 		setIsUpdating(true);
 		// 📱 iOS: force bỏ cache trước khi reload
 		if (isIOS) {
+			// Xoá dismissed bundle khi user chủ động update
+			localStorage.removeItem('pwa_dismissed_bundle');
 			// Lưu hash deployed vào localStorage trước khi reload
 			localStorage.setItem('pwa_updated', 'true');
 			// Xoá SW cache nếu có
@@ -164,7 +168,7 @@ const ReloadPrompt: React.FC = () => {
 							</button>
 						)}
 						<button
-							onClick={() => { close(); setIosUpdateAvailable(false); }}
+							onClick={() => { close(); setIosUpdateAvailable(false); localStorage.setItem('pwa_dismissed_bundle', localStorage.getItem('pwa_current_bundle') || ''); }}
 							disabled={isUpdating}
 							className="px-5 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all disabled:opacity-50"
 						>

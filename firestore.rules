@@ -129,10 +129,12 @@ service cloud.firestore {
     }
     match /notifications/{docId} { 
       allow read, update, delete: if isAuthed() && (
-        (resource != null && resource.data.userId == request.auth.uid)
+        (resource != null && resource.data.userId == request.auth.uid) ||
+        (resource != null && getUserData().ownerId == resource.data.userId)
       );
       allow create: if isAuthed() && (
-        (request.resource != null && request.resource.data.userId == request.auth.uid)
+        (request.resource != null && request.resource.data.userId == request.auth.uid) ||
+        (request.resource != null && getUserData().ownerId == request.resource.data.userId)
       );
     }
     match /ai_actions/{docId} {

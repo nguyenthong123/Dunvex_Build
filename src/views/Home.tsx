@@ -4,7 +4,7 @@ import { signOut } from 'firebase/auth';
 import { collection, query, where, onSnapshot, updateDoc, doc, writeBatch, getDocs, limit, orderBy } from 'firebase/firestore';
 import React, { useState, useEffect } from 'react';
 import { useNavigationConfig } from '../hooks/useNavigationConfig';
-import { Eye, EyeOff, TrendingUp, TrendingDown, AlertTriangle, Wallet, Gift } from 'lucide-react';
+import { Eye, EyeOff, TrendingUp, TrendingDown, AlertTriangle, Wallet, Gift, Trophy, User as UserIcon } from 'lucide-react';
 
 import { useOwner } from '../hooks/useOwner';
 import QRScanner from '../components/shared/QRScanner';
@@ -399,6 +399,9 @@ const Home = () => {
 
 				</div>
 
+				{/* 🏆 BẢNG DOANH SỐ NHÂN VIÊN HÔM NAY */}
+				<StaffLeaderboard orders={orders} todayStr={today} formatPrice={formatPrice} />
+
 				{/* Alerts Section */}
 				<div className="mb-6 flex flex-col md:flex-row gap-4">
 					{lowStockProducts.length > 0 && (
@@ -673,6 +676,86 @@ const ActivityCard = ({ icon, name, task, value, time }: any) => (
 	</div>
 );
 
+
+// ==================== BẢNG DOANH SỐ NHÂN VIÊN HÔM NAY ====================
+const StaffLeaderboard = ({ orders, todayStr, formatPrice }: { orders: any[], todayStr: string, formatPrice: (n: number) => string }) => {
+	// Tổng hợp doanh số hôm nay theo nhân viên
+	const staffSales = orders
+		.filter(o => {
+			const d = o.createdAt?.seconds ? new Date(o.createdAt.seconds * 1000).toISOString().split('T')[0] : o.orderDate;
+			return d === todayStr && o.status === 'Đơn chốt';
+		})
+		.reduce((acc: Record<string, { name: string; email: string; orders: number; revenue: number }>, o) => {
+			const email = o.createdByEmail || 'unknown';
+			const name = o.createdByEmail?.split('@')[0] || 'Nhân viên';
+			if (!acc[email]) acc[email] = { name, email, orders: 0, revenue: 0 };
+			acc[email].orders += 1;
+			acc[email].revenue += Number(o.totalAmount) || 0;
+			return acc;
+		}, {});
+
+	const sorted = Object.values(staffSales).sort((a, b) => b.revenue - a.revenue);
+
+	if (sorted.length === 0) return null;
+
+	const maxRevenue = Math.max(...sorted.map(s => s.revenue), 1);
+	const trophyColors = ['text-amber-400', 'text-slate-400', 'text-orange-600'];
+
+	return (
+		<div className="mb-6 bg-white dark:bg-slate-900 rounded-[2rem] p-5 md:p-6 shadow-sm border border-slate-100 dark:border-slate-800">
+			<div className="flex items-center justify-between mb-4">
+				<h3 className="text-sm font-black uppercase text-slate-800 dark:text-white flex items-center gap-2">
+					<Trophy size={18} className="text-[#FF6D00]" /> Chốt đơn hôm nay
+				</h3>
+				<span className="text-[10px] font-bold text-slate-400 uppercase">{sorted.length} nhân viên có đơn</span>
+			</div>
+
+			<div className="space-y-3">
+				{sorted.map((s, i) => (
+					<div key={s.email} className="flex items-center gap-3 group">
+						{/* Rank badge */}
+						<div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs shrink-0 ${
+							i === 0 ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600' :
+							i === 1 ? 'bg-slate-100 dark:bg-slate-800 text-slate-500' :
+							i === 2 ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-600' :
+							'bg-slate-50 dark:bg-slate-800/50 text-slate-400'
+						}`}>
+							{i < 3 ? <Trophy size={14} className={trophyColors[i]} /> : i + 1}
+						</div>
+
+						{/* Info */}
+						<div className="flex-1 min-w-0">
+							<div className="flex items-center gap-2">
+								<UserIcon size={12} className="text-slate-400 shrink-0" />
+								<span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{s.name}</span>
+								<span className="text-[10px] text-slate-400">{s.orders} đơn</span>
+							</div>
+							{/* Progress bar */}
+							<div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full mt-1.5 overflow-hidden">
+								<div
+									className={`h-full rounded-full transition-all duration-700 ${
+										i === 0 ? 'bg-gradient-to-r from-amber-400 to-[#FF6D00]' :
+										i === 1 ? 'bg-gradient-to-r from-slate-400 to-slate-500' :
+										i === 2 ? 'bg-gradient-to-r from-orange-400 to-orange-600' :
+										'bg-[#1A237E]/30 dark:bg-indigo-500/30'
+									}`}
+									style={{ width: `${Math.max((s.revenue / maxRevenue) * 100, 8)}%` }}
+								></div>
+							</div>
+						</div>
+
+						{/* Revenue */}
+						<div className="text-right shrink-0">
+							<span className="text-sm font-black text-[#1A237E] dark:text-indigo-400">
+								{formatPrice(s.revenue)}
+							</span>
+						</div>
+					</div>
+				))}
+			</div>
+		</div>
+	);
+};
 
 const DashboardSkeleton = () => (
 	<div className="min-h-screen bg-[#f8f9fb] dark:bg-slate-950 p-4 md:p-8 space-y-8 animate-pulse transition-colors duration-300">

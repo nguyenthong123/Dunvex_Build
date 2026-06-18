@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '../components/shared/Toast';
 import { auth, db } from '../services/firebase';
+import { createAdminNotification } from '../utils/notifications';
 import {
 	collection,
 	query,
@@ -362,6 +363,8 @@ const NexusControl = () => {
 						if (now < graceEnd) {
 							await setDoc(doc(db, 'settings', customer.uid), { graceUntil: graceEnd, subscriptionStatus: 'grace' }, { merge: true });
 							await addDoc(collection(db, 'notifications'), { userId: customer.uid, title: '⚠️ GÓI ĐÃ HẾT HẠN — 3 NGÀY ÂN HẠN', body: `Gói đã hết hạn. Bạn có 3 ngày (đến ${graceEnd.toLocaleDateString('vi-VN')}) để gia hạn trước khi bị khoá.`, type: 'warning', priority: 'high', read: false, createdAt: serverTimestamp() });
+							// 📢 Thông báo cho admin
+							await createAdminNotification(customer.uid, { title: '⚠️ KH gần hết hạn', body: `${customer.email || customer.uid} sắp hết hạn gói. Gia hạn trước ${graceEnd.toLocaleDateString('vi-VN')}.`, type: 'subscription', priority: 'high' });
 							return;
 						}
 					}
@@ -407,6 +410,8 @@ const NexusControl = () => {
 		if (customer.manualLockOrders && customer.manualLockDebts && customer.manualLockSheets && customer.manualLockAi) return;
 		await setDoc(doc(db, 'settings', customer.uid), { manualLockOrders: true, manualLockDebts: true, manualLockSheets: true, manualLockAi: true, subscriptionStatus: 'expired', isPro: false, graceUntil: null }, { merge: true });
 		await addDoc(collection(db, 'notifications'), { userId: customer.uid, title: '🔒 TÍNH NĂNG ĐÃ BỊ KHOÁ', body: 'Gói đã hết hạn. Vui lòng gia hạn để tiếp tục.', type: 'lock', priority: 'high', read: false, createdAt: serverTimestamp() });
+		// 📢 Thông báo cho admin
+		await createAdminNotification(customer.uid, { title: '🔒 KH ĐÃ BỊ KHOÁ', body: `${customer.email || customer.uid} đã hết hạn gói và bị khoá tính năng.`, type: 'subscription', priority: 'high' });
 	};
 
 	const parseExpireDate = (val: any): Date | null => {
@@ -584,6 +589,14 @@ const NexusControl = () => {
 				priority: 'high',
 				read: false,
 				createdAt: serverTimestamp()
+			});
+
+			// 📢 Thông báo cho admin về gói đăng ký mới
+			await createAdminNotification(request.ownerId, {
+				title: `💰 GÓI MỚI: ${request.planName || request.planId}`,
+				body: `${request.userEmail} vừa đăng ký gói ${request.planName || request.planId} — ${request.amount.toLocaleString('vi-VN')}đ. Đã được duyệt & kích hoạt.`,
+				type: 'subscription',
+				priority: 'high'
 			});
 
 			showToast("Đã duyệt thanh toán và kích hoạt tài khoản!", "success");

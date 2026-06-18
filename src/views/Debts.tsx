@@ -1677,23 +1677,12 @@ const Debts: React.FC = () => {
 			{/* DEBT STATEMENT MODAL */}
 			{showStatement && selectedCustomer && (
 				((owner.isPro || !owner.systemConfig.lock_free_debts) && !owner.manualLockDebts) ? (
-					<div id="debt-statement-modal" className="fixed inset-0 z-[160] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-0 md:p-4">
+					<div id="debt-statement-modal" className="fixed inset-0 z-[160] bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-0 md:p-4">
 						<div className="bg-transparent w-full max-w-5xl max-h-screen md:max-h-[95vh] relative flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
-							{/* MODAL HEADER - CLEAN */}
-							<div className="flex-none bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-6 py-3 border-b border-slate-200/50 flex items-center justify-between z-20 md:rounded-t-[2.5rem] print:hidden">
-								<div className="flex items-center gap-3">
-									<div className="size-9 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center">
-										<History size={18} />
-									</div>
-									<div>
-										<h3 className="text-sm font-black uppercase tracking-tight text-slate-800">Chi tiết công nợ</h3>
-										<p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{selectedCustomer.name}</p>
-									</div>
-								</div>
-								<button onClick={() => setShowStatement(false)} className="size-8 rounded-full bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600 flex items-center justify-center transition-colors">
-									<X size={16} />
-								</button>
-							</div>
+							{/* Floating close button */}
+							<button onClick={() => setShowStatement(false)} className="absolute top-3 right-3 z-30 size-10 rounded-full bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-white dark:hover:bg-slate-800 shadow-sm flex items-center justify-center transition-all print:hidden">
+								<X size={18} />
+							</button>
 
 							{/* DATE FILTER BAR FOR STATEMENT - REMOVED AS PER USER REQUEST */}
 

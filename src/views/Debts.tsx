@@ -1695,38 +1695,16 @@ const Debts: React.FC = () => {
 									</div>
 
 									{/* Zoom Controls */}
-									<div className="hidden lg:flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl px-2 py-1 gap-1">
-										<button 
-											onClick={() => setStatementZoom(prev => Math.max(0.5, prev - 0.1))}
-											className="size-8 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-500 transition-all"
-											title="Thu nhỏ"
-										>
-											<span className="material-symbols-outlined text-lg">zoom_out</span>
+									<div className="hidden lg:flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-lg px-2 py-1">
+										<button onClick={() => setStatementZoom(prev => Math.max(0.5, prev - 0.1))} className="size-7 rounded-md hover:bg-white text-slate-500 transition-all flex items-center justify-center" title="Thu nhỏ">
+											<span className="material-symbols-outlined text-base">zoom_out</span>
 										</button>
-										<span className="text-[10px] font-black w-12 text-center text-slate-500">{Math.round(statementZoom * 100)}%</span>
-										<button 
-											onClick={() => setStatementZoom(prev => Math.min(1.5, prev + 0.1))}
-											className="size-8 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-500 transition-all"
-											title="Phóng to"
-										>
-											<span className="material-symbols-outlined text-lg">zoom_in</span>
+										<span className="text-[10px] font-black w-10 text-center text-slate-500 tabular-nums">{Math.round(statementZoom * 100)}%</span>
+										<button onClick={() => setStatementZoom(prev => Math.min(1.5, prev + 0.1))} className="size-7 rounded-md hover:bg-white text-slate-500 transition-all flex items-center justify-center" title="Phóng to">
+											<span className="material-symbols-outlined text-base">zoom_in</span>
 										</button>
-										<div className="w-[1px] h-4 bg-slate-200 dark:bg-slate-700 mx-1"></div>
-										<button 
-											onClick={() => {
-												const container = document.getElementById('debt-statement-container');
-												const paper = document.getElementById('debt-statement-paper');
-												if (container && paper) {
-													const availableHeight = container.clientHeight - 80;
-													const paperHeight = paper.clientHeight;
-													const zoomNeeded = availableHeight / paperHeight;
-													setStatementZoom(Math.min(1, zoomNeeded));
-												}
-											}}
-											className="px-3 py-1.5 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-500 text-[9px] font-black uppercase transition-all"
-										>
-											Vừa màn hình
-										</button>
+										<div className="w-px h-3 bg-slate-300 mx-0.5"></div>
+										<button onClick={() => { const c = document.getElementById('debt-statement-container'); const p = document.getElementById('debt-statement-paper'); if (c && p) setStatementZoom(Math.min(1, (c.clientHeight - 80) / p.clientHeight)); }} className="px-2 py-1 rounded-md hover:bg-white text-slate-500 text-[9px] font-black uppercase transition-all">Vừa</button>
 									</div>
 								</div>
 								<div className="flex items-center gap-2">
@@ -1834,56 +1812,53 @@ const Debts: React.FC = () => {
 											return (
 												<>
 													{/* 1. Paper Header */}
-													<header className="mb-10">
-														<h1 className="text-4xl font-black text-center text-gray-900 uppercase mb-6 tracking-[4px]">
-															PHIẾU BÁO CÔNG NỢ
-														</h1>
-														<div className="flex justify-center gap-12 text-sm font-bold text-gray-700 border-t border-b border-dashed border-gray-300 py-5">
-															<div className="flex items-center">
-																<span className="text-gray-400 mr-2 uppercase text-[10px] tracking-widest">Mã Đối Tác:</span>
-																<span className="text-[#1A237E]">#{selectedCustomer.id?.slice(-6).toUpperCase()}</span>
+													<header className="mb-8 text-center">
+														<h1 className="text-2xl font-black text-slate-900 uppercase tracking-[3px] mb-3">Chi tiết Công Nợ</h1>
+														<div className="flex justify-center items-center gap-6 text-xs flex-wrap">
+															<div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 rounded-lg">
+																<span className="text-slate-400 font-bold uppercase tracking-widest text-[9px]">Mã</span>
+																<span className="font-mono font-bold text-[#1A237E] text-sm">#{selectedCustomer.id?.slice(-6).toUpperCase()}</span>
 															</div>
-															<div className="flex items-center">
-																<span className="text-gray-400 mr-2 uppercase text-[10px] tracking-widest">Ngày lập:</span>
-																<span className="text-slate-900">{new Date().toLocaleDateString('vi-VN')}</span>
+															<div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 rounded-lg">
+																<span className="text-slate-400 font-bold uppercase tracking-widest text-[9px]">Ngày lập</span>
+																<span className="font-bold text-slate-700">{new Date().toLocaleDateString('vi-VN')}</span>
 															</div>
-															<div className="flex items-center">
-																<span className="text-gray-400 mr-2 uppercase text-[10px] tracking-widest">Trạng thái:</span>
-																<span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${closingBalance > 0 ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'}`}>
-																	{closingBalance > 0 ? 'Còn dư nợ' : 'Đã tất toán'}
+															<div>
+																<span className={`inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${closingBalance > 0 ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-emerald-50 text-emerald-600 border border-emerald-200'}`}>
+																	{closingBalance > 0 ? 'Còn nợ' : 'Đã tất toán'}
 																</span>
 															</div>
 														</div>
 													</header>
 
-													<section className="mb-10 grid grid-cols-2 gap-8">
-														<div className="space-y-4">
-															<div className="flex flex-col">
-																<span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Người nhận thông báo</span>
-																<span className="font-black text-gray-900 text-2xl uppercase leading-tight tracking-tight">
+													<section className="mb-8">
+														<div className="bg-slate-50 rounded-2xl p-6 flex items-start justify-between gap-4 flex-wrap">
+															<div>
+																<span className="text-[10px] font-black text-slate-400 uppercase tracking-[2px] mb-2 block">Khách hàng</span>
+																<span className="font-black text-slate-900 text-xl uppercase tracking-tight">
 																	{selectedCustomer.businessName || selectedCustomer.name}
 																</span>
+																<div className="flex flex-col text-slate-500 text-xs mt-2 gap-0.5">
+																	{selectedCustomer.phone && <p>📞 {selectedCustomer.phone}</p>}
+																	{selectedCustomer.address && <p>📍 {selectedCustomer.address}</p>}
+																</div>
 															</div>
-															<div className="flex flex-col text-slate-500 font-bold italic text-sm">
-																{selectedCustomer.phone && <p>SĐT: {selectedCustomer.phone}</p>}
-																{selectedCustomer.address && <p>Địa chỉ: {selectedCustomer.address}</p>}
+															<div className="text-right shrink-0">
+																<p className="text-xs text-slate-400 italic max-w-[200px] leading-relaxed">
+																	Chúng tôi xin thông báo tình trạng công nợ tính đến thời điểm hiện tại
+																</p>
 															</div>
-														</div>
-														<div className="space-y-4 text-right flex flex-col items-end justify-center">
-															<p className="text-slate-600 text-lg font-medium leading-relaxed italic max-w-xs">
-																"Chúng tôi xin thông báo tình trạng công nợ tính đến thời điểm hiện tại như sau:"
-															</p>
 														</div>
 													</section>
 
 													{/* 2. List of Orders (Includes Opening Balance) */}
 													<div className="mb-10">
-														<h3 className="flex items-center text-slate-900 font-black text-lg mb-4 pl-4 border-l-[6px] border-[#1A237E] uppercase tracking-tight">
-															1. Danh sách đơn hàng
+														<h3 className="flex items-center gap-2 text-slate-900 font-black text-sm mb-4 uppercase tracking-[2px]">
+															<span className="size-6 rounded-md bg-[#1A237E] text-white flex items-center justify-center text-[10px] font-black">1</span> Danh sách đơn hàng
 														</h3>
 														<div className="rounded-2xl border border-slate-200 overflow-x-auto custom-scrollbar shadow-sm">
 															<table className="w-full text-sm border-collapse min-w-[600px]">
-																<thead className="bg-[#1c130d] text-white font-black uppercase tracking-widest text-[10px]">
+																<thead className="bg-slate-100 text-slate-500 font-black uppercase tracking-widest text-[10px]">
 																	<tr>
 																		<th className="py-4 px-6 text-left w-1/4 border-r border-white/10">Ngày</th>
 																		<th className="py-4 px-6 text-left w-1/4 border-r border-white/10">Mã đơn</th>
@@ -1922,12 +1897,12 @@ const Debts: React.FC = () => {
 
 													{/* 3. Payment History */}
 													<div className="mb-12">
-														<h3 className="flex items-center text-slate-900 font-black text-lg mb-4 pl-4 border-l-[6px] border-emerald-500 uppercase tracking-tight">
-															2. Lịch sử thanh toán
+														<h3 className="flex items-center gap-2 text-slate-900 font-black text-sm mb-4 uppercase tracking-[2px]">
+															<span className="size-6 rounded-md bg-emerald-500 text-white flex items-center justify-center text-[10px] font-black">2</span> Lịch sử thanh toán
 														</h3>
 														<div className="rounded-2xl border border-slate-200 overflow-x-auto custom-scrollbar shadow-sm">
 															<table className="w-full text-sm border-collapse min-w-[600px]">
-																<thead className="bg-[#1c130d] text-white font-black uppercase tracking-widest text-[10px]">
+																<thead className="bg-slate-100 text-slate-500 font-black uppercase tracking-widest text-[10px]">
 																	<tr>
 																		<th className="py-4 px-6 text-left w-1/4 border-r border-white/10">Ngày</th>
 																		<th className="py-4 px-6 text-left w-1/2 border-r border-white/10">Nội dung</th>
@@ -1958,24 +1933,41 @@ const Debts: React.FC = () => {
 														</div>
 													</div>
 
-													{/* 4. Final Summary Box */}
-													<div className="bg-[#FF6D00] text-white rounded-3xl p-10 flex flex-row justify-between items-center mb-20 shadow-2xl shadow-orange-500/20 relative overflow-hidden gap-4">
-														<div className="absolute right-0 top-1/2 -translate-y-1/2 p-8 opacity-20">
-															<span className="material-symbols-outlined text-[8rem]">payments</span>
+													{/* 4. Summary Card */}
+													<div className="rounded-2xl border-2 border-[#FF6D00] bg-gradient-to-br from-orange-50 to-amber-50 p-8 mb-16 shadow-lg">
+														<div className="flex items-center justify-between gap-6 flex-wrap">
+															<div className="flex items-center gap-4">
+																<div className="size-12 rounded-xl bg-[#FF6D00] flex items-center justify-center shrink-0">
+																	<span className="material-symbols-outlined text-white text-2xl">account_balance_wallet</span>
+																</div>
+																<div>
+																	<p className="text-[10px] font-black text-slate-400 uppercase tracking-[2px] mb-0.5">Số dư công nợ</p>
+																	<p className="font-black text-[#FF6D00] text-3xl tracking-tight tabular-nums">{formatPrice(closingBalance)}</p>
+																</div>
+															</div>
+															<div className="flex flex-col gap-1.5 text-xs shrink-0">
+																<div className="flex items-center justify-between gap-6">
+																	<span className="text-slate-400">Phát sinh</span>
+																	<span className="font-bold text-slate-600 tabular-nums">{formatPrice(debitIncrease)}</span>
+																</div>
+																<div className="flex items-center justify-between gap-6">
+																	<span className="text-slate-400">Đã trả</span>
+																	<span className="font-bold text-emerald-600 tabular-nums">-{formatPrice(creditDecrease)}</span>
+																</div>
+															</div>
 														</div>
-														<span className="relative z-10 font-black uppercase text-2xl tracking-[2px] shrink-0">SỐ DƯ CÔNG NỢ CÒN LẠI</span>
-														<span className="relative z-10 font-black text-5xl tracking-tighter tabular-nums drop-shadow-lg whitespace-nowrap text-right">{formatPrice(closingBalance)}</span>
 													</div>
 
 													{/* 5. Signatures */}
-													<div className="flex justify-between px-10 mb-12 items-end">
-														<div className="text-center flex flex-col items-center">
-															<p className="font-black text-slate-900 mb-28 text-lg uppercase tracking-widest">Đại diện khách hàng</p>
-															<p className="text-slate-500 font-bold italic text-xs">(Ký và ghi rõ họ tên)</p>
+													<div className="flex justify-between px-10 mb-8 items-end">
+														<div className="text-center">
+															<div className="w-40 h-[1px] bg-slate-200 mb-16"></div>
+															<p className="font-black text-slate-600 text-xs uppercase tracking-widest">Đại diện khách hàng</p>
+															<p className="text-slate-400 text-[10px] italic mt-1">(Ký và ghi rõ họ tên)</p>
 														</div>
-														<div className="text-center flex flex-col items-center">
-															<p className="font-black text-slate-900 mb-28 text-lg uppercase tracking-widest">Người lập phiếu</p>
-															<p className="font-black text-slate-900 uppercase text-xl underline decoration-4 decoration-[#FFD600] underline-offset-8">{auth.currentUser?.displayName || 'Admin'}</p>
+														<div className="text-center">
+															<p className="font-black text-slate-900 uppercase text-base mb-16 tracking-wider">{auth.currentUser?.displayName || 'Admin'}</p>
+															<p className="font-black text-slate-600 text-xs uppercase tracking-widest">Người lập phiếu</p>
 														</div>
 													</div>
 

@@ -219,8 +219,8 @@ const SaleBot = () => {
 
         for (const file of imageFiles) {
             fileNames.push(file.name);
-            // 🔧 Resize ảnh trước khi gửi để tránh vượt body limit (max 1200px, quality 0.7)
-            const base64 = await resizeImage(file, 1200, 0.7);
+            // 🔧 Resize ảnh trước khi gửi để tránh vượt body limit + timeout (max 800px, quality 0.5)
+            const base64 = await resizeImage(file, 800, 0.5);
             imageData.push({ base64, mimeType: 'image/jpeg' });
         }
 

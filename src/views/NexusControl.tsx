@@ -41,6 +41,7 @@ import {
 	orderBy,
 	limit,
 	getDoc,
+	getDocs,
 	setDoc,
 	addDoc
 } from 'firebase/firestore';
@@ -350,12 +351,17 @@ const NexusControl = () => {
 				// 1. Provision new users - dùng gói trial từ subscription_packages
 				if (!customer.planId && !customer.isAiProcessed) {
 					const expireDate = new Date();
-					// Tìm gói trial/free trong subscription_packages để lấy durationDays
-					let trialDays = 60; // mặc định 60 ngày
+				// Tìm gói miễn phí (price=0) trong subscription_packages
+					let trialDays = 60;
 					try {
-						const pkgSnap = await getDoc(doc(db, 'subscription_packages', 'free_trial'));
-						if (pkgSnap.exists() && pkgSnap.data().price === 0) {
-							trialDays = Number(pkgSnap.data().durationDays) || 60;
+						const pkgSnap = await getDocs(query(
+							collection(db, 'subscription_packages'),
+							where('price', '==', 0),
+							limit(1)
+						));
+						if (!pkgSnap.empty) {
+							const pkgData = pkgSnap.docs[0].data();
+							trialDays = Number(pkgData.durationDays) || 60;
 						}
 					} catch (e) { /* fallback 60 ngày */ }
 					expireDate.setDate(expireDate.getDate() + trialDays);

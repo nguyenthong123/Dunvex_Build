@@ -21,18 +21,10 @@ service cloud.firestore {
     }
 
     // ── Business doc access (dùng chung cho mọi collection) ──
-    function canRead(doc) {
+    function canWrite(existingDoc, incomingDoc) {
       return isAuthed() && (
-        doc == null ||                                   // doc chưa tồn tại → cho phép query
-        doc.data.ownerId == request.auth.uid ||          // chính chủ
-        getUserData().ownerId == doc.data.ownerId        // cùng tổ chức
-      );
-    }
-    
-    function canWrite(doc, newDoc) {
-      return isAuthed() && (
-        (doc == null || doc.data.ownerId == request.auth.uid || getUserData().ownerId == doc.data.ownerId) &&
-        (newDoc == null || newDoc.data.ownerId == request.auth.uid || getUserData().ownerId == newDoc.data.ownerId)
+        (existingDoc == null || existingDoc.data.ownerId == request.auth.uid || getUserData().ownerId == existingDoc.data.ownerId) &&
+        (incomingDoc == null || incomingDoc.data.ownerId == request.auth.uid || getUserData().ownerId == incomingDoc.data.ownerId)
       );
     }
 

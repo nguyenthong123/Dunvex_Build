@@ -729,8 +729,13 @@ const QuickOrder = () => {
 				const profileSnap = await getDoc(profileRef);
 				if (profileSnap.exists()) {
 					staffPhone = profileSnap.data().phone || '';
+					console.log('📱 Staff phone from profile:', staffPhone);
+				} else {
+					console.log('📱 No profile found for', auth.currentUser?.uid);
 				}
-			} catch (e) { /* bỏ qua nếu chưa có profile */ }
+			} catch (e: any) {
+				console.error('📱 Profile fetch error:', e.message || e);
+			}
 
 			const orderData: any = {
 				customerName: finalCustomer?.name || searchCustomerQuery || 'Khách vãng lai',

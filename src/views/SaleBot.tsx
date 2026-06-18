@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { parseSaleMessage } from '../services/geminiService';
-import { BotMessageSquare, Send, Sparkles, User, AlertCircle, CheckCircle2, Package } from 'lucide-react';
+import { parseSaleMessage, analyzeImage } from '../services/geminiService';
+import { BotMessageSquare, Send, Sparkles, User, AlertCircle, CheckCircle2, Package, Camera, Mic, MicOff, X, ImagePlus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { db, auth } from '../services/firebase';
 import { collection, query, where, getDocs, addDoc, serverTimestamp, updateDoc, doc, Timestamp, increment, setDoc, getDoc } from 'firebase/firestore';
@@ -25,6 +25,13 @@ const SaleBot = () => {
     const [showProductsModal, setShowProductsModal] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // 🛡️ Confirmation step
+    const [confirmAction, setConfirmAction] = useState<any>(null);
+    // 🎙️ Voice recording
+    const [isRecording, setIsRecording] = useState(false);
+    const recognitionRef = useRef<any>(null);
 
     const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         setInput(e.target.value);
@@ -156,10 +163,104 @@ const SaleBot = () => {
 
     const handleSend = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
-        if (!input.trim()) return;
+        if (!input.trim() && !fileInputRef.current?.files?.length) return;
 
-        const userMsg = input;
+        // 📸 Nếu có ảnh được chọn
+        if (fileInputRef.current?.files?.length) {
+            await handleImageSend();
+            return;
+        }
+
+        await processTextMessage(input);
         setInput('');
+    };
+
+    // 📸 Xử lý gửi ảnh
+    const handleImageSend = async () => {
+        const file = fileInputRef.current?.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const base64 = (e.target?.result as string).split(',')[1];
+            const mimeType = file.type;
+
+            const newMessages = [...messages, {
+                id: Date.now().toString(),
+                role: 'user' as const,
+                content: `📸 [Ảnh: ${file.name}]${input ? ' - ' + input : ''}`
+            }];
+            setMessages(newMessages);
+            setInput('');
+            setIsLoading(true);
+
+            try {
+                const data = await analyzeImage(base64, mimeType, input || undefined, productsStr);
+                setMessages(prev => [...prev, {
+                    id: Date.now().toString(),
+                    role: 'bot',
+                    content: data.message || 'Em đã phân tích xong ảnh!',
+                    parsedData: data
+                }]);
+            } catch (err: any) {
+                setMessages(prev => [...prev, {
+                    id: Date.now().toString(),
+                    role: 'bot',
+                    content: `❌ ${err.message || 'Lỗi phân tích ảnh'}`
+                }]);
+            } finally {
+                setIsLoading(false);
+                if (fileInputRef.current) fileInputRef.current.value = '';
+            }
+        };
+        reader.readAsDataURL(file);
+    };
+
+    // 🎙️ Voice input (Web Speech API)
+    const toggleVoiceInput = () => {
+        if (isRecording) {
+            recognitionRef.current?.stop();
+            return;
+        }
+
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert('Trình duyệt của anh không hỗ trợ nhập giọng nói. Vui lòng dùng Chrome hoặc Edge.');
+            return;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'vi-VN';
+        recognition.continuous = false;
+        recognition.interimResults = false;
+
+        recognition.onresult = (event: any) => {
+            const transcript = event.results[0][0].transcript;
+            setInput(prev => prev + ' ' + transcript);
+        };
+
+        recognition.onerror = (event: any) => {
+            console.error('Voice error:', event.error);
+            setIsRecording(false);
+        };
+
+        recognition.onend = () => {
+            setIsRecording(false);
+        };
+
+        recognitionRef.current = recognition;
+        setIsRecording(true);
+        recognition.start();
+    };
+
+    // 🛡️ Confirm & execute
+    const confirmAndExecute = async () => {
+        const data = confirmAction;
+        setConfirmAction(null);
+        await executeAction(data);
+    };
+
+    const processTextMessage = async (userMsg: string) => {
         
         const newMessages = [...messages, { id: Date.now().toString(), role: 'user' as const, content: userMsg }];
         setMessages(newMessages);
@@ -287,7 +388,13 @@ const SaleBot = () => {
         }
     };
 
-    const handleAction = async (data: any) => {
+    // 🛡️ Show confirmation before executing
+    const handleAction = (data: any) => {
+        setConfirmAction(data);
+    };
+
+    // ⚡ Execute the actual action (after confirmation)
+    const executeAction = async (data: any) => {
         if (data.intent === 'CREATE_ORDER') {
             navigate('/quick-order', { state: { prefill: data } });
         } else if (data.intent === 'INVENTORY_ACTION') {
@@ -918,27 +1025,107 @@ const SaleBot = () => {
 
                 {/* Input Area */}
                 <div className="p-4 md:p-6 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shrink-0">
-                    <form onSubmit={handleSend} className="relative flex items-center">
+                    <form onSubmit={handleSend} className="relative flex items-center gap-2">
+                        {/* 📸 Camera button */}
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={() => handleSend()}
+                        />
+                        <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={isLoading}
+                            className="size-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 hover:bg-indigo-100 hover:text-indigo-600 dark:hover:bg-indigo-900/40 dark:hover:text-indigo-400 transition-colors shrink-0"
+                            title="Gửi ảnh"
+                        >
+                            <Camera size={18} />
+                        </button>
+
                         <textarea
                             ref={textareaRef}
                             value={input}
                             onChange={handleInput}
                             onKeyDown={handleKeyDown}
-                            placeholder="Nhập yêu cầu tạo đơn/khách (Ví dụ: Tạo khách anh Nam ở Q1...)"
+                            placeholder="Nhập yêu cầu tạo đơn/khách..."
                             className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[24px] py-4 pl-6 pr-14 outline-none focus:border-[#FF6D00] dark:focus:border-[#FF6D00] transition-colors text-slate-800 dark:text-white resize-none overflow-hidden custom-scrollbar leading-relaxed"
                             style={{ minHeight: '56px', maxHeight: '120px' }}
                             rows={1}
                             disabled={isLoading}
                         />
+
+                        {/* 🎙️ Voice button */}
+                        <button
+                            type="button"
+                            onClick={toggleVoiceInput}
+                            disabled={isLoading}
+                            className={`size-10 rounded-full flex items-center justify-center transition-all shrink-0 ${isRecording ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-orange-100 hover:text-orange-600 dark:hover:bg-orange-900/40 dark:hover:text-orange-400'}`}
+                            title={isRecording ? 'Đang nghe...' : 'Nhập giọng nói'}
+                        >
+                            {isRecording ? <MicOff size={18} /> : <Mic size={18} />}
+                        </button>
+
                         <button 
                             type="submit" 
                             disabled={!input.trim() || isLoading}
-                            className="absolute right-2 bottom-2 size-10 bg-[#FF6D00] hover:bg-[#E66000] disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded-full flex items-center justify-center transition-colors shadow-md"
+                            className="size-10 bg-[#FF6D00] hover:bg-[#E66000] disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded-full flex items-center justify-center transition-colors shadow-md shrink-0"
                         >
                             <Send size={18} className={input.trim() && !isLoading ? 'ml-1' : ''} />
                         </button>
                     </form>
                 </div>
+
+                {/* 🛡️ Confirmation Dialog */}
+                {confirmAction && (
+                    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
+                        <div className="bg-white dark:bg-slate-900 w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl p-6 animate-in slide-in-from-bottom-full sm:zoom-in-95 duration-300">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-black text-[#1A237E] dark:text-indigo-400 uppercase">Xác nhận thao tác</h3>
+                                <button onClick={() => setConfirmAction(null)} className="size-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500">
+                                    <X size={16} />
+                                </button>
+                            </div>
+                            
+                            <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 mb-4 space-y-2">
+                                <div className="text-xs font-black text-[#FF6D00] uppercase tracking-widest">
+                                    {confirmAction.intent === 'CREATE_CUSTOMER' ? '🆕 Tạo khách hàng mới' :
+                                     confirmAction.intent === 'CREATE_ORDER' ? '🛒 Lên đơn hàng' :
+                                     confirmAction.intent === 'CREATE_PRODUCT' ? '📦 Tạo sản phẩm mới' :
+                                     confirmAction.intent === 'CREATE_PAYMENT' ? '💰 Thu công nợ' :
+                                     confirmAction.intent === 'INVENTORY_ACTION' ? '📊 Phiếu kho' :
+                                     'Thao tác'}
+                                </div>
+                                {confirmAction.customer?.name && <p className="text-sm font-bold">👤 {confirmAction.customer.name}{confirmAction.customer.phone ? ` - ${confirmAction.customer.phone}` : ''}</p>}
+                                {confirmAction.products?.length > 0 && (
+                                    <div className="text-sm">
+                                        <span className="font-bold">📋 Sản phẩm:</span>
+                                        {confirmAction.products.map((p: any, i: number) => (
+                                            <span key={i} className="ml-1 text-slate-600 dark:text-slate-400">{p.name} x{p.quantity}{i < confirmAction.products.length - 1 ? ', ' : ''}</span>
+                                        ))}
+                                    </div>
+                                )}
+                                {confirmAction.payment_info?.amount > 0 && <p className="text-sm font-bold text-green-600">💵 {confirmAction.payment_info.amount.toLocaleString('vi-VN')} VND</p>}
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setConfirmAction(null)}
+                                    className="flex-1 py-3 rounded-2xl font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                >
+                                    Huỷ
+                                </button>
+                                <button
+                                    onClick={confirmAndExecute}
+                                    className="flex-1 py-3 rounded-2xl font-bold text-white bg-[#FF6D00] hover:bg-[#E66000] shadow-lg shadow-orange-500/20 transition-all active:scale-[0.98]"
+                                >
+                                    ✅ Xác nhận
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
             </div>
         </div>

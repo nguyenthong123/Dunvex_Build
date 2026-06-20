@@ -930,6 +930,163 @@ const SaleBot = () => {
             } finally {
                 setIsLoading(false);
             }
+        } else if (data.intent === 'IMPORT_INVENTORY') {
+            // 📊 Import tồn kho từ Google Sheet
+            try {
+                if (!data.import_url) {
+                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot',
+                        content: '❌ Không tìm thấy link Google Sheet. Anh/chị vui lòng gửi lại link đầy đủ.' }]);
+                    return;
+                }
+                setIsLoading(true);
+                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot',
+                    content: '⏳ Đang đọc dữ liệu từ Google Sheet...' }]);
+
+                // Chuyển Google Sheet URL → CSV export
+                let csvUrl = data.import_url;
+                const match = csvUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                if (!match) {
+                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot',
+                        content: '❌ Link Google Sheet không đúng định dạng. Cần link dạng: https://docs.google.com/spreadsheets/d/...' }]);
+                    setIsLoading(false);
+                    return;
+                }
+                const sheetId = match[1];
+                const gidMatch = csvUrl.match(/gid=(\d+)/);
+                const gid = gidMatch ? gidMatch[1] : '0';
+                csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
+
+                const res = await fetch(csvUrl);
+                if (!res.ok) {
+                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot',
+                        content: '❌ Không đọc được Google Sheet. Sheet cần được chia sẻ công khai (Anyone with link).' }]);
+                    setIsLoading(false);
+                    return;
+                }
+
+                const csvText = await res.text();
+                const lines = csvText.split('\n').filter(l => l.trim());
+                if (lines.length < 2) {
+                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot',
+                        content: '❌ Sheet trống hoặc không có dữ liệu.' }]);
+                    setIsLoading(false);
+                    return;
+                }
+
+                // Parse header để tìm cột
+                const parseCSVLine = (line: string): string[] => {
+                    const result: string[] = [];
+                    let current = '';
+                    let inQuotes = false;
+                    for (const ch of line) {
+                        if (ch === '"') { inQuotes = !inQuotes; continue; }
+                        if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ''; continue; }
+                        current += ch;
+                    }
+                    result.push(current.trim());
+                    return result;
+                };
+
+                const headers = parseCSVLine(lines[0]).map(h => normalizeVN(h));
+                const nameColIdx = headers.findIndex((h: string) => 
+                    h.includes('ten') || h.includes('sanpham') || h.includes('product') || h.includes('name') || h.includes('hanghoa'));
+                const priceColIdx = headers.findIndex((h: string) =>
+                    h.includes('gia') || h.includes('price') || h.includes('ban') || h.includes('don'));
+                const stockColIdx = headers.findIndex((h: string) =>
+                    h.includes('ton') || h.includes('stock') || h.includes('soluong') || h.includes('kho') || h.includes('conlai'));
+
+                if (nameColIdx < 0) {
+                    const cols = headers.join(', ');
+                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot',
+                        content: `❌ Không tìm thấy cột "Tên sản phẩm". Các cột hiện có: ${cols}. Vui lòng đặt tên cột có chữ "tên" hoặc "sản phẩm".` }]);
+                    setIsLoading(false);
+                    return;
+                }
+
+                // Lấy tất cả sản phẩm từ database
+                const qProd = query(collection(db, 'products'), where('ownerId', '==', owner.ownerId));
+                const snap = await getDocs(qProd);
+                const allProducts = snap.docs.map(d => ({ id: d.id, ...d.data() as any }));
+
+                // Parse từng dòng
+                const matchedItems: any[] = [];
+                const notFoundItems: { name: string; stock: number }[] = [];
+                for (let i = 1; i < lines.length; i++) {
+                    const cols = parseCSVLine(lines[i]);
+                    const rowName = cols[nameColIdx] || '';
+                    const rowPrice = priceColIdx >= 0 ? cols[priceColIdx] : '';
+                    const rowStock = stockColIdx >= 0 ? Number(cols[stockColIdx]?.replace(/[^\d.-]/g, '')) : 0;
+
+                    if (!rowName || isNaN(rowStock)) continue;
+
+                    const matched = findMatchingProduct(rowName, allProducts);
+                    if (matched) {
+                        matchedItems.push({ product: matched, newStock: rowStock });
+                    } else {
+                        notFoundItems.push({ name: rowName, stock: rowStock });
+                    }
+                }
+
+                if (matchedItems.length === 0) {
+                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot',
+                        content: `❌ Không tìm thấy sản phẩm nào khớp trong ${lines.length - 1} dòng.\nDanh sách từ sheet: ${notFoundItems.map(i => i.name).join(', ')}` }]);
+                    setIsLoading(false);
+                    return;
+                }
+
+                // Hiện popup xác nhận
+                const confirmMsg = notFoundItems.length > 0
+                    ? `📊 Đã tìm thấy **${matchedItems.length}/${lines.length - 1}** sản phẩm khớp. ${notFoundItems.length} sản phẩm không tìm thấy: ${notFoundItems.map(i => i.name).join(', ')}.\n\nXác nhận cập nhật tồn kho?`
+                    : `📊 Đã tìm thấy **${matchedItems.length}** sản phẩm khớp từ sheet. Xác nhận cập nhật tồn kho?`;
+
+                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: confirmMsg,
+                    parsedData: { intent: 'CONFIRM_IMPORT', import_items: matchedItems, not_found: notFoundItems } }]);
+            } catch (err: any) {
+                console.error('IMPORT_INVENTORY error:', err);
+                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot',
+                    content: `❌ Lỗi khi đọc Google Sheet: ${err.message || 'Sheet có thể chưa được chia sẻ công khai.'}` }]);
+            } finally {
+                setIsLoading(false);
+            }
+        } else if (data.intent === 'CONFIRM_IMPORT') {
+            // 📊 Xác nhận cập nhật tồn kho từ import
+            try {
+                if (!data.import_items?.length) return;
+                setIsLoading(true);
+
+                let updatedCount = 0;
+                for (const item of data.import_items) {
+                    await updateDoc(doc(db, 'products', item.product.id), {
+                        stock: Number(item.newStock) || 0,
+                        updatedAt: serverTimestamp()
+                    });
+                    updatedCount++;
+                }
+
+                // Lưu log
+                await addDoc(collection(db, 'inventory_logs'), {
+                    action: 'Import Google Sheet',
+                    type: 'import',
+                    items: data.import_items.map((i: any) => ({
+                        productId: i.product.id,
+                        name: i.product.name,
+                        newStock: i.newStock,
+                        previousStock: i.product.stock || 0
+                    })),
+                    note: 'Import từ Google Sheet qua SaleBot',
+                    createdAt: serverTimestamp(),
+                    ownerId: owner.ownerId,
+                    user: auth.currentUser?.displayName || 'Unknown'
+                });
+
+                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot',
+                    content: `✅ Đã cập nhật tồn kho cho **${updatedCount}** sản phẩm từ Google Sheet!` }]);
+            } catch (err: any) {
+                console.error('CONFIRM_IMPORT error:', err);
+                alert(`Lỗi khi cập nhật tồn kho: ${err.message}`);
+            } finally {
+                setIsLoading(false);
+            }
         } else if (data.intent === 'CREATE_CUSTOMER') {
             try {
                 if (!owner.ownerId) {
@@ -1269,6 +1426,47 @@ const SaleBot = () => {
             } finally {
                 setIsLoading(false);
             }
+        } else if (data.intent === 'CONFIRM_IMPORT') {
+            // 📊 Xác nhận cập nhật tồn kho từ import
+            try {
+                if (!data.import_items?.length) {
+                    alert('Không có sản phẩm nào để cập nhật.');
+                    return;
+                }
+                setIsLoading(true);
+
+                let updatedCount = 0;
+                for (const item of data.import_items) {
+                    await updateDoc(doc(db, 'products', item.product.id), {
+                        stock: Number(item.newStock) || 0,
+                        updatedAt: serverTimestamp()
+                    });
+                    updatedCount++;
+                }
+
+                await addDoc(collection(db, 'inventory_logs'), {
+                    action: 'Import Google Sheet',
+                    type: 'import',
+                    items: data.import_items.map((i: any) => ({
+                        productId: i.product.id,
+                        name: i.product.name,
+                        newStock: i.newStock,
+                        previousStock: i.product.stock || 0
+                    })),
+                    note: 'Import từ Google Sheet qua SaleBot',
+                    createdAt: serverTimestamp(),
+                    ownerId: owner.ownerId,
+                    user: auth.currentUser?.displayName || 'Unknown'
+                });
+
+                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot',
+                    content: `✅ Đã cập nhật tồn kho cho **${updatedCount}** sản phẩm từ Google Sheet!` }]);
+            } catch (err: any) {
+                console.error('CONFIRM_IMPORT exec error:', err);
+                alert(`Lỗi: ${err.message}`);
+            } finally {
+                setIsLoading(false);
+            }
         } else {
             alert('Hành động chưa được hỗ trợ.');
         }
@@ -1485,7 +1683,7 @@ const SaleBot = () => {
                                             </div>
                                         )}
 
-                                        {['CREATE_ORDER', 'UPDATE_ORDER', 'REVIEW_ORDER', 'FIX_ORDER', 'CREATE_CUSTOMER', 'UPDATE_CUSTOMER', 'CREATE_PRODUCT', 'CREATE_PAYMENT', 'INVENTORY_ACTION'].includes(msg.parsedData.intent) && 
+                                        {['CREATE_ORDER', 'UPDATE_ORDER', 'REVIEW_ORDER', 'FIX_ORDER', 'CREATE_CUSTOMER', 'UPDATE_CUSTOMER', 'CREATE_PRODUCT', 'CREATE_PAYMENT', 'CONFIRM_IMPORT'].includes(msg.parsedData.intent) && 
                                         (!msg.parsedData.missing_info || msg.parsedData.missing_info.length === 0) && (
                                             <button 
                                                 onClick={() => handleAction(msg.parsedData)}
@@ -1640,6 +1838,7 @@ const SaleBot = () => {
                                      confirmAction.intent === 'CREATE_PRODUCT' ? '📦 Tạo sản phẩm mới' :
                                      confirmAction.intent === 'CREATE_PAYMENT' ? '💰 Thu công nợ' :
                                      confirmAction.intent === 'INVENTORY_ACTION' ? '📊 Phiếu kho' :
+                                     confirmAction.intent === 'CONFIRM_IMPORT' ? '📊 Import Tồn kho' :
                                      'Thao tác'}
                                 </div>
                                 {confirmAction.customer?.name && <p className="text-sm font-bold">👤 {confirmAction.customer.name}{confirmAction.customer.phone ? ` - ${confirmAction.customer.phone}` : ''}</p>}
@@ -1662,6 +1861,19 @@ const SaleBot = () => {
                                     </div>
                                 )}
                                 {confirmAction.payment_info?.amount > 0 && <p className="text-sm font-bold text-green-600">💵 {confirmAction.payment_info.amount.toLocaleString('vi-VN')} VND</p>}
+                                {confirmAction.import_items?.length > 0 && (
+                                    <div className="text-sm space-y-1 max-h-40 overflow-y-auto">
+                                        <span className="font-bold">📋 Cập nhật tồn kho ({confirmAction.import_items.length} SP):</span>
+                                        {confirmAction.import_items.slice(0, 10).map((item: any, i: number) => (
+                                            <div key={i} className="ml-2 text-xs text-slate-600 dark:text-slate-400">
+                                                • {item.product.name}: <strong>{item.product.stock || 0}</strong> → <strong className="text-green-600">{item.newStock}</strong>
+                                            </div>
+                                        ))}
+                                        {confirmAction.import_items.length > 10 && (
+                                            <p className="text-xs text-slate-400 ml-2">...và {confirmAction.import_items.length - 10} sản phẩm khác</p>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
                             <div className="flex gap-3">

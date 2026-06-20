@@ -4,10 +4,6 @@ const config: CapacitorConfig = {
   appId: 'com.dunvex.build',
   appName: 'Dunvex Build',
   webDir: 'dist',
-  server: {
-    // Dùng localhost để tránh CORS, Capacitor sẽ load từ assets
-    androidScheme: 'https'
-  },
   plugins: {
     FirebaseAuthentication: {
       skipNativeAuth: false,

@@ -2,6 +2,10 @@ import React, { useEffect, useState } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 
 const ReloadPrompt: React.FC = () => {
+	// 🏠 Tắt update prompt trong dev mode (HMR liên tục đổi hash gây popup)
+	const isDev = import.meta.env.DEV;
+	if (isDev) return null;
+
 	const {
 		offlineReady: [offlineReady, setOfflineReady],
 		needRefresh: [needRefresh, setNeedRefresh],

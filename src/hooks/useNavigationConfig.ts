@@ -121,6 +121,14 @@ export const useNavigationConfig = () => {
 			};
 		}
 
+		if (path === '/sale-bot') {
+			return {
+				icon: 'forum',
+				label: 'Chat AI',
+				path: 'event:toggle-salebot',
+			};
+		}
+
 		if (path === '/settings') {
 			return {
 				icon: 'contrast',

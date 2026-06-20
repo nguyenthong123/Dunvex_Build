@@ -8,7 +8,7 @@ interface ImportMetaEnv {
 	readonly VITE_FIREBASE_STORAGE_BUCKET: string
 	readonly VITE_FIREBASE_MESSAGING_SENDER_ID: string
 	readonly VITE_FIREBASE_APP_ID: string
-	readonly VITE_GROQ_API_KEY: string
+	// GEMINI_API_KEY is server-side only (not exposed to client)
 }
 
 interface ImportMeta {

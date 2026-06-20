@@ -6,6 +6,59 @@ import { db, auth } from '../services/firebase';
 import { collection, query, where, getDocs, addDoc, serverTimestamp, updateDoc, doc, Timestamp, increment, setDoc, getDoc } from 'firebase/firestore';
 import { useOwner } from '../hooks/useOwner';
 
+// 🔍 Chuẩn hóa tiếng Việt để tìm kiếm chính xác (bỏ dấu, lowercase, NFC)
+function normalizeVN(text: string): string {
+    return text
+        .normalize('NFC')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '') // bỏ dấu
+        .replace(/đ/g, 'd')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+// 🔍 Tìm sản phẩm khớp trong danh sách (ưu tiên khớp chính xác, rồi includes, rồi fuzzy tiếng Việt)
+function findMatchingProduct(name: string, allProducts: any[], category?: string): any | null {
+    const searchName = (name || '').toLowerCase().trim();
+    const searchNameVN = normalizeVN(name || '');
+    
+    // Ưu tiên 1: Khớp chính xác tên (case-insensitive)
+    let found = allProducts.find(p => (p.name || '').toLowerCase() === searchName);
+    if (found) return found;
+    
+    // Ưu tiên 2: Khớp tên + category nếu có
+    if (category) {
+        const searchCat = normalizeVN(category);
+        found = allProducts.find(p => 
+            (p.name || '').toLowerCase() === searchName && 
+            normalizeVN(p.category || '') === searchCat
+        );
+        if (found) return found;
+    }
+    
+    // Ưu tiên 3: Contains exact name
+    found = allProducts.find(p => (p.name || '').toLowerCase().includes(searchName));
+    if (found) return found;
+    
+    // Ưu tiên 4: Fuzzy Vietnamese match (bỏ dấu)
+    if (searchNameVN.length >= 3) {
+        found = allProducts.find(p => normalizeVN(p.name || '').includes(searchNameVN));
+        if (found) return found;
+        
+        // Ưu tiên 5: Fuzzy + category
+        if (category) {
+            found = allProducts.find(p => 
+                normalizeVN(p.name || '').includes(searchNameVN) &&
+                normalizeVN(p.category || '').includes(normalizeVN(category))
+            );
+            if (found) return found;
+        }
+    }
+    
+    return null;
+}
+
 interface ChatMessage {
     id: string;
     role: 'user' | 'bot';
@@ -23,6 +76,7 @@ const SaleBot = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [productsStr, setProductsStr] = useState<string>("");
     const [showProductsModal, setShowProductsModal] = useState(false);
+    const [chatVisible, setChatVisible] = useState(true); // 🔘 Toggle FAB
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -126,6 +180,13 @@ const SaleBot = () => {
         if (isInitialLoad.current) return;
         saveMessagesToDb(messages);
     }, [messages]);
+
+    useEffect(() => {
+        // 🔘 Lắng nghe sự kiện toggle chat từ FAB
+        const handler = () => setChatVisible(v => !v);
+        window.addEventListener('toggle-salebot', handler);
+        return () => window.removeEventListener('toggle-salebot', handler);
+    }, []);
 
     useEffect(() => {
         if (!owner.ownerId) return; // Đợi load xong ownerId mới query
@@ -512,12 +573,12 @@ const SaleBot = () => {
 
                 for (const aiProd of data.products) {
                     const aiName = (aiProd.name || '').toLowerCase().trim();
-                    let matched = allProducts.find(p => (p.name || '').toLowerCase() === aiName);
-                    if (!matched) matched = allProducts.find(p => (p.name || '').toLowerCase().includes(aiName));
+                    const aiCategory = (aiProd.category || '').trim();
+                    const matched = findMatchingProduct(aiProd.name, allProducts, aiCategory);
                     
                     if (matched) {
                         const qty = Number(aiProd.quantity) || 1;
-                        const price = Number(matched.price || matched.retail_price || 0);
+                        const price = Number(matched.price || matched.retail_price || matched.priceSell || 0);
                         const cost = Number(matched.cost || matched.import_price || 0);
                         const weight = Number(matched.weight || 0);
                         newItems.push({
@@ -720,11 +781,10 @@ const SaleBot = () => {
                     const itemName = (item.name || '').toLowerCase().trim();
                     
                     // Tìm sản phẩm khớp
-                    let found = allProducts.find(p => (p.name || '').toLowerCase() === itemName);
-                    if (!found) found = allProducts.find(p => (p.name || '').toLowerCase().includes(itemName));
+                    const found = findMatchingProduct(itemName, allProducts);
                     
                     if (found) {
-                        const newPrice = Number(found.price || found.retail_price || 0);
+                        const newPrice = Number(found.price || found.retail_price || found.priceSell || 0);
                         const newCost = Number(found.cost || found.import_price || 0);
                         const newWeight = Number(found.weight || 0);
                         const newQty = Number(item.quantity) || 1;
@@ -799,11 +859,7 @@ const SaleBot = () => {
 
                 const matchedItems = [];
                 for (const aiProd of data.products) {
-                    const aiName = (aiProd.name || '').toLowerCase().trim();
-                    let matchedProd = allProducts.find(p => (p.name || '').toLowerCase() === aiName);
-                    if (!matchedProd) {
-                        matchedProd = allProducts.find(p => (p.name || '').toLowerCase().includes(aiName));
-                    }
+                    const matchedProd = findMatchingProduct(aiProd.name, allProducts, aiProd.category);
 
                     if (matchedProd) {
                         matchedItems.push({
@@ -1225,22 +1281,8 @@ const SaleBot = () => {
         <div className="absolute inset-0 pt-14 lg:pt-0 pb-24 lg:pb-0 z-40 bg-white dark:bg-slate-900 flex flex-col">
             <div className="w-full flex flex-col h-full overflow-hidden relative">
                 
-                {/* Header */}
-                <div className="flex items-center gap-4 p-6 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-[#1A237E] to-[#0D1240] text-white shrink-0">
-                    <div className="w-12 h-12 bg-white/10 backdrop-blur-sm rounded-2xl flex items-center justify-center relative shadow-lg">
-                        <BotMessageSquare size={24} className="text-[#ffcc00]" />
-                        <Sparkles size={12} className="absolute -top-1 -right-1 text-[#ffcc00] animate-pulse" />
-                    </div>
-                    <div>
-                        <h2 className="text-xl font-black uppercase tracking-tight flex items-center gap-2">
-                            Trợ lý AI <span className="text-[10px] bg-[#ffcc00] text-slate-900 px-2 py-0.5 rounded-full font-bold">PRO</span>
-                        </h2>
-                        <p className="text-xs text-white/70 font-bold uppercase tracking-widest mt-0.5">Powered by Gemini 2.5 Flash</p>
-                    </div>
-                </div>
-
                 {/* Chat Area */}
-                <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-6 space-y-6 custom-scrollbar bg-slate-50 dark:bg-slate-900/50">
+                <div className="flex-1 overflow-y-auto p-3 md:p-6 pb-4 space-y-4 custom-scrollbar bg-slate-50 dark:bg-slate-900/50">
                     {messages.map((msg) => (
                         <div key={msg.id} className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
                             <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 shadow-sm ${msg.role === 'user' ? 'bg-[#FF6D00] text-white' : 'bg-indigo-100 dark:bg-indigo-900/40 text-[#1A237E] dark:text-indigo-400'}`}>
@@ -1449,7 +1491,9 @@ const SaleBot = () => {
                     <div ref={messagesEndRef} />
                 </div>
 
-                {/* Input Area */}
+                {/* Input Area — ẩn/hiện bằng nút cam FAB */}
+                {chatVisible && (
+                <>
                 {/* 🔍 Xem trước ảnh đã chọn */}
                 {imagePreviews.length > 0 && (
                     <div className="px-4 pt-3 flex gap-2 overflow-x-auto shrink-0 bg-white dark:bg-slate-900">
@@ -1474,7 +1518,7 @@ const SaleBot = () => {
                     </div>
                 )}
 
-                <div className="p-4 md:p-6 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shrink-0 z-10 relative">
+                <div className="p-3 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shrink-0 z-10 relative mb-[72px]">
                     <form onSubmit={handleSend} className="relative flex items-center gap-2">
                         {/* 📸 Photo library button */}
                         <input
@@ -1540,6 +1584,8 @@ const SaleBot = () => {
                         </button>
                     </form>
                 </div>
+                </>
+                )}
 
                 {/* 🛡️ Confirmation Dialog */}
                 {confirmAction && (

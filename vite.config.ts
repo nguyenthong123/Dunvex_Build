@@ -3,15 +3,17 @@ import react from '@vitejs/plugin-react-swc'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 import { VitePWA } from 'vite-plugin-pwa'
+import { devApiPlugin } from './vite-api-dev'
 
 // https://vitejs.dev/config/
 export default defineConfig({
 	plugins: [
 		react(),
+		devApiPlugin(), // 🔐 Xử lý /api/gemini-proxy và /api/gemini-vision trong dev mode
 		tailwindcss(),
 		VitePWA({
 			registerType: 'prompt',
-			includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+			includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png'],
 			manifest: {
 				name: 'Dunvex Build Management',
 				short_name: 'DunvexBuild',
@@ -30,6 +32,16 @@ export default defineConfig({
 						src: '/dv_icon.svg',
 						sizes: '512x512',
 						type: 'image/svg+xml'
+					},
+					{
+						src: '/icon-192.png',
+						sizes: '192x192',
+						type: 'image/png'
+					},
+					{
+						src: '/icon-512.png',
+						sizes: '512x512',
+						type: 'image/png'
 					}
 				]
 			},
@@ -72,5 +84,10 @@ export default defineConfig({
 	},
 	build: {
 		sourcemap: false,
+		// Xóa console.log/debugger khỏi production build
+		minify: 'esbuild',
+		esbuild: {
+			drop: ['console', 'debugger'],
+		},
 	},
 })

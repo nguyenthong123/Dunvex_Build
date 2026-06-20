@@ -14,11 +14,11 @@ function normalizeVN(text: string): string {
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '') // bỏ dấu
         .replace(/đ/g, 'd')
-        .replace(/\s+/g, ' ')
+        .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\s]+/g, '') // bỏ dấu câu + khoảng trắng
         .trim();
 }
 
-// 🔍 Tìm sản phẩm khớp trong danh sách (ưu tiên khớp chính xác, rồi includes, rồi fuzzy tiếng Việt)
+// 🔍 Tìm sản phẩm khớp trong danh sách (8 tầng ưu tiên)
 function findMatchingProduct(name: string, allProducts: any[], category?: string): any | null {
     const searchName = (name || '').toLowerCase().trim();
     const searchNameVN = normalizeVN(name || '');
@@ -37,16 +37,27 @@ function findMatchingProduct(name: string, allProducts: any[], category?: string
         if (found) return found;
     }
     
-    // Ưu tiên 3: Contains exact name
+    // Ưu tiên 3: DB name contains search name
     found = allProducts.find(p => (p.name || '').toLowerCase().includes(searchName));
     if (found) return found;
     
-    // Ưu tiên 4: Fuzzy Vietnamese match (bỏ dấu)
-    if (searchNameVN.length >= 3) {
+    // Ưu tiên 4: Search name contains DB name (VD: "Keo A2.75" chứa "A2.75")
+    found = allProducts.find(p => searchName.includes((p.name || '').toLowerCase()));
+    if (found) return found;
+    
+    // Ưu tiên 5: Fuzzy Vietnamese match (bỏ dấu + bỏ space/punctuation)
+    if (searchNameVN.length >= 2) {
         found = allProducts.find(p => normalizeVN(p.name || '').includes(searchNameVN));
         if (found) return found;
         
-        // Ưu tiên 5: Fuzzy + category
+        // Ưu tiên 6: Ngược lại - search bao hàm DB
+        found = allProducts.find(p => {
+            const dbVN = normalizeVN(p.name || '');
+            return dbVN.length >= 2 && searchNameVN.includes(dbVN);
+        });
+        if (found) return found;
+        
+        // Ưu tiên 7: Fuzzy + category
         if (category) {
             found = allProducts.find(p => 
                 normalizeVN(p.name || '').includes(searchNameVN) &&

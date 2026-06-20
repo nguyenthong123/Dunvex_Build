@@ -13,7 +13,7 @@ const BottomNav = () => {
 	};
 
 	return (
-		<nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 pb-safe-area-inset-bottom z-[100] md:hidden">
+		<nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 pb-safe-area-inset-bottom z-[40] md:hidden">
 			<div className="flex justify-between items-end relative px-6 py-2">
 				{navItems.map((item) => {
 					const isActive = item.path === '/' ? currentPath === '/' : currentPath.startsWith(item.path);

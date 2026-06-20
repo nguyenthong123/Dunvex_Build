@@ -896,10 +896,11 @@ const SaleBot = () => {
                 }
 
                 if (matchedItems.length === 0) {
+                    const notFoundNames = data.products?.map((p: any) => p.name).join(', ') || 'không xác định';
                     setMessages(prev => [...prev, {
                         id: Date.now().toString(),
                         role: 'bot',
-                        content: `❌ Không tìm thấy sản phẩm nào khớp trong kho. Vui lòng kiểm tra lại tên sản phẩm.`
+                        content: `❌ Không tìm thấy sản phẩm nào trong kho:\n\n**${notFoundNames}**\n\n💡 Sản phẩm có thể chưa được tạo. Hãy tạo sản phẩm trước bằng cách gõ:\n\`tạo sản phẩm: [tên sản phẩm]\``
                     }]);
                     setIsLoading(false);
                     return;
@@ -1675,7 +1676,7 @@ const SaleBot = () => {
                                             </div>
                                         )}
 
-                                        {msg.parsedData.intent === 'INVENTORY_ACTION' && msg.parsedData.products && (
+                                        {msg.parsedData.intent === 'INVENTORY_ACTION' && msg.parsedData.products && msg.parsedData.products.length > 0 && (
                                             <div className="mb-3">
                                                 <p className="text-[10px] text-slate-500 uppercase font-bold mb-2">
                                                     Danh sách mặt hàng ({msg.parsedData.inventory_action?.type === 'export' ? 'Xuất kho' : 'Nhập kho'}):

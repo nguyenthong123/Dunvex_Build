@@ -1216,12 +1216,25 @@ const SaleBot = () => {
                 let successCount = 0;
                 let firstProductName = "";
 
+                // 📋 Lấy tất cả SKU hiện có để tránh trùng
+                const existingSnap = await getDocs(query(collection(db, 'products'), where('ownerId', '==', owner.ownerId)));
+                const existingSkus = new Set(existingSnap.docs.map(d => d.data().sku).filter(Boolean));
+
+                const generateUniqueSku = (idx: number): string => {
+                    for (let attempt = 0; attempt < 10; attempt++) {
+                        const sku = 'SP' + String(1000 + Math.floor(Math.random() * 9000)) + Date.now().toString().slice(-4) + String(idx);
+                        if (!existingSkus.has(sku)) return sku;
+                    }
+                    // Fallback: timestamp-based
+                    return 'SP' + Date.now().toString(36).toUpperCase() + String(idx);
+                };
+
                 for (let i = 0; i < productsToCreate.length; i++) {
                     const pInfo = productsToCreate[i];
                     if (!pInfo.name) continue;
 
-                    // Tự động tạo mã SKU (Ví dụ: SP + 4 số ngẫu nhiên + 4 số cuối timestamp)
-                    const generatedSku = 'SP' + Math.floor(1000 + Math.random() * 9000) + Date.now().toString().slice(-4) + i.toString();
+                    const generatedSku = generateUniqueSku(i);
+                    existingSkus.add(generatedSku); // Đánh dấu đã dùng trong batch này
 
                     const productData = {
                         name: pInfo.name,

@@ -144,15 +144,15 @@ const Login = () => {
 			setIsLoggingIn(true);
 			setLoginStatus('Đang mở đăng nhập Google...');
 
-			// 📱 PWA standalone không hỗ trợ popup → dùng redirect
-			const isPWA = window.matchMedia('(display-mode: standalone)').matches
-				|| (navigator as any).standalone;
-
-			if (isPWA) {
+			// 📱 Chỉ iOS PWA (Safari standalone) mới cần redirect vì WKWebView không hỗ trợ popup
+			// navigator.standalone chỉ có trên iOS Safari PWA, KHÔNG có trên Android Chrome
+			const isIOSPWA = !!(navigator as any).standalone;
+			if (isIOSPWA) {
 				await signInWithRedirect(auth, googleProvider);
 				return;
 			}
 
+			// Android PWA & browser thường: dùng popup như cũ
 			try {
 				const result = await signInWithPopup(auth, googleProvider);
 				if (result.user) await processUserLogin(result.user);

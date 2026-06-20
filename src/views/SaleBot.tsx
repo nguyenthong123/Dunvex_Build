@@ -402,6 +402,21 @@ const SaleBot = () => {
         });
 
         try {
+            // 📊 Pre-check: nếu có link Google Sheet → import trực tiếp, không cần Gemini
+            const sheetMatch = userMsg.match(/https?:\/\/docs\.google\.com\/spreadsheets\/[^\s]+/);
+            if (sheetMatch) {
+                const data = {
+                    intent: 'IMPORT_INVENTORY',
+                    import_url: sheetMatch[0],
+                    message: 'Dạ, em đã nhận được link Google Sheet của anh/chị và sẽ tiến hành cập nhật tồn kho ạ.'
+                };
+                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: data.message, parsedData: data }]);
+                setIsLoading(false);
+                // Tự động xử lý import
+                await executeAction(data);
+                return;
+            }
+
             const data = await parseSaleMessage(userMsg, productsStr, formattedHistory);
             
             // Nếu AI muốn SEARCH, ta làm ngay ngầm phía dưới!
@@ -1423,47 +1438,6 @@ const SaleBot = () => {
             } catch (error: any) {
                 console.error("Lỗi thu tiền:", error);
                 alert(`Lỗi khi chuyển hướng thu tiền: ${error?.message || JSON.stringify(error)}`);
-            } finally {
-                setIsLoading(false);
-            }
-        } else if (data.intent === 'CONFIRM_IMPORT') {
-            // 📊 Xác nhận cập nhật tồn kho từ import
-            try {
-                if (!data.import_items?.length) {
-                    alert('Không có sản phẩm nào để cập nhật.');
-                    return;
-                }
-                setIsLoading(true);
-
-                let updatedCount = 0;
-                for (const item of data.import_items) {
-                    await updateDoc(doc(db, 'products', item.product.id), {
-                        stock: Number(item.newStock) || 0,
-                        updatedAt: serverTimestamp()
-                    });
-                    updatedCount++;
-                }
-
-                await addDoc(collection(db, 'inventory_logs'), {
-                    action: 'Import Google Sheet',
-                    type: 'import',
-                    items: data.import_items.map((i: any) => ({
-                        productId: i.product.id,
-                        name: i.product.name,
-                        newStock: i.newStock,
-                        previousStock: i.product.stock || 0
-                    })),
-                    note: 'Import từ Google Sheet qua SaleBot',
-                    createdAt: serverTimestamp(),
-                    ownerId: owner.ownerId,
-                    user: auth.currentUser?.displayName || 'Unknown'
-                });
-
-                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot',
-                    content: `✅ Đã cập nhật tồn kho cho **${updatedCount}** sản phẩm từ Google Sheet!` }]);
-            } catch (err: any) {
-                console.error('CONFIRM_IMPORT exec error:', err);
-                alert(`Lỗi: ${err.message}`);
             } finally {
                 setIsLoading(false);
             }

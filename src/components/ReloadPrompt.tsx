@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 
 const ReloadPrompt: React.FC = () => {
-	// 🏠 Tắt update prompt trong dev mode (HMR liên tục đổi hash gây popup)
-	const isDev = import.meta.env.DEV;
-	if (isDev) return null;
+	// 🏠 Tắt trong dev mode
+	if (import.meta.env.DEV) return null;
+
+	const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+		(navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
 	const {
 		offlineReady: [offlineReady, setOfflineReady],
@@ -12,42 +14,33 @@ const ReloadPrompt: React.FC = () => {
 		updateServiceWorker,
 	} = useRegisterSW({
 		onRegistered(r: ServiceWorkerRegistration | undefined) {
-			console.log('SW Registered: ', r)
-			// 🔄 Kiểm tra bản cập nhật mỗi 5 phút (thay vì 1 giờ)
-			if (r) {
-				setInterval(() => {
-					r.update().catch(console.error);
-				}, 5 * 60 * 1000);
-				// Kiểm tra ngay lập tức sau khi register
-				setTimeout(() => r.update().catch(console.error), 3000);
+			if (r && !isIOS) {
+				// Trên non-iOS: kiểm tra update mỗi 30 phút
+				setInterval(() => r.update().catch(() => {}), 30 * 60 * 1000);
 			}
 		},
-		onRegisterError(error: any) {
-			console.log('SW registration error', error)
-		},
+		onRegisterError() {},
 	})
 
-	// 📱 iOS Safari fallback: tự kiểm tra version bằng fetch
 	const [iosUpdateAvailable, setIosUpdateAvailable] = useState(false);
-	const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-		(navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+	const [isUpdating, setIsUpdating] = useState(false);
+	const deployedHashRef = useRef<string>('');
 
-	// Lưu bundle hash hiện tại khi load trang
-	const getCurrentBundleHash = () => {
-		const scripts = Array.from(document.querySelectorAll('script[src]'))
-			.map(s => s.getAttribute('src') || '')
-			.filter(src => src.includes('/assets/index-'));
-		return scripts[0] || '';
-	};
-
+	// 📱 iOS: tự kiểm tra version bằng fetch (SW update không hoạt động tốt trên iOS)
 	useEffect(() => {
-		// Lưu hash hiện tại vào localStorage lần đầu
-		const currentHash = getCurrentBundleHash();
-		if (currentHash) {
-			const storedHash = localStorage.getItem('pwa_current_bundle');
-			if (storedHash !== currentHash) {
-				localStorage.setItem('pwa_current_bundle', currentHash);
-			}
+		if (!isIOS) return;
+
+		const getCurrentHash = () => {
+			const scripts = Array.from(document.querySelectorAll('script[src]'))
+				.map(s => s.getAttribute('src') || '')
+				.filter(src => src.includes('/assets/index-'));
+			return scripts[0] || '';
+		};
+
+		// Lưu hash hiện tại
+		const currentHash = getCurrentHash();
+		if (currentHash && !localStorage.getItem('pwa_current_bundle')) {
+			localStorage.setItem('pwa_current_bundle', currentHash);
 		}
 
 		const checkVersion = async () => {
@@ -56,131 +49,79 @@ const ReloadPrompt: React.FC = () => {
 				const html = await res.text();
 				const match = html.match(/assets\/index-[\w-]+\.js/);
 				if (match && match[0]) {
-					const deployedBundle = match[0];
-					const storedBundle = localStorage.getItem('pwa_current_bundle');
-					// Đã bị dismiss phiên bản này chưa?
-					const dismissedBundle = localStorage.getItem('pwa_dismissed_bundle');
-					// Chỉ báo update nếu deployed KHÁC stored và CHƯA bị dismiss
-					if (storedBundle && deployedBundle !== storedBundle && deployedBundle !== dismissedBundle && !needRefresh) {
-						console.log('📱 New version! Stored:', storedBundle, 'Deployed:', deployedBundle);
+					const deployed = match[0];
+					deployedHashRef.current = deployed;
+					const stored = localStorage.getItem('pwa_current_bundle');
+					const dismissed = localStorage.getItem('pwa_dismissed_bundle');
+
+					if (stored && deployed !== stored && deployed !== dismissed) {
+						console.log('📱 New version deployed:', deployed);
 						setIosUpdateAvailable(true);
 					}
 				}
-			} catch (e) { /* ignore */ }
+			} catch {}
 		};
 
-		if (isIOS) {
-			checkVersion();
-			const interval = setInterval(checkVersion, 5 * 60 * 1000); // 5 phút thay vì 2
-			return () => clearInterval(interval);
-		}
-	}, [isIOS, needRefresh]);
+		checkVersion();
+		const interval = setInterval(checkVersion, 30 * 60 * 1000);
+		return () => clearInterval(interval);
+	}, [isIOS]);
 
-	// Tự động cập nhật thông minh (Smart Auto-Update)
-	useEffect(() => {
-		if (needRefresh) {
-			const handleVisibilityChange = () => {
-				// Nếu người dùng tắt màn hình, hoặc chuyển tab, app vào chế độ ngủ (hidden)
-				if (document.visibilityState === 'hidden') {
-					// Đợi 5 giây để chắc chắn không phải họ lỡ tay vuốt ra rồi vuốt lại
-					setTimeout(() => {
-						if (document.visibilityState === 'hidden') {
-							console.log('App is hidden, silently updating...');
-							updateServiceWorker(true);
-						}
-					}, 5000);
-				}
-			};
-
-			document.addEventListener('visibilitychange', handleVisibilityChange);
-
-			// Vẫn giữ cơ chế 12h đêm: Nếu tới 12h đêm mà người dùng ĐANG mở màn hình, 
-			// thì nó không F5 ngang. Nếu họ tắt màn hình, nó sẽ F5 ngay.
-			const now = new Date();
-			const midnight = new Date();
-			midnight.setHours(24, 0, 0, 0); 
-			
-			let timeToMidnight = midnight.getTime() - now.getTime();
-			
-			const timer = setTimeout(() => {
-				if (document.visibilityState === 'hidden') {
-					updateServiceWorker(true);
-				}
-			}, timeToMidnight);
-
-			return () => {
-				document.removeEventListener('visibilitychange', handleVisibilityChange);
-				clearTimeout(timer);
-			};
-		}
-	}, [needRefresh, updateServiceWorker]);
-
-	const close = () => {
-		setOfflineReady(false)
-		setNeedRefresh(false)
-	}
-
-	const [isUpdating, setIsUpdating] = React.useState(false);
-
+	// 🔄 Cập nhật ngay
 	const handleUpdate = () => {
 		setIsUpdating(true);
-		// 📱 iOS: force bỏ cache trước khi reload
-		if (isIOS) {
-			// Xoá dismissed bundle khi user chủ động update
-			localStorage.removeItem('pwa_dismissed_bundle');
-			// Lưu hash deployed vào localStorage trước khi reload
-			localStorage.setItem('pwa_updated', 'true');
-			// Xoá SW cache nếu có
-			if ('caches' in window) {
-				caches.keys().then(names => {
-					names.forEach(name => caches.delete(name));
-				});
-			}
-			// Force reload bypass cache
-			setTimeout(() => {
-				window.location.href = window.location.href.split('?')[0] + '?v=' + Date.now();
-			}, 500);
-			return;
+		// Xóa tất cả cache
+		localStorage.removeItem('pwa_dismissed_bundle');
+		if ('caches' in window) {
+			caches.keys().then(names => names.forEach(name => caches.delete(name)));
 		}
-		updateServiceWorker(true);
-		// Fallback: Ép tải lại trang sau 1.5s nếu Service Worker bị kẹt không tự reload
-		setTimeout(() => {
-			window.location.reload();
-		}, 1500);
+		// Force reload với cache-busting
+		const url = window.location.href.split('?')[0];
+		window.location.href = url + '?v=' + Date.now();
 	};
 
+	// ❌ Đóng = reload trang (không thể dismiss vì SW sẽ báo lại sau 5-30p)
+	const handleDismiss = () => {
+		setIsUpdating(true);
+		// Xóa cache + reload
+		if ('caches' in window) {
+			caches.keys().then(names => names.forEach(name => caches.delete(name)));
+		}
+		const url = window.location.href.split('?')[0];
+		window.location.href = url + '?v=' + Date.now();
+	};
+
+	const showPopup = offlineReady || needRefresh || iosUpdateAvailable;
+	if (!showPopup) return null;
+
 	return (
-		<div className="fixed bottom-20 right-4 z-[200]">
-			{(offlineReady || needRefresh || iosUpdateAvailable) && (
-				<div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 animate-in slide-in-from-bottom-5 duration-300">
-					<div className="mb-4">
-						<p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">
-							{offlineReady ? 'Ứng dụng đã sẵn sàng chạy Offline' : 'Đã có bản cập nhật mới'}
-						</p>
-						{iosUpdateAvailable && (
-							<p className="text-[10px] text-slate-400 mt-1">📱 Phiên bản mới đã được phát hiện. Vui lòng cập nhật.</p>
-						)}
-					</div>
-					<div className="flex gap-2">
-						{(needRefresh || iosUpdateAvailable) && (
-							<button
-								onClick={handleUpdate}
-								disabled={isUpdating}
-								className={`px-5 py-2.5 bg-[#1A237E] text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-900/10 ${isUpdating ? 'opacity-50 cursor-wait' : ''}`}
-							>
-								{isUpdating ? 'Đang xử lý...' : 'Cập nhật ngay'}
-							</button>
-						)}
-						<button
-							onClick={() => { close(); setIosUpdateAvailable(false); localStorage.setItem('pwa_dismissed_bundle', localStorage.getItem('pwa_current_bundle') || ''); }}
-							disabled={isUpdating}
-							className="px-5 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all disabled:opacity-50"
-						>
-							Đóng
-						</button>
-					</div>
+		<div className="fixed inset-0 z-[200] flex items-end justify-center pb-24 bg-black/30" onClick={handleDismiss}>
+			<div className="bg-white dark:bg-slate-900 mx-4 p-6 rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+				<div className="mb-4">
+					<p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">
+						{offlineReady ? '✅ Ứng dụng đã sẵn sàng Offline' : '🔄 Đã có bản cập nhật mới'}
+					</p>
+					<p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
+						Bấm <strong>Cập nhật ngay</strong> để tải phiên bản mới nhất.
+					</p>
 				</div>
-			)}
+				<div className="flex gap-3">
+					<button
+						onClick={handleDismiss}
+						disabled={isUpdating}
+						className="flex-1 px-4 py-3 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+					>
+						Để sau
+					</button>
+					<button
+						onClick={handleUpdate}
+						disabled={isUpdating}
+						className="flex-1 px-4 py-3 bg-[#1A237E] text-white text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-900/20 disabled:opacity-50"
+					>
+						{isUpdating ? 'Đang tải...' : 'Cập nhật ngay'}
+					</button>
+				</div>
+			</div>
 		</div>
 	)
 }

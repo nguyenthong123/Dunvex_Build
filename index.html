@@ -40,6 +40,23 @@
 		gtag('js', new Date());
 		gtag('config', 'G-JTKDHG66X6');
 	</script>
+	<!-- 🔄 Force cleanup old service workers (một lần duy nhất) -->
+	<script>
+		if ('serviceWorker' in navigator && !sessionStorage.getItem('sw_cleaned_v2')) {
+			sessionStorage.setItem('sw_cleaned_v2', '1');
+			navigator.serviceWorker.getRegistrations().then(function(regs) {
+				regs.forEach(function(reg) { reg.unregister(); });
+				// Xóa toàn bộ cache storage
+				if ('caches' in window) {
+					caches.keys().then(function(names) {
+						names.forEach(function(name) { caches.delete(name); });
+					});
+				}
+				// Reload trang sạch
+				setTimeout(function() { location.reload(); }, 300);
+			});
+		}
+	</script>
 </head>
 
 <body>

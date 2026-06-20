@@ -143,11 +143,21 @@ const Login = () => {
 		try {
 			setIsLoggingIn(true);
 			setLoginStatus('Đang mở đăng nhập Google...');
+
+			// 📱 PWA standalone không hỗ trợ popup → dùng redirect
+			const isPWA = window.matchMedia('(display-mode: standalone)').matches
+				|| (navigator as any).standalone;
+
+			if (isPWA) {
+				await signInWithRedirect(auth, googleProvider);
+				return;
+			}
+
 			try {
 				const result = await signInWithPopup(auth, googleProvider);
 				if (result.user) await processUserLogin(result.user);
 			} catch (popupError: any) {
-				if (popupError.code === 'auth/popup-blocked') {
+				if (popupError.code === 'auth/popup-blocked' || popupError.code === 'auth/cancelled-popup-request') {
 					await signInWithRedirect(auth, googleProvider);
 				} else {
 					throw popupError;

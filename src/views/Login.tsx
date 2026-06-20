@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, googleProvider, db } from '../services/firebase';
-import { signInWithPopup, signInWithRedirect, getRedirectResult, setPersistence, browserLocalPersistence, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { signInWithPopup, signInWithRedirect, getRedirectResult, setPersistence, browserLocalPersistence, signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
 import { doc, getDoc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import {
 	Building2,
@@ -144,8 +144,23 @@ const Login = () => {
 			setIsLoggingIn(true);
 			setLoginStatus('Đang mở đăng nhập Google...');
 
+			// 📱 Capacitor native Google Sign-In (Android/iOS app)
+			const CapFirebaseAuth = (window as any).Capacitor?.Plugins?.FirebaseAuthentication;
+			if (CapFirebaseAuth) {
+				try {
+					const result = await CapFirebaseAuth.signIn({ provider: 'google.com' });
+					if (result?.credential) {
+						const credential = GoogleAuthProvider.credential(result.credential.idToken);
+						const userCred = await signInWithCredential(auth, credential);
+						if (userCred.user) await processUserLogin(userCred.user);
+						return;
+					}
+				} catch (nativeErr: any) {
+					console.warn('Capacitor native auth failed, fallback to popup:', nativeErr.message);
+				}
+			}
+
 			// 📱 Chỉ iOS PWA (Safari standalone) mới cần redirect vì WKWebView không hỗ trợ popup
-			// navigator.standalone chỉ có trên iOS Safari PWA, KHÔNG có trên Android Chrome
 			const isIOSPWA = !!(navigator as any).standalone;
 			if (isIOSPWA) {
 				await signInWithRedirect(auth, googleProvider);

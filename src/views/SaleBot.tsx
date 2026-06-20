@@ -1515,6 +1515,7 @@ const SaleBot = () => {
                                                  msg.parsedData.intent === 'CREATE_PRODUCT' ? 'Thông tin Sản Phẩm' : 
                                                  msg.parsedData.intent === 'CREATE_PAYMENT' ? 'Thông tin Thu Công Nợ' :
                                                  msg.parsedData.intent === 'INVENTORY_ACTION' ? 'Thông tin Phiếu Kho' :
+                                                 msg.parsedData.intent === 'CONFIRM_IMPORT' ? '📊 Import Tồn Kho' :
                                                  'Thông tin Khách Hàng'}
                                             </span>
                                         </div>
@@ -1639,6 +1640,28 @@ const SaleBot = () => {
                                             </div>
                                         )}
 
+                                        {msg.parsedData.intent === 'CONFIRM_IMPORT' && msg.parsedData.import_items && (
+                                            <div className="mb-3 bg-green-50 dark:bg-green-900/20 p-3 rounded-xl border border-green-100 dark:border-green-800/50">
+                                                <p className="text-[10px] text-green-600 dark:text-green-400 uppercase font-bold mb-2">
+                                                    📋 Danh sách cập nhật ({msg.parsedData.import_items.length} SP)
+                                                </p>
+                                                <div className="max-h-40 overflow-y-auto space-y-1">
+                                                    {msg.parsedData.import_items.slice(0, 10).map((item: any, idx: number) => (
+                                                        <div key={idx} className="text-xs text-slate-600 dark:text-slate-400 flex justify-between">
+                                                            <span className="truncate mr-2">{item.product.name}</span>
+                                                            <span className="font-bold shrink-0">{item.product.stock || 0} → <span className="text-green-600">{item.newStock}</span></span>
+                                                        </div>
+                                                    ))}
+                                                    {msg.parsedData.import_items.length > 10 && (
+                                                        <p className="text-xs text-slate-400">...và {msg.parsedData.import_items.length - 10} sản phẩm khác</p>
+                                                    )}
+                                                </div>
+                                                {msg.parsedData.not_found?.length > 0 && (
+                                                    <p className="text-xs text-red-500 mt-2">⚠️ Không tìm thấy: {msg.parsedData.not_found.map((i: any) => i.name).join(', ')}</p>
+                                                )}
+                                            </div>
+                                        )}
+
                                         {msg.parsedData.intent === 'INVENTORY_ACTION' && msg.parsedData.products && (
                                             <div className="mb-3">
                                                 <p className="text-[10px] text-slate-500 uppercase font-bold mb-2">
@@ -1671,6 +1694,7 @@ const SaleBot = () => {
                                                  msg.parsedData.intent === 'CREATE_PRODUCT' ? `Tạo ${msg.parsedData.products_to_create?.length || ''} Sản Phẩm Mới` :
                                                  msg.parsedData.intent === 'CREATE_PAYMENT' ? 'Đi tới Form Phiếu Thu' :
                                                  msg.parsedData.intent === 'INVENTORY_ACTION' ? 'Xác Nhận & Tạo Phiếu Kho' :
+                                                 msg.parsedData.intent === 'CONFIRM_IMPORT' ? '✅ Xác Nhận Cập Nhật Tồn Kho' :
                                                  'Tiếp Tục Lên Đơn'}
                                             </button>
                                         )}

@@ -1,5 +1,8 @@
 {
 	"functions": {
+		"api/gemini-proxy.ts": {
+			"maxDuration": 10
+		},
 		"api/gemini-vision.ts": {
 			"maxDuration": 10
 		}

@@ -49,7 +49,15 @@ const InventoryPage = () => {
 	const [showActionModal, setShowActionModal] = useState(false);
 	const [actionModalInitialProduct, setActionModalInitialProduct] = useState<any>(null);
 	const [selectedProduct, setSelectedProduct] = useState<any>(null);
-	const [searchTerm, setSearchTerm] = useState('');
+	const [searchTerm, setSearchTerm] = useState(() => {
+		// Khôi phục từ khóa tìm kiếm sau khi reload (để liền mạch công việc)
+		return sessionStorage.getItem('inventory_search') || '';
+	});
+
+	// Lưu từ khóa tìm kiếm vào sessionStorage — giữ lại sau reload
+	useEffect(() => {
+		sessionStorage.setItem('inventory_search', searchTerm);
+	}, [searchTerm]);
 	const [uploading, setUploading] = useState(false);
 	const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 	// 🔧 REFACTOR: inventoryLogs + orders đã chuyển qua hooks

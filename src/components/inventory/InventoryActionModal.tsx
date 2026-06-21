@@ -78,31 +78,34 @@ const InventoryActionModal: React.FC<InventoryActionModalProps> = ({ show, onClo
 			const actionLabel = type === 'import' ? 'Nhập kho' : 'Xuất kho';
 			const userName = auth?.currentUser?.displayName || auth?.currentUser?.email || 'Unknown';
 
-			// Create log first
-			const logData = {
-				action: actionLabel,
-				type: type,
-				items: selectedItems.map(i => ({
-					productId: i.product.id,
-					name: i.product.name,
-					sku: i.product.sku || '',
-					quantity: i.quantity,
-					previousStock: i.product.stock,
-					newStock: type === 'import' ? i.product.stock + i.quantity : i.product.stock - i.quantity
-				})),
-				note,
-				createdAt: serverTimestamp(),
-				ownerId: owner.ownerId,
-				user: userName
-			};
-
 			console.log('[InventoryAction] Saving log:', { actionLabel, itemCount: selectedItems.length, ownerId: owner.ownerId });
-			await addDoc(collection(db, 'inventory_logs'), logData);
-			console.log('[InventoryAction] Log saved OK');
 
-			// Update product stocks
+			// Write ONE inventory_log per product (matching flat structure used by stats calculator)
 			for (const item of selectedItems) {
-				const newStock = type === 'import' ? item.product.stock + item.quantity : item.product.stock - item.quantity;
+				const newStock = type === 'import'
+					? Number(item.product.stock) + Number(item.quantity)
+					: Number(item.product.stock) - Number(item.quantity);
+
+				const logEntry = {
+					productId: item.product.id,
+					productName: item.product.name,
+					sku: item.product.sku || '',
+					unit: item.product.unit || '',
+					qty: Number(item.quantity),
+					type: type,
+					action: actionLabel,
+					previousStock: Number(item.product.stock),
+					newStock: newStock,
+					note: note,
+					createdAt: serverTimestamp(),
+					ownerId: owner.ownerId,
+					user: userName
+				};
+
+				console.log(`[InventoryAction] Writing log for ${item.product.id}:`, logEntry);
+				await addDoc(collection(db, 'inventory_logs'), logEntry);
+
+				// Update product stock
 				console.log(`[InventoryAction] Updating ${item.product.id}: ${item.product.stock} → ${newStock}`);
 				await updateDoc(doc(db, 'products', item.product.id), {
 					stock: newStock

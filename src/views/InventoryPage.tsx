@@ -250,12 +250,12 @@ const InventoryPage = () => {
 		const logs = inventoryLogs.filter(l => targetIds.includes(l.productId));
 
 		const totalImport = logs
-			.filter(l => l.type === 'init' || (l.type === 'audit' && l.diffType === 'increase'))
+			.filter(l => l.type === 'init' || l.type === 'import' || (l.type === 'audit' && l.diffType === 'increase'))
 			.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
 
 		const totalExport = logs
 			.filter(l => {
-				const isOutType = l.type === 'out' || (l.type === 'audit' && l.diffType === 'decrease');
+				const isOutType = l.type === 'out' || l.type === 'export' || (l.type === 'audit' && l.diffType === 'decrease');
 				if (!isOutType) return false;
 
 				// If it's an order (type 'out'), verify status
@@ -286,12 +286,12 @@ const InventoryPage = () => {
 		products.forEach(p => {
 			const logs = inventoryLogs.filter(l => l.productId === p.id);
 			const totalImport = logs
-				.filter(l => l.type === 'init' || (l.type === 'audit' && l.diffType === 'increase'))
+				.filter(l => l.type === 'init' || l.type === 'import' || (l.type === 'audit' && l.diffType === 'increase'))
 				.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
 
 			const totalExport = logs
 				.filter(l => {
-					const isOutType = l.type === 'out' || (l.type === 'audit' && l.diffType === 'decrease');
+					const isOutType = l.type === 'out' || l.type === 'export' || (l.type === 'audit' && l.diffType === 'decrease');
 					if (!isOutType) return false;
 
 					// If it's an order (type 'out'), verify status
@@ -301,7 +301,7 @@ const InventoryPage = () => {
 						return status === 'Đơn chốt';
 					}
 
-					return true; // Keep audit/manual decreases
+					return true; // Keep audit/manual decreases + standalone export
 				})
 				.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
 

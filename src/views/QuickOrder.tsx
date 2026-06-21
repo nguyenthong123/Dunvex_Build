@@ -31,6 +31,13 @@ const QuickOrder = () => {
 	};
 	const [products, setProducts] = useState<any[]>([]);
 	const [customers, setCustomers] = useState<any[]>([]);
+
+	// 🔧 REFACTOR: products/customers từ hooks
+	const { products: hookProducts } = useProducts({ ownerId: owner.ownerId, enabled: !owner.loading && !!owner.ownerId });
+	const { customers: hookCustomers } = useCustomers({ ownerId: owner.ownerId, enabled: !owner.loading && !!owner.ownerId });
+
+	useEffect(() => { setProducts(hookProducts); }, [hookProducts]);
+	useEffect(() => { setCustomers(hookCustomers); }, [hookCustomers]);
 	const [loading, setLoading] = useState(true);
 	const [fetchingOrder, setFetchingOrder] = useState(false);
 	const [originalOrder, setOriginalOrder] = useState<any>(null);

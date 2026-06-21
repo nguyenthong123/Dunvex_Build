@@ -4,6 +4,9 @@ import QRScanner from '../components/shared/QRScanner';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { db, auth } from '../services/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, doc, getDoc, serverTimestamp, where, increment, writeBatch, getDocs, limit, Timestamp } from 'firebase/firestore';
+import { useProducts } from '../hooks/useProducts';
+import { useCustomers } from '../hooks/useCustomers';
+import { usePayments } from '../hooks/usePayments';
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
 
@@ -48,7 +51,7 @@ const QuickOrder = () => {
 
 	// Line items state
 	const [lineItems, setLineItems] = useState<any[]>([
-		{ id: Date.now(), category: '', productId: '', name: '', serialNumber: '', qty: '', price: 0, buyPrice: 0, unit: '', packaging: '', density: '', maxStock: 0 }
+		{ id: crypto.randomUUID(), category: '', productId: '', name: '', serialNumber: '', qty: '', price: 0, buyPrice: 0, unit: '', packaging: '', density: '', maxStock: 0 }
 	]);
 
 	// Adjustments
@@ -83,41 +86,14 @@ const QuickOrder = () => {
 	// Fetch Data (Products & Customers) based on Owner
 	useEffect(() => {
 		if (owner.loading || !owner.ownerId) return;
-
-		const isAdmin = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
-
-		const qProds = query(collection(db, 'products'), where('ownerId', '==', owner.ownerId));
-		const unsubProds = onSnapshot(qProds, (snap) => {
-			setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-		});
-
-		// 🔓 Dùng chung: Admin & Nhân viên đều thấy toàn bộ khách hàng
-		const qCusts = query(
-			collection(db, 'customers'),
-			where('ownerId', '==', owner.ownerId)
-		);
-
-		const unsubCusts = onSnapshot(qCusts, (snap) => {
-			setCustomers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-		});
-
+		// 🔧 REFACTOR: products/customers/payments → hooks
+		// Chỉ giữ orders onSnapshot (cần status filter 'Đơn chốt')
 		const qOrders = query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId), where('status', '==', 'Đơn chốt'));
 		const unsubOrders = onSnapshot(qOrders, (snap) => {
 			setAllOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })));
 		});
-
-		const qPayments = query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId));
-		const unsubPayments = onSnapshot(qPayments, (snap) => {
-			setAllPayments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-		});
-
 		setLoading(false);
-		return () => {
-			unsubProds();
-			unsubCusts();
-			unsubOrders();
-			unsubPayments();
-		};
+		return () => { unsubOrders(); };
 	}, [owner.loading, owner.ownerId, owner.role, owner.isEmployee]);
 
 	// Fetch Order for Editing
@@ -248,7 +224,7 @@ const QuickOrder = () => {
 	}, [lineItems.length, products, loading, fetchingOrder]);
 
 	const addLineItem = () => {
-		setLineItems([...lineItems, { id: Date.now(), category: '', productId: '', sku: '', name: '', imageUrl: '', serialNumber: '', qty: '', price: 0, buyPrice: 0, unit: '', packaging: '', density: '', maxStock: 0 }]);
+		setLineItems([...lineItems, { id: crypto.randomUUID(), category: '', productId: '', sku: '', name: '', imageUrl: '', serialNumber: '', qty: '', price: 0, buyPrice: 0, unit: '', packaging: '', density: '', maxStock: 0 }]);
 	};
 
 	const removeLineItem = (index: number) => {
@@ -485,7 +461,7 @@ const QuickOrder = () => {
 				setLineItems([
 					...lineItems,
 					{
-						id: Date.now(),
+						id: crypto.randomUUID(),
 						category: product.category || '',
 						productId: product.id,
 						sku: product.sku || '',

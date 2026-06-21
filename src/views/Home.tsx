@@ -1,17 +1,21 @@
 import { useNavigate } from 'react-router-dom';
-import { auth, db } from '../services/firebase';
+import { auth } from '../services/firebase';
 import { signOut } from 'firebase/auth';
-import { collection, query, where, onSnapshot, updateDoc, doc, writeBatch, getDocs, limit, orderBy } from 'firebase/firestore';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigationConfig } from '../hooks/useNavigationConfig';
 import { Eye, EyeOff, TrendingUp, TrendingDown, AlertTriangle, Wallet, Gift, Trophy, User as UserIcon } from 'lucide-react';
 
 import { useOwner } from '../hooks/useOwner';
+// 🔧 REFACTOR: Dùng hooks mới thay vì Firestore trực tiếp
+import { useProducts } from '../hooks/useProducts';
+import { useOrders } from '../hooks/useOrders';
+import { useCustomers } from '../hooks/useCustomers';
+import { usePayments } from '../hooks/usePayments';
+import { useAuditLogs } from '../hooks/useAuditLogs';
 import QRScanner from '../components/shared/QRScanner';
 import { QrCode } from 'lucide-react';
 import { useToast } from '../components/shared/Toast';
 import { maskSensitiveData } from '../utils/validation';
-import NotificationBell from '../components/NotificationBell';
 
 const Home = () => {
 	const navigate = useNavigate();
@@ -19,86 +23,39 @@ const Home = () => {
 	const isAdmin = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
 	const { showToast } = useToast();
 	const { sidebarItems } = useNavigationConfig();
-	// --- Removed redundant notification state ---
 
-	// Real Data State
-	const [orders, setOrders] = useState<any[]>([]);
-	const [customers, setCustomers] = useState<any[]>([]);
-	const [payments, setPayments] = useState<any[]>([]);
-	const [products, setProducts] = useState<any[]>([]);
-	const [auditLogs, setAuditLogs] = useState<any[]>([]);
+	// 🔧 REFACTOR: Data từ hooks tập trung — KHÔNG còn Firestore queries rải rác
+	const { products, loading: productsLoading } = useProducts({
+		ownerId: owner.ownerId,
+		enabled: !owner.loading && !!owner.ownerId,
+	});
+	const { orders } = useOrders({
+		ownerId: owner.ownerId,
+		enabled: !owner.loading && !!owner.ownerId,
+		maxResults: 500,
+	});
+	const { customers } = useCustomers({
+		ownerId: owner.ownerId,
+		enabled: !owner.loading && !!owner.ownerId,
+	});
+	const { payments } = usePayments({
+		ownerId: owner.ownerId,
+		enabled: !owner.loading && !!owner.ownerId,
+		maxResults: 500,
+	});
+	const { logs: auditLogs } = useAuditLogs({
+		ownerId: owner.ownerId,
+		enabled: !owner.loading && !!owner.ownerId,
+		maxResults: 100,
+	});
+
 	const [showProfit, setShowProfit] = useState(false);
 	const [chartFilter, setChartFilter] = useState('7days');
 	const [showScanner, setShowScanner] = useState(false);
 
-	useEffect(() => {
-		if (!auth.currentUser || owner.loading || !owner.ownerId) return;
-
-		// ... removed redundant notification snapshot ...
-
-		// 3. Fetch Data for Dashboard Calculations (Owner specific)
-		const isAdmin = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
-
-		let qOrders, qAudit, qCust, qPay;
-
-		if (isAdmin) {
-			qOrders = query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId), limit(500));
-			qAudit = query(collection(db, 'audit_logs'), where('ownerId', '==', owner.ownerId), limit(100));
-			qCust = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
-			qPay = query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId), limit(500));
-		} else {
-			// For employees, we still query by ownerId but filter by user email/id client-side 
-			// to avoid needing composite indexes (Firestore requires indexes for multiple equality filters sometimes)
-			qOrders = query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId), limit(500));
-			qAudit = query(collection(db, 'audit_logs'), where('ownerId', '==', owner.ownerId), limit(100));
-			qCust = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
-			qPay = query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId), limit(500));
-		}
-
-		// ... inside onSnapshot or effects, apply filtering if not admin
-		const unsubAudit = onSnapshot(qAudit, (snap) => {
-			const logs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-			// Apply client-side filter for employees
-			const filteredLogs = isAdmin ? logs : logs.filter((l: any) => l.userId === auth.currentUser?.uid);
-
-			const sorted = filteredLogs.sort((a: any, b: any) => {
-				const timeA = a.createdAt?.seconds || 0;
-				const timeB = b.createdAt?.seconds || 0;
-				return timeB - timeA;
-			});
-			setAuditLogs(sorted.slice(0, 10));
-		}, (err) => console.error("Home: Audit Logs Error:", err));
-
-		const qProd = query(collection(db, 'products'), where('ownerId', '==', owner.ownerId));
-
-		const unsubOrders = onSnapshot(qOrders, (snap) => {
-			const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-			setOrders(docs);
-		}, (err: any) => console.error("Home: Orders Error:", err));
-
-		const unsubCust = onSnapshot(qCust, (snap) => {
-			const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-			setCustomers(docs);
-		}, (err: any) => console.error("Home: Customers Error:", err));
-
-		const unsubPay = onSnapshot(qPay, (snap) => {
-			const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-			setPayments(docs);
-		}, (err: any) => console.error("Home: Payments Error:", err));
-
-		const unsubProd = onSnapshot(qProd, (snap) => {
-			setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-		}, (err: any) => console.error("Home: Products Error:", err));
-
-		return () => {
-			// unsubscribeNotif(); // removed
-			unsubOrders();
-			unsubCust();
-			unsubPay();
-			unsubProd();
-			unsubAudit();
-		};
-	}, [owner.loading, owner.ownerId, owner.role, owner.isEmployee]);
+	// 🔧 REFACTOR: useEffect Firestore queries đã chuyển vào hooks — xoá 65 dòng code
+	// Các hook useProducts/useOrders/useCustomers/usePayments/useAuditLogs
+	// tự động subscribe/unsubscribe realtime qua dataAccess layer
 
 	// --- Removed redundant notification handlers ---
 

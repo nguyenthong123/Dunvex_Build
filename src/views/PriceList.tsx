@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, collection, addDoc, deleteDoc, query, where } from 'firebase/firestore';
+import { usePriceLists } from '../hooks/usePriceLists';
 import {
 	FileSpreadsheet, Upload, Link as LinkIcon, Download,
 	Printer, Search, Trash2, Globe, ArrowLeft, Building2,
@@ -9,7 +10,6 @@ import {
 	Calendar, User, ChevronRight, Maximize2, Check, Save,
 	Lock, Crown
 } from 'lucide-react';
-import { collection, query, where, orderBy, onSnapshot, addDoc, deleteDoc } from 'firebase/firestore';
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
 
@@ -63,23 +63,7 @@ const PriceList = () => {
 		};
 		fetchSettings();
 
-		// 2. Fetch Price Lists (Unified listener approach)
-		const q = query(
-			collection(db, 'price_lists'),
-			where('ownerId', '==', owner.ownerId)
-		);
-
-		// Listen to collection changes
-		const unsubscribe = onSnapshot(q, (snapshot) => {
-			const collectionLists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-			setPriceLists(collectionLists);
-			setLoading(false);
-		}, (err) => {
-			console.error("Error fetching lists:", err);
-			setLoading(false);
-		});
-
-		// 3. Check for Legacy Doc
+		// 2. Check for Legacy Doc
 		const checkLegacy = async () => {
 			if (!owner.ownerId) return;
 			try {
@@ -93,8 +77,6 @@ const PriceList = () => {
 			}
 		};
 		checkLegacy();
-
-		return () => unsubscribe();
 	}, [owner.loading, owner.ownerId]);
 
 	useEffect(() => {

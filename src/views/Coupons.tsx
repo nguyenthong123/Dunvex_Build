@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Tag, Copy, Check, Ticket, Clock, Info, Search, ChevronRight, Gift, Percent, Filter, Plus, Trash2, Edit3, X, Calendar, Truck, DollarSign, RotateCcw } from 'lucide-react';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../services/firebase';
 import { useOwner } from '../hooks/useOwner';
+import { useCoupons } from '../hooks/useCoupons';
 import { useToast } from '../components/shared/Toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -11,8 +12,7 @@ const Coupons = () => {
 	const { showToast } = useToast();
 	const location = useLocation();
 	const navigate = useNavigate();
-	const [coupons, setCoupons] = useState<any[]>([]);
-	const [loading, setLoading] = useState(true);
+	const { coupons, loading } = useCoupons({ ownerId: owner.ownerId, enabled: !owner.loading && !!owner.ownerId });
 	const [searchTerm, setSearchTerm] = useState('');
 	const [copiedCode, setCopiedCode] = useState<string | null>(null);
 	const [activeTab, setActiveTab] = useState('all');
@@ -44,63 +44,7 @@ const Coupons = () => {
 		}
 	}, [location.search, isAdmin, navigate]);
 
-	useEffect(() => {
-		if (owner.loading || !owner.ownerId) return;
 
-		const q = query(collection(db, 'coupons'), where('ownerId', '==', owner.ownerId));
-		const unsubscribe = onSnapshot(q, (snapshot) => {
-			const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-			if (fetched.length === 0) {
-				setCoupons([
-					{
-						id: 'demo-1',
-						code: 'DUNVEXPRO2026',
-						title: 'Giảm 10% Tất cả đơn hàng',
-						description: 'Áp dụng cho đơn hàng từ 5.000.000 đ trở lên',
-						discount: '10%',
-						expiry: '2026-12-31',
-						type: 'percentage',
-						status: 'active',
-						usageLimit: 100,
-						usageCount: 12,
-						isDemo: true
-					},
-					{
-						id: 'demo-2',
-						code: 'FREESHIP79',
-						title: 'Miễn phí vận chuyển',
-						description: 'Miễn phí vận chuyển nội thành cho đơn hàng trên 2.000.000 đ',
-						discount: '0đ',
-						expiry: '2026-06-30',
-						type: 'shipping',
-						status: 'active',
-						usageLimit: 500,
-						usageCount: 84,
-						isDemo: true
-					},
-					{
-						id: 'demo-3',
-						code: 'TANXUAN2026',
-						title: 'Lì xì 500k cho khách mới',
-						description: 'Giảm thẳng 500.000 đ cho khách hàng lần đầu lên đơn',
-						discount: '500k',
-						expiry: '2026-03-15',
-						type: 'fixed',
-						status: 'active',
-						usageLimit: 50,
-						usageCount: 48,
-						isDemo: true
-					}
-				]);
-			} else {
-				setCoupons(fetched);
-			}
-			setLoading(false);
-		});
-
-		return () => unsubscribe();
-	}, [owner.loading, owner.ownerId]);
 
 	// Automatic Expiration Management
 	useEffect(() => {

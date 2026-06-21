@@ -1,7 +1,13 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, where, writeBatch, increment, limit, getDoc, getDocs } from 'firebase/firestore';
+// 🔧 REFACTOR: Chỉ giữ Firestore write ops (addDoc, updateDoc, deleteDoc, batch...)
+// Read ops đã chuyển qua hooks: useProducts, useOrders, useInventoryLogs
+import { addDoc, serverTimestamp, updateDoc, doc, deleteDoc, where, writeBatch, increment, limit, getDocs, collection, query } from 'firebase/firestore';
+// 🔧 REFACTOR: Dùng hooks mới thay vì onSnapshot trực tiếp
+import { useProducts } from '../hooks/useProducts';
+import { useOrders } from '../hooks/useOrders';
+import { useInventoryLogs } from '../hooks/useInventoryLogs';
 import BulkImport from '../components/shared/BulkImport';
 import QRScanner from '../components/shared/QRScanner';
 import InventoryActionButtons from '../components/inventory/InventoryActionButtons';
@@ -21,8 +27,21 @@ const ProductList = () => {
 	const owner = useOwner();
 	const { showToast } = useToast();
 
-	const [products, setProducts] = useState<any[]>([]);
-	const [loading, setLoading] = useState(true);
+	// 🔧 REFACTOR: Data từ hooks — bỏ 3 useState + 3 useEffect onSnapshot
+	const { products, loading, create: createProduct, update: updateProduct, remove: removeProduct, findBySku } = useProducts({
+		ownerId: owner.ownerId,
+		enabled: !owner.loading && !!owner.ownerId,
+	});
+	const { logs: inventoryLogs } = useInventoryLogs({
+		ownerId: owner.ownerId,
+		enabled: !owner.loading && !!owner.ownerId,
+	});
+	const { orders } = useOrders({
+		ownerId: owner.ownerId,
+		enabled: !owner.loading && !!owner.ownerId,
+		maxResults: 1000,
+	});
+
 	const [showAddForm, setShowAddForm] = useState(false);
 	const [showImport, setShowImport] = useState(false);
 	const [showEditForm, setShowEditForm] = useState(false);
@@ -31,8 +50,7 @@ const ProductList = () => {
 	const [searchTerm, setSearchTerm] = useState('');
 	const [uploading, setUploading] = useState(false);
 	const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-	const [inventoryLogs, setInventoryLogs] = useState<any[]>([]);
-	const [orders, setOrders] = useState<any[]>([]);
+	// 🔧 REFACTOR: inventoryLogs + orders đã chuyển qua hooks useInventoryLogs + useOrders
 	const [expandedSkus, setExpandedSkus] = useState<Set<string>>(new Set());
 	const [currentPage, setCurrentPage] = useState(1);
 	const [showMobileSearch, setShowMobileSearch] = useState(false);
@@ -108,51 +126,10 @@ const ProductList = () => {
 		...products.map(p => p.density).filter(Boolean)
 	]));
 
-	useEffect(() => {
-		if (owner.loading || !owner.ownerId) return;
+	// 🔧 REFACTOR: 3 useEffect onSnapshot (products, inventory_logs, orders)
+	// đã chuyển vào hooks useProducts, useInventoryLogs, useOrders
+	// → -80 dòng code, + tái sử dụng được cho views khác
 
-		const q = query(
-			collection(db, 'products'),
-			where('ownerId', '==', owner.ownerId),
-			limit(1000)
-		);
-		const unsubscribe = onSnapshot(q, (snapshot: any) => {
-			let docs = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
-
-			// Check for expired products and delete them
-			const today = new Date();
-			today.setHours(0, 0, 0, 0);
-			const validDocs: any[] = [];
-			for (const p of docs) {
-				if (p.expiryDate) {
-					// Parse date manually to avoid UTC timezone offset (new Date('YYYY-MM-DD') parses as UTC midnight = 7am Vietnam)
-					const parts = String(p.expiryDate).split('-');
-					const expDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-					expDate.setHours(0, 0, 0, 0);
-					if (today > expDate && p.status !== 'Hết hạn') {
-						updateDoc(doc(db, 'products', p.id), { status: 'Hết hạn' }).catch(console.error);
-					}
-				}
-				validDocs.push(p);
-			}
-
-			const sortedDocs = [...validDocs].sort((a, b) => {
-				const stockA = Number(a.stock) || 0;
-				const stockB = Number(b.stock) || 0;
-
-				// Prioritize products with stock > 0
-				if (stockA > 0 && stockB === 0) return -1;
-				if (stockA === 0 && stockB > 0) return 1;
-
-				const dateA = a.createdAt?.seconds || 0;
-				const dateB = b.createdAt?.seconds || 0;
-				return dateB - dateA;
-			});
-			setProducts(sortedDocs);
-			setLoading(false);
-		});
-		return unsubscribe;
-	}, [owner.loading, owner.ownerId]);
 
 	useEffect(() => {
 		if (products.length > 0) {
@@ -171,42 +148,8 @@ const ProductList = () => {
 	}, [location.search, products]);
 
 
-	// Fetch Inventory Logs (Always fetch to compute stats)
-	useEffect(() => {
-		if (owner.loading || !owner.ownerId) return;
-
-		const q = query(
-			collection(db, 'inventory_logs'),
-			where('ownerId', '==', owner.ownerId)
-		);
-		const unsubscribe = onSnapshot(q, (snapshot) => {
-			const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-			const sorted = [...docs].sort((a: any, b: any) => {
-				const dateA = a.createdAt?.seconds || 0;
-				const dateB = b.createdAt?.seconds || 0;
-				return dateB - dateA;
-			});
-			setInventoryLogs(sorted);
-		});
-		return unsubscribe;
-	}, [owner.loading, owner.ownerId]);
 
 
-	// Fetch Orders (To filter inventory logs by status)
-	useEffect(() => {
-		if (owner.loading || !owner.ownerId) return;
-
-		const q = query(
-			collection(db, 'orders'),
-			where('ownerId', '==', owner.ownerId),
-			limit(1000)
-		);
-		const unsubscribe = onSnapshot(q, (snapshot) => {
-			const docs = snapshot.docs.map(doc => ({ id: doc.id, status: doc.data().status }));
-			setOrders(docs);
-		});
-		return unsubscribe;
-	}, [owner.loading, owner.ownerId]);
 
 	const { search } = useLocation();
 	useEffect(() => {

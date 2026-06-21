@@ -3,6 +3,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 import { signOut } from 'firebase/auth';
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, deleteDoc, doc, writeBatch, getDocs, limit, orderBy, increment, Timestamp } from 'firebase/firestore';
+import { useOrders } from '../hooks/useOrders';
+import { usePayments } from '../hooks/usePayments';
+import { useCustomers } from '../hooks/useCustomers';
 import { Filter, Download, PlusCircle, Printer, X, History, FileText, Edit2, Trash2, MapPin, Phone, Camera, Image, Lock, Crown } from 'lucide-react';
 import UpgradeModal from '../components/UpgradeModal';
 
@@ -38,10 +41,10 @@ const Debts: React.FC = () => {
 
 	const [activeTab, setActiveTab] = useState<'customers' | 'history'>('customers');
 	const [currentTime, setCurrentTime] = useState(new Date());
-	const [orders, setOrders] = useState<any[]>([]);
-	const [payments, setPayments] = useState<any[]>([]);
-	const [customers, setCustomers] = useState<any[]>([]);
-	const [loading, setLoading] = useState(true);
+	const { orders } = useOrders({ ownerId: owner.ownerId, enabled: !owner.loading && !!owner.ownerId, maxResults: 500 });
+	const { payments } = usePayments({ ownerId: owner.ownerId, enabled: !owner.loading && !!owner.ownerId });
+	const { customers, loading } = useCustomers({ ownerId: owner.ownerId, enabled: !owner.loading && !!owner.ownerId });
+	// 🔧 REFACTOR: Trên là hooks thay cho useState + 3 onSnapshot
 
 	// Filters
 	const [searchTerm, setSearchTerm] = useState('');
@@ -377,39 +380,7 @@ const Debts: React.FC = () => {
 		return () => clearInterval(timer);
 	}, []);
 
-	useEffect(() => {
-		if (owner.loading || !owner.ownerId) return;
-
-		const isAdmin = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
-
-		let qOrders, qPayments, qCustomers;
-		qOrders = query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId), orderBy('createdAt', 'desc'), limit(500));
-		qPayments = query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId), orderBy('createdAt', 'desc'), limit(500));
-		qCustomers = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
-
-		// 🔓 Dùng chung: Admin & Nhân viên đều thấy toàn bộ
-		const unsubOrders = onSnapshot(qOrders, (snapshot) => {
-			const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-			setOrders(docs);
-		});
-
-		const unsubPayments = onSnapshot(qPayments, (snapshot) => {
-			const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-			setPayments(docs);
-		});
-
-		const unsubCustomers = onSnapshot(qCustomers, (snapshot) => {
-			const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-			setCustomers(docs);
-			setLoading(false);
-		});
-
-		return () => {
-			unsubOrders();
-			unsubPayments();
-			unsubCustomers();
-		};
-	}, [owner.loading, owner.ownerId, owner.role, owner.isEmployee]);
+	// 🔧 REFACTOR: 3 onSnapshot (orders/payments/customers) → hooks useOrders/usePayments/useCustomers
 
 	const formatPrice = (price: number) => {
 		return new Intl.NumberFormat('vi-VN').format(price || 0) + ' đ';
@@ -781,12 +752,7 @@ const Debts: React.FC = () => {
 				createdBy: auth.currentUser?.uid,
 				createdByEmail: auth.currentUser?.email
 			};
-			setPayments(prev => {
-				if (editingPaymentId) {
-					return prev.map(p => p.id === editingPaymentId ? updatedPayment : p);
-				}
-				return [updatedPayment, ...prev];
-			});
+			// 🔧 REFACTOR: Hook tự cập nhật qua Firestore listener
 
 			showToast(editingPaymentId ? "Cập nhật phiếu thu thành công" : "Ghi nhận thu nợ thành công", "success");
 			setShowPaymentForm(false);
@@ -820,7 +786,7 @@ const Debts: React.FC = () => {
 			const paymentToDelete = payments.find(p => p.id === id);
 			
 			// Optimistic local state update for immediate feedback
-			setPayments(prev => prev.filter(p => p.id !== id));
+			// 🔧 REFACTOR: Hook tự cập nhật
 
 			if (paymentToDelete && paymentToDelete.customerId && !String(paymentToDelete.customerId).startsWith('guest_')) {
 				const batch = writeBatch(db);

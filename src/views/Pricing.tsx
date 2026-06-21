@@ -72,6 +72,12 @@ const Pricing = () => {
 				setNewAccountNumber('107882271865');
 				setNewAccountName('NGUYEN BA THONG');
 			}
+		}, (error) => {
+			// Fallback if permission denied (non-admin users)
+			console.warn('system_config/payment read skipped:', error.code);
+			setNewBankId('ICB');
+			setNewAccountNumber('107882271865');
+			setNewAccountName('NGUYEN BA THONG');
 		});
 		return () => unsub();
 	}, []);

@@ -1,7 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
-import { collection, query, orderBy, onSnapshot, updateDoc, doc, getDoc, deleteDoc, serverTimestamp, where, addDoc, getDocs, writeBatch, increment, limit } from 'firebase/firestore';
+// 🔧 REFACTOR: Chỉ giữ Firestore write ops — read ops đã chuyển qua hooks
+import { updateDoc, doc, getDoc, deleteDoc, serverTimestamp, addDoc, getDocs, writeBatch, increment, collection, query, where } from 'firebase/firestore';
+// 🔧 REFACTOR: Dùng hooks mới thay vì onSnapshot trực tiếp
+import { useOrders } from '../hooks/useOrders';
+import { useProducts } from '../hooks/useProducts';
 import OrderTicket from '../components/OrderTicket';
 import UpgradeModal from '../components/UpgradeModal';
 import { Lock, Crown } from 'lucide-react';
@@ -13,9 +17,13 @@ const OrderList = () => {
 	const navigate = useNavigate();
 	const owner = useOwner();
 	const { showToast } = useToast();
-	const [orders, setOrders] = useState<any[]>([]);
+	// 🔧 REFACTOR: Dùng useOrders hook thay vì useState + onSnapshot
+	const { orders, loading } = useOrders({
+		ownerId: owner.ownerId,
+		enabled: !owner.loading && !!owner.ownerId,
+		maxResults: 500,
+	});
 	const isAdmin = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
-	const [loading, setLoading] = useState(true);
 	const [searchTerm, setSearchTerm] = useState('');
 	const [showDetail, setShowDetail] = useState(false);
 	const [selectedOrder, setSelectedOrder] = useState<any>(null);
@@ -25,36 +33,7 @@ const OrderList = () => {
 	const searchRef = useRef<HTMLInputElement>(null);
 	const { search } = useLocation();
 
-	useEffect(() => {
-		if (owner.loading || !owner.ownerId) return;
-
-		const isAdmin = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
-
-		console.log("OrderList Query Executing with ownerId:", owner.ownerId, "uid:", auth.currentUser?.uid, "isAdmin:", isAdmin);
-		// 🔓 Dùng chung: Admin & Nhân viên đều thấy toàn bộ đơn hàng
-		const q = query(
-			collection(db, 'orders'),
-			where('ownerId', '==', owner.ownerId),
-			limit(500)
-		);
-
-		const unsubscribe = onSnapshot(q, (snapshot: any) => {
-			const docs = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
-
-			const sortedDocs = [...docs].sort((a, b) => {
-				const dateA = a.createdAt?.seconds || 0;
-				const dateB = b.createdAt?.seconds || 0;
-				return dateB - dateA;
-			});
-			setOrders(sortedDocs);
-			setLoading(false);
-		}, (error: any) => {
-			console.error("Lỗi khi tải đơn hàng:", error);
-			showToast("Lỗi tải đơn hàng: " + error.message, "error");
-			setLoading(false);
-		});
-		return unsubscribe;
-	}, [owner.loading, owner.ownerId, owner.role, owner.isEmployee]);
+	// 🔧 REFACTOR: Orders onSnapshot + products one-time fetch đã chuyển qua hooks
 
 	useEffect(() => {
 		const params = new URLSearchParams(search);
@@ -129,6 +108,12 @@ const OrderList = () => {
 		}
 	};
 
+	// 🔧 REFACTOR: Dùng useProducts — thay thế getDocs one-time fetch trong updateStatus
+	const { products: allProducts } = useProducts({
+		ownerId: owner.ownerId,
+		enabled: !owner.loading && !!owner.ownerId,
+	});
+
 	const formatPrice = (price: number) => {
 		return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
 	};
@@ -139,9 +124,7 @@ const OrderList = () => {
 			
 			// 1. Nếu chuyển sang Đơn chốt, cần kiểm tra và trừ tồn kho
 			if (newStatus === 'Đơn chốt') {
-				// Lấy danh sách sản phẩm hiện tại
-				const productsSnap = await getDocs(query(collection(db, 'products'), where('ownerId', '==', owner.ownerId)));
-				const allProducts = productsSnap.docs.map(d => ({ id: d.id, ...d.data() as any }));
+				// 🔧 REFACTOR: Dùng dữ liệu từ useProducts hook thay vì getDocs one-time
 				const normalizeText = (text: any) => text ? String(text).normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase() : '';
 				
 				let isMissing = false;

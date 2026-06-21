@@ -152,7 +152,13 @@ const SaleBot = () => {
                 if (docSnap.exists()) {
                     const data = docSnap.data();
                     if (data.messages && data.messages.length > 0) {
-                        setMessages(data.messages);
+                        // 🔧 Fix: Deduplicate keys từ dữ liệu cũ (Date.now() có thể trùng)
+                        const seen = new Set<string>();
+                        const deduped = data.messages.map((m: any, i: number) => ({
+                            ...m,
+                            id: m.id && !seen.has(String(m.id)) ? (seen.add(String(m.id)), m.id) : crypto.randomUUID()
+                        }));
+                        setMessages(deduped);
                     }
                 }
             } catch (err) {
@@ -302,7 +308,7 @@ const SaleBot = () => {
             : `📸 [Ảnh: ${fileNames[0]}]`;
 
         const newMessages = [...messages, {
-            id: Date.now().toString(),
+            id: crypto.randomUUID(),
             role: 'user' as const,
             content: `${previewText}${input ? ' - ' + input : ''}`
         }];
@@ -317,14 +323,14 @@ const SaleBot = () => {
         try {
             const data = await analyzeImage(imageData, input || undefined, productsStr);
             setMessages(prev => [...prev, {
-                id: Date.now().toString(),
+                id: crypto.randomUUID(),
                 role: 'bot',
                 content: data.message || (imageFiles.length > 1 ? 'Em đã gộp các ảnh thành 1 đơn!' : 'Em đã phân tích xong ảnh!'),
                 parsedData: data
             }]);
         } catch (err: any) {
             setMessages(prev => [...prev, {
-                id: Date.now().toString(),
+                id: crypto.randomUUID(),
                 role: 'bot',
                 content: `❌ ${err.message || 'Lỗi phân tích ảnh'}`
             }]);
@@ -380,7 +386,7 @@ const SaleBot = () => {
 
     const processTextMessage = async (userMsg: string) => {
         
-        const newMessages = [...messages, { id: Date.now().toString(), role: 'user' as const, content: userMsg }];
+        const newMessages = [...messages, { id: crypto.randomUUID(), role: 'user' as const, content: userMsg }];
         setMessages(newMessages);
         setIsLoading(true);
 
@@ -410,7 +416,7 @@ const SaleBot = () => {
                     import_url: sheetMatch[0],
                     message: 'Dạ, em đã nhận được link Google Sheet của anh/chị và sẽ tiến hành cập nhật tồn kho ạ.'
                 };
-                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: data.message, parsedData: data }]);
+                setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot', content: data.message, parsedData: data }]);
                 setIsLoading(false);
                 // Tự động xử lý import
                 await executeAction(data);
@@ -544,11 +550,11 @@ const SaleBot = () => {
                     return;
                 }
                 if (!data.order_id) {
-                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: '❌ Vui lòng cung cấp ID đơn hàng cần sửa.' }]);
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot', content: '❌ Vui lòng cung cấp ID đơn hàng cần sửa.' }]);
                     return;
                 }
                 if (!data.products || data.products.length === 0) {
-                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: '❌ Vui lòng cho biết sản phẩm cần thêm vào đơn.' }]);
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot', content: '❌ Vui lòng cho biết sản phẩm cần thêm vào đơn.' }]);
                     return;
                 }
                 setIsLoading(true);
@@ -575,14 +581,14 @@ const SaleBot = () => {
                         matchedOrderId = prefixMatches[0].id;
                     } else if (prefixMatches.length > 1) {
                         const ids = prefixMatches.map(d => d.id.slice(0, 8).toUpperCase()).join(', ');
-                        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: `⚠️ Tìm thấy **${prefixMatches.length}** đơn hàng trùng prefix **${searchId}**: ${ids}. Anh/chị vui lòng nhập đầy đủ ID chính xác nhé!` }]);
+                        setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot', content: `⚠️ Tìm thấy **${prefixMatches.length}** đơn hàng trùng prefix **${searchId}**: ${ids}. Anh/chị vui lòng nhập đầy đủ ID chính xác nhé!` }]);
                         setIsLoading(false);
                         return;
                     }
                 }
 
                 if (!matchedOrder) {
-                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: `❌ Không tìm thấy đơn hàng với ID **${searchId}**.\n\n💡 Lưu ý: ID trên phiếu giao hàng là 8 ký tự đầu của mã đơn. Nếu không tìm thấy, anh/chị kiểm tra lại hoặc dùng ID đầy đủ nhé!` }]);
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot', content: `❌ Không tìm thấy đơn hàng với ID **${searchId}**.\n\n💡 Lưu ý: ID trên phiếu giao hàng là 8 ký tự đầu của mã đơn. Nếu không tìm thấy, anh/chị kiểm tra lại hoặc dùng ID đầy đủ nhé!` }]);
                     setIsLoading(false);
                     return;
                 }
@@ -624,7 +630,7 @@ const SaleBot = () => {
                 }
 
                 if (newItems.length === 0) {
-                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: `❌ Không tìm thấy sản phẩm nào trong kho khớp với yêu cầu.` }]);
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot', content: `❌ Không tìm thấy sản phẩm nào trong kho khớp với yêu cầu.` }]);
                     setIsLoading(false);
                     return;
                 }
@@ -662,11 +668,11 @@ const SaleBot = () => {
                 if (notFound.length > 0) {
                     msg += `\n\n⚠️ Không tìm thấy: ${notFound.join(', ')}`;
                 }
-                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: msg }]);
+                setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot', content: msg }]);
 
             } catch (err) {
                 console.error('UPDATE_ORDER error:', err);
-                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: '❌ Lỗi khi cập nhật đơn hàng. Vui lòng thử lại.' }]);
+                setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot', content: '❌ Lỗi khi cập nhật đơn hàng. Vui lòng thử lại.' }]);
             } finally {
                 setIsLoading(false);
             }
@@ -674,7 +680,7 @@ const SaleBot = () => {
             // 🔍 Xem chi tiết đơn hàng theo ID
             try {
                 if (!owner.ownerId || !data.order_id) {
-                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: '❌ Vui lòng cung cấp ID đơn hàng cần xem.' }]);
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot', content: '❌ Vui lòng cung cấp ID đơn hàng cần xem.' }]);
                     return;
                 }
                 setIsLoading(true);
@@ -693,14 +699,14 @@ const SaleBot = () => {
                     if (prefixMatches.length === 1) {
                         matched = { id: prefixMatches[0].id, ...prefixMatches[0].data() };
                     } else if (prefixMatches.length > 1) {
-                        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: `⚠️ Tìm thấy **${prefixMatches.length}** đơn trùng prefix **${searchId}**. Nhập ID đầy đủ nhé!` }]);
+                        setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot', content: `⚠️ Tìm thấy **${prefixMatches.length}** đơn trùng prefix **${searchId}**. Nhập ID đầy đủ nhé!` }]);
                         setIsLoading(false);
                         return;
                     }
                 }
                 
                 if (!matched) {
-                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: `❌ Không tìm thấy đơn hàng với ID **${searchId}**.` }]);
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot', content: `❌ Không tìm thấy đơn hàng với ID **${searchId}**.` }]);
                     setIsLoading(false);
                     return;
                 }
@@ -740,10 +746,10 @@ const SaleBot = () => {
                     msg += `\n\n🔧 Gõ **"sửa đơn ${matched.id.slice(0, 8).toUpperCase()}"** để em tự động tìm và sửa các mặt hàng lỗi nhé!`;
                 }
                 
-                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: msg }]);
+                setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot', content: msg }]);
             } catch (err) {
                 console.error('REVIEW_ORDER error:', err);
-                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: '❌ Lỗi khi xem đơn hàng.' }]);
+                setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot', content: '❌ Lỗi khi xem đơn hàng.' }]);
             } finally {
                 setIsLoading(false);
             }
@@ -751,7 +757,7 @@ const SaleBot = () => {
             // 🔧 Tự động sửa các mặt hàng lỗi trong đơn
             try {
                 if (!owner.ownerId || !data.order_id) {
-                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: '❌ Vui lòng cung cấp ID đơn hàng cần sửa.' }]);
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot', content: '❌ Vui lòng cung cấp ID đơn hàng cần sửa.' }]);
                     return;
                 }
                 setIsLoading(true);
@@ -772,7 +778,7 @@ const SaleBot = () => {
                         matched = { ...prefixMatches[0].data() };
                         matchedId = prefixMatches[0].id;
                     } else {
-                        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: `❌ Không tìm thấy đơn **${searchId}**.` }]);
+                        setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot', content: `❌ Không tìm thấy đơn **${searchId}**.` }]);
                         setIsLoading(false);
                         return;
                     }
@@ -788,7 +794,7 @@ const SaleBot = () => {
                 });
                 
                 if (brokenIndices.length === 0) {
-                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: `✅ Đơn **#${matchedId.slice(0, 8).toUpperCase()}** không có mặt hàng lỗi nào! Tất cả đều có giá và số lượng hợp lệ.` }]);
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot', content: `✅ Đơn **#${matchedId.slice(0, 8).toUpperCase()}** không có mặt hàng lỗi nào! Tất cả đều có giá và số lượng hợp lệ.` }]);
                     setIsLoading(false);
                     return;
                 }
@@ -834,7 +840,7 @@ const SaleBot = () => {
                 }
                 
                 if (fixCount === 0) {
-                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: `⚠️ Không tìm thấy sản phẩm nào trong kho khớp với các mặt hàng lỗi. Hãy tạo sản phẩm trước rồi sửa lại đơn.` }]);
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot', content: `⚠️ Không tìm thấy sản phẩm nào trong kho khớp với các mặt hàng lỗi. Hãy tạo sản phẩm trước rồi sửa lại đơn.` }]);
                     setIsLoading(false);
                     return;
                 }
@@ -859,11 +865,11 @@ const SaleBot = () => {
                     fixDetails.join('\n') +
                     `\n\n📊 Tổng mới: **${(newTotal || 0).toLocaleString('vi-VN')}đ**\n\n💡 Gõ "check đơn ${matchedId.slice(0, 8).toUpperCase()}" để xem lại.`;
                 
-                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: msg }]);
+                setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot', content: msg }]);
                 
             } catch (err) {
                 console.error('FIX_ORDER error:', err);
-                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: '❌ Lỗi khi sửa đơn hàng.' }]);
+                setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot', content: '❌ Lỗi khi sửa đơn hàng.' }]);
             } finally {
                 setIsLoading(false);
             }
@@ -898,7 +904,7 @@ const SaleBot = () => {
                 if (matchedItems.length === 0) {
                     const notFoundNames = data.products?.map((p: any) => p.name).join(', ') || 'không xác định';
                     setMessages(prev => [...prev, {
-                        id: Date.now().toString(),
+                        id: crypto.randomUUID(),
                         role: 'bot',
                         content: `❌ Không tìm thấy sản phẩm nào trong kho:\n\n**${notFoundNames}**\n\n💡 Sản phẩm có thể chưa được tạo. Hãy tạo sản phẩm trước bằng cách gõ:\n\`tạo sản phẩm: [tên sản phẩm]\``
                     }]);
@@ -936,7 +942,7 @@ const SaleBot = () => {
                 }
 
                 setMessages(prev => [...prev, {
-                    id: Date.now().toString(),
+                    id: crypto.randomUUID(),
                     role: 'bot',
                     content: `✅ Đã tạo thành công Phiếu ${actionName} cho ${matchedItems.length} mặt hàng.`
                 }]);
@@ -950,19 +956,19 @@ const SaleBot = () => {
             // 📊 Import tồn kho từ Google Sheet
             try {
                 if (!data.import_url) {
-                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot',
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
                         content: '❌ Không tìm thấy link Google Sheet. Anh/chị vui lòng gửi lại link đầy đủ.' }]);
                     return;
                 }
                 setIsLoading(true);
-                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot',
+                setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
                     content: '⏳ Đang đọc dữ liệu từ Google Sheet...' }]);
 
                 // Chuyển Google Sheet URL → CSV export
                 let csvUrl = data.import_url;
                 const match = csvUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
                 if (!match) {
-                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot',
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
                         content: '❌ Link Google Sheet không đúng định dạng. Cần link dạng: https://docs.google.com/spreadsheets/d/...' }]);
                     setIsLoading(false);
                     return;
@@ -974,7 +980,7 @@ const SaleBot = () => {
 
                 const res = await fetch(csvUrl);
                 if (!res.ok) {
-                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot',
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
                         content: '❌ Không đọc được Google Sheet. Sheet cần được chia sẻ công khai (Anyone with link).' }]);
                     setIsLoading(false);
                     return;
@@ -983,7 +989,7 @@ const SaleBot = () => {
                 const csvText = await res.text();
                 const lines = csvText.split('\n').filter(l => l.trim());
                 if (lines.length < 2) {
-                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot',
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
                         content: '❌ Sheet trống hoặc không có dữ liệu.' }]);
                     setIsLoading(false);
                     return;
@@ -1013,7 +1019,7 @@ const SaleBot = () => {
 
                 if (nameColIdx < 0) {
                     const cols = headers.join(', ');
-                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot',
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
                         content: `❌ Không tìm thấy cột "Tên sản phẩm". Các cột hiện có: ${cols}. Vui lòng đặt tên cột có chữ "tên" hoặc "sản phẩm".` }]);
                     setIsLoading(false);
                     return;
@@ -1044,7 +1050,7 @@ const SaleBot = () => {
                 }
 
                 if (matchedItems.length === 0) {
-                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot',
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
                         content: `❌ Không tìm thấy sản phẩm nào khớp trong ${lines.length - 1} dòng.\nDanh sách từ sheet: ${notFoundItems.map(i => i.name).join(', ')}` }]);
                     setIsLoading(false);
                     return;
@@ -1055,11 +1061,11 @@ const SaleBot = () => {
                     ? `📊 Đã tìm thấy **${matchedItems.length}/${lines.length - 1}** sản phẩm khớp. ${notFoundItems.length} sản phẩm không tìm thấy: ${notFoundItems.map(i => i.name).join(', ')}.\n\nXác nhận cập nhật tồn kho?`
                     : `📊 Đã tìm thấy **${matchedItems.length}** sản phẩm khớp từ sheet. Xác nhận cập nhật tồn kho?`;
 
-                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot', content: confirmMsg,
+                setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot', content: confirmMsg,
                     parsedData: { intent: 'CONFIRM_IMPORT', import_items: matchedItems, not_found: notFoundItems } }]);
             } catch (err: any) {
                 console.error('IMPORT_INVENTORY error:', err);
-                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot',
+                setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
                     content: `❌ Lỗi khi đọc Google Sheet: ${err.message || 'Sheet có thể chưa được chia sẻ công khai.'}` }]);
             } finally {
                 setIsLoading(false);
@@ -1095,7 +1101,7 @@ const SaleBot = () => {
                     user: auth.currentUser?.displayName || 'Unknown'
                 });
 
-                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'bot',
+                setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
                     content: `✅ Đã cập nhật tồn kho cho **${updatedCount}** sản phẩm từ Google Sheet!` }]);
             } catch (err: any) {
                 console.error('CONFIRM_IMPORT error:', err);
@@ -1118,7 +1124,7 @@ const SaleBot = () => {
                 if (data.customer?.use_current_location) {
                     try {
                         setMessages(prev => [...prev, {
-                            id: Date.now().toString() + '_loc',
+                            id: crypto.randomUUID() + '_loc',
                             role: 'bot',
                             content: `📍 Đang lấy vị trí hiện tại của bạn...`
                         }]);
@@ -1176,7 +1182,7 @@ const SaleBot = () => {
 
                 // Cập nhật tin nhắn thành công
                 setMessages(prev => [...prev, {
-                    id: Date.now().toString(),
+                    id: crypto.randomUUID(),
                     role: 'bot',
                     content: `🎉 Tự động hóa thành công! Hồ sơ khách hàng **${customerData.name}** đã được lưu thẳng vào hệ thống mà không cần bạn điền form.`
                 }]);
@@ -1206,7 +1212,7 @@ const SaleBot = () => {
                 if (missingCategory.length > 0) {
                     const names = missingCategory.map((p: any) => p.name).join(', ');
                     setMessages(prev => [...prev, {
-                        id: Date.now().toString(),
+                        id: crypto.randomUUID(),
                         role: 'bot',
                         content: `⚠️ **Thiếu danh mục** cho: ${names}\n\nAnh/chị vui lòng cho em biết danh mục của sản phẩm này (VD: Sơn, Nhựa và phụ kiện, Vật liệu xây dựng...).\n\n💡 Gõ: \"sửa danh mục ${missingCategory[0].name} thành [tên danh mục]\"`
                     }]);
@@ -1223,7 +1229,7 @@ const SaleBot = () => {
 
                 const generateUniqueSku = (idx: number): string => {
                     for (let attempt = 0; attempt < 10; attempt++) {
-                        const sku = 'SP' + String(1000 + Math.floor(Math.random() * 9000)) + Date.now().toString().slice(-4) + String(idx);
+                        const sku = 'SP' + String(1000 + Math.floor(Math.random() * 9000)) + crypto.randomUUID().slice(-4) + String(idx);
                         if (!existingSkus.has(sku)) return sku;
                     }
                     // Fallback: timestamp-based
@@ -1275,7 +1281,7 @@ const SaleBot = () => {
 
                     // Cập nhật tin nhắn thành công
                     setMessages(prev => [...prev, {
-                        id: Date.now().toString(),
+                        id: crypto.randomUUID(),
                         role: 'bot',
                         content: `🎉 Tự động hóa thành công! Đã lưu ${successCount} sản phẩm thẳng vào kho hàng.`
                     }]);
@@ -1368,7 +1374,7 @@ const SaleBot = () => {
                 }
 
                 setMessages(prev => [...prev, {
-                    id: Date.now().toString(),
+                    id: crypto.randomUUID(),
                     role: 'bot',
                     content: `✅ Đã cập nhật thành công hồ sơ khách hàng!`
                 }]);

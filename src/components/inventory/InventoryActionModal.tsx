@@ -14,7 +14,7 @@ interface InventoryActionModalProps {
 const InventoryActionModal: React.FC<InventoryActionModalProps> = ({ show, onClose, products, owner, initialProduct }) => {
 	const { showToast } = useToast();
 	const [type, setType] = useState<'import' | 'export'>('import');
-	const [selectedItems, setSelectedItems] = useState<{product: any, quantity: number}[]>([]);
+	const [selectedItems, setSelectedItems] = useState<{product: any, quantity: string}[]>([]);
 	const [searchQuery, setSearchQuery] = useState('');
 	const [note, setNote] = useState('');
 	const [loading, setLoading] = useState(false);
@@ -22,7 +22,7 @@ const InventoryActionModal: React.FC<InventoryActionModalProps> = ({ show, onClo
 	React.useEffect(() => {
 		if (show) {
 			if (initialProduct) {
-				setSelectedItems([{ product: initialProduct, quantity: 1 }]);
+				setSelectedItems([{ product: initialProduct, quantity: '1' }]);
 			} else {
 				setSelectedItems([]);
 			}
@@ -41,13 +41,15 @@ const InventoryActionModal: React.FC<InventoryActionModalProps> = ({ show, onClo
 
 	const handleSelect = (product: any) => {
 		if (!selectedItems.find(i => i.product.id === product.id)) {
-			setSelectedItems([...selectedItems, { product, quantity: 1 }]);
+			setSelectedItems([...selectedItems, { product, quantity: '1' }]);
 		}
 		setSearchQuery('');
 	};
 
-	const handleQuantityChange = (id: string, qty: number) => {
-		setSelectedItems(selectedItems.map(i => i.product.id === id ? { ...i, quantity: qty } : i));
+	const handleQuantityChange = (id: string, rawValue: string) => {
+		// Chỉ cho phép số, không cho ký tự đặc biệt. Giữ giá trị thô để nhập liệu tự nhiên
+		const clean = rawValue.replace(/[^0-9]/g, '');
+		setSelectedItems(selectedItems.map(i => i.product.id === id ? { ...i, quantity: clean } : i));
 	};
 
 	const handleRemove = (id: string) => {
@@ -73,6 +75,12 @@ const InventoryActionModal: React.FC<InventoryActionModalProps> = ({ show, onClo
 				if (typeof item.product.stock !== 'number') {
 					throw new Error(`Sản phẩm "${item.product.name || '?'}" không có số lượng tồn kho`);
 				}
+				const qty = parseInt(item.quantity, 10);
+				if (!qty || qty <= 0) {
+					showToast(`Vui lòng nhập số lượng cho "${item.product.name || '?'}"`, 'warning');
+					setLoading(false);
+					return;
+				}
 			}
 
 			const actionLabel = type === 'import' ? 'Nhập kho' : 'Xuất kho';
@@ -82,16 +90,17 @@ const InventoryActionModal: React.FC<InventoryActionModalProps> = ({ show, onClo
 
 			// Write ONE inventory_log per product (matching flat structure used by stats calculator)
 			for (const item of selectedItems) {
+				const qty = parseInt(item.quantity, 10) || 0;
 				const newStock = type === 'import'
-					? Number(item.product.stock) + Number(item.quantity)
-					: Number(item.product.stock) - Number(item.quantity);
+					? Number(item.product.stock) + qty
+					: Number(item.product.stock) - qty;
 
 				const logEntry = {
 					productId: item.product.id,
 					productName: item.product.name,
 					sku: item.product.sku || '',
 					unit: item.product.unit || '',
-					qty: Number(item.quantity),
+					qty: qty,
 					type: type,
 					action: actionLabel,
 					previousStock: Number(item.product.stock),
@@ -196,10 +205,11 @@ const InventoryActionModal: React.FC<InventoryActionModalProps> = ({ show, onClo
 									</div>
 									<div className="flex items-center gap-2">
 										<input 
-											type="number" 
-											min="1"
+											type="text"
+											inputMode="numeric"
+											pattern="[0-9]*"
 											value={item.quantity}
-											onChange={(e) => handleQuantityChange(item.product.id, Number(e.target.value))}
+											onChange={(e) => handleQuantityChange(item.product.id, e.target.value)}
 											className="w-20 text-center bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg py-1.5 font-black text-indigo-600 dark:text-indigo-400 outline-none focus:border-indigo-500"
 										/>
 										<button onClick={() => handleRemove(item.product.id)} className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg transition-colors">

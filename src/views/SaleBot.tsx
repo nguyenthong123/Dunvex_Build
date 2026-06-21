@@ -1016,8 +1016,10 @@ const SaleBot = () => {
                 const headers = parseCSVLine(lines[0]).map(h => normalizeVN(h));
                 const nameColIdx = headers.findIndex((h: string) => 
                     h.includes('ten') || h.includes('sanpham') || h.includes('product') || h.includes('name') || h.includes('hanghoa'));
-                const priceColIdx = headers.findIndex((h: string) =>
-                    h.includes('gia') || h.includes('price') || h.includes('ban') || h.includes('don'));
+                const priceImportColIdx = headers.findIndex((h: string) =>
+                    h.includes('gianhap') || h.includes('giavon') || h.includes('cost') || h.includes('nhap'));
+                const priceSellColIdx = headers.findIndex((h: string) =>
+                    h.includes('giaban') || h.includes('ban') || h.includes('retail') || h.includes('le') || (!priceImportColIdx && h.includes('gia')));
                 const stockColIdx = headers.findIndex((h: string) =>
                     h.includes('ton') || h.includes('stock') || h.includes('soluong') || h.includes('kho') || h.includes('conlai'));
                 const catColIdx = headers.findIndex((h: string) =>
@@ -1026,6 +1028,8 @@ const SaleBot = () => {
                     h.includes('donvi') || h.includes('unit') || h.includes('dvt') || h.includes('tinh'));
                 const weightColIdx = headers.findIndex((h: string) =>
                     h.includes('trongluong') || h.includes('weight') || h.includes('density') || h.includes('matdo') || h.includes('khoiluong') || h.includes('kg'));
+                const specColIdx = headers.findIndex((h: string) =>
+                    h.includes('quycach') || h.includes('spec') || h.includes('kichthuoc') || h.includes('size') || h.includes('dacdiem'));
 
                 if (nameColIdx < 0) {
                     const cols = headers.join(', ');
@@ -1042,15 +1046,17 @@ const SaleBot = () => {
 
                 // Parse từng dòng
                 const matchedItems: any[] = [];
-                const notFoundItems: { name: string; stock: number; price: number; category: string; unit: string; weight: string }[] = [];
+                const notFoundItems: { name: string; stock: number; priceImport: number; priceSell: number; category: string; unit: string; weight: string; spec: string }[] = [];
                 for (let i = 1; i < lines.length; i++) {
                     const cols = parseCSVLine(lines[i]);
                     const rowName = cols[nameColIdx] || '';
-                    const rowPrice = priceColIdx >= 0 ? cols[priceColIdx] : '';
+                    const rowPriceImport = priceImportColIdx >= 0 ? cols[priceImportColIdx] : '';
+                    const rowPriceSell = priceSellColIdx >= 0 ? cols[priceSellColIdx] : (priceImportColIdx >= 0 ? cols[priceImportColIdx] : '');
                     const rowStock = stockColIdx >= 0 ? Number(cols[stockColIdx]?.replace(/[^\d.-]/g, '')) : 0;
                     const rowCat = catColIdx >= 0 ? (cols[catColIdx] || '').trim() : '';
                     const rowUnit = unitColIdx >= 0 ? (cols[unitColIdx] || '').trim() : '';
                     const rowWeight = weightColIdx >= 0 ? (cols[weightColIdx] || '').trim() : '';
+                    const rowSpec = specColIdx >= 0 ? (cols[specColIdx] || '').trim() : '';
 
                     if (!rowName || isNaN(rowStock)) continue;
 
@@ -1058,7 +1064,17 @@ const SaleBot = () => {
                     if (matched) {
                         matchedItems.push({ product: matched, newStock: rowStock });
                     } else {
-                        notFoundItems.push({ name: rowName, stock: rowStock, price: Number(rowPrice?.replace(/[^\d.-]/g, '')) || 0, category: rowCat, unit: rowUnit, weight: rowWeight });
+                        const parsePrice = (s: string) => Number((s || '').replace(/[^\d.-]/g, '')) || 0;
+                        notFoundItems.push({
+                            name: rowName,
+                            stock: rowStock,
+                            priceImport: parsePrice(rowPriceImport),
+                            priceSell: parsePrice(rowPriceSell) || parsePrice(rowPriceImport),
+                            category: rowCat,
+                            unit: rowUnit,
+                            weight: rowWeight,
+                            spec: rowSpec
+                        });
                     }
                 }
 
@@ -1087,10 +1103,12 @@ const SaleBot = () => {
                         new_products: notFoundItems.map(nf => ({
                             name: nf.name,
                             stock: nf.stock,
-                            price: nf.price || 0,
+                            priceImport: nf.priceImport || 0,
+                            priceSell: nf.priceSell || 0,
                             category: nf.category || '',
                             unit: nf.unit || '',
-                            weight: nf.weight || ''
+                            weight: nf.weight || '',
+                            spec: nf.spec || ''
                         }))
                     } }]);
             } catch (err: any) {
@@ -1137,18 +1155,20 @@ const SaleBot = () => {
                 // 2. Create new products from unmatched items
                 for (const np of (data.new_products || [])) {
                     const stock = Number(np.stock) || 0;
-                    const price = Number(np.price) || 0;
+                    const priceImport = Number(np.priceImport) || 0;
+                    const priceSell = Number(np.priceSell) || priceImport || 0;
                     const sku = `DV-${Math.floor(100000 + Math.random() * 900000)}`;
 
                     const newProdRef = await addDoc(collection(db, 'products'), {
                         name: np.name,
                         sku: sku,
                         stock: stock,
-                        priceImport: price,
-                        priceSell: price,
+                        priceImport: priceImport,
+                        priceSell: priceSell,
                         category: np.category || 'Tôn lợp',
                         unit: np.unit || 'm2',
                         density: np.weight || '',
+                        specification: np.spec || '',
                         status: 'Kinh doanh',
                         createdAt: serverTimestamp(),
                         ownerId: owner.ownerId,
@@ -1978,7 +1998,7 @@ const SaleBot = () => {
                                         <span className="font-bold">🆕 Tạo sản phẩm mới ({confirmAction.new_products.length} SP):</span>
                                         {confirmAction.new_products.slice(0, 10).map((np: any, i: number) => (
                                             <div key={i} className="ml-2 text-xs text-slate-600 dark:text-slate-400">
-                                                • {np.name}: tồn <strong className="text-green-600">{np.stock}</strong>{np.price > 0 ? ` — ${np.price.toLocaleString('vi-VN')}đ` : ''}{np.category ? ` [${np.category}]` : ''}{np.unit ? ` /${np.unit}` : ''}{np.weight ? ` — ${np.weight}` : ''}
+                                                • {np.name}: tồn <strong className="text-green-600">{np.stock}</strong>{np.priceImport > 0 ? ` — nhập ${np.priceImport.toLocaleString('vi-VN')}đ` : ''}{np.priceSell > 0 && np.priceSell !== np.priceImport ? ` / bán ${np.priceSell.toLocaleString('vi-VN')}đ` : ''}{np.category ? ` [${np.category}]` : ''}{np.unit ? ` /${np.unit}` : ''}{np.weight ? ` — ${np.weight}` : ''}{np.spec ? ` — ${np.spec}` : ''}
                                             </div>
                                         ))}
                                         {confirmAction.new_products.length > 10 && (

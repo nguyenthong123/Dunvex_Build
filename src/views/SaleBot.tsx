@@ -1024,6 +1024,8 @@ const SaleBot = () => {
                     h.includes('danhmuc') || h.includes('loai') || h.includes('category') || h.includes('nhom'));
                 const unitColIdx = headers.findIndex((h: string) =>
                     h.includes('donvi') || h.includes('unit') || h.includes('dvt') || h.includes('tinh'));
+                const weightColIdx = headers.findIndex((h: string) =>
+                    h.includes('trongluong') || h.includes('weight') || h.includes('density') || h.includes('matdo') || h.includes('khoiluong') || h.includes('kg'));
 
                 if (nameColIdx < 0) {
                     const cols = headers.join(', ');
@@ -1040,7 +1042,7 @@ const SaleBot = () => {
 
                 // Parse từng dòng
                 const matchedItems: any[] = [];
-                const notFoundItems: { name: string; stock: number; price: number; category: string; unit: string }[] = [];
+                const notFoundItems: { name: string; stock: number; price: number; category: string; unit: string; weight: string }[] = [];
                 for (let i = 1; i < lines.length; i++) {
                     const cols = parseCSVLine(lines[i]);
                     const rowName = cols[nameColIdx] || '';
@@ -1048,6 +1050,7 @@ const SaleBot = () => {
                     const rowStock = stockColIdx >= 0 ? Number(cols[stockColIdx]?.replace(/[^\d.-]/g, '')) : 0;
                     const rowCat = catColIdx >= 0 ? (cols[catColIdx] || '').trim() : '';
                     const rowUnit = unitColIdx >= 0 ? (cols[unitColIdx] || '').trim() : '';
+                    const rowWeight = weightColIdx >= 0 ? (cols[weightColIdx] || '').trim() : '';
 
                     if (!rowName || isNaN(rowStock)) continue;
 
@@ -1055,7 +1058,7 @@ const SaleBot = () => {
                     if (matched) {
                         matchedItems.push({ product: matched, newStock: rowStock });
                     } else {
-                        notFoundItems.push({ name: rowName, stock: rowStock, price: Number(rowPrice?.replace(/[^\d.-]/g, '')) || 0, category: rowCat, unit: rowUnit });
+                        notFoundItems.push({ name: rowName, stock: rowStock, price: Number(rowPrice?.replace(/[^\d.-]/g, '')) || 0, category: rowCat, unit: rowUnit, weight: rowWeight });
                     }
                 }
 
@@ -1086,7 +1089,8 @@ const SaleBot = () => {
                             stock: nf.stock,
                             price: nf.price || 0,
                             category: nf.category || '',
-                            unit: nf.unit || ''
+                            unit: nf.unit || '',
+                            weight: nf.weight || ''
                         }))
                     } }]);
             } catch (err: any) {
@@ -1144,6 +1148,7 @@ const SaleBot = () => {
                         priceSell: price,
                         category: np.category || 'Tôn lợp',
                         unit: np.unit || 'm2',
+                        density: np.weight || '',
                         status: 'Kinh doanh',
                         createdAt: serverTimestamp(),
                         ownerId: owner.ownerId,
@@ -1973,7 +1978,7 @@ const SaleBot = () => {
                                         <span className="font-bold">🆕 Tạo sản phẩm mới ({confirmAction.new_products.length} SP):</span>
                                         {confirmAction.new_products.slice(0, 10).map((np: any, i: number) => (
                                             <div key={i} className="ml-2 text-xs text-slate-600 dark:text-slate-400">
-                                                • {np.name}: tồn <strong className="text-green-600">{np.stock}</strong>{np.price > 0 ? ` — ${np.price.toLocaleString('vi-VN')}đ` : ''}{np.category ? ` [${np.category}]` : ''}{np.unit ? ` /${np.unit}` : ''}
+                                                • {np.name}: tồn <strong className="text-green-600">{np.stock}</strong>{np.price > 0 ? ` — ${np.price.toLocaleString('vi-VN')}đ` : ''}{np.category ? ` [${np.category}]` : ''}{np.unit ? ` /${np.unit}` : ''}{np.weight ? ` — ${np.weight}` : ''}
                                             </div>
                                         ))}
                                         {confirmAction.new_products.length > 10 && (

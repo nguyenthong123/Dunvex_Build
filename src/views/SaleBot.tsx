@@ -408,9 +408,26 @@ const SaleBot = () => {
         });
 
         try {
-            // 📊 Pre-check: nếu có link Google Sheet → import trực tiếp, không cần Gemini
+            // 📊 Pre-check: nếu có link Google Sheet
             const sheetMatch = userMsg.match(/https?:\/\/docs\.google\.com\/spreadsheets\/[^\s]+/);
             if (sheetMatch) {
+                const isOrder = /(lên|tạo|chốt)\s*(đơn|order)|đơn\s*hàng|đặt\s*hàng|order/i.test(userMsg);
+                const isInventory = /(nhập|import|cập nhật)\s*(kho|tồn|inventory)|tồn\s*kho/i.test(userMsg);
+
+                if (isOrder && !isInventory) {
+                    // Tạo đơn hàng từ sheet
+                    const data = {
+                        intent: 'IMPORT_ORDER_FROM_SHEET',
+                        import_url: sheetMatch[0],
+                        message: '📋 Dạ, em sẽ đọc Google Sheet và tạo đơn hàng. Đang xử lý...'
+                    };
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot', content: data.message, parsedData: data }]);
+                    setIsLoading(false);
+                    await executeAction(data);
+                    return;
+                }
+
+                // Import tồn kho từ sheet
                 const data = {
                     intent: 'IMPORT_INVENTORY',
                     import_url: sheetMatch[0],
@@ -418,7 +435,6 @@ const SaleBot = () => {
                 };
                 setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot', content: data.message, parsedData: data }]);
                 setIsLoading(false);
-                // Tự động xử lý import
                 await executeAction(data);
                 return;
             }
@@ -1210,6 +1226,221 @@ const SaleBot = () => {
             } finally {
                 setIsLoading(false);
             }
+        } else if (data.intent === 'IMPORT_ORDER_FROM_SHEET') {
+            // 📋 Tạo đơn hàng từ Google Sheet
+            try {
+                if (!data.import_url) {
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
+                        content: '❌ Không tìm thấy link Google Sheet.' }]);
+                    return;
+                }
+                setIsLoading(true);
+                setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
+                    content: '⏳ Đang đọc danh sách sản phẩm từ Google Sheet...' }]);
+
+                // Parse Sheet URL → CSV
+                let csvUrl = data.import_url;
+                const match = csvUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                if (!match) {
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
+                        content: '❌ Link Google Sheet không đúng định dạng.' }]);
+                    setIsLoading(false); return;
+                }
+                const sheetId = match[1];
+                const gidMatch = csvUrl.match(/gid=(\d+)/);
+                const gid = gidMatch ? gidMatch[1] : '0';
+                csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
+
+                const res = await fetch(csvUrl);
+                if (!res.ok) {
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
+                        content: '❌ Không đọc được Sheet. Sheet cần được chia sẻ công khai (Anyone with link).' }]);
+                    setIsLoading(false); return;
+                }
+
+                const csvText = await res.text();
+                const lines = csvText.split('\n').filter(l => l.trim());
+                if (lines.length < 2) {
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
+                        content: '❌ Sheet trống hoặc không có dữ liệu.' }]);
+                    setIsLoading(false); return;
+                }
+
+                // Parse CSV
+                const parseCSVLine = (line: string): string[] => {
+                    const result: string[] = [];
+                    let current = ''; let inQuotes = false;
+                    for (const ch of line) {
+                        if (ch === '"') { inQuotes = !inQuotes; continue; }
+                        if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ''; continue; }
+                        current += ch;
+                    }
+                    result.push(current.trim());
+                    return result;
+                };
+
+                const headers = parseCSVLine(lines[0]).map(h => normalizeVN(h));
+                const nameColIdx = headers.findIndex((h: string) =>
+                    h.includes('ten') || h.includes('sanpham') || h.includes('product') || h.includes('name'));
+                const qtyColIdx = headers.findIndex((h: string) =>
+                    h.includes('soluong') || h.includes('qty') || h.includes('quantity') || h.includes('so') || h.includes('sl'));
+                const catColIdx = headers.findIndex((h: string) =>
+                    h.includes('danhmuc') || h.includes('loai') || h.includes('category') || h.includes('nhom'));
+                const noteColIdx = headers.findIndex((h: string) =>
+                    h.includes('ghichu') || h.includes('note') || h.includes('mota'));
+
+                if (nameColIdx < 0) {
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
+                        content: `❌ Không tìm thấy cột "Tên sản phẩm". Các cột: ${headers.join(', ')}` }]);
+                    setIsLoading(false); return;
+                }
+
+                // Lấy tất cả sản phẩm
+                const qProd = query(collection(db, 'products'), where('ownerId', '==', owner.ownerId));
+                const snap = await getDocs(qProd);
+                const allProducts = snap.docs.map(d => ({ id: d.id, ...d.data() as any }));
+
+                // Parse từng dòng
+                const orderItems: any[] = [];
+                const notFound: string[] = [];
+                let orderNote = '';
+
+                for (let i = 1; i < lines.length; i++) {
+                    const cols = parseCSVLine(lines[i]);
+                    const rowName = (cols[nameColIdx] || '').trim();
+                    if (!rowName) continue;
+
+                    const rowQty = qtyColIdx >= 0 ? parseInt(cols[qtyColIdx], 10) || 1 : 1;
+                    const rowCat = catColIdx >= 0 ? (cols[catColIdx] || '').trim() : '';
+                    if (noteColIdx >= 0 && cols[noteColIdx]) orderNote = cols[noteColIdx].trim();
+
+                    const matched = findMatchingProduct(rowName, allProducts, rowCat);
+                    if (matched) {
+                        orderItems.push({
+                            product: matched,
+                            quantity: rowQty,
+                            price: Number(matched.priceSell) || Number(matched.priceImport) || 0
+                        });
+                    } else {
+                        notFound.push(rowName);
+                    }
+                }
+
+                if (orderItems.length === 0) {
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
+                        content: `❌ Không tìm thấy sản phẩm nào khớp.\nDanh sách: ${notFound.join(', ')}` }]);
+                    setIsLoading(false); return;
+                }
+
+                const totalAmount = orderItems.reduce((sum, it) => sum + (it.price * it.quantity), 0);
+                const itemsSummary = orderItems.map(it =>
+                    `• ${it.product.name} x${it.quantity} = ${(it.price * it.quantity).toLocaleString('vi-VN')}đ`
+                ).join('\n');
+
+                const confirmMsg = `📋 **Đơn hàng từ Sheet**\n\n${itemsSummary}\n\n💰 Tổng: **${totalAmount.toLocaleString('vi-VN')}đ**${orderNote ? '\n📝 Ghi chú: ' + orderNote : ''}${notFound.length > 0 ? '\n\n⚠️ Không tìm thấy: ' + notFound.join(', ') : ''}\n\n👤 Vui lòng nhập **tên khách hàng** để hoàn tất đơn.`;
+
+                setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot', content: confirmMsg,
+                    parsedData: {
+                        intent: 'CONFIRM_ORDER_FROM_SHEET',
+                        order_items: orderItems,
+                        total: totalAmount,
+                        note: orderNote,
+                        not_found: notFound
+                    } }]);
+            } catch (err: any) {
+                console.error('IMPORT_ORDER error:', err);
+                setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
+                    content: `❌ Lỗi: ${err.message || 'Không xác định'}` }]);
+            } finally {
+                setIsLoading(false);
+            }
+        } else if (data.intent === 'CONFIRM_ORDER_FROM_SHEET') {
+            // 📋 Xác nhận tạo đơn từ sheet — cần tên khách hàng
+            try {
+                const customerName = data.customer_name?.trim() || input.trim();
+                if (!customerName) {
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
+                        content: '👤 Vui lòng nhập tên khách hàng để tạo đơn hàng.',
+                        parsedData: { ...data, intent: 'CONFIRM_ORDER_FROM_SHEET' } }]);
+                    return;
+                }
+                if (!data.order_items?.length) return;
+                setIsLoading(true);
+
+                // Tìm hoặc tạo khách hàng
+                const qCust = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
+                const custSnap = await getDocs(qCust);
+                const allCustomers = custSnap.docs.map(d => ({ id: d.id, ...d.data() as any }));
+                let customer = allCustomers.find(c => normalizeVN(c.name || '') === normalizeVN(customerName));
+                if (!customer) {
+                    const newCustRef = await addDoc(collection(db, 'customers'), {
+                        name: customerName,
+                        type: 'Chủ nhà',
+                        ownerId: owner.ownerId,
+                        ownerEmail: owner.ownerEmail,
+                        createdAt: serverTimestamp(),
+                        createdBy: auth.currentUser?.uid
+                    });
+                    customer = { id: newCustRef.id, name: customerName, type: 'Chủ nhà' };
+                }
+
+                // Tạo đơn hàng
+                const orderItems = data.order_items.map((it: any) => ({
+                    id: crypto.randomUUID(),
+                    name: it.product.name,
+                    productId: it.product.id,
+                    sku: it.product.sku || '',
+                    qty: it.quantity,
+                    price: it.price,
+                    unit: it.product.unit || 'm2'
+                }));
+                const totalAmount = orderItems.reduce((sum: number, it: any) => sum + (it.price * it.qty), 0);
+
+                const orderRef = await addDoc(collection(db, 'orders'), {
+                    customerId: customer.id,
+                    customerName: customer.name,
+                    items: orderItems,
+                    totalAmount,
+                    status: 'Đơn chốt',
+                    note: data.note || 'Tạo từ Google Sheet qua SaleBot',
+                    orderDate: Timestamp.now(),
+                    createdAt: serverTimestamp(),
+                    ownerId: owner.ownerId,
+                    ownerEmail: owner.ownerEmail,
+                    createdBy: auth.currentUser?.uid,
+                    createdByEmail: auth.currentUser?.email
+                });
+
+                // Trừ tồn kho
+                for (const it of data.order_items) {
+                    const newStock = Math.max(0, (Number(it.product.stock) || 0) - it.quantity);
+                    await updateDoc(doc(db, 'products', it.product.id), { stock: newStock, updatedAt: serverTimestamp() });
+                    await addDoc(collection(db, 'inventory_logs'), {
+                        productId: it.product.id,
+                        productName: it.product.name,
+                        sku: it.product.sku || '',
+                        qty: it.quantity,
+                        type: 'out',
+                        action: 'Xuất kho',
+                        orderId: orderRef.id,
+                        previousStock: Number(it.product.stock) || 0,
+                        newStock,
+                        note: `Đơn hàng #${orderRef.id.slice(0, 6)}`,
+                        createdAt: serverTimestamp(),
+                        ownerId: owner.ownerId,
+                        user: auth.currentUser?.displayName || 'Unknown'
+                    });
+                }
+
+                setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
+                    content: `✅ Đã tạo đơn hàng cho **${customerName}** thành công!\n\n📋 ${orderItems.length} sản phẩm\n💰 Tổng: **${totalAmount.toLocaleString('vi-VN')}đ**\n📦 Tồn kho đã được cập nhật.` }]);
+            } catch (err: any) {
+                console.error('CONFIRM_ORDER_FROM_SHEET error:', err);
+                setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
+                    content: `❌ Lỗi: ${err.message || 'Không xác định'}` }]);
+            } finally {
+                setIsLoading(false);
+            }
         } else if (data.intent === 'CREATE_CUSTOMER') {
             try {
                 if (!owner.ownerId) {
@@ -1801,7 +2032,7 @@ const SaleBot = () => {
                                             </div>
                                         )}
 
-                                        {['CREATE_ORDER', 'UPDATE_ORDER', 'REVIEW_ORDER', 'FIX_ORDER', 'CREATE_CUSTOMER', 'UPDATE_CUSTOMER', 'CREATE_PRODUCT', 'CREATE_PAYMENT', 'CONFIRM_IMPORT'].includes(msg.parsedData.intent) && 
+                                        {['CREATE_ORDER', 'UPDATE_ORDER', 'REVIEW_ORDER', 'FIX_ORDER', 'CREATE_CUSTOMER', 'UPDATE_CUSTOMER', 'CREATE_PRODUCT', 'CREATE_PAYMENT', 'CONFIRM_IMPORT', 'IMPORT_ORDER_FROM_SHEET', 'CONFIRM_ORDER_FROM_SHEET'].includes(msg.parsedData.intent) && 
                                         (!msg.parsedData.missing_info || msg.parsedData.missing_info.length === 0) && (
                                             <button 
                                                 onClick={() => handleAction(msg.parsedData)}
@@ -1816,6 +2047,8 @@ const SaleBot = () => {
                                                  msg.parsedData.intent === 'CREATE_PAYMENT' ? 'Đi tới Form Phiếu Thu' :
                                                  msg.parsedData.intent === 'INVENTORY_ACTION' ? 'Xác Nhận & Tạo Phiếu Kho' :
                                                  msg.parsedData.intent === 'CONFIRM_IMPORT' ? '✅ Xác Nhận Cập Nhật Tồn Kho' :
+                                                 msg.parsedData.intent === 'IMPORT_ORDER_FROM_SHEET' ? '📋 Tạo Đơn Hàng' :
+                                                 msg.parsedData.intent === 'CONFIRM_ORDER_FROM_SHEET' ? '📋 Xác Nhận Đơn Hàng' :
                                                  'Tiếp Tục Lên Đơn'}
                                             </button>
                                         )}
@@ -1958,6 +2191,8 @@ const SaleBot = () => {
                                      confirmAction.intent === 'CREATE_PAYMENT' ? '💰 Thu công nợ' :
                                      confirmAction.intent === 'INVENTORY_ACTION' ? '📊 Phiếu kho' :
                                      confirmAction.intent === 'CONFIRM_IMPORT' ? '📊 Import Tồn kho' :
+                                     confirmAction.intent === 'IMPORT_ORDER_FROM_SHEET' ? '📋 Tạo đơn từ Sheet' :
+                                     confirmAction.intent === 'CONFIRM_ORDER_FROM_SHEET' ? '📋 Xác nhận đơn từ Sheet' :
                                      'Thao tác'}
                                 </div>
                                 {confirmAction.customer?.name && <p className="text-sm font-bold">👤 {confirmAction.customer.name}{confirmAction.customer.phone ? ` - ${confirmAction.customer.phone}` : ''}</p>}

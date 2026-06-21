@@ -61,6 +61,7 @@ export const COLLECTIONS = {
   subscriptionPackages: () => collection(db, 'subscription_packages'),
   permissions: () => collection(db, 'permissions'),
   aiActions: () => collection(db, 'ai_actions'),
+  rebateTiers: () => collection(db, 'rebate_tiers'),
 } as const;
 
 // ─── Common Query Helpers ───────────────────────────────────
@@ -373,6 +374,31 @@ export const subscriptionPackageService = {
     return onSnapshot(COLLECTIONS.subscriptionPackages(), (snap: QuerySnapshot) => {
       onData(snap.docs.map(withId));
     }, onError);
+  },
+};
+
+// ─── Rebate Tier Service ────────────────────────────────────
+
+export const rebateTierService = {
+  listenByOwner(ownerId: string, onData: (tiers: WithId<any>[]) => void, onError?: (err: Error) => void): Unsubscribe {
+    const q = query(COLLECTIONS.rebateTiers(), where('ownerId', '==', ownerId));
+    return onSnapshot(q, (snap: QuerySnapshot) => {
+      onData(snap.docs.map(withId));
+    }, onError);
+  },
+
+  async saveTiers(ownerId: string, customerType: string, tiers: { minAmount: number; percent: number }[]): Promise<void> {
+    const docId = customerType.toLowerCase().replace(/\s+/g, '-');
+    await setDoc(doc(COLLECTIONS.rebateTiers(), docId), {
+      ownerId,
+      customerType,
+      tiers,
+      updatedAt: serverTimestamp(),
+    });
+  },
+
+  async deleteTiers(docId: string): Promise<void> {
+    await deleteDoc(doc(COLLECTIONS.rebateTiers(), docId));
   },
 };
 

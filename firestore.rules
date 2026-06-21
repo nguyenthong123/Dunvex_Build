@@ -120,6 +120,10 @@ service cloud.firestore {
       allow read, update, delete: if allowByOwner();
       allow create: if allowCreateByOwner();
     }
+    match /rebate_tiers/{docId} {
+      allow read, update, delete: if allowByOwner();
+      allow create: if allowCreateByOwner();
+    }
     match /usage_limits/{docId} {
       allow read, update, delete: if allowByOwner();
       allow create: if allowCreateByOwner();

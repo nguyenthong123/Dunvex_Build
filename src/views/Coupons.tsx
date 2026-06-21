@@ -5,6 +5,7 @@ import { db, auth } from '../services/firebase';
 import { useOwner } from '../hooks/useOwner';
 import { useCoupons } from '../hooks/useCoupons';
 import { useToast } from '../components/shared/Toast';
+import RebatePanel from '../components/RebatePanel';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 const Coupons = () => {
@@ -16,6 +17,7 @@ const Coupons = () => {
 	const [searchTerm, setSearchTerm] = useState('');
 	const [copiedCode, setCopiedCode] = useState<string | null>(null);
 	const [activeTab, setActiveTab] = useState('all');
+	const [mainTab, setMainTab] = useState<'coupons' | 'rebate'>('coupons');
 
 	// CRUD State
 	const [showModal, setShowModal] = useState(false);
@@ -224,6 +226,34 @@ const Coupons = () => {
 	return (
 		<div className="min-h-screen bg-[#f8f9fb] dark:bg-slate-950 p-4 md:p-8 pb-32 transition-colors duration-300">
 			<div className="max-w-3xl mx-auto">
+
+				{/* MAIN TAB SWITCHER */}
+				<div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl mb-6">
+					<button
+						onClick={() => setMainTab('coupons')}
+						className={mainTab === 'coupons'
+							? 'flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all bg-white dark:bg-slate-900 text-[#1A237E] dark:text-indigo-400 shadow-sm'
+							: 'flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all text-slate-400 hover:text-slate-600'}
+					>
+						<Gift size={14} className="inline mr-1.5" /> Mã giảm giá
+					</button>
+					<button
+						onClick={() => setMainTab('rebate')}
+						className={mainTab === 'rebate'
+							? 'flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all bg-white dark:bg-slate-900 text-[#1A237E] dark:text-indigo-400 shadow-sm'
+							: 'flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all text-slate-400 hover:text-slate-600'}
+					>
+						<Percent size={14} className="inline mr-1.5" /> Chiết khấu trả sau
+					</button>
+				</div>
+
+				{/* REBATE PANEL — shows only on rebate tab */}
+				{mainTab === 'rebate' && (
+					<RebatePanel ownerId={owner.ownerId} isAdmin={isAdmin} />
+				)}
+
+				{/* COUPONS CONTENT — hidden on rebate tab via CSS */}
+				<div className={mainTab === 'rebate' ? 'hidden' : ''}>
 
 				{/* HEADER */}
 				<div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -539,6 +569,8 @@ const Coupons = () => {
 					</div>
 				</div>
 			)}
+
+				</div>
 
 			<style dangerouslySetInnerHTML={{
 				__html: `

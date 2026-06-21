@@ -914,27 +914,31 @@ const SaleBot = () => {
 
                 const type = data.inventory_action?.type === 'export' ? 'export' : 'import';
                 const actionName = type === 'import' ? 'Nhập kho' : 'Xuất kho';
-                
-                const logData = {
-                    action: actionName,
-                    type: type,
-                    items: matchedItems.map(i => ({
-                        productId: i.product.id,
-                        name: i.product.name,
-                        sku: i.product.sku || '',
-                        quantity: i.quantity,
-                        previousStock: i.product.stock || 0,
-                        newStock: type === 'import' ? (i.product.stock || 0) + i.quantity : (i.product.stock || 0) - i.quantity
-                    })),
-                    note: data.inventory_action?.note || 'Tạo tự động từ SaleBot',
-                    createdAt: serverTimestamp(),
-                    ownerId: owner.ownerId,
-                    user: auth.currentUser?.displayName || 'Unknown'
-                };
-                await addDoc(collection(db, 'inventory_logs'), logData);
 
+                // Write ONE inventory_log per product (flat structure — matches stats calculator)
                 for (const item of matchedItems) {
-                    const newStock = type === 'import' ? (item.product.stock || 0) + item.quantity : (item.product.stock || 0) - item.quantity;
+                    const newStock = type === 'import'
+                        ? (Number(item.product.stock) || 0) + Number(item.quantity)
+                        : (Number(item.product.stock) || 0) - Number(item.quantity);
+
+                    const logEntry = {
+                        productId: item.product.id,
+                        productName: item.product.name,
+                        sku: item.product.sku || '',
+                        unit: item.product.unit || '',
+                        qty: Number(item.quantity),
+                        type: type,
+                        action: actionName,
+                        previousStock: Number(item.product.stock) || 0,
+                        newStock: newStock,
+                        note: data.inventory_action?.note || 'Tạo tự động từ SaleBot',
+                        createdAt: serverTimestamp(),
+                        ownerId: owner.ownerId,
+                        user: auth.currentUser?.displayName || 'Unknown'
+                    };
+                    await addDoc(collection(db, 'inventory_logs'), logEntry);
+
+                    // Update product stock
                     await updateDoc(doc(db, 'products', item.product.id), {
                         stock: newStock,
                         updatedAt: serverTimestamp()

@@ -1036,7 +1036,7 @@ const SaleBot = () => {
 
                 // Parse từng dòng
                 const matchedItems: any[] = [];
-                const notFoundItems: { name: string; stock: number }[] = [];
+                const notFoundItems: { name: string; stock: number; price: number; category: string }[] = [];
                 for (let i = 1; i < lines.length; i++) {
                     const cols = parseCSVLine(lines[i]);
                     const rowName = cols[nameColIdx] || '';
@@ -1049,24 +1049,39 @@ const SaleBot = () => {
                     if (matched) {
                         matchedItems.push({ product: matched, newStock: rowStock });
                     } else {
-                        notFoundItems.push({ name: rowName, stock: rowStock });
+                        notFoundItems.push({ name: rowName, stock: rowStock, price: Number(rowPrice?.replace(/[^\d.-]/g, '')) || 0, category: '' });
                     }
                 }
 
-                if (matchedItems.length === 0) {
+                if (matchedItems.length === 0 && notFoundItems.length === 0) {
                     setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
                         content: `❌ Không tìm thấy sản phẩm nào khớp trong ${lines.length - 1} dòng.\nDanh sách từ sheet: ${notFoundItems.map(i => i.name).join(', ')}` }]);
                     setIsLoading(false);
                     return;
                 }
 
-                // Hiện popup xác nhận
-                const confirmMsg = notFoundItems.length > 0
-                    ? `📊 Đã tìm thấy **${matchedItems.length}/${lines.length - 1}** sản phẩm khớp. ${notFoundItems.length} sản phẩm không tìm thấy: ${notFoundItems.map(i => i.name).join(', ')}.\n\nXác nhận cập nhật tồn kho?`
-                    : `📊 Đã tìm thấy **${matchedItems.length}** sản phẩm khớp từ sheet. Xác nhận cập nhật tồn kho?`;
+                // Build confirmation message
+                const parts: string[] = [];
+                if (matchedItems.length > 0) {
+                    parts.push(`📦 **${matchedItems.length}** sản phẩm sẽ được cập nhật tồn kho`);
+                }
+                if (notFoundItems.length > 0) {
+                    parts.push(`🆕 **${notFoundItems.length}** sản phẩm mới sẽ được tạo: ${notFoundItems.map(i => i.name).join(', ')}`);
+                }
+                const confirmMsg = parts.join('\n') + '\n\nXác nhận thực hiện?';
 
                 setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot', content: confirmMsg,
-                    parsedData: { intent: 'CONFIRM_IMPORT', import_items: matchedItems, not_found: notFoundItems } }]);
+                    parsedData: {
+                        intent: 'CONFIRM_IMPORT',
+                        import_items: matchedItems,
+                        not_found: notFoundItems,
+                        new_products: notFoundItems.map(nf => ({
+                            name: nf.name,
+                            stock: nf.stock,
+                            price: nf.price || 0,
+                            category: nf.category || ''
+                        }))
+                    } }]);
             } catch (err: any) {
                 console.error('IMPORT_INVENTORY error:', err);
                 setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
@@ -1075,41 +1090,91 @@ const SaleBot = () => {
                 setIsLoading(false);
             }
         } else if (data.intent === 'CONFIRM_IMPORT') {
-            // 📊 Xác nhận cập nhật tồn kho từ import
+            // 📊 Xác nhận cập nhật tồn kho + tạo sản phẩm mới từ import
             try {
-                if (!data.import_items?.length) return;
+                if (!data.import_items?.length && !data.new_products?.length) return;
                 setIsLoading(true);
 
                 let updatedCount = 0;
-                for (const item of data.import_items) {
+                let createdCount = 0;
+
+                // 1. Update stock for matched products
+                for (const item of (data.import_items || [])) {
+                    const newStock = Number(item.newStock) || 0;
                     await updateDoc(doc(db, 'products', item.product.id), {
-                        stock: Number(item.newStock) || 0,
+                        stock: newStock,
                         updatedAt: serverTimestamp()
+                    });
+                    // Write individual log
+                    await addDoc(collection(db, 'inventory_logs'), {
+                        productId: item.product.id,
+                        productName: item.product.name,
+                        sku: item.product.sku || '',
+                        qty: newStock,
+                        type: 'import',
+                        action: 'Import Google Sheet',
+                        previousStock: Number(item.product.stock) || 0,
+                        newStock: newStock,
+                        note: 'Import từ Google Sheet qua SaleBot',
+                        createdAt: serverTimestamp(),
+                        ownerId: owner.ownerId,
+                        user: auth.currentUser?.displayName || 'Unknown'
                     });
                     updatedCount++;
                 }
 
-                // Lưu log
-                await addDoc(collection(db, 'inventory_logs'), {
-                    action: 'Import Google Sheet',
-                    type: 'import',
-                    items: data.import_items.map((i: any) => ({
-                        productId: i.product.id,
-                        name: i.product.name,
-                        newStock: i.newStock,
-                        previousStock: i.product.stock || 0
-                    })),
-                    note: 'Import từ Google Sheet qua SaleBot',
-                    createdAt: serverTimestamp(),
-                    ownerId: owner.ownerId,
-                    user: auth.currentUser?.displayName || 'Unknown'
-                });
+                // 2. Create new products from unmatched items
+                for (const np of (data.new_products || [])) {
+                    const stock = Number(np.stock) || 0;
+                    const price = Number(np.price) || 0;
+                    const sku = `DV-${Math.floor(100000 + Math.random() * 900000)}`;
+
+                    const newProdRef = await addDoc(collection(db, 'products'), {
+                        name: np.name,
+                        sku: sku,
+                        stock: stock,
+                        priceImport: price,
+                        priceSell: price,
+                        category: np.category || 'Tôn lợp',
+                        unit: 'm2',
+                        status: 'Kinh doanh',
+                        createdAt: serverTimestamp(),
+                        ownerId: owner.ownerId,
+                        ownerEmail: owner.ownerEmail,
+                        createdBy: auth.currentUser?.uid,
+                        createdByEmail: auth.currentUser?.email
+                    });
+
+                    // Write inventory log for initial stock
+                    if (stock > 0) {
+                        await addDoc(collection(db, 'inventory_logs'), {
+                            productId: newProdRef.id,
+                            productName: np.name,
+                            sku: sku,
+                            qty: stock,
+                            type: 'init',
+                            action: 'Khởi tạo',
+                            previousStock: 0,
+                            newStock: stock,
+                            note: 'Tạo mới từ Google Sheet qua SaleBot',
+                            createdAt: serverTimestamp(),
+                            ownerId: owner.ownerId,
+                            user: auth.currentUser?.displayName || 'Unknown'
+                        });
+                    }
+                    createdCount++;
+                }
+
+                const resultParts: string[] = [];
+                if (updatedCount > 0) resultParts.push(`📦 Cập nhật tồn: **${updatedCount}** SP`);
+                if (createdCount > 0) resultParts.push(`🆕 Tạo mới: **${createdCount}** SP`);
 
                 setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
-                    content: `✅ Đã cập nhật tồn kho cho **${updatedCount}** sản phẩm từ Google Sheet!` }]);
+                    content: `✅ Hoàn tất! ${resultParts.join(' | ')}` }]);
             } catch (err: any) {
                 console.error('CONFIRM_IMPORT error:', err);
-                alert(`Lỗi khi cập nhật tồn kho: ${err.message}`);
+                setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
+                    content: `❌ Lỗi: ${err.message || 'Không xác định'}` }]);
             } finally {
                 setIsLoading(false);
             }
@@ -1893,6 +1958,19 @@ const SaleBot = () => {
                                         ))}
                                         {confirmAction.import_items.length > 10 && (
                                             <p className="text-xs text-slate-400 ml-2">...và {confirmAction.import_items.length - 10} sản phẩm khác</p>
+                                        )}
+                                    </div>
+                                )}
+                                {confirmAction.new_products?.length > 0 && (
+                                    <div className="text-sm space-y-1 max-h-40 overflow-y-auto">
+                                        <span className="font-bold">🆕 Tạo sản phẩm mới ({confirmAction.new_products.length} SP):</span>
+                                        {confirmAction.new_products.slice(0, 10).map((np: any, i: number) => (
+                                            <div key={i} className="ml-2 text-xs text-slate-600 dark:text-slate-400">
+                                                • {np.name}: tồn <strong className="text-green-600">{np.stock}</strong>{np.price > 0 ? ` — ${np.price.toLocaleString('vi-VN')}đ` : ''}
+                                            </div>
+                                        ))}
+                                        {confirmAction.new_products.length > 10 && (
+                                            <p className="text-xs text-slate-400 ml-2">...và {confirmAction.new_products.length - 10} sản phẩm khác</p>
                                         )}
                                     </div>
                                 )}

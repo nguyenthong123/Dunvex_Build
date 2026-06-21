@@ -411,8 +411,12 @@ const SaleBot = () => {
             // 📊 Pre-check: nếu có link Google Sheet
             const sheetMatch = userMsg.match(/https?:\/\/docs\.google\.com\/spreadsheets\/[^\s]+/);
             if (sheetMatch) {
-                const isOrder = /(lên|tạo|chốt)\s*(đơn|order)|đơn\s*hàng|đặt\s*hàng|order/i.test(userMsg);
-                const isInventory = /(nhập|import|cập nhật)\s*(kho|tồn|inventory)|tồn\s*kho/i.test(userMsg);
+                // Chuẩn hóa text để detect intent (bỏ dấu xuống dòng, gộp khoảng trắng)
+                const flatMsg = userMsg.replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ').toLowerCase();
+                const isOrder = /(lên|tạo|chốt|đặt|order|tao)\s*.?(đơn|don|order|hàng|hang)/.test(flatMsg) ||
+                    /đơn\s*hàng|order\s*from|từ\s*sheet.*đơn/.test(flatMsg);
+                const isInventory = /(nhập|import|cập\s*nhật|update|nạp|thêm)\s*.?(kho|tồn|ton|inventory|stock)/.test(flatMsg) ||
+                    /tồn\s*kho|nhập\s*hàng|import\s*stock/.test(flatMsg);
 
                 if (isOrder && !isInventory) {
                     // Tạo đơn hàng từ sheet
@@ -427,15 +431,25 @@ const SaleBot = () => {
                     return;
                 }
 
-                // Import tồn kho từ sheet
-                const data = {
-                    intent: 'IMPORT_INVENTORY',
-                    import_url: sheetMatch[0],
-                    message: 'Dạ, em đã nhận được link Google Sheet của anh/chị và sẽ tiến hành cập nhật tồn kho ạ.'
-                };
-                setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot', content: data.message, parsedData: data }]);
+                if (isInventory && !isOrder) {
+                    // Import tồn kho từ sheet
+                    const data = {
+                        intent: 'IMPORT_INVENTORY',
+                        import_url: sheetMatch[0],
+                        message: 'Dạ, em đã nhận được link Google Sheet của anh/chị và sẽ tiến hành cập nhật tồn kho ạ.'
+                    };
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot', content: data.message, parsedData: data }]);
+                    setIsLoading(false);
+                    await executeAction(data);
+                    return;
+                }
+
+                // Không rõ ý định → hỏi lại
+                setMessages(prev => [...prev, {
+                    id: crypto.randomUUID(), role: 'bot',
+                    content: '📊 Em thấy anh/chị gửi link Google Sheet. Anh/chị muốn:\n\n1️⃣ **Nhập tồn kho** — cập nhật số lượng tồn\n2️⃣ **Lên đơn hàng** — tạo đơn từ danh sách\n\nVui lòng nhập "nhập kho" hoặc "lên đơn" để em xử lý ạ!'
+                }]);
                 setIsLoading(false);
-                await executeAction(data);
                 return;
             }
 

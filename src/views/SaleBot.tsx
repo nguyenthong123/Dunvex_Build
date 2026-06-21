@@ -1337,7 +1337,7 @@ const SaleBot = () => {
                     `• ${it.product.name} x${it.quantity} = ${(it.price * it.quantity).toLocaleString('vi-VN')}đ`
                 ).join('\n');
 
-                const confirmMsg = `📋 **Đơn hàng từ Sheet**\n\n${itemsSummary}\n\n💰 Tổng: **${totalAmount.toLocaleString('vi-VN')}đ**${orderNote ? '\n📝 Ghi chú: ' + orderNote : ''}${notFound.length > 0 ? '\n\n⚠️ Không tìm thấy: ' + notFound.join(', ') : ''}\n\n👤 Vui lòng nhập **tên khách hàng** để hoàn tất đơn.`;
+                const confirmMsg = `📋 **Đơn hàng từ Sheet**\n\n${itemsSummary}\n\n💰 Tổng: **${totalAmount.toLocaleString('vi-VN')}đ**${orderNote ? '\n📝 Ghi chú: ' + orderNote : ''}${notFound.length > 0 ? '\n\n⚠️ Không tìm thấy: ' + notFound.join(', ') : ''}\n\n👤 Nhập **tên khách hàng** → mở form lên đơn với danh sách đã fill sẵn.`;
 
                 setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot', content: confirmMsg,
                     parsedData: {
@@ -1355,91 +1355,35 @@ const SaleBot = () => {
                 setIsLoading(false);
             }
         } else if (data.intent === 'CONFIRM_ORDER_FROM_SHEET') {
-            // 📋 Xác nhận tạo đơn từ sheet — cần tên khách hàng
+            // 📋 Xác nhận tạo đơn từ sheet → mở form QuickOrder với dữ liệu prefill
             try {
                 const customerName = data.customer_name?.trim() || input.trim();
                 if (!customerName) {
                     setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
-                        content: '👤 Vui lòng nhập tên khách hàng để tạo đơn hàng.',
+                        content: '👤 Vui lòng nhập tên khách hàng để tiếp tục.',
                         parsedData: { ...data, intent: 'CONFIRM_ORDER_FROM_SHEET' } }]);
                     return;
                 }
                 if (!data.order_items?.length) return;
-                setIsLoading(true);
 
-                // Tìm hoặc tạo khách hàng
-                const qCust = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
-                const custSnap = await getDocs(qCust);
-                const allCustomers = custSnap.docs.map(d => ({ id: d.id, ...d.data() as any }));
-                let customer = allCustomers.find(c => normalizeVN(c.name || '') === normalizeVN(customerName));
-                if (!customer) {
-                    const newCustRef = await addDoc(collection(db, 'customers'), {
-                        name: customerName,
-                        type: 'Chủ nhà',
-                        ownerId: owner.ownerId,
-                        ownerEmail: owner.ownerEmail,
-                        createdAt: serverTimestamp(),
-                        createdBy: auth.currentUser?.uid
-                    });
-                    customer = { id: newCustRef.id, name: customerName, type: 'Chủ nhà' };
-                }
-
-                // Tạo đơn hàng
-                const orderItems = data.order_items.map((it: any) => ({
-                    id: crypto.randomUUID(),
-                    name: it.product.name,
-                    productId: it.product.id,
-                    sku: it.product.sku || '',
-                    qty: it.quantity,
-                    price: it.price,
-                    unit: it.product.unit || 'm2'
-                }));
-                const totalAmount = orderItems.reduce((sum: number, it: any) => sum + (it.price * it.qty), 0);
-
-                const orderRef = await addDoc(collection(db, 'orders'), {
-                    customerId: customer.id,
-                    customerName: customer.name,
-                    items: orderItems,
-                    totalAmount,
-                    status: 'Đơn chốt',
-                    note: data.note || 'Tạo từ Google Sheet qua SaleBot',
-                    orderDate: Timestamp.now(),
-                    createdAt: serverTimestamp(),
-                    ownerId: owner.ownerId,
-                    ownerEmail: owner.ownerEmail,
-                    createdBy: auth.currentUser?.uid,
-                    createdByEmail: auth.currentUser?.email
-                });
-
-                // Trừ tồn kho
-                for (const it of data.order_items) {
-                    const newStock = Math.max(0, (Number(it.product.stock) || 0) - it.quantity);
-                    await updateDoc(doc(db, 'products', it.product.id), { stock: newStock, updatedAt: serverTimestamp() });
-                    await addDoc(collection(db, 'inventory_logs'), {
+                // Chuyển sang form QuickOrder với dữ liệu prefill
+                const prefillData = {
+                    customer: { name: customerName },
+                    products: data.order_items.map((it: any) => ({
+                        name: it.product.name,
                         productId: it.product.id,
-                        productName: it.product.name,
                         sku: it.product.sku || '',
-                        qty: it.quantity,
-                        type: 'out',
-                        action: 'Xuất kho',
-                        orderId: orderRef.id,
-                        previousStock: Number(it.product.stock) || 0,
-                        newStock,
-                        note: `Đơn hàng #${orderRef.id.slice(0, 6)}`,
-                        createdAt: serverTimestamp(),
-                        ownerId: owner.ownerId,
-                        user: auth.currentUser?.displayName || 'Unknown'
-                    });
-                }
-
-                setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
-                    content: `✅ Đã tạo đơn hàng cho **${customerName}** thành công!\n\n📋 ${orderItems.length} sản phẩm\n💰 Tổng: **${totalAmount.toLocaleString('vi-VN')}đ**\n📦 Tồn kho đã được cập nhật.` }]);
+                        quantity: it.quantity,
+                        price: it.price,
+                        unit: it.product.unit || 'm2'
+                    })),
+                    note: data.note || ''
+                };
+                navigate('/quick-order', { state: { prefill: prefillData } });
             } catch (err: any) {
                 console.error('CONFIRM_ORDER_FROM_SHEET error:', err);
                 setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
                     content: `❌ Lỗi: ${err.message || 'Không xác định'}` }]);
-            } finally {
-                setIsLoading(false);
             }
         } else if (data.intent === 'CREATE_CUSTOMER') {
             try {

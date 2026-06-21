@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { updateDoc, doc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../../services/firebase';
+import { db, auth } from '../../services/firebase';
+import { useToast } from '../shared/Toast';
 
 interface InventoryActionModalProps {
 	show: boolean;
@@ -11,6 +12,7 @@ interface InventoryActionModalProps {
 }
 
 const InventoryActionModal: React.FC<InventoryActionModalProps> = ({ show, onClose, products, owner, initialProduct }) => {
+	const { showToast } = useToast();
 	const [type, setType] = useState<'import' | 'export'>('import');
 	const [selectedItems, setSelectedItems] = useState<{product: any, quantity: number}[]>([]);
 	const [searchQuery, setSearchQuery] = useState('');
@@ -53,12 +55,32 @@ const InventoryActionModal: React.FC<InventoryActionModalProps> = ({ show, onClo
 	};
 
 	const handleSubmit = async () => {
-		if (selectedItems.length === 0) return;
+		if (selectedItems.length === 0) {
+			showToast('Vui lòng chọn ít nhất 1 sản phẩm', 'warning');
+			return;
+		}
+		if (!owner?.ownerId) {
+			showToast('Lỗi: Không xác định được chủ cửa hàng', 'error');
+			return;
+		}
 		setLoading(true);
 		try {
+			// Validate all items have required fields
+			for (const item of selectedItems) {
+				if (!item.product?.id) {
+					throw new Error('Sản phẩm không hợp lệ: thiếu ID');
+				}
+				if (typeof item.product.stock !== 'number') {
+					throw new Error(`Sản phẩm "${item.product.name || '?'}" không có số lượng tồn kho`);
+				}
+			}
+
+			const actionLabel = type === 'import' ? 'Nhập kho' : 'Xuất kho';
+			const userName = auth?.currentUser?.displayName || auth?.currentUser?.email || 'Unknown';
+
 			// Create log first
 			const logData = {
-				action: type === 'import' ? 'Nhập kho' : 'Xuất kho',
+				action: actionLabel,
 				type: type,
 				items: selectedItems.map(i => ({
 					productId: i.product.id,
@@ -71,24 +93,30 @@ const InventoryActionModal: React.FC<InventoryActionModalProps> = ({ show, onClo
 				note,
 				createdAt: serverTimestamp(),
 				ownerId: owner.ownerId,
-				user: owner.currentUser?.displayName || 'Unknown'
+				user: userName
 			};
+
+			console.log('[InventoryAction] Saving log:', { actionLabel, itemCount: selectedItems.length, ownerId: owner.ownerId });
 			await addDoc(collection(db, 'inventory_logs'), logData);
+			console.log('[InventoryAction] Log saved OK');
 
 			// Update product stocks
 			for (const item of selectedItems) {
 				const newStock = type === 'import' ? item.product.stock + item.quantity : item.product.stock - item.quantity;
+				console.log(`[InventoryAction] Updating ${item.product.id}: ${item.product.stock} → ${newStock}`);
 				await updateDoc(doc(db, 'products', item.product.id), {
 					stock: newStock
 				});
+				console.log(`[InventoryAction] Updated ${item.product.id} OK`);
 			}
 
+			showToast(`Đã lưu phiếu ${actionLabel.toLowerCase()} thành công!`, 'success');
 			onClose();
 			setSelectedItems([]);
 			setNote('');
-		} catch (error) {
-			console.error("Error creating inventory action:", error);
-			alert("Có lỗi xảy ra khi lưu phiếu kho!");
+		} catch (error: any) {
+			console.error('[InventoryAction] Error:', error);
+			showToast('Lỗi khi lưu: ' + (error?.message || 'Không xác định'), 'error');
 		} finally {
 			setLoading(false);
 		}

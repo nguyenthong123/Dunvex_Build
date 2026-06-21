@@ -117,6 +117,11 @@ const InventoryActionModal: React.FC<InventoryActionModalProps> = ({ show, onClo
 			onClose();
 			setSelectedItems([]);
 			setNote('');
+
+			// Auto-reload sau 0.8s để hiển thị số liệu mới
+			setTimeout(() => {
+				window.location.reload();
+			}, 800);
 		} catch (error: any) {
 			console.error('[InventoryAction] Error:', error);
 			showToast('Lỗi khi lưu: ' + (error?.message || 'Không xác định'), 'error');

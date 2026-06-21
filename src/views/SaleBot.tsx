@@ -1020,6 +1020,10 @@ const SaleBot = () => {
                     h.includes('gia') || h.includes('price') || h.includes('ban') || h.includes('don'));
                 const stockColIdx = headers.findIndex((h: string) =>
                     h.includes('ton') || h.includes('stock') || h.includes('soluong') || h.includes('kho') || h.includes('conlai'));
+                const catColIdx = headers.findIndex((h: string) =>
+                    h.includes('danhmuc') || h.includes('loai') || h.includes('category') || h.includes('nhom'));
+                const unitColIdx = headers.findIndex((h: string) =>
+                    h.includes('donvi') || h.includes('unit') || h.includes('dvt') || h.includes('tinh'));
 
                 if (nameColIdx < 0) {
                     const cols = headers.join(', ');
@@ -1036,12 +1040,14 @@ const SaleBot = () => {
 
                 // Parse từng dòng
                 const matchedItems: any[] = [];
-                const notFoundItems: { name: string; stock: number; price: number; category: string }[] = [];
+                const notFoundItems: { name: string; stock: number; price: number; category: string; unit: string }[] = [];
                 for (let i = 1; i < lines.length; i++) {
                     const cols = parseCSVLine(lines[i]);
                     const rowName = cols[nameColIdx] || '';
                     const rowPrice = priceColIdx >= 0 ? cols[priceColIdx] : '';
                     const rowStock = stockColIdx >= 0 ? Number(cols[stockColIdx]?.replace(/[^\d.-]/g, '')) : 0;
+                    const rowCat = catColIdx >= 0 ? (cols[catColIdx] || '').trim() : '';
+                    const rowUnit = unitColIdx >= 0 ? (cols[unitColIdx] || '').trim() : '';
 
                     if (!rowName || isNaN(rowStock)) continue;
 
@@ -1049,7 +1055,7 @@ const SaleBot = () => {
                     if (matched) {
                         matchedItems.push({ product: matched, newStock: rowStock });
                     } else {
-                        notFoundItems.push({ name: rowName, stock: rowStock, price: Number(rowPrice?.replace(/[^\d.-]/g, '')) || 0, category: '' });
+                        notFoundItems.push({ name: rowName, stock: rowStock, price: Number(rowPrice?.replace(/[^\d.-]/g, '')) || 0, category: rowCat, unit: rowUnit });
                     }
                 }
 
@@ -1079,7 +1085,8 @@ const SaleBot = () => {
                             name: nf.name,
                             stock: nf.stock,
                             price: nf.price || 0,
-                            category: nf.category || ''
+                            category: nf.category || '',
+                            unit: nf.unit || ''
                         }))
                     } }]);
             } catch (err: any) {
@@ -1136,7 +1143,7 @@ const SaleBot = () => {
                         priceImport: price,
                         priceSell: price,
                         category: np.category || 'Tôn lợp',
-                        unit: 'm2',
+                        unit: np.unit || 'm2',
                         status: 'Kinh doanh',
                         createdAt: serverTimestamp(),
                         ownerId: owner.ownerId,
@@ -1966,7 +1973,7 @@ const SaleBot = () => {
                                         <span className="font-bold">🆕 Tạo sản phẩm mới ({confirmAction.new_products.length} SP):</span>
                                         {confirmAction.new_products.slice(0, 10).map((np: any, i: number) => (
                                             <div key={i} className="ml-2 text-xs text-slate-600 dark:text-slate-400">
-                                                • {np.name}: tồn <strong className="text-green-600">{np.stock}</strong>{np.price > 0 ? ` — ${np.price.toLocaleString('vi-VN')}đ` : ''}
+                                                • {np.name}: tồn <strong className="text-green-600">{np.stock}</strong>{np.price > 0 ? ` — ${np.price.toLocaleString('vi-VN')}đ` : ''}{np.category ? ` [${np.category}]` : ''}{np.unit ? ` /${np.unit}` : ''}
                                             </div>
                                         ))}
                                         {confirmAction.new_products.length > 10 && (

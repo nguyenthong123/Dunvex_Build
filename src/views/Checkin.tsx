@@ -7,7 +7,7 @@ import { addDoc, serverTimestamp, deleteDoc, doc, collection, query, where, orde
 // 🔧 REFACTOR: Dùng hooks mới thay vì onSnapshot trực tiếp
 import { useCustomers } from '../hooks/useCustomers';
 import { useCheckins } from '../hooks/useCheckins';
-import { MapPin, User, FileText, Camera, CheckCircle2, Navigation2, History, ArrowLeft } from 'lucide-react';
+import { MapPin, User, FileText, Camera, CheckCircle2, Navigation2, History, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -110,7 +110,7 @@ const Checkin = () => {
     const { showToast } = useToast();
 
     const { customers, loading: custLoading } = useCustomers({ ownerId: owner.ownerId, enabled: !owner.loading && !!owner.ownerId });
-    const { checkins: recentCheckins, loading: checkLoading } = useCheckins({ ownerId: owner.ownerId, enabled: !owner.loading && !!owner.ownerId });
+    const { checkins: recentCheckins, loading: checkLoading, error: checkinError } = useCheckins({ ownerId: owner.ownerId, enabled: !owner.loading && !!owner.ownerId, maxResults: 500 });
     const [submitting, setSubmitting] = useState(false);
     const loading = custLoading || checkLoading || submitting;
     const [showCheckinForm, setShowCheckinForm] = useState(false);

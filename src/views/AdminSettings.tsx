@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
 	Settings, User, Bell, Shield, Database, Globe, Moon, Sun, Users, Activity,
 	FileText, Save, Plus, Trash2, Edit2, Edit3, CheckCircle, XCircle, Crown, Clock,
-	Rocket, Lock, RefreshCcw, ExternalLink, MapPin, Calendar, X,
+	Rocket, Lock, RefreshCcw, ExternalLink, MapPin, Calendar, X, AlertTriangle,
 	ChevronLeft, ChevronRight, Download
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
@@ -87,6 +87,7 @@ const AdminSettings = () => {
 	// Audit Logs & Attendance Logs & Field Checkins
 	const [logs, setLogs] = useState<any[]>([]);
 	const [attendanceLogs, setAttendanceLogs] = useState<any[]>([]);
+	const [attendanceError, setAttendanceError] = useState<string | null>(null);
 	const [fieldCheckins, setFieldCheckins] = useState<any[]>([]);
 
 	useEffect(() => {
@@ -125,6 +126,15 @@ const AdminSettings = () => {
 		const qLogs = query(collection(db, 'audit_logs'), where('ownerId', '==', owner.ownerId), orderBy('createdAt', 'desc'), limit(50));
 		const unsubLogs = onSnapshot(qLogs, (snap) => {
 			setLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+		}, (err) => {
+			console.error('Audit logs query error:', err);
+			// Fallback without orderBy
+			const fallbackAuditQ = query(collection(db, 'audit_logs'), where('ownerId', '==', owner.ownerId), limit(50));
+			onSnapshot(fallbackAuditQ, (fallbackSnap) => {
+				const items = fallbackSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+				items.sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+				setLogs(items);
+			});
 		});
 
 		// 3. Listen to System Config
@@ -138,12 +148,38 @@ const AdminSettings = () => {
 		const qAtt = query(collection(db, 'attendance_logs'), where('ownerId', '==', owner.ownerId), orderBy('createdAt', 'desc'), limit(500));
 		const unsubAtt = onSnapshot(qAtt, (snap) => {
 			setAttendanceLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+			setAttendanceError(null);
+		}, (err) => {
+			console.error('Attendance query error:', err);
+			setAttendanceError(err.message);
+			// Fallback: try without orderBy to avoid index requirement
+			const fallbackQ = query(collection(db, 'attendance_logs'), where('ownerId', '==', owner.ownerId), limit(500));
+			const unsubFallback = onSnapshot(fallbackQ, (fallbackSnap) => {
+				const logs = fallbackSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+				logs.sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+				setAttendanceLogs(logs);
+				setAttendanceError(null);
+			}, (fallbackErr) => {
+				console.error('Attendance fallback error:', fallbackErr);
+				setAttendanceError(fallbackErr.message);
+			});
+			// Note: we can't return unsubscribe for fallback here easily,
+			// but the original subscription is already errored
 		});
 
 		// Listen to Field Checkins for Market Staff tracking
 		const qField = query(collection(db, 'checkins'), where('ownerId', '==', owner.ownerId), orderBy('createdAt', 'desc'), limit(500));
 		const unsubField = onSnapshot(qField, (snap) => {
 			setFieldCheckins(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+		}, (err) => {
+			console.error('Field checkins query error:', err);
+			// Fallback without orderBy
+			const fallbackFieldQ = query(collection(db, 'checkins'), where('ownerId', '==', owner.ownerId), limit(500));
+			onSnapshot(fallbackFieldQ, (fallbackSnap) => {
+				const items = fallbackSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+				items.sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+				setFieldCheckins(items);
+			});
 		});
 
 		// 4. Listen to Export Usage
@@ -947,7 +983,7 @@ const AdminSettings = () => {
 						</>
 					)}
 
-					{activeTab === 'attendance' && <AttendanceAdmin logs={attendanceLogs} fieldLogs={fieldCheckins} companyInfo={companyInfo} setCompanyInfo={setCompanyInfo} onSave={handleSaveSettings} />}
+					{activeTab === 'attendance' && <AttendanceAdmin logs={attendanceLogs} fieldLogs={fieldCheckins} companyInfo={companyInfo} setCompanyInfo={setCompanyInfo} onSave={handleSaveSettings} error={attendanceError} />}
 
 					{activeTab === 'permissions' && canManageUsers && (
 						<div className="space-y-6">
@@ -1094,6 +1130,20 @@ const LogoUploadSection = ({ label, value, onUpload, uploading }: any) => {
 
 const UserManagement = ({ userList, showAdd, onShowAdd, newUser, setNewUser, handleAddUser, onUpdateRole, onDelete, editingUser, setEditingUser, handleUpdateUser }: any) => {
 	const [deletingUserId, setDeletingUserId] = React.useState<string | null>(null);
+
+	if (error) {
+		return (
+			<div className="flex flex-col items-center justify-center p-12 text-center">
+				<div className="bg-amber-500/10 p-6 rounded-full text-amber-500 mb-4 border border-amber-500/20">
+					<AlertTriangle size={48} />
+				</div>
+				<h3 className="text-lg font-black text-slate-800 dark:text-white mb-2">Đang gặp sự cố kết nối</h3>
+				<p className="text-sm text-slate-500 max-w-md mb-6">{error}</p>
+				<p className="text-xs text-slate-400 mb-4">Vui lòng tạo composite index trong Firebase Console:<br/><code className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-[10px]">attendance_logs: ownerId ASC, createdAt DESC</code></p>
+				<button onClick={() => window.location.reload()} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm">Thử lại</button>
+			</div>
+		);
+	}
 
 	return (
 		<div className="space-y-6">
@@ -1275,7 +1325,7 @@ const UserManagement = ({ userList, showAdd, onShowAdd, newUser, setNewUser, han
 	);
 };
 
-const AttendanceAdmin = ({ logs, fieldLogs, companyInfo, setCompanyInfo, onSave }: { logs: any[], fieldLogs: any[], companyInfo: any, setCompanyInfo: any, onSave: any }) => {
+const AttendanceAdmin = ({ logs, fieldLogs, companyInfo, setCompanyInfo, onSave, error }: { logs: any[], fieldLogs: any[], companyInfo: any, setCompanyInfo: any, onSave: any, error?: string | null }) => {
 	const [viewerEmail, setViewerEmail] = useState('');
 	const [startDate, setStartDate] = useState('');
 	const [endDate, setEndDate] = useState('');
@@ -1360,6 +1410,20 @@ const AttendanceAdmin = ({ logs, fieldLogs, companyInfo, setCompanyInfo, onSave 
 		const newList = companyInfo.attendanceViewers.filter((e: string) => e !== email);
 		setCompanyInfo({ ...companyInfo, attendanceViewers: newList });
 	};
+
+	if (error) {
+		return (
+			<div className="flex flex-col items-center justify-center p-12 text-center">
+				<div className="bg-amber-500/10 p-6 rounded-full text-amber-500 mb-4 border border-amber-500/20">
+					<AlertTriangle size={48} />
+				</div>
+				<h3 className="text-lg font-black text-slate-800 dark:text-white mb-2">Đang gặp sự cố kết nối</h3>
+				<p className="text-sm text-slate-500 max-w-md mb-6">{error}</p>
+				<p className="text-xs text-slate-400 mb-4">Vui lòng tạo composite index trong Firebase Console:<br/><code className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-[10px]">attendance_logs: ownerId ASC, createdAt DESC</code></p>
+				<button onClick={() => window.location.reload()} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm">Thử lại</button>
+			</div>
+		);
+	}
 
 	return (
 		<div className="space-y-6">

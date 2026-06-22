@@ -1131,20 +1131,6 @@ const LogoUploadSection = ({ label, value, onUpload, uploading }: any) => {
 const UserManagement = ({ userList, showAdd, onShowAdd, newUser, setNewUser, handleAddUser, onUpdateRole, onDelete, editingUser, setEditingUser, handleUpdateUser }: any) => {
 	const [deletingUserId, setDeletingUserId] = React.useState<string | null>(null);
 
-	if (error) {
-		return (
-			<div className="flex flex-col items-center justify-center p-12 text-center">
-				<div className="bg-amber-500/10 p-6 rounded-full text-amber-500 mb-4 border border-amber-500/20">
-					<AlertTriangle size={48} />
-				</div>
-				<h3 className="text-lg font-black text-slate-800 dark:text-white mb-2">Đang gặp sự cố kết nối</h3>
-				<p className="text-sm text-slate-500 max-w-md mb-6">{error}</p>
-				<p className="text-xs text-slate-400 mb-4">Vui lòng tạo composite index trong Firebase Console:<br/><code className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-[10px]">attendance_logs: ownerId ASC, createdAt DESC</code></p>
-				<button onClick={() => window.location.reload()} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm">Thử lại</button>
-			</div>
-		);
-	}
-
 	return (
 		<div className="space-y-6">
 			<div className="flex justify-between items-center">
@@ -1330,6 +1316,21 @@ const AttendanceAdmin = ({ logs, fieldLogs, companyInfo, setCompanyInfo, onSave,
 	const [startDate, setStartDate] = useState('');
 	const [endDate, setEndDate] = useState('');
 	const [currentPage, setCurrentPage] = useState(1);
+
+	// Hiển thị lỗi nếu query Firestore thất bại
+	if (error) {
+		return (
+			<div className="flex flex-col items-center justify-center p-12 text-center">
+				<div className="bg-amber-500/10 p-6 rounded-full text-amber-500 mb-4 border border-amber-500/20">
+					<AlertTriangle size={48} />
+				</div>
+				<h3 className="text-lg font-black text-slate-800 dark:text-white mb-2">Đang gặp sự cố kết nối</h3>
+				<p className="text-sm text-slate-500 max-w-md mb-6">{error}</p>
+				<p className="text-xs text-slate-400 mb-4">Vui lòng tạo composite index trong Firebase Console:<br/><code className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-[10px]">attendance_logs: ownerId ASC, createdAt DESC</code></p>
+				<button onClick={() => window.location.reload()} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm">Thử lại</button>
+			</div>
+		);
+	}
 	const rowsPerPage = 10;
 
 	// Aggregate data by User and Date

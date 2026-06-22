@@ -33,7 +33,15 @@ const PriceList = () => {
 
 	// New states
 	const [viewMode, setViewMode] = useState<'list' | 'detail'>('list');
+	const { priceLists: _fetchedLists, loading: _listsLoading, error: _listsError } = usePriceLists({ ownerId: owner.ownerId, enabled: !owner.loading && !!owner.ownerId });
 	const [priceLists, setPriceLists] = useState<any[]>([]);
+
+	// Sync fetched lists into state
+	useEffect(() => {
+		if (_fetchedLists.length > 0) {
+			setPriceLists(_fetchedLists);
+		}
+	}, [_fetchedLists]);
 	const [legacyList, setLegacyList] = useState<any>(null);
 	const [selectedList, setSelectedList] = useState<any>(null);
 	const [zoomScale, setZoomScale] = useState(1);
@@ -616,7 +624,7 @@ const PriceList = () => {
 		return withEllipsis;
 	};
 
-	if (loading) return (
+	if (loading || _listsLoading) return (
 		<div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-950">
 			<div className="flex flex-col items-center gap-4">
 				<RefreshCw className="w-10 h-10 text-indigo-600 animate-spin" />

@@ -59,21 +59,34 @@ const PriceList = () => {
 	}, [location, navigate]);
 
 	useEffect(() => {
-		if (owner.loading || !owner.ownerId) return;
+		if (owner.loading || !owner.ownerId) {
+			setLoading(false);
+			return;
+		}
+
+		let completed = 0;
+		const totalTasks = 2;
+		const finishTask = () => { completed++; if (completed >= totalTasks) setLoading(false); };
 
 		// 1. Get Company Info
 		const fetchSettings = async () => {
-			const settingsRef = doc(db, 'settings', owner.ownerId);
-			const settingsSnap = await getDoc(settingsRef);
-			if (settingsSnap.exists()) {
-				setCompanyInfo(settingsSnap.data());
+			try {
+				const settingsRef = doc(db, 'settings', owner.ownerId);
+				const settingsSnap = await getDoc(settingsRef);
+				if (settingsSnap.exists()) {
+					setCompanyInfo(settingsSnap.data());
+				}
+			} catch (err) {
+				console.error("Settings fetch error:", err);
+			} finally {
+				finishTask();
 			}
 		};
 		fetchSettings();
 
 		// 2. Check for Legacy Doc
 		const checkLegacy = async () => {
-			if (!owner.ownerId) return;
+			if (!owner.ownerId) { finishTask(); return; }
 			try {
 				const legacyRef = doc(db, 'price_lists', owner.ownerId);
 				const legacySnap = await getDoc(legacyRef);
@@ -82,6 +95,8 @@ const PriceList = () => {
 				}
 			} catch (err) {
 				console.error("Legacy fetch error:", err);
+			} finally {
+				finishTask();
 			}
 		};
 		checkLegacy();

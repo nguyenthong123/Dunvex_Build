@@ -11,6 +11,9 @@ const AdminSettings = lazy(() => import('./views/AdminSettings'));
 const AppSettings = lazy(() => import('./views/AppSettings'));
 const Login = lazy(() => import('./views/Login'));
 const CustomerList = lazy(() => import('./views/CustomerList'));
+const SupplierList = lazy(() => import('./views/SupplierList'));
+const SupplierDebts = lazy(() => import('./views/SupplierDebts'));
+const PurchaseOrders = lazy(() => import('./views/PurchaseOrders')); // NEW
 const ProductList = lazy(() => import('./views/ProductList'));
 const InventoryPage = lazy(() => import('./views/InventoryPage'));
 const OrderList = lazy(() => import('./views/OrderList'));
@@ -94,6 +97,18 @@ function App() {
 						<Route
 							path="/customers"
 							element={currentUser ? <MainLayout><CustomerList /></MainLayout> : <Navigate to="/login" />}
+						/>
+						<Route
+							path="/suppliers"
+							element={currentUser ? <MainLayout><SupplierList /></MainLayout> : <Navigate to="/login" />}
+						/>
+						<Route
+							path="/supplier-debts"
+							element={currentUser ? <MainLayout><SupplierDebts /></MainLayout> : <Navigate to="/login" />}
+						/>
+						<Route
+							path="/purchase-orders"
+							element={currentUser ? <MainLayout><PurchaseOrders /></MainLayout> : <Navigate to="/login" />}
 						/>
 						<Route
 							path="/products"

@@ -62,6 +62,9 @@ export const COLLECTIONS = {
   permissions: () => collection(db, 'permissions'),
   aiActions: () => collection(db, 'ai_actions'),
   rebateTiers: () => collection(db, 'rebate_tiers'),
+  suppliers: () => collection(db, 'suppliers'),
+  purchaseOrders: () => collection(db, 'purchase_orders'),
+  supplierDebts: () => collection(db, 'supplier_debts'),
 } as const;
 
 // ─── Common Query Helpers ───────────────────────────────────
@@ -399,6 +402,108 @@ export const rebateTierService = {
 
   async deleteTiers(docId: string): Promise<void> {
     await deleteDoc(doc(COLLECTIONS.rebateTiers(), docId));
+  },
+};
+
+// ─── Supplier Service ────────────────────────────────────────
+
+export const supplierService = {
+  listenByOwner(ownerId: string, onData: (suppliers: WithId<any>[]) => void, onError?: (err: Error) => void): Unsubscribe {
+    const q = query(COLLECTIONS.suppliers(), where('ownerId', '==', ownerId));
+    return onSnapshot(q, (snap: QuerySnapshot) => {
+      onData(snap.docs.map(withId));
+    }, onError);
+  },
+
+  async create(data: Record<string, any>): Promise<string> {
+    const ref = await addDoc(COLLECTIONS.suppliers(), {
+      ...data,
+      totalDebt: 0,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return ref.id;
+  },
+
+  async update(id: string, data: Record<string, any>): Promise<void> {
+    await updateDoc(doc(COLLECTIONS.suppliers(), id), {
+      ...data,
+      updatedAt: serverTimestamp(),
+    });
+  },
+
+  async remove(id: string): Promise<void> {
+    await deleteDoc(doc(COLLECTIONS.suppliers(), id));
+  },
+};
+
+// ─── Purchase Order Service ──────────────────────────────────
+
+export const purchaseOrderService = {
+  listenByOwner(
+    ownerId: string,
+    onData: (pos: WithId<any>[]) => void,
+    onError?: (err: Error) => void,
+    maxResults = 500,
+  ): Unsubscribe {
+    const q = query(
+      COLLECTIONS.purchaseOrders(),
+      where('ownerId', '==', ownerId),
+      orderBy('createdAt', 'desc'),
+      limit(maxResults),
+    );
+    return onSnapshot(q, (snap: QuerySnapshot) => {
+      onData(snap.docs.map(withId));
+    }, onError);
+  },
+
+  async create(data: Record<string, any>): Promise<string> {
+    const ref = await addDoc(COLLECTIONS.purchaseOrders(), {
+      ...data,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return ref.id;
+  },
+
+  async update(id: string, data: Record<string, any>): Promise<void> {
+    await updateDoc(doc(COLLECTIONS.purchaseOrders(), id), {
+      ...data,
+      updatedAt: serverTimestamp(),
+    });
+  },
+
+  async remove(id: string): Promise<void> {
+    await deleteDoc(doc(COLLECTIONS.purchaseOrders(), id));
+  },
+};
+
+// ─── Supplier Debt Service ───────────────────────────────────
+
+export const supplierDebtService = {
+  listenByOwner(
+    ownerId: string,
+    onData: (debts: WithId<any>[]) => void,
+    onError?: (err: Error) => void,
+    maxResults = 500,
+  ): Unsubscribe {
+    const q = query(
+      COLLECTIONS.supplierDebts(),
+      where('ownerId', '==', ownerId),
+      orderBy('createdAt', 'desc'),
+      limit(maxResults),
+    );
+    return onSnapshot(q, (snap: QuerySnapshot) => {
+      onData(snap.docs.map(withId));
+    }, onError);
+  },
+
+  async create(data: Record<string, any>): Promise<string> {
+    const ref = await addDoc(COLLECTIONS.supplierDebts(), {
+      ...data,
+      createdAt: serverTimestamp(),
+    });
+    return ref.id;
   },
 };
 

@@ -172,6 +172,9 @@ export const useNavigationConfig = () => {
 		{ icon: 'group', label: 'Khách hàng', path: '/customers', permissionKey: 'customers_manage' },       // 4
 		{ icon: 'category', label: 'Sản phẩm', path: '/products', permissionKey: 'inventory_view' },     // 5
 		{ icon: 'inventory_2', label: 'Tồn kho', path: '/inventory', permissionKey: 'inventory_view' },    // 5.5
+		{ icon: 'local_shipping', label: 'Đơn nhập hàng', path: '/purchase-orders', permissionKey: 'admin' }, // NEW
+		{ icon: 'storefront', label: 'Nhà cung cấp', path: '/suppliers', permissionKey: 'admin' }, // NEW
+		{ icon: 'account_balance', label: 'Công nợ NCC', path: '/supplier-debts', permissionKey: 'admin' }, // NEW
 		{ icon: 'request_quote', label: 'Báo giá', path: '/price-list' },                                     // 6
 		{ icon: 'location_on', label: 'Checkin', path: '/checkin?action=history', permissionKey: 'checkin_create' }, // 7
 		{ icon: 'confirmation_number', label: 'Ưu đãi', path: '/coupons' },                                    // 8
@@ -188,7 +191,18 @@ export const useNavigationConfig = () => {
 	const getMobileItems = () => {
 		const home = allItems[0];
 		const orders = allItems[1];
-		const searchBtn: NavItem = { icon: 'search', label: 'Tìm kiếm', path: '/orders?search=focus' };
+
+		const hasLocalSearch = [
+			'/products', '/inventory', '/orders', '/customers', '/debts', 
+			'/suppliers', '/supplier-debts', '/purchase-orders'
+		].includes(location.pathname);
+
+		const searchBtn: NavItem = { 
+			icon: 'search', 
+			label: 'Tìm kiếm', 
+			path: hasLocalSearch ? 'event:open-mobile-search' : '/orders?search=focus' 
+		};
+
 		const aiBot = allItems.find(i => i.path === '/sale-bot') || allItems[13];
 		const center = { ...getCenterItem(), isCenter: true };
 

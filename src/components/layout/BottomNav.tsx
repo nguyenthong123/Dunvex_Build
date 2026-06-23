@@ -38,6 +38,24 @@ const BottomNav = () => {
 						);
 					}
 
+					const isEvent = item.path.startsWith('event:');
+					
+					if (isEvent) {
+						return (
+							<button
+								key={`${item.path}-${item.label}`}
+								onClick={() => {
+									const eventName = item.path.replace('event:', '');
+									window.dispatchEvent(new CustomEvent(eventName));
+								}}
+								className={`flex flex-col items-center justify-center w-12 gap-1 transition-colors ${isActive ? 'text-[#1A237E] dark:text-indigo-400' : 'text-slate-400'}`}
+							>
+								<span className="material-symbols-outlined text-2xl">{item.icon}</span>
+								<span className="text-[10px] whitespace-nowrap font-bold uppercase tracking-tighter">{item.label}</span>
+							</button>
+						);
+					}
+
 					return (
 						<NavLink
 							key={`${item.path}-${item.label}`}

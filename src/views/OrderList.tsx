@@ -58,7 +58,14 @@ const OrderList = () => {
 	useEffect(() => {
 		const handleOpenSearch = () => {
 			setShowMobileSearch(true);
-			setTimeout(() => searchRef.current?.focus(), 200);
+			setTimeout(() => {
+				const mobileInput = document.getElementById('mobile-search-input') as HTMLInputElement;
+				if (mobileInput) {
+					mobileInput.focus();
+				} else {
+					searchRef.current?.focus();
+				}
+			}, 200);
 		};
 		window.addEventListener('open-mobile-search', handleOpenSearch);
 		return () => window.removeEventListener('open-mobile-search', handleOpenSearch);
@@ -375,6 +382,7 @@ const OrderList = () => {
 						<div className="flex items-center gap-3 bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-200 dark:border-slate-800">
 							<span className="material-symbols-outlined text-slate-400">search</span>
 							<input
+								id="mobile-search-input"
 								ref={searchRef}
 								type="text"
 								placeholder="Nhập mã đơn, tên khách..."

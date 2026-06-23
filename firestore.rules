@@ -96,6 +96,18 @@ service cloud.firestore {
       allow read, update, delete: if allowByOwner();
       allow create: if allowCreateByOwner();
     }
+    match /suppliers/{docId} {
+      allow read, update, delete: if allowByOwner();
+      allow create: if allowCreateByOwner();
+    }
+    match /purchase_orders/{docId} {
+      allow read, update, delete: if allowByOwner();
+      allow create: if allowCreateByOwner();
+    }
+    match /supplier_debts/{docId} {
+      allow read, update, delete: if allowByOwner();
+      allow create: if allowCreateByOwner();
+    }
     match /finance_transactions/{docId} {
       allow read, update, delete: if allowByOwner();
       allow create: if allowCreateByOwner();

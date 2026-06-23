@@ -23,12 +23,12 @@ const BottomNav = () => {
 						return (
 							<div key={`${item.path}-${item.label}`} className="absolute left-1/2 -translate-x-1/2 -top-10">
 								{isEvent ? (
-									<button onClick={() => handleCenterClick(item)} className="h-16 w-16 bg-[#FF6D00] rounded-full shadow-lg shadow-orange-500/40 flex items-center justify-center text-white hover:scale-105 active:scale-95 transition-transform border-4 border-white dark:border-slate-900">
+									<button type="button" onClick={() => handleCenterClick(item)} className="h-16 w-16 bg-[#FF6D00] rounded-full shadow-lg shadow-orange-500/40 flex items-center justify-center text-white hover:scale-105 active:scale-95 transition-transform border-4 border-white dark:border-slate-900">
 										<span className="material-symbols-outlined text-3xl font-bold">{item.icon}</span>
 									</button>
 								) : (
 									<NavLink to={item.path}>
-										<button className="h-16 w-16 bg-[#FF6D00] rounded-full shadow-lg shadow-orange-500/40 flex items-center justify-center text-white hover:scale-105 active:scale-95 transition-transform border-4 border-white dark:border-slate-900">
+										<button type="button" className="h-16 w-16 bg-[#FF6D00] rounded-full shadow-lg shadow-orange-500/40 flex items-center justify-center text-white hover:scale-105 active:scale-95 transition-transform border-4 border-white dark:border-slate-900">
 											<span className="material-symbols-outlined text-3xl font-bold">{item.icon}</span>
 										</button>
 									</NavLink>
@@ -43,8 +43,10 @@ const BottomNav = () => {
 					if (isEvent) {
 						return (
 							<button
+								type="button"
 								key={`${item.path}-${item.label}`}
-								onClick={() => {
+								onClick={(e) => {
+									e.preventDefault();
 									const eventName = item.path.replace('event:', '');
 									window.dispatchEvent(new CustomEvent(eventName));
 								}}

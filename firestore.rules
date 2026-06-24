@@ -50,7 +50,8 @@ service cloud.firestore {
     
     match /permissions/{docId} {
       allow read: if isAuthed();
-      allow write: if isAdmin();
+      allow create: if isAdmin() || allowCreateByOwner();
+      allow update, delete: if isAdmin() || allowByOwner();
     }
 
     match /system_config/{docId} {

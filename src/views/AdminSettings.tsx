@@ -1618,16 +1618,41 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 				where('createdAt', '>=', Timestamp.fromDate(startDate)),
 				where('createdAt', '<=', Timestamp.fromDate(endDate))
 			);
-			const snap = await getDocs(checkinsQ);
-			const allCheckins: any[] = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+			
+			const attendanceQ = query(
+				collection(db, 'attendance_logs'),
+				where('ownerId', '==', ownerId),
+				where('createdAt', '>=', Timestamp.fromDate(startDate)),
+				where('createdAt', '<=', Timestamp.fromDate(endDate))
+			);
+
+			const [checkinsSnap, attendanceSnap] = await Promise.all([
+				getDocs(checkinsQ),
+				getDocs(attendanceQ)
+			]);
+
+			const allCheckins: any[] = checkinsSnap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+			const allAttendance: any[] = attendanceSnap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
 			
 			const data = userList.map(user => {
 				const userCheckins = allCheckins.filter(c => c.userId === user.id || c.userEmail === user.email);
-				// Đếm số ngày duy nhất
-				const uniqueDays = new Set(userCheckins.map(c => {
-					const dt = c.createdAt?.toDate?.() || new Date(c.createdAt);
-					return dt.toISOString().slice(0, 10);
-				}));
+				const userAttendance = allAttendance.filter(a => a.userId === user.id || a.userEmail === user.email);
+				
+				// Loại bỏ các đơn từ (nghỉ phép, đi muộn) khỏi ngày công thực tế
+				const validAttendance = userAttendance.filter(a => a.type !== 'request');
+
+				// Đếm số ngày duy nhất từ cả 2 nguồn (Thị trường & Văn phòng)
+				const uniqueDays = new Set([
+					...userCheckins.map(c => {
+						const dt = c.createdAt?.toDate?.() || new Date(c.createdAt);
+						return dt.toISOString().slice(0, 10);
+					}),
+					...validAttendance.map(a => {
+						const dt = a.createdAt?.toDate?.() || new Date(a.createdAt);
+						return dt.toISOString().slice(0, 10);
+					})
+				]);
+
 				const daysWorked = uniqueDays.size;
 				const dailyWage = Number(user.dailyWage) || 0;
 				return {
@@ -1635,7 +1660,7 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 					name: user.displayName || user.email?.split('@')[0] || 'N/A',
 					email: user.email,
 					role: user.role,
-					checkins: userCheckins.length,
+					checkins: userCheckins.length + validAttendance.length,
 					daysWorked,
 					dailyWage,
 					totalSalary: daysWorked * dailyWage

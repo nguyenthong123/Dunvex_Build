@@ -4,11 +4,6 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Only allow POST
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -16,6 +11,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
+  }
+
+  // Only allow POST
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
   if (!GEMINI_API_KEY) {

@@ -1,3 +1,5 @@
+import crypto from 'crypto';
+
 /**
  * Vercel Serverless: POST /api/order-webhook
  * Nhận đơn hàng từ bot web → tạo đơn trong Firestore
@@ -26,7 +28,6 @@ async function getAccessToken(): Promise<string> {
 
   const b64obj = (obj: any) => Buffer.from(JSON.stringify(obj)).toString('base64url');
   const sign = (pk: string, data: string) => {
-    const crypto = require('crypto');
     return crypto.createSign('RSA-SHA256').update(data).sign(pk, 'base64url');
   };
   const partial = `${b64obj(header)}.${b64obj(claim)}`;
@@ -55,11 +56,43 @@ async function restGet(token: string, path: string) {
   return res.json();
 }
 
-async function restQuery(token: string, collection: string, params: string) {
-  const url = `${FIRESTORE_BASE}/${collection}?${params}`;
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+async function runStructuredQuery(token: string, collectionId: string, fieldFilters: any[]): Promise<any[]> {
+  const url = `${FIRESTORE_BASE}:runQuery`;
+  const filter = fieldFilters.length === 1
+    ? fieldFilters[0]
+    : {
+        compositeFilter: {
+          op: 'AND',
+          filters: fieldFilters
+        }
+      };
+
+  const body = {
+    structuredQuery: {
+      from: [{ collectionId }],
+      where: filter
+    }
+  };
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`Firestore query failed: ${res.status} ${txt}`);
+  }
+
   const data = await res.json();
-  return data.documents || [];
+  if (!Array.isArray(data)) return [];
+  return data
+    .filter((item: any) => item.document)
+    .map((item: any) => item.document);
 }
 
 async function restCreate(token: string, collection: string, fields: any) {
@@ -85,11 +118,20 @@ async function restUpdate(token: string, path: string, fields: any) {
 }
 
 export default async function handler(req: any, res: any) {
+  // CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed. Use POST.' });
   }
 
-  const apiKey = req.headers['x-api-key'];
+  const apiKey = req.headers['x-api-key'] || req.headers['X-Api-Key'];
   if (!apiKey) return res.status(401).json({ error: 'Missing x-api-key header' });
 
   try {
@@ -107,6 +149,17 @@ export default async function handler(req: any, res: any) {
       return res.status(403).json({ error: 'Invalid or disabled API key' });
     }
 
+    // Tải toàn bộ danh sách sản phẩm của owner để so khớp (tối ưu hóa số lần gọi API)
+    const allProducts = await runStructuredQuery(token, 'products', [
+      {
+        fieldFilter: {
+          field: { fieldPath: 'ownerId' },
+          op: 'EQUAL',
+          value: { stringValue: body.ownerId }
+        }
+      }
+    ]);
+
     // Match products
     const items: any[] = [];
     const notFound: string[] = [];
@@ -116,25 +169,29 @@ export default async function handler(req: any, res: any) {
 
       // Ưu tiên productId
       if (item.productId) {
-        const prodDoc = await restGet(token, `products/${item.productId}`);
-        if (prodDoc) {
-          const pf = prodDoc.fields || {};
-          if (pf.ownerId?.stringValue === body.ownerId) {
-            matched = { id: item.productId, ...pf };
+        const found = allProducts.find((p: any) => p.name.split('/').pop() === item.productId);
+        if (found) {
+          matched = { id: item.productId, ...found.fields };
+        } else {
+          // Fallback: GET trực tiếp document phòng trường hợp sản phẩm mới hoặc ngoài danh sách 500
+          const prodDoc = await restGet(token, `products/${item.productId}`);
+          if (prodDoc) {
+            const pf = prodDoc.fields || {};
+            if (pf.ownerId?.stringValue === body.ownerId) {
+              matched = { id: item.productId, ...pf };
+            }
           }
         }
       }
 
       // Fallback: match theo tên
       if (!matched && item.productName) {
-        const docs = await restQuery(token, 'products',
-          `orderBy=ownerId&equalTo=${body.ownerId}&pageSize=500`);
-        for (const doc of docs) {
+        const found = allProducts.find((doc: any) => {
           const f = doc.fields || {};
-          if (f.name?.stringValue?.toLowerCase() === item.productName.toLowerCase()) {
-            matched = { id: doc.name!.split('/').pop()!, ...f };
-            break;
-          }
+          return f.name?.stringValue?.toLowerCase() === item.productName.toLowerCase();
+        });
+        if (found) {
+          matched = { id: found.name.split('/').pop()!, ...found.fields };
         }
       }
 
@@ -166,26 +223,59 @@ export default async function handler(req: any, res: any) {
 
     if (!customerId) {
       let matchedCust: any = null;
+      const filters: any[] = [
+        {
+          fieldFilter: {
+            field: { fieldPath: 'ownerId' },
+            op: 'EQUAL',
+            value: { stringValue: body.ownerId }
+          }
+        }
+      ];
 
       // 1. Match by email
       if (customerEmail) {
-        const docs = await restQuery(token, 'customers',
-          `orderBy=ownerId&equalTo=${body.ownerId}&pageSize=500`);
-        matchedCust = docs.find((d: any) => d.fields?.email?.stringValue === customerEmail);
+        const docs = await runStructuredQuery(token, 'customers', [
+          ...filters,
+          {
+            fieldFilter: {
+              field: { fieldPath: 'email' },
+              op: 'EQUAL',
+              value: { stringValue: customerEmail }
+            }
+          }
+        ]);
+        if (docs.length > 0) matchedCust = docs[0];
       }
 
       // 2. Match by phone
       if (!matchedCust && customerPhone) {
-        const docs = await restQuery(token, 'customers',
-          `orderBy=ownerId&equalTo=${body.ownerId}&pageSize=500`);
-        matchedCust = docs.find((d: any) => d.fields?.phone?.stringValue === customerPhone);
+        const docs = await runStructuredQuery(token, 'customers', [
+          ...filters,
+          {
+            fieldFilter: {
+              field: { fieldPath: 'phone' },
+              op: 'EQUAL',
+              value: { stringValue: customerPhone }
+            }
+          }
+        ]);
+        if (docs.length > 0) matchedCust = docs[0];
       }
 
       // 3. Match by name
       if (!matchedCust && customerName) {
-        const docs = await restQuery(token, 'customers',
-          `orderBy=ownerId&equalTo=${body.ownerId}&pageSize=500`);
-        matchedCust = docs.find((d: any) => d.fields?.name?.stringValue === customerName);
+        const docs = await runStructuredQuery(token, 'customers', [
+          ...filters,
+          {
+            fieldFilter: {
+              field: { fieldPath: 'name' },
+              op: 'EQUAL',
+              value: { stringValue: customerName }
+            }
+          }
+        ]);
+        if (docs.length > 0) matchedCust = docs[0];
       }
 
       if (matchedCust) {

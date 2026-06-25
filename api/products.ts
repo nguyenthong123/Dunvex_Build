@@ -1,3 +1,5 @@
+import crypto from 'crypto';
+
 /**
  * Vercel Serverless: GET /api/products
  * Bot web gọi để lấy toàn bộ sản phẩm + tồn kho
@@ -32,7 +34,6 @@ async function getAccessToken(): Promise<string> {
     return Buffer.from(JSON.stringify(obj)).toString('base64url');
   }
   function sign(pk: string, data: string): string {
-    const crypto = require('crypto');
     const signer = crypto.createSign('RSA-SHA256');
     signer.update(data);
     signer.end();
@@ -65,12 +66,21 @@ async function verifyApiKey(ownerId: string, key: string): Promise<boolean> {
 }
 
 export default async function handler(req: any, res: any) {
+  // CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, x-owner-id');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed. Use GET.' });
   }
 
-  const apiKey = req.headers['x-api-key'];
-  const ownerId = req.headers['x-owner-id'];
+  const apiKey = req.headers['x-api-key'] || req.headers['X-Api-Key'];
+  const ownerId = req.headers['x-owner-id'] || req.headers['X-Owner-Id'];
 
   if (!apiKey) return res.status(401).json({ error: 'Missing x-api-key header' });
   if (!ownerId) return res.status(400).json({ error: 'Missing x-owner-id header' });
@@ -79,15 +89,41 @@ export default async function handler(req: any, res: any) {
     const valid = await verifyApiKey(ownerId, apiKey);
     if (!valid) return res.status(403).json({ error: 'Invalid or disabled API key' });
 
-    // Lấy products
+    // Lấy products bằng POST runQuery do GET params không hỗ trợ equalTo trên Firestore REST API
     const token = await getAccessToken();
-    const url = `${FIRESTORE_BASE}/products?orderBy=ownerId&equalTo=${ownerId}&pageSize=500`;
+    const url = `${FIRESTORE_BASE}:runQuery`;
+    const queryBody = {
+      structuredQuery: {
+        from: [{ collectionId: 'products' }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: 'ownerId' },
+            op: 'EQUAL',
+            value: { stringValue: ownerId }
+          }
+        },
+        limit: 500
+      }
+    };
+
     const productsRes = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(queryBody)
     });
 
+    if (!productsRes.ok) {
+      const errText = await productsRes.text();
+      throw new Error(`Firestore runQuery failed: ${productsRes.status} ${errText}`);
+    }
+
     const data = await productsRes.json();
-    const docs = data.documents || [];
+    const docs = Array.isArray(data)
+      ? data.filter((item: any) => item.document).map((item: any) => item.document)
+      : [];
 
     const products = docs.map((doc: any) => {
       const nameParts = doc.name.split('/');
@@ -103,6 +139,7 @@ export default async function handler(req: any, res: any) {
         weight: f.weight?.stringValue || '',
         stock: Number(f.stock?.doubleValue || f.stock?.integerValue || 0),
         articleNo: f.articleNo?.stringValue || '',
+        specification: f.specification?.stringValue || '',
       };
     });
 

@@ -125,11 +125,11 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: 'No matching products found', notFound });
     }
 
-    // Calculate totals
+    // Calculate totals — web order = always paid = always "Đơn chốt"
     const subTotal = items.reduce((s, i) => s + (i.price * i.qty), 0);
-    const paidAmount = Number(body.paidAmount) || 0;
-    const orderStatus = paidAmount >= subTotal ? 'Đơn chốt' : 'Chưa thanh toán';
-    const debtAmount = Math.max(0, subTotal - paidAmount);
+    const paidAmount = subTotal;  // khách đã thanh toán trên web
+    const orderStatus = 'Đơn chốt';
+    const debtAmount = 0;
 
     // Match/find or create customer (ưu tiên: email > phone > name+phone)
     let customerId = body.customerId || null;

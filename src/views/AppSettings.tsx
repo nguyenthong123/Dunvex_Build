@@ -1,9 +1,9 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { auth } from '../services/firebase';
+import { auth, db } from '../services/firebase';
 import { signOut } from 'firebase/auth';
 import { useTheme } from '../context/ThemeContext';
-import { Moon, Sun, Globe, Bell, LogOut, User, HelpCircle } from 'lucide-react';
+import { Moon, Sun, Globe, Bell, LogOut, User, HelpCircle, Key, Copy, Check, RefreshCw, Link } from 'lucide-react';
 import { useToast } from '../components/shared/Toast';
 import { useOwner } from '../hooks/useOwner';
 
@@ -14,6 +14,64 @@ const AppSettings = () => {
 	const { showToast } = useToast();
 	const owner = useOwner();
 	const [showConfirmLogout, setShowConfirmLogout] = React.useState(false);
+	const [apiKey, setApiKey] = React.useState('');
+	const [apiCopied, setApiCopied] = React.useState(false);
+	const [urlCopied, setUrlCopied] = React.useState(false);
+	const [generating, setGenerating] = React.useState(false);
+	const [apiEnabled, setApiEnabled] = React.useState(false);
+
+	React.useEffect(() => {
+		if (!owner.ownerId) return;
+		const load = async () => {
+			try {
+				const { doc: d, getDoc: gd } = await import('firebase/firestore');
+				const snap = await gd(d(db, 'api_keys', owner.ownerId));
+				if (snap.exists()) {
+					const data = snap.data();
+					setApiKey(data.key || '');
+					setApiEnabled(data.enabled === true);
+				}
+			} catch (e) { console.error(e); }
+		};
+		load();
+	}, [owner.ownerId]);
+
+	const generateApiKey = async () => {
+		if (!owner.ownerId) return;
+		setGenerating(true);
+		try {
+			const { doc: d, setDoc: sd } = await import('firebase/firestore');
+			const newKey = 'dvx_' + Array.from(crypto.getRandomValues(new Uint8Array(24)))
+				.map(b => b.toString(16).padStart(2, '0')).join('');
+			await sd(d(db, 'api_keys', owner.ownerId), {
+				key: newKey, enabled: true, ownerId: owner.ownerId,
+				createdAt: new Date().toISOString(),
+				createdBy: auth.currentUser?.email || '',
+			}, { merge: true });
+			setApiKey(newKey);
+			setApiEnabled(true);
+			showToast('API Key đã được tạo!', 'success');
+		} catch (e: any) {
+			showToast('Lỗi: ' + e.message, 'error');
+		} finally {
+			setGenerating(false);
+		}
+	};
+
+	const toggleApi = async () => {
+		if (!owner.ownerId || !apiKey) return;
+		const ns = !apiEnabled;
+		try {
+			const { doc: d, setDoc: sd } = await import('firebase/firestore');
+			await sd(d(db, 'api_keys', owner.ownerId), { enabled: ns }, { merge: true });
+			setApiEnabled(ns);
+			showToast(ns ? 'API đã bật!' : 'API đã tắt!', 'success');
+		} catch (e: any) {
+			showToast('Lỗi: ' + e.message, 'error');
+		}
+	};
+
+	const webhookUrl = typeof window !== 'undefined' ? `${window.location.origin}/api/order-webhook` : '/api/order-webhook';
 
 	React.useEffect(() => {
 		const params = new URLSearchParams(location.search);
@@ -218,6 +276,55 @@ const AppSettings = () => {
 						</div>
 					</div>
 
+
+				{/* ─── API & Webhook Settings ─── */}
+				<div className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800">
+					<div className="flex items-center gap-3 mb-4">
+						<div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-xl">
+							<Link size={24} />
+						</div>
+						<h3 className="text-lg font-bold text-slate-800 dark:text-white uppercase tracking-tight">API & Webhook</h3>
+					</div>
+					<p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+						Kết nối website bên ngoài để tự động tạo đơn hàng vào hệ thống. Webhook nhận POST request kèm API Key.
+					</p>
+
+					<div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800 mb-3">
+						<div className="flex items-center justify-between mb-3">
+							<div className="flex items-center gap-2">
+								<Key size={16} className="text-indigo-500" />
+								<span className="text-xs font-black text-slate-500 uppercase tracking-widest">API Key</span>
+							</div>
+							<div className="flex items-center gap-2">
+								<label className="relative inline-flex items-center cursor-pointer">
+									<input type="checkbox" className="sr-only peer" checked={apiEnabled} onChange={toggleApi} disabled={!apiKey} />
+									<div className="w-9 h-5 bg-slate-300 rounded-full peer peer-checked:bg-emerald-500 after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
+								</label>
+								<span className="text-[10px] text-slate-400">{apiEnabled ? 'Bật' : 'Tắt'}</span>
+							</div>
+						</div>
+						{apiKey ? (
+							<div className="flex items-center gap-2">
+								<code className="flex-1 px-3 py-2 bg-white dark:bg-slate-900 rounded-lg text-xs font-mono text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 truncate">{apiKey}</code>
+								<button onClick={() => {{ navigator.clipboard.writeText(apiKey); setApiCopied(true); showToast('Copy xong!', 'success'); setTimeout(() => setApiCopied(false), 2000); }}} className="p-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-all">{apiCopied ? <Check size={16} /> : <Copy size={16} />}</button>
+							</div>
+						) : (
+							<button onClick={generateApiKey} disabled={generating} className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2">{generating ? <RefreshCw size={16} className="animate-spin" /> : <Key size={16} />}Tạo API Key Mới</button>
+						)}
+					</div>
+
+					<div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800">
+						<div className="flex items-center gap-2 mb-2">
+							<Globe size={16} className="text-emerald-500" />
+							<span className="text-xs font-black text-slate-500 uppercase tracking-widest">Webhook URL</span>
+						</div>
+						<div className="flex items-center gap-2">
+							<code className="flex-1 px-3 py-2 bg-white dark:bg-slate-900 rounded-lg text-xs font-mono text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 truncate">{webhookUrl}</code>
+							<button onClick={() => {{ navigator.clipboard.writeText(webhookUrl); setUrlCopied(true); showToast('Copy xong!', 'success'); setTimeout(() => setUrlCopied(false), 2000); }}} className="p-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg transition-all">{urlCopied ? <Check size={16} /> : <Copy size={16} />}</button>
+						</div>
+						<p className="text-[10px] text-slate-400 mt-2">Gửi POST request với header <code className="bg-slate-200 dark:bg-slate-700 px-1 rounded">x-api-key</code> và body JSON đơn hàng.</p>
+					</div>
+				</div>
 
 					<div className="text-center text-xs text-slate-400 mt-8 pb-32">
 						<p>Dunvex Build v1.0.1</p>

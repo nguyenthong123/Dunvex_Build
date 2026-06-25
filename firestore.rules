@@ -146,7 +146,11 @@ service cloud.firestore {
       allow create: if allowCreateByOwner();
     }
     
-    // AI Chat + AI Actions
+    // API Keys
+    match /api_keys/{docId} {
+      allow read, update, delete: if allowByOwner();
+      allow create: if allowCreateByOwner();
+    }
     match /bot_chats/{docId} {
       allow read, update, delete: if allowByOwner();
       allow create: if allowCreateByOwner();

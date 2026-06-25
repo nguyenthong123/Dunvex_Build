@@ -458,7 +458,7 @@ const PurchaseOrders = () => {
 
 			for (let i = 0; i < validItems.length; i++) {
 				if (snaps[i].exists()) {
-					const oldStock = Number(snaps[i].data().stock) || 0;
+					const oldStock = Number(snaps[i].data()?.stock) || 0;
 					transaction.update(productRefs[i], { stock: oldStock + Number(validItems[i].qty), priceImport: Number(validItems[i].priceImport) });
 				}
 			}

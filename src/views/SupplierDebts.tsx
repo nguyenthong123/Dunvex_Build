@@ -81,11 +81,7 @@ const SupplierDebts = () => {
 				createdAt: serverTimestamp()
 			});
 
-			// Update supplier total debt
-			const newDebt = (selectedSupplier.totalDebt || 0) - amountNum;
-			await updateSupplier(selectedSupplier.id, {
-				totalDebt: newDebt
-			});
+			// P0 #2: totalDebt tự động tính từ debts listener, không cần update thủ công
 
 			showToast("Thanh toán thành công", "success");
 			setShowPaymentForm(false);
@@ -108,7 +104,6 @@ const SupplierDebts = () => {
 		}
 
 		try {
-			const newDebtAmount = (debtSupplier.totalDebt || 0) + amountNum;
 
 			await addDebt({
 				supplierId: debtSupplier.id,
@@ -120,9 +115,7 @@ const SupplierDebts = () => {
 				createdAt: serverTimestamp()
 			});
 
-			await updateSupplier(debtSupplier.id, {
-				totalDebt: newDebtAmount
-			});
+			// P0 #2: totalDebt tự động tính từ debts listener
 
 			showToast("Đã ghi nợ thành công", "success");
 			setShowAddDebtForm(false);

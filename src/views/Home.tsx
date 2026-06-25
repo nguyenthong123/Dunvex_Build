@@ -1,7 +1,8 @@
 import { useNavigate } from 'react-router-dom';
-import { auth } from '../services/firebase';
+import { auth, db } from '../services/firebase';
 import { signOut } from 'firebase/auth';
 import React, { useState, useEffect, useMemo } from 'react';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useNavigationConfig } from '../hooks/useNavigationConfig';
 import { Eye, EyeOff, TrendingUp, TrendingDown, AlertTriangle, Wallet, Gift, Trophy, User as UserIcon } from 'lucide-react';
 
@@ -52,6 +53,45 @@ const Home = () => {
 	const [showProfit, setShowProfit] = useState(false);
 	const [chartFilter, setChartFilter] = useState('7days');
 	const [showScanner, setShowScanner] = useState(false);
+
+	// ─── FIX: Fetch tất cả đơn chốt (không limit 500) để tính tổng doanh số chính xác ───
+	const [allTimeStats, setAllTimeStats] = useState({ revenue: 0, count: 0, loading: true });
+
+	useEffect(() => {
+		if (!owner.ownerId) return;
+		const fetchAll = async () => {
+			try {
+				const q = query(
+					collection(db, 'orders'),
+					where('ownerId', '==', owner.ownerId),
+					where('status', '==', 'Đơn chốt')
+				);
+				const snap = await getDocs(q);
+				const userEmail = auth.currentUser?.email || '';
+				let total = 0;
+				let count = 0;
+				snap.forEach(doc => {
+					const data = doc.data();
+					if (data.createdByEmail === userEmail) {
+						total += Number(data.totalAmount) || 0;
+						count++;
+					}
+				});
+				setAllTimeStats({ revenue: total, count, loading: false });
+			} catch (e) {
+				console.error('Failed to fetch all orders:', e);
+				setAllTimeStats(prev => ({ ...prev, loading: false }));
+			}
+		};
+		fetchAll();
+	}, [owner.ownerId]);
+
+	// Format tiền rút gọn cho số lớn
+	const formatCompactPrice = (price: number) => {
+		if (price >= 1_000_000_000) return (price / 1_000_000_000).toFixed(1).replace('.0', '') + ' Tỷ';
+		if (price >= 1_000_000) return (price / 1_000_000).toFixed(1).replace('.0', '') + ' Triệu';
+		return price.toLocaleString('vi-VN') + 'đ';
+	};
 
 	// 🔧 REFACTOR: useEffect Firestore queries đã chuyển vào hooks — xoá 65 dòng code
 	// Các hook useProducts/useOrders/useCustomers/usePayments/useAuditLogs
@@ -154,7 +194,11 @@ const Home = () => {
 	// 1.3 Personal Performance (for the current login user)
 	const personalOrders = orders.filter(o => o.createdByEmail === auth.currentUser?.email && o.status === 'Đơn chốt');
 	const personalChartData = getDailyChartData(personalOrders);
-	const personalTotalRevenue = personalOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+	// FIX: Dùng allTimeStats (fetch toàn bộ, không limit) khi đã load xong; fallback listener 500 đơn
+	const personalTotalRevenue = allTimeStats.loading
+		? personalOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0)
+		: allTimeStats.revenue;
+	const personalOrderCount = allTimeStats.loading ? personalOrders.length : allTimeStats.count;
 
 	// Calculate Today's Growth (comparison with yesterday)
 	const yesterday = new Date();
@@ -323,11 +367,11 @@ const Home = () => {
 							<div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
 								<div className="bg-black/20 px-3 py-1 rounded-lg border border-white/5">
 									<p className="text-[10px] text-white/50 font-bold uppercase">Tổng doanh số</p>
-									<p className="text-lg font-black text-[#ffcc00]">{formatPrice(personalTotalRevenue)}</p>
+									<p className="text-lg font-black text-[#ffcc00]">{formatCompactPrice(personalTotalRevenue)}</p>
 								</div>
 								<div className="bg-black/20 px-3 py-1 rounded-lg border border-white/5">
 									<p className="text-[10px] text-white/50 font-bold uppercase">Đơn đã chốt</p>
-									<p className="text-lg font-black text-white">{personalOrders.length} Đơn</p>
+									<p className="text-lg font-black text-white">{personalOrderCount} Đơn</p>
 								</div>
 							</div>
 						</div>

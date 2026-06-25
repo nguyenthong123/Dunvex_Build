@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Store, Plus, Search, Trash, X, ArrowLeft, CheckCircle2, Package, History } from 'lucide-react';
+import { Store, Plus, Search, Trash, X, ArrowLeft, CheckCircle2, Package, History, MessageCircle, Send, Loader } from 'lucide-react';
 import { useOwner } from '../hooks/useOwner';
 import { useSuppliers } from '../hooks/useSuppliers';
 import { useProducts } from '../hooks/useProducts';
 import { usePurchaseOrders } from '../hooks/usePurchaseOrders';
 import { useSupplierDebts } from '../hooks/useSupplierDebts';
 import { useToast } from '../components/shared/Toast';
-import { serverTimestamp } from 'firebase/firestore';
+import { serverTimestamp, runTransaction, doc, collection } from 'firebase/firestore';
+import { db } from '../services/firebase';
+import { inventoryService } from '../services/dataAccess';
+import { parseSupplyMessage } from '../services/supplyBotService';
 
 const PurchaseOrders = () => {
 	const navigate = useNavigate();
@@ -16,13 +19,22 @@ const PurchaseOrders = () => {
 	
 	const { suppliers, updateSupplier } = useSuppliers();
 	const { products, update, create } = useProducts({ ownerId: owner.ownerId, enabled: !!owner.ownerId });
-	const { purchaseOrders, loading, addPurchaseOrder } = usePurchaseOrders();
+	const { purchaseOrders, loading, addPurchaseOrder, deletePurchaseOrder, updatePurchaseOrder } = usePurchaseOrders();
 	const { addDebt } = useSupplierDebts();
 
 	const [activeTab, setActiveTab] = useState<'list' | 'create'>('list');
 	const [searchTerm, setSearchTerm] = useState('');
 
 	const searchInputRef = useRef<HTMLInputElement>(null);
+
+	// ─── Supply Bot Chat State ───
+	const [chatOpen, setChatOpen] = useState(false);
+	const [chatInput, setChatInput] = useState('');
+	const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'bot'; text: string }[]>([
+		{ role: 'bot', text: '👋 Chào anh! Tôi là trợ lý nhập hàng. Tôi có thể giúp anh:\n• Tạo nhà cung cấp mới\n• Tạo đơn nhập hàng\n• Ghi nhận trả nợ NCC\n• Nhập hàng từ Google Sheet' }
+	]);
+	const [chatLoading, setChatLoading] = useState(false);
+	const chatEndRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
 		const handleOpenSearch = () => {
@@ -164,54 +176,97 @@ const PurchaseOrders = () => {
 			return;
 		}
 
+		const orderData = {
+			supplierId: selectedSupplier.id,
+			supplierName: selectedSupplier.name,
+			items: validItems,
+			totalAmount,
+			paidAmount: paidNum,
+			debtAmount: unpaidAmount,
+			note: orderNote,
+			status: 'Hoàn thành',
+			orderDate: new Date().toISOString()
+		};
+
 		try {
-			// 1. Tạo Purchase Order
-			const orderData = {
-				supplierId: selectedSupplier.id,
-				supplierName: selectedSupplier.name,
-				items: validItems,
-				totalAmount,
-				paidAmount: paidNum,
-				debtAmount: unpaidAmount,
-				note: orderNote,
-				status: 'Hoàn thành',
-				orderDate: new Date().toISOString()
-			};
+			// ─── P0 FIX: Atomic Firestore transaction ───
+			// Tất cả các bước (tạo PO + update stock + tạo debt + update totalDebt) chạy trong 1 transaction
+			const orderId = await runTransaction(db, async (transaction) => {
+				// Đọc tất cả product docs + supplier doc trước khi ghi (yêu cầu của Firestore transaction)
+				const productRefs = validItems.map(item => doc(db, 'products', item.productId));
+				const productSnaps = await Promise.all(productRefs.map(ref => transaction.get(ref)));
 
-			const orderId = await addPurchaseOrder(orderData);
+				const supplierRef = doc(db, 'suppliers', selectedSupplier.id);
+				const supplierSnap = await transaction.get(supplierRef);
+				const supplierData = supplierSnap.data() || {};
 
-			// 2. Cập nhật Tồn kho và Giá nhập mới (Cách 1: Lấy giá mới nhất)
-			for (const item of validItems) {
-				const currentProduct = products.find(p => p.id === item.productId);
-				if (currentProduct) {
-					const newStock = (Number(currentProduct.stock) || 0) + Number(item.qty);
-					// Cập nhật giá nhập mới nhất (Cách 1) để bảo toàn vốn
-					await update(currentProduct.id, {
+				// 1. Tạo Purchase Order document
+				const poRef = doc(collection(db, 'purchase_orders'));
+				const poId = poRef.id;
+				transaction.set(poRef, {
+					...orderData,
+					ownerId: owner.ownerId,
+					createdAt: serverTimestamp(),
+					createdBy: owner.ownerId
+				});
+
+				// 2. Cập nhật Tồn kho + Giá nhập từng SP
+				for (let i = 0; i < validItems.length; i++) {
+					const item = validItems[i];
+					const snap = productSnaps[i];
+					if (!snap.exists()) continue;
+					const productData = snap.data();
+					const oldStock = Number(productData.stock) || 0;
+					const newStock = oldStock + Number(item.qty);
+					transaction.update(productRefs[i], {
 						stock: newStock,
 						priceImport: Number(item.priceImport)
 					});
+
+					// 3. P1: Ghi inventory_logs (không atomic được vì transaction ko hỗ trợ addDoc trực tiếp)
+					// Sẽ ghi sau transaction
 				}
-			}
 
-			// 3. Ghi nhận Công nợ (nếu có nợ lại)
-			if (unpaidAmount > 0) {
-				await addDebt({
-					supplierId: selectedSupplier.id,
-					supplierName: selectedSupplier.name,
-					type: 'debt_increase', // Phát sinh nợ
-					amount: unpaidAmount,
-					note: `Nợ đơn nhập hàng ngày ${new Date().toLocaleDateString('vi-VN')}`,
-					orderId: orderId,
-					createdBy: owner.ownerId,
-					createdAt: serverTimestamp()
-				});
+				// 4. Tạo công nợ + Cập nhật totalDebt của NCC (nếu có nợ)
+				if (unpaidAmount > 0) {
+					const debtRef = doc(collection(db, 'supplier_debts'));
+					transaction.set(debtRef, {
+						ownerId: owner.ownerId,
+						supplierId: selectedSupplier.id,
+						supplierName: selectedSupplier.name,
+						type: 'debt_increase',
+						amount: unpaidAmount,
+						note: `Nợ đơn nhập hàng ngày ${new Date().toLocaleDateString('vi-VN')}`,
+						orderId: poId,
+						createdBy: owner.ownerId,
+						createdAt: serverTimestamp()
+					});
+					transaction.update(supplierRef, {
+						totalDebt: (supplierData.totalDebt || 0) + unpaidAmount
+					});
+				}
 
-				// Cập nhật tổng nợ của nhà cung cấp
-				await updateSupplier(selectedSupplier.id, {
-					totalDebt: (selectedSupplier.totalDebt || 0) + unpaidAmount
+				return poId;
+			});
+
+			// P1 #3: Ghi inventory_logs sau transaction (không thể trong transaction)
+			const logPromises = validItems.map(async (item) => {
+				const product = products.find(p => p.id === item.productId);
+				await inventoryService.addLog({
+					ownerId: owner.ownerId,
+					productId: item.productId,
+					productName: item.name,
+					type: 'import',
+					change: Number(item.qty),
+					note: `Nhập hàng từ ${selectedSupplier.name} - PO #${orderId.slice(0, 8)}`,
+					priceImport: Number(item.priceImport),
+					beforeStock: product?.stock || 0,
+					afterStock: (product?.stock || 0) + Number(item.qty),
 				});
-			}
-			
+			});
+			// Fire-and-forget inventory logs (non-critical)
+			Promise.all(logPromises).catch(e => console.warn('Inventory logs failed:', e));
+
 			// If paidAmount > 0, we should record a payment transaction too, but to keep it simple, it's just "tiền trả ngay".
 
 			showToast("Đã hoàn thành phiếu nhập kho", "success");
@@ -228,6 +283,228 @@ const PurchaseOrders = () => {
 		}
 	};
 
+	// P1 #4: Huỷ đơn nhập hàng + rollback stock/debt trong transaction
+	const handleCancelPO = async (po: any) => {
+		if (!confirm(`Xác nhận huỷ đơn nhập hàng từ ${po.supplierName}?\nThao tác này sẽ hoàn trả tồn kho và xoá công nợ liên quan.`)) return;
+
+		try {
+			await runTransaction(db, async (transaction) => {
+				// Đọc PO hiện tại
+				const poRef = doc(db, 'purchase_orders', po.id);
+				const poSnap = await transaction.get(poRef);
+				if (!poSnap.exists()) throw new Error('PO không tồn tại');
+
+				// Rollback stock từng SP
+				for (const item of (po.items || [])) {
+					const productRef = doc(db, 'products', item.productId);
+					const productSnap = await transaction.get(productRef);
+					if (productSnap.exists()) {
+						const currentStock = Number(productSnap.data().stock) || 0;
+						const rollbackStock = Math.max(0, currentStock - Number(item.qty));
+						transaction.update(productRef, { stock: rollbackStock });
+					}
+				}
+
+				// Xoá debt records liên quan đến PO này
+				// Query debts trong transaction không khả thi (cần query collection group)
+				// Thay vào đó: tạo 1 debt payment để offset
+				if ((po.debtAmount || 0) > 0) {
+					const debtRef = doc(collection(db, 'supplier_debts'));
+					transaction.set(debtRef, {
+						ownerId: owner.ownerId,
+						supplierId: po.supplierId,
+						supplierName: po.supplierName,
+						type: 'payment',
+						amount: po.debtAmount,
+						note: `Huỷ đơn nhập hàng - PO #${po.id.slice(0, 8)}`,
+						orderId: po.id,
+						createdBy: owner.ownerId,
+						createdAt: serverTimestamp()
+					});
+				}
+
+				// Xoá PO
+				transaction.delete(poRef);
+			});
+
+			showToast('Đã huỷ phiếu nhập kho và hoàn trả tồn kho', 'success');
+		} catch (error) {
+			console.error(error);
+			showToast('Lỗi khi huỷ đơn nhập hàng', 'error');
+		}
+	};
+
+	// ─── Supply Bot: Xử lý chat nhập hàng ───
+	const handleSupplyChat = async () => {
+		const msg = chatInput.trim();
+		if (!msg) return;
+
+		setChatMessages(prev => [...prev, { role: 'user', text: msg }]);
+		setChatInput('');
+		setChatLoading(true);
+
+		try {
+			const ctx = {
+				suppliers: suppliers.map(s => `${s.name} (nợ: ${(s.totalDebt||0).toLocaleString('vi-VN')}đ)`).join('\n'),
+				products: products.slice(0, 50).map(p => `${p.name} (tồn: ${p.stock||0}, giá nhập: ${(p.priceImport||0).toLocaleString('vi-VN')}đ)`).join('\n'),
+			};
+
+			const result = await parseSupplyMessage(msg, ctx);
+
+			// ─── Thực thi intent ───
+			switch (result.intent) {
+				case 'CREATE_SUPPLIER': {
+					if (!result.supplier?.name) {
+						setChatMessages(prev => [...prev, { role: 'bot', text: '⚠️ Vui lòng cung cấp tên nhà cung cấp.' }]);
+						break;
+					}
+					await addSupplierFromBot(result.supplier);
+					break;
+				}
+				case 'CREATE_PURCHASE_ORDER': {
+					if (!result.purchase_order?.supplierName || !result.purchase_order?.items?.length) {
+						setChatMessages(prev => [...prev, { role: 'bot', text: '⚠️ Cần tên NCC và ít nhất 1 sản phẩm để tạo đơn nhập hàng.' }]);
+						break;
+					}
+					await createPOFromBot(result.purchase_order);
+					break;
+				}
+				case 'RECORD_SUPPLIER_PAYMENT': {
+					if (!result.supplier_payment?.supplierName || !result.supplier_payment?.amount) {
+						setChatMessages(prev => [...prev, { role: 'bot', text: '⚠️ Cần tên NCC và số tiền để ghi nhận trả nợ.' }]);
+						break;
+					}
+					await recordPaymentFromBot(result.supplier_payment);
+					break;
+				}
+				case 'IMPORT_GOOGLE_SHEET': {
+					if (!result.google_sheet?.url) {
+						setChatMessages(prev => [...prev, { role: 'bot', text: '⚠️ Vui lòng gửi link Google Sheet.' }]);
+						break;
+					}
+					await importFromSheet(result.google_sheet);
+					break;
+				}
+				default: {
+					setChatMessages(prev => [...prev, { role: 'bot', text: result.response_message || 'Xin lỗi, tôi chưa hiểu yêu cầu.' }]);
+				}
+			}
+		} catch (error) {
+			console.error('SupplyBot error:', error);
+			setChatMessages(prev => [...prev, { role: 'bot', text: '❌ Có lỗi xảy ra, vui lòng thử lại.' }]);
+		} finally {
+			setChatLoading(false);
+		}
+	};
+
+	// ─── Bot Action Handlers ───
+	const addSupplierFromBot = async (s: any) => {
+		const { addDoc: addDocFn, collection: colFn } = await import('firebase/firestore');
+		await addDocFn(colFn(db, 'suppliers'), {
+			ownerId: owner.ownerId,
+			name: s.name,
+			phone: s.phone || '',
+			address: s.address || '',
+			category: s.category || 'Vật liệu khác',
+			note: s.note || '',
+			totalDebt: 0,
+			createdAt: serverTimestamp(),
+		});
+		setChatMessages(prev => [...prev, { role: 'bot', text: `✅ Đã tạo nhà cung cấp **${s.name}** thành công!` }]);
+	};
+
+	const createPOFromBot = async (po: any) => {
+		const supplier = suppliers.find(s => s.name.toLowerCase() === po.supplierName.toLowerCase());
+		if (!supplier) {
+			setChatMessages(prev => [...prev, { role: 'bot', text: `❌ Không tìm thấy NCC "${po.supplierName}". Hãy tạo NCC trước.` }]);
+			return;
+		}
+
+		const validItems: any[] = [];
+		for (const item of (po.items || [])) {
+			const product = products.find(p => p.name.toLowerCase() === item.productName.toLowerCase());
+			if (!product) {
+				setChatMessages(prev => [...prev, { role: 'bot', text: `❌ SP "${item.productName}" chưa có trong kho. Hãy tạo SP trước.` }]);
+				return;
+			}
+			validItems.push({ productId: product.id, name: product.name, qty: item.qty, priceImport: item.priceImport });
+		}
+
+		const totalAmount = validItems.reduce((sum, i) => sum + (Number(i.qty) * Number(i.priceImport)), 0);
+		const paidNum = Number(po.paidAmount) || 0;
+		const unpaidAmount = totalAmount - paidNum;
+
+		await runTransaction(db, async (transaction) => {
+			const productRefs = validItems.map(i => doc(db, 'products', i.productId));
+			const snaps = await Promise.all(productRefs.map(ref => transaction.get(ref)));
+			const supplierRef = doc(db, 'suppliers', supplier.id);
+			const supplierSnap = await transaction.get(supplierRef);
+			const supplierData = supplierSnap.data() || {};
+
+			const poRef = doc(collection(db, 'purchase_orders'));
+			const poId = poRef.id;
+			transaction.set(poRef, {
+				ownerId: owner.ownerId,
+				supplierId: supplier.id,
+				supplierName: supplier.name,
+				items: validItems,
+				totalAmount, paidAmount: paidNum, debtAmount: unpaidAmount,
+				note: po.note || 'Tạo bởi AI',
+				status: 'Hoàn thành',
+				orderDate: new Date().toISOString(),
+				createdAt: serverTimestamp(),
+				createdBy: owner.ownerId
+			});
+
+			for (let i = 0; i < validItems.length; i++) {
+				if (snaps[i].exists()) {
+					const oldStock = Number(snaps[i].data().stock) || 0;
+					transaction.update(productRefs[i], { stock: oldStock + Number(validItems[i].qty), priceImport: Number(validItems[i].priceImport) });
+				}
+			}
+
+			if (unpaidAmount > 0) {
+				const debtRef = doc(collection(db, 'supplier_debts'));
+				transaction.set(debtRef, {
+					ownerId: owner.ownerId, supplierId: supplier.id, supplierName: supplier.name,
+					type: 'debt_increase', amount: unpaidAmount,
+					note: `Nợ đơn nhập hàng (AI) ${new Date().toLocaleDateString('vi-VN')}`,
+					orderId: poId, createdBy: owner.ownerId, createdAt: serverTimestamp()
+				});
+				transaction.update(supplierRef, { totalDebt: (supplierData.totalDebt || 0) + unpaidAmount });
+			}
+		});
+
+		setChatMessages(prev => [...prev, { role: 'bot', text: `✅ Đã tạo đơn nhập hàng từ **${supplier.name}**\n📦 ${validItems.length} SP • 💰 ${totalAmount.toLocaleString('vi-VN')}đ • 📋 Nợ: ${unpaidAmount.toLocaleString('vi-VN')}đ` }]);
+	};
+
+	const recordPaymentFromBot = async (payment: any) => {
+		const supplier = suppliers.find(s => s.name.toLowerCase() === payment.supplierName.toLowerCase());
+		if (!supplier) {
+			setChatMessages(prev => [...prev, { role: 'bot', text: `❌ Không tìm thấy NCC "${payment.supplierName}".` }]);
+			return;
+		}
+
+		const { addDoc: addDocFn, collection: colFn } = await import('firebase/firestore');
+		await addDocFn(colFn(db, 'supplier_debts'), {
+			ownerId: owner.ownerId,
+			supplierId: supplier.id,
+			supplierName: supplier.name,
+			type: 'payment',
+			amount: payment.amount,
+			method: payment.method || 'Tiền mặt',
+			note: payment.note || `Trả nợ (AI) ${new Date().toLocaleDateString('vi-VN')}`,
+			createdBy: owner.ownerId,
+			createdAt: serverTimestamp()
+		});
+
+		setChatMessages(prev => [...prev, { role: 'bot', text: `✅ Đã ghi nhận trả nợ **${payment.amount.toLocaleString('vi-VN')}đ** cho ${supplier.name}` }]);
+	};
+
+	const importFromSheet = async (sheet: any) => {
+		setChatMessages(prev => [...prev, { role: 'bot', text: `🔗 Đang xử lý Google Sheet...\n${sheet.url}\n\n⚠️ Tính năng đang phát triển. Vui lòng gửi nội dung sheet để tôi tạo đơn.` }]);
+	};
+
 	const formatCurrency = (val: any) => Number(val || 0).toLocaleString('vi-VN');
 
 	if (loading) {
@@ -235,6 +512,7 @@ const PurchaseOrders = () => {
 	}
 
 	return (
+		<>
 		<div className="h-full flex flex-col relative pb-24 lg:pb-0">
 			{/* Header */}
 			<div className="sticky top-0 z-40 bg-[#f8f9fa] dark:bg-slate-950 pb-4">
@@ -281,15 +559,24 @@ const PurchaseOrders = () => {
 
 					<div className="space-y-3">
 						{filteredPOs.map(po => (
-							<div key={po.id} className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+							<div key={po.id} className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm group">
 								<div className="flex justify-between items-start mb-2">
 									<div>
 										<h4 className="font-bold text-slate-800 dark:text-white">{po.supplierName}</h4>
 										<div className="text-xs text-slate-500 mt-1">{new Date(po.orderDate).toLocaleString('vi-VN')}</div>
 									</div>
-									<div className="text-right">
-										<div className="font-black text-slate-800 dark:text-white">{formatCurrency(po.totalAmount)} đ</div>
-										{po.debtAmount > 0 && <div className="text-xs text-red-500 font-bold mt-1">Nợ: {formatCurrency(po.debtAmount)} đ</div>}
+									<div className="flex items-center gap-2">
+										<div className="text-right">
+											<div className="font-black text-slate-800 dark:text-white">{formatCurrency(po.totalAmount)} đ</div>
+											{po.debtAmount > 0 && <div className="text-xs text-red-500 font-bold mt-1">Nợ: {formatCurrency(po.debtAmount)} đ</div>}
+										</div>
+										<button
+											onClick={(e) => { e.stopPropagation(); handleCancelPO(po); }}
+											className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+											title="Huỷ đơn nhập hàng"
+										>
+											<Trash size={16} />
+										</button>
 									</div>
 								</div>
 								<div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-sm text-slate-600 dark:text-slate-400">
@@ -516,6 +803,70 @@ const PurchaseOrders = () => {
 				</div>
 			)}
 		</div>
+
+		{/* ─── Supply Bot FAB + Chat Panel ─── */}
+		{!chatOpen && (
+			<button
+				onClick={() => setChatOpen(true)}
+				className="fixed bottom-24 right-6 z-50 bg-[#FF6D00] text-white w-14 h-14 rounded-full shadow-xl shadow-orange-500/40 flex items-center justify-center hover:scale-110 active:scale-95 transition-all"
+				title="Trợ lý nhập hàng AI"
+			>
+				<MessageCircle size={24} />
+			</button>
+		)}
+
+		{chatOpen && (
+			<div className="fixed bottom-20 right-4 z-50 w-[360px] max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden" style={{ height: '480px', maxHeight: '70vh' }}>
+				<div className="flex items-center justify-between px-4 py-3 bg-[#FF6D00] text-white shrink-0">
+					<div className="flex items-center gap-2">
+						<MessageCircle size={18} />
+						<span className="font-black text-sm uppercase">Trợ lý Nhập Hàng</span>
+					</div>
+					<button onClick={() => setChatOpen(false)} className="p-1 hover:bg-white/20 rounded-lg transition-all"><X size={18} /></button>
+				</div>
+				<div className="flex-1 overflow-y-auto p-4 space-y-3">
+					{chatMessages.map((m, i) => (
+						<div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+							<div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${
+								m.role === 'user' 
+									? 'bg-[#FF6D00] text-white rounded-br-md' 
+									: 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-bl-md'
+							}`}>
+								{m.text}
+							</div>
+						</div>
+					))}
+					{chatLoading && (
+						<div className="flex justify-start">
+							<div className="bg-slate-100 dark:bg-slate-800 rounded-2xl rounded-bl-md px-4 py-3">
+								<Loader size={16} className="animate-spin text-[#FF6D00]" />
+							</div>
+						</div>
+					)}
+					<div ref={chatEndRef} />
+				</div>
+				<div className="p-3 border-t border-slate-200 dark:border-slate-800 shrink-0">
+					<div className="flex gap-2">
+						<input
+							type="text"
+							value={chatInput}
+							onChange={e => setChatInput(e.target.value)}
+							onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSupplyChat()}
+							placeholder="VD: Nhập 10 tấm thạch cao từ NCC Xi măng Hà Tiên, giá 85k..."
+							className="flex-1 px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm dark:text-white outline-none focus:ring-2 focus:ring-[#FF6D00]/30"
+						/>
+						<button
+							onClick={handleSupplyChat}
+							disabled={chatLoading || !chatInput.trim()}
+							className="p-2.5 bg-[#FF6D00] text-white rounded-xl hover:bg-[#E66000] disabled:opacity-40 transition-all"
+						>
+							<Send size={18} />
+						</button>
+					</div>
+				</div>
+			</div>
+		)}
+		</>
 	);
 };
 

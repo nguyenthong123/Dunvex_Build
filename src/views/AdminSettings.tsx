@@ -388,10 +388,21 @@ const AdminSettings = () => {
 		try {
 			setLoading(true);
 			const collectionName = editingUser.status === 'pending' ? 'permissions' : 'users';
-			await updateDoc(doc(db, collectionName, editingUser.id), {
+			const updateData: any = {
 				displayName: editingUser.displayName,
 				role: editingUser.role
-			});
+			};
+			// Lương tháng → tự động tính lương ngày (26 ngày công chuẩn)
+			const monthlyWage = Number(editingUser.monthlyWage) || 0;
+			if (monthlyWage > 0) {
+				updateData.monthlyWage = monthlyWage;
+				updateData.dailyWage = Math.round(monthlyWage / 26);
+			} else if (editingUser.monthlyWage === '' || editingUser.monthlyWage === 0) {
+				// Xóa lương nếu để trống
+				updateData.monthlyWage = 0;
+				updateData.dailyWage = 0;
+			}
+			await updateDoc(doc(db, collectionName, editingUser.id), updateData);
 			showToast("Cập nhật thành công", "success");
 			setEditingUser(null);
 		} catch (error: any) {
@@ -1206,14 +1217,19 @@ const UserManagement = ({ userList, showAdd, onShowAdd, newUser, setNewUser, han
 							</div>
 
 							<div className="space-y-2">
-								<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">💰 Lương / ngày (VNĐ)</label>
+								<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">💰 Lương / tháng (VNĐ)</label>
 								<input
 									type="number"
 									className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20"
-									value={editingUser.dailyWage || ''}
-									onChange={e => setEditingUser({ ...editingUser, dailyWage: e.target.value })}
-									placeholder="VD: 300000"
+									value={editingUser.monthlyWage || ''}
+									onChange={e => setEditingUser({ ...editingUser, monthlyWage: e.target.value })}
+									placeholder="VD: 8000000"
 								/>
+								{editingUser.monthlyWage > 0 && (
+									<p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold px-1">
+										≈ {Math.round(Number(editingUser.monthlyWage) / 26).toLocaleString('vi-VN')}đ/ngày (26 ngày công)
+									</p>
+								)}
 							</div>
 
 							<div className="flex gap-3 pt-4">
@@ -1599,9 +1615,13 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 	const [salaryData, setSalaryData] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [month, setMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+	const [expandedUser, setExpandedUser] = useState<string | null>(null);
+	const [rawCheckins, setRawCheckins] = useState<any[]>([]);
+	const [rawAttendance, setRawAttendance] = useState<any[]>([]);
 
 	useEffect(() => {
 		if (!ownerId || userList.length === 0) return;
+		setExpandedUser(null);
 		loadSalaryData();
 	}, [ownerId, userList, month]);
 
@@ -1633,6 +1653,8 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 
 			const allCheckins: any[] = checkinsSnap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
 			const allAttendance: any[] = attendanceSnap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+			setRawCheckins(allCheckins);
+			setRawAttendance(allAttendance);
 			
 			const data = userList.map(user => {
 				const userCheckins = allCheckins.filter(c => c.userId === user.id || c.userEmail === user.email);
@@ -1641,20 +1663,27 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 				// Loại bỏ các đơn từ (nghỉ phép, đi muộn) khỏi ngày công thực tế
 				const validAttendance = userAttendance.filter(a => a.type !== 'request');
 
-				// Đếm số ngày duy nhất từ cả 2 nguồn (Thị trường & Văn phòng)
-				const uniqueDays = new Set([
-					...userCheckins.map(c => {
-						const dt = c.createdAt?.toDate?.() || new Date(c.createdAt);
-						return dt.toISOString().slice(0, 10);
-					}),
-					...validAttendance.map(a => {
-						const dt = a.createdAt?.toDate?.() || new Date(a.createdAt);
-						return dt.toISOString().slice(0, 10);
-					})
-				]);
+				// Gom nhóm chi tiết theo ngày
+				const dailyDetails: Record<string, { checkin?: any; attendances: any[] }> = {};
+				userCheckins.forEach(c => {
+					const dt = c.createdAt?.toDate?.() || new Date(c.createdAt);
+					const day = dt.toISOString().slice(0, 10);
+					if (!dailyDetails[day]) dailyDetails[day] = { attendances: [] };
+					dailyDetails[day].checkin = c;
+				});
+				validAttendance.forEach(a => {
+					const dt = a.createdAt?.toDate?.() || new Date(a.createdAt);
+					const day = dt.toISOString().slice(0, 10);
+					if (!dailyDetails[day]) dailyDetails[day] = { attendances: [] };
+					dailyDetails[day].attendances.push(a);
+				});
 
-				const daysWorked = uniqueDays.size;
-				const dailyWage = Number(user.dailyWage) || 0;
+				const daysWorked = Object.keys(dailyDetails).length;
+				const WORKING_DAYS = 26; // Ngày công chuẩn / tháng
+				const monthlyWage = Number(user.monthlyWage) || 0;
+				const dailyWage = monthlyWage > 0 
+					? Math.round(monthlyWage / WORKING_DAYS)
+					: (Number(user.dailyWage) || 0); // fallback lương ngày cũ
 				return {
 					userId: user.id,
 					name: user.displayName || user.email?.split('@')[0] || 'N/A',
@@ -1662,8 +1691,10 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 					role: user.role,
 					checkins: userCheckins.length + validAttendance.length,
 					daysWorked,
+					monthlyWage,
 					dailyWage,
-					totalSalary: daysWorked * dailyWage
+					totalSalary: daysWorked * dailyWage,
+					dailyDetails,
 				};
 			});
 			setSalaryData(data);
@@ -1672,6 +1703,29 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 		} finally {
 			setLoading(false);
 		}
+	};
+
+	const getDetailForUser = (userId: string) => {
+		const user = salaryData.find(d => d.userId === userId);
+		if (!user?.dailyDetails) return [];
+		return Object.entries(user.dailyDetails)
+			.sort(([a], [b]) => b.localeCompare(a))
+			.map(([day, detail]: [string, any]) => ({
+				day,
+				checkinTime: detail.checkin ? (() => {
+					const dt = detail.checkin.createdAt?.toDate?.() || new Date(detail.checkin.createdAt);
+					return dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+				})() : null,
+				checkinNote: detail.checkin?.note || detail.checkin?.location || '',
+				attendances: detail.attendances.map((a: any) => {
+					const dt = a.createdAt?.toDate?.() || new Date(a.createdAt);
+					return {
+						time: dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+						type: a.type || a.status || 'check',
+						note: a.note || a.location || ''
+					};
+				})
+			}));
 	};
 
 	const formatPrice = (n: number) => n.toLocaleString('vi-VN');
@@ -1698,37 +1752,95 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 								<th className="px-4 py-3">Nhân viên</th>
 								<th className="px-4 py-3 text-center">Ngày làm</th>
 								<th className="px-4 py-3 text-center">Lượt chấm</th>
+								<th className="px-4 py-3 text-right">Lương/tháng</th>
 								<th className="px-4 py-3 text-right">Lương/ngày</th>
-								<th className="px-4 py-3 text-right">Tổng lương</th>
+								<th className="px-4 py-3 text-right">Thực lãnh</th>
 							</tr>
 						</thead>
 						<tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-							{salaryData.map((d, i) => (
-								<tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
-									<td className="px-4 py-3">
-										<div className="font-bold text-sm dark:text-white">{d.name}</div>
-										<div className="text-[10px] text-slate-400">{d.role === 'admin' ? 'Quản trị' : d.role === 'sale' ? 'Sale' : d.role === 'warehouse' ? 'Kho' : 'Kế toán'}</div>
-									</td>
-									<td className="px-4 py-3 text-center">
-										<span className={`font-black text-sm ${d.daysWorked > 0 ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-300'}`}>
-											{d.daysWorked} ngày
-										</span>
-									</td>
-									<td className="px-4 py-3 text-center text-xs text-slate-500">{d.checkins} lượt</td>
-									<td className="px-4 py-3 text-right text-xs font-bold text-slate-600 dark:text-slate-300">
-										{d.dailyWage > 0 ? formatPrice(d.dailyWage) + 'đ' : <span className="text-slate-300 italic">-</span>}
-									</td>
-									<td className="px-4 py-3 text-right">
-										<span className={`font-black text-sm ${d.totalSalary > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-300'}`}>
-											{formatPrice(d.totalSalary)}đ
-										</span>
-									</td>
-								</tr>
-							))}
+							{salaryData.map((d, i) => {
+								const isExpanded = expandedUser === d.userId;
+								const details = isExpanded ? getDetailForUser(d.userId) : [];
+								return (
+									<React.Fragment key={i}>
+										<tr
+											className={`hover:bg-slate-50 dark:hover:bg-slate-800/30 cursor-pointer transition-all ${isExpanded ? 'bg-indigo-50/50 dark:bg-indigo-900/10' : ''}`}
+											onClick={() => setExpandedUser(isExpanded ? null : d.userId)}
+										>
+											<td className="px-4 py-3">
+												<div className="flex items-center gap-2">
+													<ChevronRight size={14} className={`text-slate-300 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+													<div>
+														<div className="font-bold text-sm dark:text-white">{d.name}</div>
+														<div className="text-[10px] text-slate-400">{d.role === 'admin' ? 'Quản trị' : d.role === 'sale' ? 'Sale' : d.role === 'warehouse' ? 'Kho' : 'Kế toán'}</div>
+													</div>
+												</div>
+											</td>
+											<td className="px-4 py-3 text-center">
+												<span className={`font-black text-sm ${d.daysWorked > 0 ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-300'}`}>
+													{d.daysWorked} ngày
+												</span>
+											</td>
+											<td className="px-4 py-3 text-center text-xs text-slate-500">{d.checkins} lượt</td>
+											<td className="px-4 py-3 text-right text-xs font-bold text-slate-600 dark:text-slate-300">
+												{d.monthlyWage > 0 ? formatPrice(d.monthlyWage) + 'đ' : <span className="text-slate-300 italic">-</span>}
+											</td>
+											<td className="px-4 py-3 text-right text-xs font-bold text-slate-600 dark:text-slate-300">
+												{d.dailyWage > 0 ? formatPrice(d.dailyWage) + 'đ' : <span className="text-slate-300 italic">-</span>}
+											</td>
+											<td className="px-4 py-3 text-right">
+												<span className={`font-black text-sm ${d.totalSalary > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-300'}`}>
+													{formatPrice(d.totalSalary)}đ
+												</span>
+											</td>
+										</tr>
+										{isExpanded && details.length > 0 && (
+											<tr key={`detail-${i}`}>
+												<td colSpan={6} className="px-4 py-3 bg-slate-50/50 dark:bg-slate-800/30">
+													<div className="space-y-2">
+														<p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">📅 Chi tiết chấm công tháng {month}</p>
+														<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+															{details.map((day: any, di: number) => (
+																<div key={di} className="bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-700 p-3">
+																	<div className="flex items-center justify-between mb-2">
+																		<span className="font-black text-sm text-indigo-600 dark:text-indigo-400">
+																			{new Date(day.day).toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' })}
+																		</span>
+																		{day.checkinTime && (
+																			<span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full">
+																				{day.checkinTime}
+																			</span>
+																		)}
+																	</div>
+																	{day.checkinNote && (
+																		<p className="text-[10px] text-slate-400 mb-1">📍 {day.checkinNote}</p>
+																	)}
+																	{day.attendances.length > 0 && (
+																		<div className="space-y-1 mt-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+																			{day.attendances.map((att: any, ai: number) => (
+																				<div key={ai} className="flex items-center justify-between">
+																					<span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${att.type === 'checkin' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400' : att.type === 'checkout' ? 'bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'}`}>
+																						{att.type === 'checkin' ? 'Vào' : att.type === 'checkout' ? 'Ra' : att.type}
+																					</span>
+																					<span className="text-[10px] text-slate-500">{att.time}</span>
+																				</div>
+																			))}
+																		</div>
+																	)}
+																</div>
+															))}
+														</div>
+													</div>
+												</td>
+											</tr>
+										)}
+									</React.Fragment>
+								);
+							})}
 						</tbody>
 						<tfoot className="bg-indigo-50 dark:bg-indigo-900/20">
 							<tr>
-								<td colSpan={4} className="px-4 py-3 text-xs font-black uppercase text-indigo-600 dark:text-indigo-400 text-right">TỔNG CỘNG</td>
+								<td colSpan={5} className="px-4 py-3 text-xs font-black uppercase text-indigo-600 dark:text-indigo-400 text-right">TỔNG CỘNG</td>
 								<td className="px-4 py-3 text-right font-black text-lg text-indigo-600 dark:text-indigo-400">{formatPrice(totalAll)}đ</td>
 							</tr>
 						</tfoot>

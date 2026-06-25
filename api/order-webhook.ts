@@ -109,24 +109,72 @@ export default async function handler(req: any, res: any) {
     const orderStatus = paidAmount >= subTotal ? 'Đơn chốt' : 'Chưa thanh toán';
     const debtAmount = Math.max(0, subTotal - paidAmount);
 
-    // Match/find customer
+    // Match/find or create customer (ưu tiên: email > phone > name+phone)
     let customerId = body.customerId || null;
+    let customerName = body.customerName || '';
+    let customerPhone = body.customerPhone || '';
+    const customerEmail = body.customerEmail || '';
+
     if (!customerId) {
-      const custSnaps = await db.collection('customers')
-        .where('ownerId', '==', body.ownerId)
-        .where('name', '==', body.customerName)
-        .limit(1)
-        .get();
-      if (!custSnaps.empty) {
-        customerId = custSnaps.docs[0].id;
+      let matchedCust: any = null;
+
+      // 1. Match by email
+      if (customerEmail) {
+        const emailSnap = await db.collection('customers')
+          .where('ownerId', '==', body.ownerId)
+          .where('email', '==', customerEmail)
+          .limit(1).get();
+        if (!emailSnap.empty) matchedCust = { id: emailSnap.docs[0].id, ...emailSnap.docs[0].data() };
+      }
+
+      // 2. Match by phone
+      if (!matchedCust && customerPhone) {
+        const phoneSnap = await db.collection('customers')
+          .where('ownerId', '==', body.ownerId)
+          .where('phone', '==', customerPhone)
+          .limit(1).get();
+        if (!phoneSnap.empty) matchedCust = { id: phoneSnap.docs[0].id, ...phoneSnap.docs[0].data() };
+      }
+
+      // 3. Match by name + phone (fuzzy)
+      if (!matchedCust && customerName) {
+        const nameSnap = await db.collection('customers')
+          .where('ownerId', '==', body.ownerId)
+          .where('name', '==', customerName)
+          .limit(1).get();
+        if (!nameSnap.empty) matchedCust = { id: nameSnap.docs[0].id, ...nameSnap.docs[0].data() };
+      }
+
+      if (matchedCust) {
+        customerId = matchedCust.id;
+        // Cập nhật thông tin mới nhất nếu có thay đổi
+        if (customerPhone && matchedCust.phone !== customerPhone) {
+          await db.collection('customers').doc(customerId).update({ phone: customerPhone, updatedAt: Timestamp.now() });
+        }
+        if (customerEmail && matchedCust.email !== customerEmail) {
+          await db.collection('customers').doc(customerId).update({ email: customerEmail, updatedAt: Timestamp.now() });
+        }
+      } else {
+        // 4. Tạo KH mới nếu không tìm thấy
+        const newCust = await db.collection('customers').add({
+          ownerId: body.ownerId,
+          name: customerName,
+          phone: customerPhone,
+          email: customerEmail,
+          address: body.customerAddress || '',
+          type: 'Khách web',
+          createdAt: Timestamp.now(),
+          createdBy: body.ownerId,
+        });
+        customerId = newCust.id;
       }
     }
 
     // Create order
     const orderData = {
       ownerId: body.ownerId,
-      customerName: body.customerName,
-      customerPhone: body.customerPhone || '',
+      customerName,
+      customerPhone,
       customerId: customerId || '',
       items,
       subTotal,
@@ -144,7 +192,7 @@ export default async function handler(req: any, res: any) {
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
       createdBy: body.ownerId,
-      createdByEmail: ownerData?.email || body.createdByEmail || 'webhook',
+      createdByEmail: customerEmail || ownerData?.email || 'webhook',
       source: 'webhook',
     };
 

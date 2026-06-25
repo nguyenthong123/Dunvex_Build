@@ -74,16 +74,38 @@ export default async function handler(req: any, res: any) {
       .where('ownerId', '==', body.ownerId)
       .get();
     
-    const products: Record<string, any> = {};
+    // Build name→product map for fallback matching
+    const productByName: Record<string, any> = {};
+    const allProducts: any[] = [];
     productSnaps.forEach(doc => {
       const p = doc.data();
-      products[p.name?.toLowerCase()] = { id: doc.id, ...p };
+      productByName[p.name?.toLowerCase()] = { id: doc.id, ...p };
+      allProducts.push({ id: doc.id, ...p });
     });
 
     const items = [];
-    const notFound = [];
+    const notFound: string[] = [];
     for (const item of body.items) {
-      const matched = products[item.productName?.toLowerCase()];
+      let matched: any = null;
+
+      // 1. Ưu tiên dùng productId nếu có (chính xác tuyệt đối)
+      if (item.productId) {
+        try {
+          const prodSnap = await db.collection('products').doc(item.productId).get();
+          if (prodSnap.exists) {
+            const pd = prodSnap.data();
+            if (pd?.ownerId === body.ownerId) {
+              matched = { id: prodSnap.id, ...pd };
+            }
+          }
+        } catch (e) { /* fall through */ }
+      }
+
+      // 2. Fallback: match theo tên
+      if (!matched && item.productName) {
+        matched = productByName[item.productName.toLowerCase()];
+      }
+
       if (matched) {
         items.push({
           productId: matched.id,
@@ -95,7 +117,7 @@ export default async function handler(req: any, res: any) {
           weight: matched.weight || '',
         });
       } else {
-        notFound.push(item.productName);
+        notFound.push(item.productId || item.productName || `item #${body.items.indexOf(item)}`);
       }
     }
 

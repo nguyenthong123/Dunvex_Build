@@ -18,13 +18,12 @@ import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 // Init Firebase Admin (reuse if already initialized)
 function getAdminDb() {
   if (!getApps().length) {
-    const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT 
-      ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
-      : undefined;
-    
+    const json = process.env.FIREBASE_SERVICE_ACCOUNT;
+    if (!json) throw new Error('Missing FIREBASE_SERVICE_ACCOUNT env');
+    const serviceAccount = JSON.parse(json);
     initializeApp({
-      credential: serviceAccount ? cert(serviceAccount) : undefined,
-      projectId: process.env.VITE_FIREBASE_PROJECT_ID || 'dunvex-89461',
+      credential: cert(serviceAccount),
+      projectId: serviceAccount.project_id,
     });
   }
   return getFirestore();

@@ -1,39 +1,87 @@
 /**
- * Vercel Serverless Function: /api/order-webhook
- * Nhận đơn hàng từ website bên ngoài → tạo đơn trong Firestore
- * 
- * POST body format:
- * {
- *   customerName: string,
- *   customerPhone?: string,
- *   items: [{ productName: string, qty: number, price: number }],
- *   note?: string,
- *   paidAmount?: number
- * }
+ * Vercel Serverless: POST /api/order-webhook
+ * Nhận đơn hàng từ bot web → tạo đơn trong Firestore
+ * Dùng Firebase REST API (không cần firebase-admin)
+ *
+ * POST body:
+ * { ownerId, customerName, customerPhone, customerEmail, items: [{productId, qty}] }
  */
 
-import { cert, initializeApp, getApps, getApp } from 'firebase-admin/app';
-import { getFirestore, Timestamp } from 'firebase-admin/firestore';
+const PROJECT_ID = 'dunvex-89461';
+const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
 
-// Init Firebase Admin (reuse if already initialized)
-function getAdminDb() {
-  if (!getApps().length) {
-    const json = process.env.FIREBASE_SERVICE_ACCOUNT;
-    if (!json) throw new Error('Missing FIREBASE_SERVICE_ACCOUNT env');
-    const serviceAccount = JSON.parse(json);
-    initializeApp({
-      credential: cert(serviceAccount),
-      projectId: serviceAccount.project_id,
-    });
-  }
-  return getFirestore();
+async function getAccessToken(): Promise<string> {
+  const json = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (!json) throw new Error('Missing FIREBASE_SERVICE_ACCOUNT env');
+  const sa = JSON.parse(json);
+
+  const header = { alg: 'RS256', typ: 'JWT', kid: sa.private_key_id };
+  const now = Math.floor(Date.now() / 1000);
+  const claim = {
+    iss: sa.client_email, sub: sa.client_email,
+    aud: 'https://oauth2.googleapis.com/token',
+    iat: now, exp: now + 3600,
+    scope: 'https://www.googleapis.com/auth/datastore',
+  };
+
+  const b64obj = (obj: any) => Buffer.from(JSON.stringify(obj)).toString('base64url');
+  const sign = (pk: string, data: string) => {
+    const crypto = require('crypto');
+    return crypto.createSign('RSA-SHA256').update(data).sign(pk, 'base64url');
+  };
+  const partial = `${b64obj(header)}.${b64obj(claim)}`;
+  const jwt = `${partial}.${sign(sa.private_key, partial)}`;
+
+  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
+  });
+  const td = await tokenRes.json();
+  if (td.error) throw new Error(`Auth: ${td.error_description || td.error}`);
+  return td.access_token;
 }
 
-async function verifyApiKey(db: FirebaseFirestore.Firestore, ownerId: string, key: string): Promise<boolean> {
-  const snap = await db.collection('api_keys').doc(ownerId).get();
-  if (!snap.exists) return false;
-  const data = snap.data();
-  return data?.enabled === true && data?.key === key;
+function fString(v: string) { return { stringValue: v }; }
+function fInt(v: number) { return { integerValue: String(v) }; }
+function fDouble(v: number) { return { doubleValue: v }; }
+function fBool(v: boolean) { return { booleanValue: v }; }
+function fTs() { return { timestampValue: new Date().toISOString() }; }
+
+async function restGet(token: string, path: string) {
+  const res = await fetch(`${FIRESTORE_BASE}/${path}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Firestore GET ${path}: ${res.status}`);
+  return res.json();
+}
+
+async function restQuery(token: string, collection: string, params: string) {
+  const url = `${FIRESTORE_BASE}/${collection}?${params}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  const data = await res.json();
+  return data.documents || [];
+}
+
+async function restCreate(token: string, collection: string, fields: any) {
+  const res = await fetch(`${FIRESTORE_BASE}/${collection}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields }),
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(`Firestore create: ${JSON.stringify(data.error)}`);
+  // Extract doc ID from name
+  const parts = (data.name || '').split('/');
+  return parts[parts.length - 1];
+}
+
+async function restUpdate(token: string, path: string, fields: any) {
+  const res = await fetch(`${FIRESTORE_BASE}/${path}?updateMask.fieldPaths=${Object.keys(fields).join('&updateMask.fieldPaths=')}`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields }),
+  });
+  return res.json();
 }
 
 export default async function handler(req: any, res: any) {
@@ -42,81 +90,67 @@ export default async function handler(req: any, res: any) {
   }
 
   const apiKey = req.headers['x-api-key'];
-  if (!apiKey) {
-    return res.status(401).json({ error: 'Missing x-api-key header' });
-  }
+  if (!apiKey) return res.status(401).json({ error: 'Missing x-api-key header' });
 
   try {
-    const db = getAdminDb();
     const body = req.body;
+    if (!body.ownerId) return res.status(400).json({ error: 'Missing ownerId' });
+    if (!body.customerName || !body.items?.length) return res.status(400).json({ error: 'Missing customerName or items' });
 
-    // Validate required fields
-    if (!body.ownerId) {
-      return res.status(400).json({ error: 'Missing ownerId' });
-    }
-    if (!body.customerName || !body.items?.length) {
-      return res.status(400).json({ error: 'Missing customerName or items' });
-    }
+    const token = await getAccessToken();
 
     // Verify API key
-    const valid = await verifyApiKey(db, body.ownerId, apiKey);
-    if (!valid) {
+    const keyDoc = await restGet(token, `api_keys/${body.ownerId}`);
+    if (!keyDoc) return res.status(403).json({ error: 'API key not found' });
+    const kf = keyDoc.fields || {};
+    if (kf.enabled?.booleanValue !== true || kf.key?.stringValue !== apiKey) {
       return res.status(403).json({ error: 'Invalid or disabled API key' });
     }
 
-    // Get owner info
-    const ownerSnap = await db.collection('owners').doc(body.ownerId).get();
-    const ownerData = ownerSnap.exists ? ownerSnap.data() : null;
-
-    // Match products by name
-    const productSnaps = await db.collection('products')
-      .where('ownerId', '==', body.ownerId)
-      .get();
-    
-    // Build name→product map for fallback matching
-    const productByName: Record<string, any> = {};
-    const allProducts: any[] = [];
-    productSnaps.forEach(doc => {
-      const p = doc.data();
-      productByName[p.name?.toLowerCase()] = { id: doc.id, ...p };
-      allProducts.push({ id: doc.id, ...p });
-    });
-
-    const items = [];
+    // Match products
+    const items: any[] = [];
     const notFound: string[] = [];
+
     for (const item of body.items) {
       let matched: any = null;
 
-      // 1. Ưu tiên dùng productId nếu có (chính xác tuyệt đối)
+      // Ưu tiên productId
       if (item.productId) {
-        try {
-          const prodSnap = await db.collection('products').doc(item.productId).get();
-          if (prodSnap.exists) {
-            const pd = prodSnap.data();
-            if (pd?.ownerId === body.ownerId) {
-              matched = { id: prodSnap.id, ...pd };
-            }
+        const prodDoc = await restGet(token, `products/${item.productId}`);
+        if (prodDoc) {
+          const pf = prodDoc.fields || {};
+          if (pf.ownerId?.stringValue === body.ownerId) {
+            matched = { id: item.productId, ...pf };
           }
-        } catch (e) { /* fall through */ }
+        }
       }
 
-      // 2. Fallback: match theo tên
+      // Fallback: match theo tên
       if (!matched && item.productName) {
-        matched = productByName[item.productName.toLowerCase()];
+        const docs = await restQuery(token, 'products',
+          `orderBy=ownerId&equalTo=${body.ownerId}&pageSize=500`);
+        for (const doc of docs) {
+          const f = doc.fields || {};
+          if (f.name?.stringValue?.toLowerCase() === item.productName.toLowerCase()) {
+            matched = { id: doc.name!.split('/').pop()!, ...f };
+            break;
+          }
+        }
       }
 
       if (matched) {
         items.push({
-          productId: matched.id,
-          name: matched.name,
+          productId: (matched as any).id,
+          name: (matched as any).name?.stringValue || '',
           qty: Number(item.qty) || 0,
-          price: Number(item.price) || matched.priceSell || 0,
-          buyPrice: matched.priceImport || 0,
-          unit: matched.unit || '',
-          weight: matched.weight || '',
+          price: Number(item.price) || Number((matched as any).priceSell?.doubleValue || (matched as any).priceSell?.integerValue || 0),
+          buyPrice: Number((matched as any).priceImport?.doubleValue || (matched as any).priceImport?.integerValue || 0),
+          unit: (matched as any).unit?.stringValue || '',
+          weight: (matched as any).weight?.stringValue || '',
+          stock: Number((matched as any).stock?.doubleValue || (matched as any).stock?.integerValue || 0),
         });
       } else {
-        notFound.push(item.productId || item.productName || `item #${body.items.indexOf(item)}`);
+        notFound.push(item.productId || item.productName || 'unknown');
       }
     }
 
@@ -124,114 +158,115 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: 'No matching products found', notFound });
     }
 
-    // Calculate totals — web order = always paid = always "Đơn chốt"
-    const subTotal = items.reduce((s, i) => s + (i.price * i.qty), 0);
-    const paidAmount = subTotal;  // khách đã thanh toán trên web
-    const orderStatus = 'Đơn chốt';
-    const debtAmount = 0;
-
-    // Match/find or create customer (ưu tiên: email > phone > name+phone)
-    let customerId = body.customerId || null;
-    let customerName = body.customerName || '';
-    let customerPhone = body.customerPhone || '';
+    // Match/find or create customer
+    const customerName = body.customerName || '';
+    const customerPhone = body.customerPhone || '';
     const customerEmail = body.customerEmail || '';
+    let customerId = body.customerId || null;
 
     if (!customerId) {
       let matchedCust: any = null;
 
       // 1. Match by email
       if (customerEmail) {
-        const emailSnap = await db.collection('customers')
-          .where('ownerId', '==', body.ownerId)
-          .where('email', '==', customerEmail)
-          .limit(1).get();
-        if (!emailSnap.empty) matchedCust = { id: emailSnap.docs[0].id, ...emailSnap.docs[0].data() };
+        const docs = await restQuery(token, 'customers',
+          `orderBy=ownerId&equalTo=${body.ownerId}&pageSize=500`);
+        matchedCust = docs.find((d: any) => d.fields?.email?.stringValue === customerEmail);
       }
 
       // 2. Match by phone
       if (!matchedCust && customerPhone) {
-        const phoneSnap = await db.collection('customers')
-          .where('ownerId', '==', body.ownerId)
-          .where('phone', '==', customerPhone)
-          .limit(1).get();
-        if (!phoneSnap.empty) matchedCust = { id: phoneSnap.docs[0].id, ...phoneSnap.docs[0].data() };
+        const docs = await restQuery(token, 'customers',
+          `orderBy=ownerId&equalTo=${body.ownerId}&pageSize=500`);
+        matchedCust = docs.find((d: any) => d.fields?.phone?.stringValue === customerPhone);
       }
 
-      // 3. Match by name + phone (fuzzy)
+      // 3. Match by name
       if (!matchedCust && customerName) {
-        const nameSnap = await db.collection('customers')
-          .where('ownerId', '==', body.ownerId)
-          .where('name', '==', customerName)
-          .limit(1).get();
-        if (!nameSnap.empty) matchedCust = { id: nameSnap.docs[0].id, ...nameSnap.docs[0].data() };
+        const docs = await restQuery(token, 'customers',
+          `orderBy=ownerId&equalTo=${body.ownerId}&pageSize=500`);
+        matchedCust = docs.find((d: any) => d.fields?.name?.stringValue === customerName);
       }
 
       if (matchedCust) {
-        customerId = matchedCust.id;
-        // Cập nhật thông tin mới nhất nếu có thay đổi
-        if (customerPhone && matchedCust.phone !== customerPhone) {
-          await db.collection('customers').doc(customerId).update({ phone: customerPhone, updatedAt: Timestamp.now() });
-        }
-        if (customerEmail && matchedCust.email !== customerEmail) {
-          await db.collection('customers').doc(customerId).update({ email: customerEmail, updatedAt: Timestamp.now() });
-        }
+        customerId = matchedCust.name.split('/').pop()!;
       } else {
-        // 4. Tạo KH mới nếu không tìm thấy
-        const newCust = await db.collection('customers').add({
-          ownerId: body.ownerId,
-          name: customerName,
-          phone: customerPhone,
-          email: customerEmail,
-          address: body.customerAddress || '',
-          type: 'Khách web',
-          createdAt: Timestamp.now(),
-          createdBy: body.ownerId,
+        // Tạo KH mới
+        customerId = await restCreate(token, 'customers', {
+          ownerId: fString(body.ownerId),
+          name: fString(customerName),
+          phone: fString(customerPhone),
+          email: fString(customerEmail),
+          address: fString(body.customerAddress || ''),
+          type: fString('Khách web'),
+          createdAt: fTs(),
+          createdBy: fString(body.ownerId),
         });
-        customerId = newCust.id;
       }
     }
 
-    // Create order
-    const orderData = {
-      ownerId: body.ownerId,
-      customerName,
-      customerPhone,
-      customerId: customerId || '',
-      items,
-      subTotal,
-      totalAmount: subTotal,
-      debtAmount,
-      paidAmount,
-      discountValue: 0,
-      adjustmentValue: 0,
-      totalWeight: items.reduce((s, i) => s + (parseFloat(i.weight) || 0) * i.qty, 0),
-      totalCost: items.reduce((s, i) => s + (i.buyPrice || 0) * i.qty, 0),
-      totalProfit: items.reduce((s, i) => s + (i.price - (i.buyPrice || 0)) * i.qty, 0),
-      note: body.note || `Đơn từ Webhook API`,
-      status: orderStatus,
-      orderDate: new Date().toISOString(),
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now(),
-      createdBy: body.ownerId,
-      createdByEmail: customerEmail || ownerData?.email || 'webhook',
-      source: 'webhook',
+    // Calculate totals
+    const subTotal = items.reduce((s: number, i: any) => s + (i.price * i.qty), 0);
+    const totalWeight = items.reduce((s: number, i: any) => s + (parseFloat(i.weight) || 0) * i.qty, 0);
+    const totalCost = items.reduce((s: number, i: any) => s + (i.buyPrice || 0) * i.qty, 0);
+
+    // Build order fields
+    const orderFields: any = {
+      ownerId: fString(body.ownerId),
+      customerName: fString(customerName),
+      customerPhone: fString(customerPhone),
+      customerId: fString(customerId || ''),
+      items: {
+        arrayValue: {
+          values: items.map((i: any) => ({
+            mapValue: {
+              fields: {
+                productId: fString(i.productId),
+                name: fString(i.name),
+                qty: fInt(i.qty),
+                price: fDouble(i.price),
+                buyPrice: fDouble(i.buyPrice),
+                unit: fString(i.unit),
+                weight: fString(i.weight),
+              }
+            }
+          }))
+        }
+      },
+      subTotal: fDouble(subTotal),
+      totalAmount: fDouble(subTotal),
+      paidAmount: fDouble(subTotal),
+      debtAmount: fDouble(0),
+      discountValue: fDouble(0),
+      adjustmentValue: fDouble(0),
+      totalWeight: fDouble(totalWeight),
+      totalCost: fDouble(totalCost),
+      totalProfit: fDouble(subTotal - totalCost),
+      status: fString('Đơn chốt'),
+      note: fString(body.note || 'Đơn từ Webhook API'),
+      orderDate: fString(new Date().toISOString()),
+      createdAt: fTs(),
+      updatedAt: fTs(),
+      createdBy: fString(body.ownerId),
+      createdByEmail: fString(customerEmail || 'webhook'),
+      source: fString('webhook'),
     };
 
-    const orderRef = await db.collection('orders').add(orderData);
+    const orderId = await restCreate(token, 'orders', orderFields);
 
-    // Update stock
-    const batch = db.batch();
+    // Update stock cho từng sản phẩm
     for (const item of items) {
-      const prodRef = db.collection('products').doc(item.productId);
-      batch.update(prodRef, { 
-        stock: (await prodRef.get()).data()?.stock || 0 - item.qty 
+      const newStock = Math.max(0, item.stock - item.qty);
+      await restUpdate(token, `products/${item.productId}`, {
+        stock: fDouble(newStock),
+        updatedAt: fTs(),
       });
     }
-    await batch.commit();
 
     return res.status(200).json({
       success: true,
-      orderId: orderRef.id,
+      orderId,
+      customerId: customerId || null,
       totalAmount: subTotal,
       items: items.length,
       notFound: notFound.length > 0 ? notFound : undefined,
@@ -239,6 +274,6 @@ export default async function handler(req: any, res: any) {
 
   } catch (error: any) {
     console.error('Webhook error:', error);
-    return res.status(500).json({ error: 'Internal server error', details: error.message });
+    return res.status(500).json({ error: error.message || 'Internal server error' });
   }
 }

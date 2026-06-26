@@ -34,6 +34,7 @@ const PurchaseOrders = () => {
 		{ role: 'bot', text: '👋 Chào anh! Tôi là trợ lý nhập hàng. Tôi có thể giúp anh:\n• Tạo nhà cung cấp mới\n• Tạo đơn nhập hàng\n• Ghi nhận trả nợ NCC\n• Nhập hàng từ Google Sheet' }
 	]);
 	const [chatLoading, setChatLoading] = useState(false);
+	const [pendingSheetOrder, setPendingSheetOrder] = useState<{ items: any[]; total: number; notFound: string[] } | null>(null);
 	const chatEndRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
@@ -343,6 +344,78 @@ const PurchaseOrders = () => {
 		setChatInput('');
 		setChatLoading(true);
 
+		// Nếu có pending sheet order → user đang nhập tên NCC để xác nhận
+		if (pendingSheetOrder) {
+			try {
+				const supplier = suppliers.find(s => s.name.toLowerCase() === msg.toLowerCase());
+				if (!supplier) {
+					setChatMessages(prev => [...prev, { role: 'bot',
+						text: `❌ Không tìm thấy NCC "${msg}". Hãy tạo NCC trước hoặc nhập đúng tên.` }]);
+					setChatLoading(false);
+					return;
+				}
+
+				const items = pendingSheetOrder.items;
+				const totalAmount = pendingSheetOrder.total;
+
+				await runTransaction(db, async (transaction) => {
+					const productRefs = items.map(i => doc(db, 'products', i.productId));
+					const snaps = await Promise.all(productRefs.map(ref => transaction.get(ref)));
+					const supplierRef = doc(db, 'suppliers', supplier.id);
+					const supplierSnap = await transaction.get(supplierRef);
+					const supplierData = supplierSnap.data() || {};
+
+					const poRef = doc(collection(db, 'purchase_orders'));
+					const poId = poRef.id;
+					transaction.set(poRef, {
+						ownerId: owner.ownerId,
+						supplierId: supplier.id,
+						supplierName: supplier.name,
+						items: items,
+						totalAmount, paidAmount: 0, debtAmount: totalAmount,
+						note: 'Tạo từ Google Sheet (AI)',
+						status: 'Hoàn thành',
+						orderDate: new Date().toISOString(),
+						createdAt: serverTimestamp(),
+						createdBy: owner.ownerId
+					});
+
+					for (let i = 0; i < items.length; i++) {
+						if (snaps[i].exists()) {
+							const oldStock = Number(snaps[i].data()?.stock) || 0;
+							transaction.update(productRefs[i], { stock: oldStock + Number(items[i].qty), priceImport: Number(items[i].priceImport) });
+						}
+					}
+
+					if (totalAmount > 0) {
+						const debtRef = doc(collection(db, 'supplier_debts'));
+						transaction.set(debtRef, {
+							ownerId: owner.ownerId, supplierId: supplier.id, supplierName: supplier.name,
+							type: 'debt_increase', amount: totalAmount,
+							note: `Nợ đơn nhập hàng (AI Sheet) ${new Date().toLocaleDateString('vi-VN')}`,
+							orderId: poId, createdBy: owner.ownerId, createdAt: serverTimestamp()
+						});
+						transaction.update(supplierRef, { totalDebt: (supplierData.totalDebt || 0) + totalAmount });
+					}
+				});
+
+				const itemsSummary = items.map(i =>
+					`• ${i.name} x${i.qty} = ${(Number(i.qty) * Number(i.priceImport)).toLocaleString('vi-VN')}đ`
+				).join('\n');
+
+				setChatMessages(prev => [...prev, { role: 'bot',
+					text: `✅ Đã tạo đơn nhập hàng từ Google Sheet!\n\n🏭 NCC: **${supplier.name}**\n${itemsSummary}\n💰 Tổng: **${totalAmount.toLocaleString('vi-VN')}đ**\n📋 Nợ NCC: ${totalAmount.toLocaleString('vi-VN')}đ` }]);
+
+				setPendingSheetOrder(null);
+			} catch (err: any) {
+				console.error('pendingSheetOrder error:', err);
+				setChatMessages(prev => [...prev, { role: 'bot', text: `❌ Lỗi: ${err.message || 'Không xác định'}` }]);
+			} finally {
+				setChatLoading(false);
+			}
+			return;
+		}
+
 		try {
 			const ctx = {
 				suppliers: suppliers.map(s => `${s.name} (nợ: ${(s.totalDebt||0).toLocaleString('vi-VN')}đ)`).join('\n'),
@@ -502,7 +575,106 @@ const PurchaseOrders = () => {
 	};
 
 	const importFromSheet = async (sheet: any) => {
-		setChatMessages(prev => [...prev, { role: 'bot', text: `🔗 Đang xử lý Google Sheet...\n${sheet.url}\n\n⚠️ Tính năng đang phát triển. Vui lòng gửi nội dung sheet để tôi tạo đơn.` }]);
+		const url = typeof sheet === 'string' ? sheet : sheet?.url;
+		if (!url) {
+			setChatMessages(prev => [...prev, { role: 'bot', text: '⚠️ Vui lòng gửi link Google Sheet.' }]);
+			return;
+		}
+
+		setChatMessages(prev => [...prev, { role: 'bot', text: '⏳ Đang đọc danh sách sản phẩm từ Google Sheet...' }]);
+
+		try {
+			let csvUrl = url;
+			const match = csvUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+			if (!match) {
+				setChatMessages(prev => [...prev, { role: 'bot', text: '❌ Link Google Sheet không đúng định dạng.' }]);
+				return;
+			}
+			const sheetId = match[1];
+			const gidMatch = csvUrl.match(/gid=(\d+)/);
+			const gid = gidMatch ? gidMatch[1] : '0';
+			csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
+
+			const res = await fetch(csvUrl);
+			if (!res.ok) {
+				setChatMessages(prev => [...prev, { role: 'bot', text: '❌ Không đọc được Sheet. Sheet cần được chia sẻ công khai (Anyone with link).' }]);
+				return;
+			}
+
+			const csvText = await res.text();
+			const lines = csvText.split('\n').filter(l => l.trim());
+			if (lines.length < 2) {
+				setChatMessages(prev => [...prev, { role: 'bot', text: '❌ Sheet trống hoặc không có dữ liệu.' }]);
+				return;
+			}
+
+			const parseCSVLine = (line: string): string[] => {
+				const result: string[] = [];
+				let current = ''; let inQuotes = false;
+				for (const ch of line) {
+					if (ch === '"') { inQuotes = !inQuotes; continue; }
+					if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ''; continue; }
+					current += ch;
+				}
+				result.push(current.trim());
+				return result;
+			};
+
+			const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+			const nameColIdx = headers.findIndex((h: string) =>
+				h.includes('ten') && !h.includes('ncc') || h.includes('sanpham') || h.includes('product'));
+			const qtyColIdx = headers.findIndex((h: string) =>
+				h.includes('soluong') || h.includes('qty') || h.includes('quantity') || h.includes('sl'));
+			const priceColIdx = headers.findIndex((h: string) =>
+				h.includes('gia') || h.includes('price') || h.includes('dongia'));
+
+			if (nameColIdx < 0) {
+				setChatMessages(prev => [...prev, { role: 'bot',
+					text: `❌ Không tìm thấy cột "Tên sản phẩm". Các cột: ${headers.join(', ')}` }]);
+				return;
+			}
+
+			const orderItems: any[] = [];
+			const notFound: string[] = [];
+
+			for (let i = 1; i < lines.length; i++) {
+				const cols = parseCSVLine(lines[i]);
+				const rowName = (cols[nameColIdx] || '').trim();
+				if (!rowName) continue;
+
+				const rowQty = qtyColIdx >= 0 ? parseInt(cols[qtyColIdx], 10) || 1 : 1;
+				const rowPrice = priceColIdx >= 0 ? parseFloat((cols[priceColIdx] || '0').replace(/[^\d.,]/g, '').replace(/\,/g, '')) || 0 : 0;
+
+				const product = products.find(p => p.name.toLowerCase() === rowName.toLowerCase());
+				if (product) {
+					orderItems.push({ productId: product.id, name: product.name, qty: rowQty, priceImport: rowPrice });
+				} else {
+					notFound.push(rowName);
+				}
+			}
+
+			if (orderItems.length === 0) {
+				setChatMessages(prev => [...prev, { role: 'bot',
+					text: `❌ Không tìm thấy sản phẩm nào khớp.\nDanh sách: ${notFound.join(', ')}` }]);
+				return;
+			}
+
+			const supplierName = sheet?.supplierName || '';
+			const totalAmount = orderItems.reduce((sum, it) => sum + (Number(it.qty) * Number(it.priceImport)), 0);
+			const itemsSummary = orderItems.map(it =>
+				`• ${it.name} x${it.qty} = ${(Number(it.qty) * Number(it.priceImport)).toLocaleString('vi-VN')}đ`
+			).join('\n');
+
+			const confirmMsg = `📦 **Đơn Nhập Hàng từ Sheet**\n\n${itemsSummary}\n\n💰 Tổng tiền nhập: **${totalAmount.toLocaleString('vi-VN')}đ**${supplierName ? '\n🏭 NCC: ' + supplierName : ''}${notFound.length > 0 ? '\n\n⚠️ Không tìm thấy: ' + notFound.join(', ') : ''}\n\nVui lòng nhập **tên nhà cung cấp** để tạo đơn:`;
+
+			setChatMessages(prev => [...prev, { role: 'bot', text: confirmMsg }]);
+
+			// Lưu pending order để xử lý khi user nhập tên NCC
+			setPendingSheetOrder({ items: orderItems, total: totalAmount, notFound });
+		} catch (err: any) {
+			console.error('importFromSheet error:', err);
+			setChatMessages(prev => [...prev, { role: 'bot', text: `❌ Lỗi: ${err.message || 'Không xác định'}` }]);
+		}
 	};
 
 	const formatCurrency = (val: any) => Number(val || 0).toLocaleString('vi-VN');

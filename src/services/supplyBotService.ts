@@ -144,10 +144,11 @@ export async function parseSupplyMessage(
       const res = await fetch('/api/gemini-proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: fullPrompt, schema: supplyBotSchema }),
+        body: JSON.stringify({ prompt: fullPrompt }),
       });
       if (!res.ok) throw new Error(`Proxy error: ${res.status}`);
-      return await res.json();
+      const data = await res.json();
+      return JSON.parse(data.text || '{}');
     } else {
       const model = getSDKModel();
       if (!model) throw new Error('Gemini SDK not available');

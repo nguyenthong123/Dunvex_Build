@@ -678,13 +678,34 @@ const PurchaseOrders = () => {
 				return result;
 			};
 
-			const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+			const headersRaw = parseCSVLine(lines[0]);
+			const headers = headersRaw.map(h => h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+			
+			// Tên SP: ưu tiên cột có "tên" hoặc "sản phẩm"
 			const nameColIdx = headers.findIndex((h: string) =>
-				(h.includes('ten') && !h.includes('ncc')) || h.includes('sanpham') || h.includes('product') || h.includes('name'));
-			const qtyColIdx = headers.findIndex((h: string) =>
-				h.includes('soluong') || h.includes('qty') || h.includes('quantity') || h.includes('sl'));
-			const priceColIdx = headers.findIndex((h: string) =>
-				(h.includes('gia') && !h.includes('ghichu') && !h.includes('danhgia')) || h.includes('price') || h.includes('dongia'));
+				(h.includes('ten') && !h.includes('ncc') && !h.includes('ghichu')) || h.includes('sanpham') || h.includes('product') || h.includes('name'));
+			
+			// Số lượng: ưu tiên "số lượng" hoặc "SL" (đứng riêng)
+			let qtyColIdx = headers.findIndex((h: string) => h === 'sl' || h === 'so luong' || h === 'soluong');
+			if (qtyColIdx < 0) qtyColIdx = headers.findIndex((h: string) =>
+				h.includes('soluong') || h.includes('qty') || h.includes('quantity'));
+			
+			// Giá: ưu tiên "đơn giá" > "giá bán" > "giá nhập" > "giá" > "dongia" > "price"
+			const priceCandidates = [
+				{ match: (h: string) => h.includes('dongia') || h.includes('don gia'), label: 'đơn giá' },
+				{ match: (h: string) => h.includes('giaban') || h.includes('gia ban') || h.includes('ban'), label: 'giá bán' },
+				{ match: (h: string) => h.includes('gianhap') || h.includes('gia nhap') || h.includes('nhap'), label: 'giá nhập' },
+				{ match: (h: string) => h.includes('price'), label: 'price' },
+				{ match: (h: string) => h.includes('gia') && !h.includes('ghichu') && !h.includes('danhgia') && !h.includes('thanh'), label: 'giá' },
+			];
+			let priceColIdx = -1; let priceColLabel = '';
+			for (const c of priceCandidates) {
+				const idx = headers.findIndex(h => c.match(h));
+				if (idx >= 0) { priceColIdx = idx; priceColLabel = c.label; break; }
+			}
+
+			// Debug: hiện headers + cột đã detect
+			const debugInfo = `📊 **Các cột phát hiện:**\n• Tên SP: cột ${nameColIdx + 1} (${headersRaw[nameColIdx] || '?'})\n• Số lượng: ${qtyColIdx >= 0 ? `cột ${qtyColIdx + 1} (${headersRaw[qtyColIdx]})` : '❌ KHÔNG TÌM THẤY (mặc định = 1)'}\n• Giá: ${priceColIdx >= 0 ? `cột ${priceColIdx + 1} (${headersRaw[priceColIdx]}) → loại: ${priceColLabel}` : '❌ KHÔNG TÌM THẤY (mặc định = giá nhập trong kho)'}\n\n📋 Tất cả cột: ${headersRaw.join(' | ')}`;
 
 			if (nameColIdx < 0) {
 				setChatMessages(prev => [...prev, { role: 'bot',
@@ -723,7 +744,7 @@ const PurchaseOrders = () => {
 				`• ${it.name} x${it.qty} = ${(Number(it.qty) * Number(it.priceImport)).toLocaleString('vi-VN')}đ`
 			).join('\n');
 
-			const confirmMsg = `📦 **Đơn Nhập Hàng từ Sheet**\n\n${itemsSummary}\n\n💰 Tổng tiền nhập: **${totalAmount.toLocaleString('vi-VN')}đ**${supplierName ? '\n🏭 NCC: ' + supplierName : ''}${notFound.length > 0 ? '\n\n⚠️ Không tìm thấy: ' + notFound.join(', ') : ''}\n\nVui lòng nhập **tên nhà cung cấp** để tạo đơn:`;
+			const confirmMsg = `${debugInfo}\n\n📦 **Đơn Nhập Hàng từ Sheet**\n\n${itemsSummary}\n\n💰 Tổng tiền nhập: **${totalAmount.toLocaleString('vi-VN')}đ**${supplierName ? '\n🏭 NCC: ' + supplierName : ''}${notFound.length > 0 ? '\n\n⚠️ Không tìm thấy: ' + notFound.join(', ') : ''}\n\nVui lòng nhập **tên nhà cung cấp** để tạo đơn:`;
 
 			setChatMessages(prev => [...prev, { role: 'bot', text: confirmMsg }]);
 

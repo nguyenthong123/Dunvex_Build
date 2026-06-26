@@ -341,36 +341,34 @@ const PurchaseOrders = () => {
 		setDeletingPO(null);
 
 		try {
-			// 1. Xoá PO (dùng hook — cực kỳ đơn giản, không cần transaction)
+			// 1. Xoá PO NGAY LẬP TỨC — UI sẽ tự update qua Firestore listener
 			await deletePurchaseOrder(po.id);
+			showToast('✅ Đã huỷ đơn nhập hàng', 'success');
 
-			// 2. Rollback stock từng SP (fire-and-forget, gom theo batch)
+			// 2+3. Rollback stock + debt offset chạy ngầm (không block UI)
 			const validItems = (po.items || []).filter((item: any) => item.productId);
+			
+			// Stock rollback ngầm
 			if (validItems.length > 0) {
-				// Dùng batch để gom tối đa 500 writes/lần
 				for (let i = 0; i < validItems.length; i += 500) {
 					const batch = writeBatch(db);
 					const chunk = validItems.slice(i, i + 500);
 					for (const item of chunk) {
-						const ref = doc(db, 'products', item.productId);
-						// Giảm stock (không đọc stock hiện tại, dùng increment cho an toàn)
-						batch.update(ref, { stock: increment(-Number(item.qty || 0)) });
+						batch.update(doc(db, 'products', item.productId), { stock: increment(-Number(item.qty || 0)) });
 					}
-					try { await batch.commit(); } catch (e) { console.warn('Batch rollback failed:', e); }
+					batch.commit().catch(e => console.warn('Stock rollback failed:', e));
 				}
 			}
-
-			// 3. Tạo debt offset nếu có nợ
+			
+			// Debt offset ngầm
 			if ((po.debtAmount || 0) > 0) {
-				await addDoc(collection(db, 'supplier_debts'), {
+				addDoc(collection(db, 'supplier_debts'), {
 					ownerId: owner.ownerId, supplierId: po.supplierId || '', supplierName: po.supplierName || '',
 					type: 'payment', amount: po.debtAmount,
 					note: `Huỷ đơn nhập hàng - PO #${po.id.slice(0, 8)}`,
 					orderId: po.id, createdBy: owner.ownerId, createdAt: serverTimestamp()
-				});
+				}).catch(e => console.warn('Debt offset failed:', e));
 			}
-
-			showToast('✅ Đã huỷ đơn nhập hàng', 'success');
 		} catch (error: any) {
 			console.error('Cancel PO error:', error);
 			showToast(`Lỗi khi huỷ: ${error.message || 'Không xác định'}`, 'error');

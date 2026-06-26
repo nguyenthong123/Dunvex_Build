@@ -7,7 +7,7 @@ import { useProducts } from '../hooks/useProducts';
 import { usePurchaseOrders } from '../hooks/usePurchaseOrders';
 import { useSupplierDebts } from '../hooks/useSupplierDebts';
 import { useToast } from '../components/shared/Toast';
-import { serverTimestamp, runTransaction, doc, collection } from 'firebase/firestore';
+import { serverTimestamp, runTransaction, doc, collection, writeBatch, increment, addDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { inventoryService } from '../services/dataAccess';
 import { parseSupplyMessage } from '../services/supplyBotService';
@@ -332,61 +332,45 @@ const PurchaseOrders = () => {
 
 	// P1 #4: Huỷ đơn nhập hàng + rollback stock/debt trong transaction
 	const handleCancelPO = async (po: any) => {
-		// Bước 1: Hiện nút xác nhận inline (không dùng confirm popup)
+		// Bước 1: Hiện nút xác nhận inline
 		if (deletingPO !== po.id) {
 			setDeletingPO(po.id);
 			return;
 		}
-		// Bước 2: Đã xác nhận → thực hiện xoá
+		// Bước 2: Đã xác nhận → xoá
 		setDeletingPO(null);
 
 		try {
+			// 1. Xoá PO (dùng hook — cực kỳ đơn giản, không cần transaction)
+			await deletePurchaseOrder(po.id);
+
+			// 2. Rollback stock từng SP (fire-and-forget, gom theo batch)
 			const validItems = (po.items || []).filter((item: any) => item.productId);
-			
-			// Thử transaction trước
-			try {
-				await runTransaction(db, async (transaction) => {
-					const poRef = doc(db, 'purchase_orders', po.id);
-					const poSnap = await transaction.get(poRef);
-					if (!poSnap.exists()) throw new Error('PO không tồn tại');
-
-					// PASS 1: Đọc tất cả product snaps
-					const reads: { item: any; ref: any; snap: any }[] = [];
-					for (const item of validItems) {
+			if (validItems.length > 0) {
+				// Dùng batch để gom tối đa 500 writes/lần
+				for (let i = 0; i < validItems.length; i += 500) {
+					const batch = writeBatch(db);
+					const chunk = validItems.slice(i, i + 500);
+					for (const item of chunk) {
 						const ref = doc(db, 'products', item.productId);
-						const snap = await transaction.get(ref);
-						reads.push({ item, ref, snap });
+						// Giảm stock (không đọc stock hiện tại, dùng increment cho an toàn)
+						batch.update(ref, { stock: increment(-Number(item.qty || 0)) });
 					}
-
-					// PASS 2: Ghi tất cả
-					for (const { item, snap } of reads) {
-						if (snap?.exists()) {
-							const currentStock = Number(snap.data().stock) || 0;
-							const rollbackStock = Math.max(0, currentStock - Number(item.qty || 0));
-							transaction.update(snap.ref, { stock: rollbackStock });
-						}
-					}
-
-					if ((po.debtAmount || 0) > 0) {
-						const debtRef = doc(collection(db, 'supplier_debts'));
-						transaction.set(debtRef, {
-							ownerId: owner.ownerId, supplierId: po.supplierId || '', supplierName: po.supplierName || '',
-							type: 'payment', amount: po.debtAmount,
-							note: `Huỷ đơn nhập hàng - PO #${po.id.slice(0, 8)}`,
-							orderId: po.id, createdBy: owner.ownerId, createdAt: serverTimestamp()
-						});
-					}
-
-					transaction.delete(poRef);
-				});
-			} catch (txError: any) {
-				console.warn('Transaction failed, fallback to direct delete:', txError.message);
-				// Fallback: xoá trực tiếp không rollback stock (an toàn hơn là crash)
-				const { deleteDoc: delDoc } = await import('firebase/firestore');
-				await delDoc(doc(db, 'purchase_orders', po.id));
+					try { await batch.commit(); } catch (e) { console.warn('Batch rollback failed:', e); }
+				}
 			}
 
-			showToast('Đã huỷ phiếu nhập kho', 'success');
+			// 3. Tạo debt offset nếu có nợ
+			if ((po.debtAmount || 0) > 0) {
+				await addDoc(collection(db, 'supplier_debts'), {
+					ownerId: owner.ownerId, supplierId: po.supplierId || '', supplierName: po.supplierName || '',
+					type: 'payment', amount: po.debtAmount,
+					note: `Huỷ đơn nhập hàng - PO #${po.id.slice(0, 8)}`,
+					orderId: po.id, createdBy: owner.ownerId, createdAt: serverTimestamp()
+				});
+			}
+
+			showToast('✅ Đã huỷ đơn nhập hàng', 'success');
 		} catch (error: any) {
 			console.error('Cancel PO error:', error);
 			showToast(`Lỗi khi huỷ: ${error.message || 'Không xác định'}`, 'error');

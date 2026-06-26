@@ -143,6 +143,7 @@ export default async function handler(req: any, res: any) {
         stock: Number(f.stock?.doubleValue || f.stock?.integerValue || 0),
         articleNo: f.articleNo?.stringValue || '',
         specification: f.specification?.stringValue || '',
+        packaging: f.packaging?.stringValue || '',
       };
     });
 

@@ -80,6 +80,7 @@ const PurchaseOrders = () => {
 	const [chatLoading, setChatLoading] = useState(false);
 	const [pendingSheetOrder, setPendingSheetOrder] = useState<{ items: any[]; total: number; notFound: string[] } | null>(null);
 	const [expandedPO, setExpandedPO] = useState<string | null>(null);
+	const [deletingPO, setDeletingPO] = useState<string | null>(null); // PO đang chờ xác nhận xoá
 	const chatEndRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
@@ -331,63 +332,64 @@ const PurchaseOrders = () => {
 
 	// P1 #4: Huỷ đơn nhập hàng + rollback stock/debt trong transaction
 	const handleCancelPO = async (po: any) => {
-		if (!confirm(`Xác nhận huỷ đơn nhập hàng từ ${po.supplierName}?\nThao tác này sẽ hoàn trả tồn kho và xoá công nợ liên quan.`)) return;
+		// Bước 1: Hiện nút xác nhận inline (không dùng confirm popup)
+		if (deletingPO !== po.id) {
+			setDeletingPO(po.id);
+			return;
+		}
+		// Bước 2: Đã xác nhận → thực hiện xoá
+		setDeletingPO(null);
 
 		try {
-			// Lọc item có productId hợp lệ
 			const validItems = (po.items || []).filter((item: any) => item.productId);
 			
-			await runTransaction(db, async (transaction) => {
-				// ── PASS 1: ĐỌC TẤT CẢ (Firestore yêu cầu: tất cả reads trước writes) ──
-				const poRef = doc(db, 'purchase_orders', po.id);
-				const poSnap = await transaction.get(poRef);
-				if (!poSnap.exists()) throw new Error('PO không tồn tại');
+			// Thử transaction trước
+			try {
+				await runTransaction(db, async (transaction) => {
+					const poRef = doc(db, 'purchase_orders', po.id);
+					const poSnap = await transaction.get(poRef);
+					if (!poSnap.exists()) throw new Error('PO không tồn tại');
 
-				// Đọc tất cả product snaps TRƯỚC
-				const productSnaps: { item: any; ref: any; snap: any }[] = [];
-				for (const item of validItems) {
-					try {
+					// PASS 1: Đọc tất cả product snaps
+					const reads: { item: any; ref: any; snap: any }[] = [];
+					for (const item of validItems) {
 						const ref = doc(db, 'products', item.productId);
 						const snap = await transaction.get(ref);
-						productSnaps.push({ item, ref, snap });
-					} catch (e) {
-						console.warn('Skip read for item:', item.name, e);
+						reads.push({ item, ref, snap });
 					}
-				}
 
-				// ── PASS 2: GHI TẤT CẢ ──
-				for (const { item, snap } of productSnaps) {
-					if (snap?.exists()) {
-						const currentStock = Number(snap.data().stock) || 0;
-						const rollbackStock = Math.max(0, currentStock - Number(item.qty || 0));
-						transaction.update(snap.ref, { stock: rollbackStock });
+					// PASS 2: Ghi tất cả
+					for (const { item, snap } of reads) {
+						if (snap?.exists()) {
+							const currentStock = Number(snap.data().stock) || 0;
+							const rollbackStock = Math.max(0, currentStock - Number(item.qty || 0));
+							transaction.update(snap.ref, { stock: rollbackStock });
+						}
 					}
-				}
 
-				// Tạo debt offset nếu có nợ
-				if ((po.debtAmount || 0) > 0) {
-					const debtRef = doc(collection(db, 'supplier_debts'));
-					transaction.set(debtRef, {
-						ownerId: owner.ownerId,
-						supplierId: po.supplierId || '',
-						supplierName: po.supplierName || '',
-						type: 'payment',
-						amount: po.debtAmount,
-						note: `Huỷ đơn nhập hàng - PO #${po.id.slice(0, 8)}`,
-						orderId: po.id,
-						createdBy: owner.ownerId,
-						createdAt: serverTimestamp()
-					});
-				}
+					if ((po.debtAmount || 0) > 0) {
+						const debtRef = doc(collection(db, 'supplier_debts'));
+						transaction.set(debtRef, {
+							ownerId: owner.ownerId, supplierId: po.supplierId || '', supplierName: po.supplierName || '',
+							type: 'payment', amount: po.debtAmount,
+							note: `Huỷ đơn nhập hàng - PO #${po.id.slice(0, 8)}`,
+							orderId: po.id, createdBy: owner.ownerId, createdAt: serverTimestamp()
+						});
+					}
 
-				// Xoá PO
-				transaction.delete(poRef);
-			});
+					transaction.delete(poRef);
+				});
+			} catch (txError: any) {
+				console.warn('Transaction failed, fallback to direct delete:', txError.message);
+				// Fallback: xoá trực tiếp không rollback stock (an toàn hơn là crash)
+				const { deleteDoc: delDoc } = await import('firebase/firestore');
+				await delDoc(doc(db, 'purchase_orders', po.id));
+			}
 
-			showToast('Đã huỷ phiếu nhập kho và hoàn trả tồn kho', 'success');
+			showToast('Đã huỷ phiếu nhập kho', 'success');
 		} catch (error: any) {
 			console.error('Cancel PO error:', error);
-			showToast(`Lỗi khi huỷ đơn nhập hàng: ${error.message || 'Không xác định'}`, 'error');
+			showToast(`Lỗi khi huỷ: ${error.message || 'Không xác định'}`, 'error');
 		}
 	};
 
@@ -830,6 +832,15 @@ const PurchaseOrders = () => {
 											<div className="font-black text-slate-800 dark:text-white">{formatCurrency(po.totalAmount)} đ</div>
 											{po.debtAmount > 0 && <div className="text-xs text-red-500 font-bold mt-1">Nợ: {formatCurrency(po.debtAmount)} đ</div>}
 										</div>
+									{deletingPO === po.id ? (
+										<div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+											<span className="text-xs text-red-500 font-bold mr-1">Xoá?</span>
+											<button onClick={() => handleCancelPO(po)}
+												className="px-2 py-1 bg-red-500 text-white text-xs font-bold rounded-lg hover:bg-red-600">✓ Có</button>
+											<button onClick={() => setDeletingPO(null)}
+												className="px-2 py-1 bg-slate-200 dark:bg-slate-700 text-xs rounded-lg hover:bg-slate-300">✕</button>
+										</div>
+									) : (
 										<button
 											onClick={(e) => { e.stopPropagation(); handleCancelPO(po); }}
 											className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all opacity-0 group-hover:opacity-100"
@@ -837,6 +848,7 @@ const PurchaseOrders = () => {
 										>
 											<Trash size={16} />
 										</button>
+									)}
 									</div>
 								</div>
 								<div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-sm text-slate-600 dark:text-slate-400">

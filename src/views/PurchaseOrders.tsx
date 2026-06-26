@@ -338,22 +338,29 @@ const PurchaseOrders = () => {
 			const validItems = (po.items || []).filter((item: any) => item.productId);
 			
 			await runTransaction(db, async (transaction) => {
+				// ── PASS 1: ĐỌC TẤT CẢ (Firestore yêu cầu: tất cả reads trước writes) ──
 				const poRef = doc(db, 'purchase_orders', po.id);
 				const poSnap = await transaction.get(poRef);
 				if (!poSnap.exists()) throw new Error('PO không tồn tại');
 
-				// Rollback stock từng SP (chỉ item có productId hợp lệ)
+				// Đọc tất cả product snaps TRƯỚC
+				const productSnaps: { item: any; ref: any; snap: any }[] = [];
 				for (const item of validItems) {
 					try {
-						const productRef = doc(db, 'products', item.productId);
-						const productSnap = await transaction.get(productRef);
-						if (productSnap.exists()) {
-							const currentStock = Number(productSnap.data().stock) || 0;
-							const rollbackStock = Math.max(0, currentStock - Number(item.qty || 0));
-							transaction.update(productRef, { stock: rollbackStock });
-						}
+						const ref = doc(db, 'products', item.productId);
+						const snap = await transaction.get(ref);
+						productSnaps.push({ item, ref, snap });
 					} catch (e) {
-						console.warn('Skip rollback for item:', item.name, e);
+						console.warn('Skip read for item:', item.name, e);
+					}
+				}
+
+				// ── PASS 2: GHI TẤT CẢ ──
+				for (const { item, snap } of productSnaps) {
+					if (snap?.exists()) {
+						const currentStock = Number(snap.data().stock) || 0;
+						const rollbackStock = Math.max(0, currentStock - Number(item.qty || 0));
+						transaction.update(snap.ref, { stock: rollbackStock });
 					}
 				}
 

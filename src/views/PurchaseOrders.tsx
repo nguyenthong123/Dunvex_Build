@@ -334,32 +334,36 @@ const PurchaseOrders = () => {
 		if (!confirm(`Xác nhận huỷ đơn nhập hàng từ ${po.supplierName}?\nThao tác này sẽ hoàn trả tồn kho và xoá công nợ liên quan.`)) return;
 
 		try {
+			// Lọc item có productId hợp lệ
+			const validItems = (po.items || []).filter((item: any) => item.productId);
+			
 			await runTransaction(db, async (transaction) => {
-				// Đọc PO hiện tại
 				const poRef = doc(db, 'purchase_orders', po.id);
 				const poSnap = await transaction.get(poRef);
 				if (!poSnap.exists()) throw new Error('PO không tồn tại');
 
-				// Rollback stock từng SP
-				for (const item of (po.items || [])) {
-					const productRef = doc(db, 'products', item.productId);
-					const productSnap = await transaction.get(productRef);
-					if (productSnap.exists()) {
-						const currentStock = Number(productSnap.data().stock) || 0;
-						const rollbackStock = Math.max(0, currentStock - Number(item.qty));
-						transaction.update(productRef, { stock: rollbackStock });
+				// Rollback stock từng SP (chỉ item có productId hợp lệ)
+				for (const item of validItems) {
+					try {
+						const productRef = doc(db, 'products', item.productId);
+						const productSnap = await transaction.get(productRef);
+						if (productSnap.exists()) {
+							const currentStock = Number(productSnap.data().stock) || 0;
+							const rollbackStock = Math.max(0, currentStock - Number(item.qty || 0));
+							transaction.update(productRef, { stock: rollbackStock });
+						}
+					} catch (e) {
+						console.warn('Skip rollback for item:', item.name, e);
 					}
 				}
 
-				// Xoá debt records liên quan đến PO này
-				// Query debts trong transaction không khả thi (cần query collection group)
-				// Thay vào đó: tạo 1 debt payment để offset
+				// Tạo debt offset nếu có nợ
 				if ((po.debtAmount || 0) > 0) {
 					const debtRef = doc(collection(db, 'supplier_debts'));
 					transaction.set(debtRef, {
 						ownerId: owner.ownerId,
-						supplierId: po.supplierId,
-						supplierName: po.supplierName,
+						supplierId: po.supplierId || '',
+						supplierName: po.supplierName || '',
 						type: 'payment',
 						amount: po.debtAmount,
 						note: `Huỷ đơn nhập hàng - PO #${po.id.slice(0, 8)}`,
@@ -374,9 +378,9 @@ const PurchaseOrders = () => {
 			});
 
 			showToast('Đã huỷ phiếu nhập kho và hoàn trả tồn kho', 'success');
-		} catch (error) {
-			console.error(error);
-			showToast('Lỗi khi huỷ đơn nhập hàng', 'error');
+		} catch (error: any) {
+			console.error('Cancel PO error:', error);
+			showToast(`Lỗi khi huỷ đơn nhập hàng: ${error.message || 'Không xác định'}`, 'error');
 		}
 	};
 

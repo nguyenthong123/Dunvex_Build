@@ -12,6 +12,50 @@ import { db } from '../services/firebase';
 import { inventoryService } from '../services/dataAccess';
 import { parseSupplyMessage } from '../services/supplyBotService';
 
+// 🔍 Chuẩn hóa tiếng Việt để tìm kiếm chính xác (bỏ dấu, lowercase, NFC)
+function normalizeVN(text: string): string {
+    return text
+        .normalize('NFC')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\s]+/g, '')
+        .trim();
+}
+
+// 🔍 Fuzzy match sản phẩm (copy từ SaleBot)
+function findMatchingProduct(name: string, allProducts: any[]): any | null {
+    const searchName = (name || '').toLowerCase().trim();
+    const searchNameVN = normalizeVN(name || '');
+    
+    // 1: Khớp chính xác tên
+    let found = allProducts.find(p => (p.name || '').toLowerCase() === searchName);
+    if (found) return found;
+    
+    // 2: DB name contains search name
+    found = allProducts.find(p => (p.name || '').toLowerCase().includes(searchName));
+    if (found) return found;
+    
+    // 3: Search name contains DB name
+    found = allProducts.find(p => searchName.includes((p.name || '').toLowerCase()));
+    if (found) return found;
+    
+    // 4: Fuzzy Vietnamese match
+    if (searchNameVN.length >= 2) {
+        found = allProducts.find(p => normalizeVN(p.name || '').includes(searchNameVN));
+        if (found) return found;
+        
+        found = allProducts.find(p => {
+            const dbVN = normalizeVN(p.name || '');
+            return dbVN.length >= 2 && searchNameVN.includes(dbVN);
+        });
+        if (found) return found;
+    }
+    
+    return null;
+}
+
 const PurchaseOrders = () => {
 	const navigate = useNavigate();
 	const owner = useOwner();
@@ -35,6 +79,7 @@ const PurchaseOrders = () => {
 	]);
 	const [chatLoading, setChatLoading] = useState(false);
 	const [pendingSheetOrder, setPendingSheetOrder] = useState<{ items: any[]; total: number; notFound: string[] } | null>(null);
+	const [expandedPO, setExpandedPO] = useState<string | null>(null);
 	const chatEndRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
@@ -504,7 +549,7 @@ const PurchaseOrders = () => {
 
 		const validItems: any[] = [];
 		for (const item of (po.items || [])) {
-			const product = products.find(p => p.name.toLowerCase() === item.productName.toLowerCase());
+			const product = findMatchingProduct(item.productName, products);
 			if (!product) {
 				setChatMessages(prev => [...prev, { role: 'bot', text: `❌ SP "${item.productName}" chưa có trong kho. Hãy tạo SP trước.` }]);
 				return;
@@ -631,11 +676,11 @@ const PurchaseOrders = () => {
 
 			const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
 			const nameColIdx = headers.findIndex((h: string) =>
-				h.includes('ten') && !h.includes('ncc') || h.includes('sanpham') || h.includes('product'));
+				(h.includes('ten') && !h.includes('ncc')) || h.includes('sanpham') || h.includes('product') || h.includes('name'));
 			const qtyColIdx = headers.findIndex((h: string) =>
 				h.includes('soluong') || h.includes('qty') || h.includes('quantity') || h.includes('sl'));
 			const priceColIdx = headers.findIndex((h: string) =>
-				h.includes('gia') || h.includes('price') || h.includes('dongia'));
+				(h.includes('gia') && !h.includes('ghichu') && !h.includes('danhgia')) || h.includes('price') || h.includes('dongia'));
 
 			if (nameColIdx < 0) {
 				setChatMessages(prev => [...prev, { role: 'bot',
@@ -652,11 +697,11 @@ const PurchaseOrders = () => {
 				if (!rowName) continue;
 
 				const rowQty = qtyColIdx >= 0 ? parseInt(cols[qtyColIdx], 10) || 1 : 1;
-				const rowPrice = priceColIdx >= 0 ? parseFloat((cols[priceColIdx] || '0').replace(/[^\d.,]/g, '').replace(/\,/g, '')) || 0 : 0;
+				const rowPrice = priceColIdx >= 0 ? parseFloat((cols[priceColIdx] || '0').replace(/[^\d.,-]/g, '').replace(/\./g, '').replace(',', '.')) || 0 : 0;
 
-				const product = products.find(p => p.name.toLowerCase() === rowName.toLowerCase());
+				const product = findMatchingProduct(rowName, products);
 				if (product) {
-					orderItems.push({ productId: product.id, name: product.name, qty: rowQty, priceImport: rowPrice });
+					orderItems.push({ productId: product.id, name: product.name, qty: rowQty, priceImport: rowPrice || Number(product.priceImport) || 0 });
 				} else {
 					notFound.push(rowName);
 				}
@@ -740,7 +785,9 @@ const PurchaseOrders = () => {
 
 					<div className="space-y-3">
 						{filteredPOs.map(po => (
-							<div key={po.id} className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm group">
+							<div key={po.id} 
+							onClick={() => setExpandedPO(expandedPO === po.id ? null : po.id)}
+							className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm group cursor-pointer hover:border-[#FF6D00]/30 transition-all">
 								<div className="flex justify-between items-start mb-2">
 									<div>
 										<h4 className="font-bold text-slate-800 dark:text-white">{po.supplierName}</h4>
@@ -761,8 +808,27 @@ const PurchaseOrders = () => {
 									</div>
 								</div>
 								<div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-sm text-slate-600 dark:text-slate-400">
-									{po.items.length} sản phẩm • {po.note || 'Không có ghi chú'}
+									{po.items?.length || 0} sản phẩm • {po.note || 'Không có ghi chú'}
+									<span className="ml-2 text-[#FF6D00] text-xs cursor-pointer">{expandedPO === po.id ? '▲ Thu gọn' : '▼ Xem chi tiết'}</span>
 								</div>
+								{expandedPO === po.id && (
+									<div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+										<div className="space-y-2 max-h-64 overflow-y-auto">
+											{(po.items || []).map((item: any, idx: number) => (
+												<div key={idx} className="flex justify-between items-center text-xs py-1.5 px-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+													<div className="flex-1">
+														<span className="font-medium text-slate-700 dark:text-slate-300">{item.name}</span>
+													</div>
+													<div className="text-right flex gap-3">
+														<span className="text-slate-500">x{item.qty}</span>
+														<span className="text-slate-500">{formatCurrency(item.priceImport)}đ</span>
+														<span className="font-bold text-slate-700 dark:text-slate-300">{formatCurrency((item.qty || 0) * (item.priceImport || 0))}đ</span>
+													</div>
+												</div>
+											))}
+										</div>
+									</div>
+								)}
 							</div>
 						))}
 						{filteredPOs.length === 0 && (

@@ -416,6 +416,15 @@ const PurchaseOrders = () => {
 			return;
 		}
 
+		// 📊 Pre-check: Google Sheet link → parse trực tiếp (giống SaleBot)
+		const sheetMatch = msg.match(/https?:\/\/docs\.google\.com\/spreadsheets\/[^\s]+/);
+		if (sheetMatch) {
+			setChatLoading(true);
+			await importFromSheet(sheetMatch[0]);
+			setChatLoading(false);
+			return;
+		}
+
 		try {
 			const ctx = {
 				suppliers: suppliers.map(s => `${s.name} (nợ: ${(s.totalDebt||0).toLocaleString('vi-VN')}đ)`).join('\n'),

@@ -298,10 +298,13 @@ export default async function handler(req: any, res: any) {
       }
     }
 
+    const shippingFee = Number(body.shippingFee) || 0;
+
     // Calculate totals
     const subTotal = items.reduce((s: number, i: any) => s + (i.price * i.qty), 0);
     const totalWeight = items.reduce((s: number, i: any) => s + (parseFloat(i.weight) || 0) * i.qty, 0);
     const totalCost = items.reduce((s: number, i: any) => s + (i.buyPrice || 0) * i.qty, 0);
+    const totalAmount = subTotal + shippingFee;
 
     // Build order fields
     const orderFields: any = {
@@ -327,11 +330,11 @@ export default async function handler(req: any, res: any) {
         }
       },
       subTotal: fDouble(subTotal),
-      totalAmount: fDouble(subTotal),
-      paidAmount: fDouble(subTotal),
+      totalAmount: fDouble(totalAmount),
+      paidAmount: fDouble(totalAmount),
       debtAmount: fDouble(0),
       discountValue: fDouble(0),
-      adjustmentValue: fDouble(0),
+      adjustmentValue: fDouble(shippingFee),
       totalWeight: fDouble(totalWeight),
       totalCost: fDouble(totalCost),
       totalProfit: fDouble(subTotal - totalCost),
@@ -360,7 +363,7 @@ export default async function handler(req: any, res: any) {
       success: true,
       orderId,
       customerId: customerId || null,
-      totalAmount: subTotal,
+      totalAmount,
       items: items.length,
       notFound: notFound.length > 0 ? notFound : undefined,
     });

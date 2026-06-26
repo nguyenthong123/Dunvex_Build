@@ -81,6 +81,7 @@ const PurchaseOrders = () => {
 	const [pendingSheetOrder, setPendingSheetOrder] = useState<{ items: any[]; total: number; notFound: string[] } | null>(null);
 	const [expandedPO, setExpandedPO] = useState<string | null>(null);
 	const [deletingPO, setDeletingPO] = useState<string | null>(null); // PO đang chờ xác nhận xoá
+	const [cancellingPO, setCancellingPO] = useState<string | null>(null); // PO đang được xoá (loading)
 	const chatEndRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
@@ -339,10 +340,12 @@ const PurchaseOrders = () => {
 		}
 		// Bước 2: Đã xác nhận → xoá
 		setDeletingPO(null);
+		setCancellingPO(po.id); // Hiện loading ngay
 
 		try {
-			// 1. Xoá PO NGAY LẬP TỨC — UI sẽ tự update qua Firestore listener
+			// 1. Xoá PO NGAY LẬP TỨC
 			await deletePurchaseOrder(po.id);
+			setCancellingPO(null);
 			showToast('✅ Đã huỷ đơn nhập hàng', 'success');
 
 			// 2+3. Rollback stock + debt offset chạy ngầm (không block UI)
@@ -370,6 +373,7 @@ const PurchaseOrders = () => {
 				}).catch(e => console.warn('Debt offset failed:', e));
 			}
 		} catch (error: any) {
+			setCancellingPO(null);
 			console.error('Cancel PO error:', error);
 			showToast(`Lỗi khi huỷ: ${error.message || 'Không xác định'}`, 'error');
 		}
@@ -821,6 +825,11 @@ const PurchaseOrders = () => {
 												className="px-2 py-1 bg-red-500 text-white text-xs font-bold rounded-lg hover:bg-red-600">✓ Có</button>
 											<button onClick={() => setDeletingPO(null)}
 												className="px-2 py-1 bg-slate-200 dark:bg-slate-700 text-xs rounded-lg hover:bg-slate-300">✕</button>
+										</div>
+									) : cancellingPO === po.id ? (
+										<div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+											<Loader size={14} className="animate-spin text-red-500" />
+											<span className="text-xs text-red-500">Đang xoá...</span>
 										</div>
 									) : (
 										<button

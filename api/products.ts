@@ -136,7 +136,10 @@ export default async function handler(req: any, res: any) {
         priceSell: Number(f.priceSell?.doubleValue || f.priceSell?.integerValue || 0),
         priceImport: Number(f.priceImport?.doubleValue || f.priceImport?.integerValue || 0),
         unit: f.unit?.stringValue || '',
-        weight: f.weight?.stringValue || '',
+        weight: f.density?.stringValue || 
+                (f.density?.doubleValue !== undefined ? String(f.density.doubleValue) : '') ||
+                (f.density?.integerValue !== undefined ? String(f.density.integerValue) : '') ||
+                '',
         stock: Number(f.stock?.doubleValue || f.stock?.integerValue || 0),
         articleNo: f.articleNo?.stringValue || '',
         specification: f.specification?.stringValue || '',

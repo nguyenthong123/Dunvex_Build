@@ -203,7 +203,10 @@ export default async function handler(req: any, res: any) {
           price: Number(item.price) || Number((matched as any).priceSell?.doubleValue || (matched as any).priceSell?.integerValue || 0),
           buyPrice: Number((matched as any).priceImport?.doubleValue || (matched as any).priceImport?.integerValue || 0),
           unit: (matched as any).unit?.stringValue || '',
-          weight: (matched as any).weight?.stringValue || '',
+          weight: (matched as any).density?.stringValue || 
+                  ((matched as any).density?.doubleValue !== undefined ? String((matched as any).density.doubleValue) : '') ||
+                  ((matched as any).density?.integerValue !== undefined ? String((matched as any).density.integerValue) : '') ||
+                  '',
           stock: Number((matched as any).stock?.doubleValue || (matched as any).stock?.integerValue || 0),
         });
       } else {

@@ -89,5 +89,14 @@ export default defineConfig({
 		esbuild: {
 			drop: ['console', 'debugger'],
 		},
+		rollupOptions: {
+			output: {
+				manualChunks: {
+					'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+					'vendor-map': ['leaflet', 'react-leaflet'],
+					'vendor-utils': ['xlsx', 'html5-qrcode']
+				}
+			}
+		}
 	},
 })

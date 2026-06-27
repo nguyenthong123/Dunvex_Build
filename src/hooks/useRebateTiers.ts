@@ -38,7 +38,7 @@ export function useRebateTiers({ ownerId, enabled = true }: UseRebateTiersOption
     const unsubscribe = rebateTierService.listenByOwner(
       ownerId,
       (data) => {
-        setTiers(data);
+        setTiers(data as WithId<RebateConfig>[]);
         setLoading(false);
         setError(null);
       },

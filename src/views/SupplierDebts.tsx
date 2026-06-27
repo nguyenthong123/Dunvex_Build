@@ -3,8 +3,9 @@ import { useOwner } from '../hooks/useOwner';
 import { useSuppliers } from '../hooks/useSuppliers';
 import { useSupplierDebts } from '../hooks/useSupplierDebts';
 import { useToast } from '../components/shared/Toast';
-import { Search, FileText, CheckCircle2, History, X, Plus, Trash2, ChevronLeft } from 'lucide-react';
-import { serverTimestamp } from 'firebase/firestore';
+import { Search, FileText, CheckCircle2, History, X, Plus, Trash2, ChevronLeft, Maximize2, Minimize2, Wrench } from 'lucide-react';
+import { serverTimestamp, collection, getDocs, query, where, writeBatch } from 'firebase/firestore';
+import { db } from '../services/firebase';
 
 const SupplierDebts = () => {
 	const owner = useOwner();
@@ -17,6 +18,7 @@ const SupplierDebts = () => {
 	const searchInputRef = useRef<HTMLInputElement>(null);
 
 	const [showStatement, setShowStatement] = useState(false);
+	const [isStatementMaximized, setIsStatementMaximized] = useState(false);
 	const [statementSupplier, setStatementSupplier] = useState<any>(null);
 
 	useEffect(() => {
@@ -150,6 +152,55 @@ const SupplierDebts = () => {
 		return Number(val || 0).toLocaleString('vi-VN');
 	};
 
+	const handleCleanupGhostData = async () => {
+		if (!confirm('Dọn dẹp rác data? Hệ thống sẽ tự động quét và xoá các công nợ không còn đơn nhập hàng tương ứng, sau đó tính toán lại tổng nợ.')) return;
+		try {
+			// 1. Lấy tất cả Đơn nhập
+			const poSnap = await getDocs(query(collection(db, 'purchase_orders'), where('ownerId', '==', owner.ownerId)));
+			const validPoIds = new Set(poSnap.docs.map(d => d.id));
+
+			// 2. Lấy tất cả công nợ
+			const debtsSnap = await getDocs(query(collection(db, 'supplier_debts'), where('ownerId', '==', owner.ownerId)));
+			
+			const batch = writeBatch(db);
+			let deleted = 0;
+			const validDebts: any[] = [];
+
+			debtsSnap.docs.forEach(d => {
+				const data = d.data();
+				// Nếu là debt_increase có orderId mà orderId ko có trong PO => XÓA
+				if (data.type === 'debt_increase' && data.orderId && !validPoIds.has(data.orderId)) {
+					batch.delete(d.ref);
+					deleted++;
+				} else {
+					validDebts.push(data);
+				}
+			});
+
+			// 3. Tính lại totalDebt cho TỪNG NCC
+			const supplierTotals: Record<string, number> = {};
+			validDebts.forEach(d => {
+				if (!d.supplierId) return;
+				if (!supplierTotals[d.supplierId]) supplierTotals[d.supplierId] = 0;
+				if (d.type === 'debt_increase') supplierTotals[d.supplierId] += Number(d.amount) || 0;
+				else supplierTotals[d.supplierId] -= Number(d.amount) || 0;
+			});
+
+			// 4. Update các supplier
+			const supSnap = await getDocs(query(collection(db, 'suppliers'), where('ownerId', '==', owner.ownerId)));
+			supSnap.docs.forEach(sup => {
+				const correctTotal = supplierTotals[sup.id] || 0;
+				batch.update(sup.ref, { totalDebt: correctTotal });
+			});
+
+			await batch.commit();
+			showToast(`Thành công! Đã xoá ${deleted} phiếu rác & cập nhật lại công nợ chuẩn!`, 'success');
+		} catch(e) {
+			console.error(e);
+			showToast('Có lỗi xảy ra khi dọn rác!', 'error');
+		}
+	};
+
 	return (
 		<div className="h-full flex flex-col relative pb-24 lg:pb-0">
 			{/* Header */}
@@ -187,8 +238,8 @@ const SupplierDebts = () => {
 
 			{activeTab === 'debts' ? (
 				<div className="mt-4">
-					<div className="mb-4">
-						<div className="relative">
+					<div className="mb-4 flex items-center justify-between gap-4">
+						<div className="relative flex-1">
 							<Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
 							<input
 								ref={searchInputRef}
@@ -199,6 +250,14 @@ const SupplierDebts = () => {
 								className="w-full h-12 pl-12 pr-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm focus:ring-2 focus:ring-[#FF6D00] outline-none transition-all dark:text-white"
 							/>
 						</div>
+						<button 
+							onClick={handleCleanupGhostData}
+							className="h-12 px-4 bg-red-50 hover:bg-red-100 text-red-600 rounded-2xl flex items-center gap-2 font-bold transition-colors shadow-sm shrink-0 border border-red-100"
+							title="Quét và sửa lỗi công nợ rác"
+						>
+							<Wrench size={18} />
+							<span className="hidden sm:inline">Dọn Rác Data</span>
+						</button>
 					</div>
 
 					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -447,12 +506,17 @@ const SupplierDebts = () => {
 
 			{/* === STATEMENT MODAL: Phiếu chi tiết công nợ NCC === */}
 			{showStatement && statementSupplier && (
-				<div className="fixed inset-0 z-[150] bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-0 md:p-4">
-					<div className="bg-transparent w-full max-w-3xl max-h-screen md:max-h-[95vh] relative flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
-						{/* Close button */}
-						<button onClick={() => setShowStatement(false)} className="absolute top-3 right-3 z-30 size-10 rounded-full bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex items-center justify-center shadow-sm transition-all">
-							<X size={18} />
-						</button>
+				<div className={`fixed inset-0 z-[150] bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl flex ${isStatementMaximized ? 'items-start py-10 overflow-y-auto' : 'items-center p-0 md:p-4'} justify-center`}>
+					<div className={`bg-transparent w-full relative flex flex-col overflow-hidden animate-in zoom-in-95 duration-300 ${isStatementMaximized ? 'h-auto max-w-4xl rounded-2xl transform scale-[0.85] origin-top' : 'max-w-3xl max-h-screen md:max-h-[95vh] rounded-2xl'}`}>
+						{/* Window controls */}
+						<div className="absolute top-3 right-3 z-30 flex items-center gap-2">
+							<button onClick={() => setIsStatementMaximized(!isStatementMaximized)} className="size-10 rounded-full bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex items-center justify-center shadow-sm transition-all" title="Thu nhỏ để chụp ảnh">
+								{isStatementMaximized ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
+							</button>
+							<button onClick={() => setShowStatement(false)} className="size-10 rounded-full bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-red-500 dark:hover:text-red-400 flex items-center justify-center shadow-sm transition-all">
+								<X size={18} />
+							</button>
+						</div>
 
 						{/* Scrollable content */}
 						<div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar px-4 sm:px-6 py-4 sm:py-6">
@@ -549,13 +613,14 @@ const SupplierDebts = () => {
 															<th className="py-3 px-2 text-right">PS Nợ</th>
 															<th className="py-3 px-2 text-right">PS Có</th>
 															<th className="py-3 px-2 text-right">Dư nợ</th>
+															<th className="py-3 px-2"></th>
 														</tr>
 													</thead>
 													<tbody className="divide-y divide-slate-100">
 														{txWithBalance.map((tx, idx) => {
 															const isDebt = tx.type === 'debt_increase';
 															return (
-																<tr key={idx} className="hover:bg-slate-50 font-bold">
+																<tr key={idx} className="hover:bg-slate-50 font-bold group relative">
 																	<td className="py-3 px-2 text-[10px] text-slate-500">
 																		{tx.ts.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
 																	</td>
@@ -572,11 +637,16 @@ const SupplierDebts = () => {
 																	<td className={`py-3 px-2 text-right font-black ${tx.balance > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
 																		{formatCurrency(tx.balance)}
 																	</td>
+																	<td className="py-3 px-2 w-10 text-right">
+																		<button onClick={(e) => { e.stopPropagation(); handleDeleteDebt(tx); }} className="p-1.5 text-slate-300 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors" title="Xoá giao dịch lỗi">
+																			<Trash2 size={14} />
+																		</button>
+																	</td>
 																</tr>
 															);
 														})}
 														{txWithBalance.length === 0 && (
-															<tr><td colSpan={5} className="py-6 text-center text-slate-400 italic text-xs">Chưa có giao dịch nào</td></tr>
+															<tr><td colSpan={6} className="py-6 text-center text-slate-400 italic text-xs">Chưa có giao dịch nào</td></tr>
 														)}
 													</tbody>
 												</table>

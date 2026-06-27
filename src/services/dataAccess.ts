@@ -86,7 +86,7 @@ export function ownerQuery(
 
 export const productService = {
   /** Lắng nghe tất cả products của owner */
-  listenByOwner(ownerId: string, onData: (products: WithId<any>[]) => void, onError?: (err: Error) => void): Unsubscribe {
+  listenByOwner(ownerId: string, onData: (products: WithId<DocumentData>[]) => void, onError?: (err: Error) => void): Unsubscribe {
     const q = query(COLLECTIONS.products(), where('ownerId', '==', ownerId));
     return onSnapshot(q, (snap: QuerySnapshot) => {
       onData(snap.docs.map(withId));
@@ -94,14 +94,14 @@ export const productService = {
   },
 
   /** Tìm product theo SKU toàn cục */
-  async findBySku(sku: string): Promise<WithId<any> | null> {
+  async findBySku(sku: string): Promise<WithId<DocumentData> | null> {
     const q = query(COLLECTIONS.products(), where('sku', '==', sku), limit(1));
     const snap = await getDocs(q);
     return snap.empty ? null : withId(snap.docs[0]);
   },
 
   /** Thêm product mới */
-  async create(data: Record<string, any>): Promise<string> {
+  async create(data: DocumentData): Promise<string> {
     const ref = await addDoc(COLLECTIONS.products(), {
       ...data,
       createdAt: serverTimestamp(),
@@ -111,7 +111,7 @@ export const productService = {
   },
 
   /** Cập nhật product */
-  async update(id: string, data: Record<string, any>): Promise<void> {
+  async update(id: string, data: DocumentData): Promise<void> {
     await updateDoc(doc(COLLECTIONS.products(), id), {
       ...data,
       updatedAt: serverTimestamp(),
@@ -124,7 +124,7 @@ export const productService = {
   },
 
   /** Get single product */
-  async getById(id: string): Promise<WithId<any> | null> {
+  async getById(id: string): Promise<WithId<DocumentData> | null> {
     const snap = await getDoc(doc(COLLECTIONS.products(), id));
     return snap.exists() ? withId(snap) : null;
   },
@@ -136,9 +136,9 @@ export const orderService = {
   /** Lắng nghe orders của owner (có phân trang) */
   listenByOwner(
     ownerId: string,
-    onData: (orders: WithId<any>[]) => void,
+    onData: (orders: WithId<DocumentData>[]) => void,
     onError?: (err: Error) => void,
-    maxResults = 500,
+    maxResults = 100,
   ): Unsubscribe {
     const q = query(
       COLLECTIONS.orders(),
@@ -152,7 +152,7 @@ export const orderService = {
   },
 
   /** Get orders một lần */
-  async getByOwner(ownerId: string, maxResults = 500): Promise<WithId<any>[]> {
+  async getByOwner(ownerId: string, maxResults = 100): Promise<WithId<DocumentData>[]> {
     const q = query(
       COLLECTIONS.orders(),
       where('ownerId', '==', ownerId),
@@ -164,7 +164,7 @@ export const orderService = {
   },
 
   /** Thêm order */
-  async create(data: Record<string, any>): Promise<string> {
+  async create(data: DocumentData): Promise<string> {
     const ref = await addDoc(COLLECTIONS.orders(), {
       ...data,
       createdAt: serverTimestamp(),
@@ -174,7 +174,7 @@ export const orderService = {
   },
 
   /** Cập nhật order */
-  async update(id: string, data: Record<string, any>): Promise<void> {
+  async update(id: string, data: DocumentData): Promise<void> {
     await updateDoc(doc(COLLECTIONS.orders(), id), {
       ...data,
       updatedAt: serverTimestamp(),
@@ -190,14 +190,14 @@ export const orderService = {
 // ─── Customer Service ───────────────────────────────────────
 
 export const customerService = {
-  listenByOwner(ownerId: string, onData: (customers: WithId<any>[]) => void, onError?: (err: Error) => void): Unsubscribe {
+  listenByOwner(ownerId: string, onData: (customers: WithId<DocumentData>[]) => void, onError?: (err: Error) => void): Unsubscribe {
     const q = query(COLLECTIONS.customers(), where('ownerId', '==', ownerId));
     return onSnapshot(q, (snap: QuerySnapshot) => {
       onData(snap.docs.map(withId));
     }, onError);
   },
 
-  async create(data: Record<string, any>): Promise<string> {
+  async create(data: DocumentData): Promise<string> {
     const ref = await addDoc(COLLECTIONS.customers(), {
       ...data,
       createdAt: serverTimestamp(),
@@ -206,7 +206,7 @@ export const customerService = {
     return ref.id;
   },
 
-  async update(id: string, data: Record<string, any>): Promise<void> {
+  async update(id: string, data: DocumentData): Promise<void> {
     await updateDoc(doc(COLLECTIONS.customers(), id), {
       ...data,
       updatedAt: serverTimestamp(),
@@ -219,9 +219,9 @@ export const customerService = {
 export const paymentService = {
   listenByOwner(
     ownerId: string,
-    onData: (payments: WithId<any>[]) => void,
+    onData: (payments: WithId<DocumentData>[]) => void,
     onError?: (err: Error) => void,
-    maxResults = 500,
+    maxResults = 100,
   ): Unsubscribe {
     const q = query(
       COLLECTIONS.payments(),
@@ -238,14 +238,14 @@ export const paymentService = {
 // ─── Inventory Service ──────────────────────────────────────
 
 export const inventoryService = {
-  listenByOwner(ownerId: string, onData: (logs: WithId<any>[]) => void, onError?: (err: Error) => void): Unsubscribe {
+  listenByOwner(ownerId: string, onData: (logs: WithId<DocumentData>[]) => void, onError?: (err: Error) => void): Unsubscribe {
     const q = query(COLLECTIONS.inventoryLogs(), where('ownerId', '==', ownerId));
     return onSnapshot(q, (snap: QuerySnapshot) => {
       onData(snap.docs.map(withId));
     }, onError);
   },
 
-  async addLog(data: Record<string, any>): Promise<string> {
+  async addLog(data: DocumentData): Promise<string> {
     const ref = await addDoc(COLLECTIONS.inventoryLogs(), {
       ...data,
       createdAt: serverTimestamp(),
@@ -253,7 +253,7 @@ export const inventoryService = {
     return ref.id;
   },
 
-  async addLogWithId(id: string, data: Record<string, any>): Promise<void> {
+  async addLogWithId(id: string, data: DocumentData): Promise<void> {
     await setDoc(doc(COLLECTIONS.inventoryLogs(), id), {
       ...data,
       createdAt: serverTimestamp(),
@@ -266,7 +266,7 @@ export const inventoryService = {
 export const auditService = {
   listenByOwner(
     ownerId: string,
-    onData: (logs: WithId<any>[]) => void,
+    onData: (logs: WithId<DocumentData>[]) => void,
     onError?: (err: Error) => void,
     maxResults = 100,
   ): Unsubscribe {
@@ -281,7 +281,7 @@ export const auditService = {
     }, onError);
   },
 
-  async addLog(data: Record<string, any>): Promise<string> {
+  async addLog(data: DocumentData): Promise<string> {
     const ref = await addDoc(COLLECTIONS.auditLogs(), {
       ...data,
       createdAt: serverTimestamp(),
@@ -289,7 +289,7 @@ export const auditService = {
     return ref.id;
   },
 
-  async addLogWithId(id: string, data: Record<string, any>): Promise<void> {
+  async addLogWithId(id: string, data: DocumentData): Promise<void> {
     await setDoc(doc(COLLECTIONS.auditLogs(), id), {
       ...data,
       createdAt: serverTimestamp(),
@@ -323,9 +323,9 @@ export const notificationService = {
 export const checkinService = {
   listenByOwner(
     ownerId: string,
-    onData: (checkins: WithId<any>[]) => void,
+    onData: (checkins: WithId<DocumentData>[]) => void,
     onError?: (err: Error) => void,
-    maxResults = 500,
+    maxResults = 100,
   ): Unsubscribe {
     const q = query(
       COLLECTIONS.checkins(),
@@ -342,7 +342,7 @@ export const checkinService = {
 // ─── Coupon Service ─────────────────────────────────────────
 
 export const couponService = {
-  listenByOwner(ownerId: string, onData: (coupons: WithId<any>[]) => void, onError?: (err: Error) => void): Unsubscribe {
+  listenByOwner(ownerId: string, onData: (coupons: WithId<DocumentData>[]) => void, onError?: (err: Error) => void): Unsubscribe {
     const q = query(COLLECTIONS.coupons(), where('ownerId', '==', ownerId));
     return onSnapshot(q, (snap: QuerySnapshot) => {
       onData(snap.docs.map(withId));
@@ -351,7 +351,7 @@ export const couponService = {
 };
 
 export const attendanceService = {
-  listenByOwner(ownerId: string, onData: (logs: WithId<any>[]) => void, onError?: (err: Error) => void): Unsubscribe {
+  listenByOwner(ownerId: string, onData: (logs: WithId<DocumentData>[]) => void, onError?: (err: Error) => void): Unsubscribe {
     const q = query(COLLECTIONS.attendance(), where('ownerId', '==', ownerId), orderBy('createdAt', 'desc'));
     return onSnapshot(q, (snap: QuerySnapshot) => {
       onData(snap.docs.map(withId));
@@ -364,7 +364,7 @@ export const attendanceService = {
 };
 
 export const priceListService = {
-  listenByOwner(ownerId: string, onData: (lists: WithId<any>[]) => void, onError?: (err: Error) => void): Unsubscribe {
+  listenByOwner(ownerId: string, onData: (lists: WithId<DocumentData>[]) => void, onError?: (err: Error) => void): Unsubscribe {
     const q = query(COLLECTIONS.priceLists(), where('ownerId', '==', ownerId));
     return onSnapshot(q, (snap: QuerySnapshot) => {
       onData(snap.docs.map(withId));
@@ -373,7 +373,7 @@ export const priceListService = {
 };
 
 export const subscriptionPackageService = {
-  listen(onData: (packages: WithId<any>[]) => void, onError?: (err: Error) => void): Unsubscribe {
+  listen(onData: (packages: WithId<DocumentData>[]) => void, onError?: (err: Error) => void): Unsubscribe {
     return onSnapshot(COLLECTIONS.subscriptionPackages(), (snap: QuerySnapshot) => {
       onData(snap.docs.map(withId));
     }, onError);
@@ -383,7 +383,7 @@ export const subscriptionPackageService = {
 // ─── Rebate Tier Service ────────────────────────────────────
 
 export const rebateTierService = {
-  listenByOwner(ownerId: string, onData: (tiers: WithId<any>[]) => void, onError?: (err: Error) => void): Unsubscribe {
+  listenByOwner(ownerId: string, onData: (tiers: WithId<DocumentData>[]) => void, onError?: (err: Error) => void): Unsubscribe {
     const q = query(COLLECTIONS.rebateTiers(), where('ownerId', '==', ownerId));
     return onSnapshot(q, (snap: QuerySnapshot) => {
       onData(snap.docs.map(withId));
@@ -408,14 +408,14 @@ export const rebateTierService = {
 // ─── Supplier Service ────────────────────────────────────────
 
 export const supplierService = {
-  listenByOwner(ownerId: string, onData: (suppliers: WithId<any>[]) => void, onError?: (err: Error) => void): Unsubscribe {
+  listenByOwner(ownerId: string, onData: (suppliers: WithId<DocumentData>[]) => void, onError?: (err: Error) => void): Unsubscribe {
     const q = query(COLLECTIONS.suppliers(), where('ownerId', '==', ownerId));
     return onSnapshot(q, (snap: QuerySnapshot) => {
       onData(snap.docs.map(withId));
     }, onError);
   },
 
-  async create(data: Record<string, any>): Promise<string> {
+  async create(data: DocumentData): Promise<string> {
     const ref = await addDoc(COLLECTIONS.suppliers(), {
       ...data,
       totalDebt: 0,
@@ -425,7 +425,7 @@ export const supplierService = {
     return ref.id;
   },
 
-  async update(id: string, data: Record<string, any>): Promise<void> {
+  async update(id: string, data: DocumentData): Promise<void> {
     await updateDoc(doc(COLLECTIONS.suppliers(), id), {
       ...data,
       updatedAt: serverTimestamp(),
@@ -442,9 +442,9 @@ export const supplierService = {
 export const purchaseOrderService = {
   listenByOwner(
     ownerId: string,
-    onData: (pos: WithId<any>[]) => void,
+    onData: (pos: WithId<DocumentData>[]) => void,
     onError?: (err: Error) => void,
-    maxResults = 500,
+    maxResults = 100,
   ): Unsubscribe {
     const q = query(
       COLLECTIONS.purchaseOrders(),
@@ -457,7 +457,7 @@ export const purchaseOrderService = {
     }, onError);
   },
 
-  async create(data: Record<string, any>): Promise<string> {
+  async create(data: DocumentData): Promise<string> {
     const ref = await addDoc(COLLECTIONS.purchaseOrders(), {
       ...data,
       createdAt: serverTimestamp(),
@@ -466,7 +466,7 @@ export const purchaseOrderService = {
     return ref.id;
   },
 
-  async update(id: string, data: Record<string, any>): Promise<void> {
+  async update(id: string, data: DocumentData): Promise<void> {
     await updateDoc(doc(COLLECTIONS.purchaseOrders(), id), {
       ...data,
       updatedAt: serverTimestamp(),
@@ -483,9 +483,9 @@ export const purchaseOrderService = {
 export const supplierDebtService = {
   listenByOwner(
     ownerId: string,
-    onData: (debts: WithId<any>[]) => void,
+    onData: (debts: WithId<DocumentData>[]) => void,
     onError?: (err: Error) => void,
-    maxResults = 500,
+    maxResults = 100,
   ): Unsubscribe {
     const q = query(
       COLLECTIONS.supplierDebts(),
@@ -498,7 +498,7 @@ export const supplierDebtService = {
     }, onError);
   },
 
-  async create(data: Record<string, any>): Promise<string> {
+  async create(data: DocumentData): Promise<string> {
     const ref = await addDoc(COLLECTIONS.supplierDebts(), {
       ...data,
       createdAt: serverTimestamp(),

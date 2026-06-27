@@ -11,6 +11,7 @@ import { serverTimestamp, runTransaction, doc, collection, writeBatch, increment
 import { db, auth } from '../services/firebase';
 import { inventoryService } from '../services/dataAccess';
 import { parseSupplyMessage } from '../services/supplyBotService';
+import { transactionService } from '../services/transactionService';
 
 // 🔍 Chuẩn hóa tiếng Việt để tìm kiếm chính xác (bỏ dấu, lowercase, NFC)
 function normalizeVN(text: string): string {
@@ -480,77 +481,28 @@ const PurchaseOrders = () => {
 		setActiveTab('create');
 	};
 
-	// P1 #4: Huỷ đơn nhập hàng + rollback stock + xoá hẳn công nợ (không offset)
+	// P1 #4: Huỷ đơn nhập hàng + rollback stock + xoá hẳn công nợ (sử dụng transactionService để đảm bảo an toàn toàn vẹn dữ liệu)
 	const handleCancelPO = async (po: any) => {
 		// Bước 1: Hiện nút xác nhận inline
 		if (deletingPO !== po.id) {
 			setDeletingPO(po.id);
 			return;
 		}
+
 		// Bước 2: Đã xác nhận → xoá
 		setDeletingPO(null);
 		setCancellingPO(po.id); // Hiện loading ngay
 
 		try {
-			// 1. Xoá PO NGAY LẬP TỨC
-			await deletePurchaseOrder(po.id);
-			setCancellingPO(null);
-			showToast('✅ Đã huỷ đơn nhập hàng', 'success');
+			// Gọi service xử lý trọn gói: Xoá PO + Hoàn Tồn kho + Xoá Công nợ liên quan + Tính lại Tổng nợ
+			await transactionService.deletePurchaseOrderSafe(po.id, owner.ownerId);
 
-			// 2+3. Rollback stock + xoá công nợ gốc chạy ngầm (không block UI)
-			const validItems = (po.items || []).filter((item: any) => item.productId);
-			
-			// Stock rollback ngầm
-			if (validItems.length > 0) {
-				for (let i = 0; i < validItems.length; i += 500) {
-					const batch = writeBatch(db);
-					const chunk = validItems.slice(i, i + 500);
-					for (const item of chunk) {
-						batch.update(doc(db, 'products', item.productId), { stock: increment(-Number(item.qty || 0)) });
-					}
-					batch.commit().catch(e => console.warn('Stock rollback failed:', e));
-				}
-			}
-			
-			// Xoá TẤT CẢ công nợ liên quan đến PO này (kể cả debt_increase + payment/cancellation cũ)
-			// Dùng getDocs toàn bộ rồi lọc — tránh cần composite index
-			if (po.supplierId) {
-				try {
-					const allDebtsQuery = query(
-						collection(db, 'supplier_debts'),
-						where('ownerId', '==', owner.ownerId)
-					);
-					const allDebtsSnap = await getDocs(allDebtsQuery);
-					// Lọc manually theo orderId (tránh cần index ownerId+orderId)
-					const matchedDocs = allDebtsSnap.docs.filter(d => d.data().orderId === po.id);
-					
-					if (matchedDocs.length > 0) {
-						await Promise.all(matchedDocs.map(d => deleteDoc(d.ref)));
-						console.log(`🧹 Đã xoá ${matchedDocs.length} bản ghi công nợ cho PO ${po.id.slice(0, 8)}`);
-					} else {
-						console.warn(`⚠️ Không tìm thấy bản ghi công nợ cho PO ${po.id.slice(0, 8)}`);
-					}
-					
-					// Cập nhật totalDebt của NCC
-					const totalCleaned = matchedDocs.reduce((sum, d) => {
-						const data = d.data();
-						if (data.type === 'debt_increase') return sum + (Number(data.amount) || 0);
-						if (data.type === 'payment' || data.type === 'cancellation') return sum - (Number(data.amount) || 0);
-						return sum;
-					}, 0);
-					if (totalCleaned !== 0) {
-						const supplierRef = doc(db, 'suppliers', po.supplierId);
-						await updateDoc(supplierRef, {
-							totalDebt: increment(-totalCleaned)
-						});
-					}
-				} catch (e) {
-					console.error('❌ Debt cleanup failed:', e);
-				}			}
-		} catch (error: any) {
 			setCancellingPO(null);
-			console.error('Cancel PO error:', error);
+			showToast('✅ Đã huỷ đơn nhập hàng thành công', 'success');
+		} catch (error: any) {
+			console.error("Lỗi khi huỷ đơn:", error);
 			showToast(`Lỗi khi huỷ: ${error.message || 'Không xác định'}`, 'error');
+			setCancellingPO(null);
 		}
 	};
 

@@ -7,7 +7,7 @@ import { useProducts } from '../hooks/useProducts';
 import { usePurchaseOrders } from '../hooks/usePurchaseOrders';
 import { useSupplierDebts } from '../hooks/useSupplierDebts';
 import { useToast } from '../components/shared/Toast';
-import { serverTimestamp, runTransaction, doc, collection, writeBatch, increment, addDoc } from 'firebase/firestore';
+import { serverTimestamp, runTransaction, doc, collection, writeBatch, increment, addDoc, getDocs, query, where, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { inventoryService } from '../services/dataAccess';
 import { parseSupplyMessage } from '../services/supplyBotService';
@@ -331,7 +331,7 @@ const PurchaseOrders = () => {
 		}
 	};
 
-	// P1 #4: Huỷ đơn nhập hàng + rollback stock/debt trong transaction
+	// P1 #4: Huỷ đơn nhập hàng + rollback stock + xoá hẳn công nợ (không offset)
 	const handleCancelPO = async (po: any) => {
 		// Bước 1: Hiện nút xác nhận inline
 		if (deletingPO !== po.id) {
@@ -348,7 +348,7 @@ const PurchaseOrders = () => {
 			setCancellingPO(null);
 			showToast('✅ Đã huỷ đơn nhập hàng', 'success');
 
-			// 2+3. Rollback stock + debt offset chạy ngầm (không block UI)
+			// 2+3. Rollback stock + xoá công nợ gốc chạy ngầm (không block UI)
 			const validItems = (po.items || []).filter((item: any) => item.productId);
 			
 			// Stock rollback ngầm
@@ -363,14 +363,30 @@ const PurchaseOrders = () => {
 				}
 			}
 			
-			// Debt offset ngầm
-			if ((po.debtAmount || 0) > 0) {
-				addDoc(collection(db, 'supplier_debts'), {
-					ownerId: owner.ownerId, supplierId: po.supplierId || '', supplierName: po.supplierName || '',
-					type: 'payment', amount: po.debtAmount,
-					note: `Huỷ đơn nhập hàng - PO #${po.id.slice(0, 8)}`,
-					orderId: po.id, createdBy: owner.ownerId, createdAt: serverTimestamp()
-				}).catch(e => console.warn('Debt offset failed:', e));
+			// Xoá công nợ gốc (thay vì tạo offset payment như cũ)
+			if ((po.debtAmount || 0) > 0 && po.supplierId) {
+				try {
+					// Tìm bản ghi nợ gốc theo orderId
+					const debtQuery = query(
+						collection(db, 'supplier_debts'),
+						where('ownerId', '==', owner.ownerId),
+						where('orderId', '==', po.id),
+						where('type', '==', 'debt_increase')
+					);
+					const debtSnapshot = await getDocs(debtQuery);
+					
+					// Xoá tất cả bản ghi nợ liên quan đến PO này
+					const deletePromises = debtSnapshot.docs.map(d => deleteDoc(d.ref));
+					await Promise.all(deletePromises);
+					
+					// Cập nhật totalDebt của NCC
+					const supplierRef = doc(db, 'suppliers', po.supplierId);
+					await updateDoc(supplierRef, {
+						totalDebt: increment(-po.debtAmount)
+					});
+				} catch (e) {
+					console.warn('Debt cleanup failed:', e);
+				}
 			}
 		} catch (error: any) {
 			setCancellingPO(null);

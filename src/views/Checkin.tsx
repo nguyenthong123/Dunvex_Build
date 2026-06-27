@@ -2,8 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
-import { collection, query, onSnapshot, addDoc, serverTimestamp, where, limit, orderBy, deleteDoc, doc } from 'firebase/firestore';
-import { MapPin, User, FileText, Camera, CheckCircle2, Navigation2, History, ArrowLeft } from 'lucide-react';
+// 🔧 REFACTOR: Chỉ giữ Firestore write ops — read ops đã chuyển qua hooks
+import { addDoc, serverTimestamp, deleteDoc, doc, collection, query, where, orderBy, limit } from 'firebase/firestore';
+// 🔧 REFACTOR: Dùng hooks mới thay vì onSnapshot trực tiếp
+import { useCustomers } from '../hooks/useCustomers';
+import { useCheckins } from '../hooks/useCheckins';
+import { MapPin, User, FileText, Camera, CheckCircle2, Navigation2, History, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -105,9 +109,10 @@ const Checkin = () => {
     const owner = useOwner();
     const { showToast } = useToast();
 
-    const [customers, setCustomers] = useState<any[]>([]);
-    const [recentCheckins, setRecentCheckins] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
+    const { customers, loading: custLoading } = useCustomers({ ownerId: owner.ownerId, enabled: !owner.loading && !!owner.ownerId });
+    const { checkins: recentCheckins, loading: checkLoading, error: checkinError } = useCheckins({ ownerId: owner.ownerId, enabled: !owner.loading && !!owner.ownerId, maxResults: 500 });
+    const [submitting, setSubmitting] = useState(false);
+    const loading = custLoading || checkLoading || submitting;
     const [showCheckinForm, setShowCheckinForm] = useState(false);
     const [sheetOpen, setSheetOpen] = useState(false);
     const [mapCenter, setMapCenter] = useState<[number, number]>([11.9931, 107.5257]);
@@ -232,47 +237,14 @@ const Checkin = () => {
         }
     };
 
+    // Set initial map center from latest checkin
+    const mapCenterSet = React.useRef(false);
     useEffect(() => {
-        if (owner.loading || !owner.ownerId) return;
-
-        const qCust = query(
-            collection(db, 'customers'),
-            where('ownerId', '==', owner.ownerId)
-        );
-        const unsubCust = onSnapshot(qCust, (snapshot) => {
-            setCustomers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        });
-
-        const qCheck = query(
-            collection(db, 'checkins'),
-            where('ownerId', '==', owner.ownerId),
-            limit(100)
-        );
-        const unsubCheck = onSnapshot(qCheck, (snapshot) => {
-            const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
-            // Sort client-side to avoid requiring a composite index
-            const sortedDocs = docs.sort((a, b) => {
-                const dateA = a.createdAt?.seconds || 0;
-                const dateB = b.createdAt?.seconds || 0;
-                return dateB - dateA;
-            });
-            setRecentCheckins(sortedDocs);
-
-            if (sortedDocs.length > 0 && sortedDocs[0].location) {
-                setMapCenter([sortedDocs[0].location.lat, sortedDocs[0].location.lng]);
-            }
-
-            setLoading(false);
-        }, (error) => {
-            console.error("Firestore Error:", error);
-            setLoading(false);
-        });
-
-        return () => {
-            unsubCust();
-            unsubCheck();
-        };
-    }, [owner.loading, owner.ownerId]);
+        if (!mapCenterSet.current && recentCheckins.length > 0 && recentCheckins[0]?.location) {
+            setMapCenter([recentCheckins[0].location.lat, recentCheckins[0].location.lng]);
+            mapCenterSet.current = true;
+        }
+    }, [recentCheckins]);
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
@@ -416,7 +388,7 @@ const Checkin = () => {
             }
         }
 
-        setLoading(true);
+        setSubmitting(true);
         try {
             await addDoc(collection(db, 'checkins'), {
                 ...formData,
@@ -456,7 +428,7 @@ const Checkin = () => {
         } catch (error) {
             showToast("Lỗi lưu dữ liệu.", "error");
         } finally {
-            setLoading(false);
+            setSubmitting(false);
         }
     };
 

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { updateDoc, doc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../../services/firebase';
+import { db, auth } from '../../services/firebase';
+import { useToast } from '../shared/Toast';
 
 interface InventoryActionModalProps {
 	show: boolean;
@@ -11,8 +12,9 @@ interface InventoryActionModalProps {
 }
 
 const InventoryActionModal: React.FC<InventoryActionModalProps> = ({ show, onClose, products, owner, initialProduct }) => {
+	const { showToast } = useToast();
 	const [type, setType] = useState<'import' | 'export'>('import');
-	const [selectedItems, setSelectedItems] = useState<{product: any, quantity: number}[]>([]);
+	const [selectedItems, setSelectedItems] = useState<{product: any, quantity: string}[]>([]);
 	const [searchQuery, setSearchQuery] = useState('');
 	const [note, setNote] = useState('');
 	const [loading, setLoading] = useState(false);
@@ -20,7 +22,7 @@ const InventoryActionModal: React.FC<InventoryActionModalProps> = ({ show, onClo
 	React.useEffect(() => {
 		if (show) {
 			if (initialProduct) {
-				setSelectedItems([{ product: initialProduct, quantity: 1 }]);
+				setSelectedItems([{ product: initialProduct, quantity: '1' }]);
 			} else {
 				setSelectedItems([]);
 			}
@@ -39,13 +41,15 @@ const InventoryActionModal: React.FC<InventoryActionModalProps> = ({ show, onClo
 
 	const handleSelect = (product: any) => {
 		if (!selectedItems.find(i => i.product.id === product.id)) {
-			setSelectedItems([...selectedItems, { product, quantity: 1 }]);
+			setSelectedItems([...selectedItems, { product, quantity: '1' }]);
 		}
 		setSearchQuery('');
 	};
 
-	const handleQuantityChange = (id: string, qty: number) => {
-		setSelectedItems(selectedItems.map(i => i.product.id === id ? { ...i, quantity: qty } : i));
+	const handleQuantityChange = (id: string, rawValue: string) => {
+		// Chỉ cho phép số, không cho ký tự đặc biệt. Giữ giá trị thô để nhập liệu tự nhiên
+		const clean = rawValue.replace(/[^0-9]/g, '');
+		setSelectedItems(selectedItems.map(i => i.product.id === id ? { ...i, quantity: clean } : i));
 	};
 
 	const handleRemove = (id: string) => {
@@ -53,42 +57,83 @@ const InventoryActionModal: React.FC<InventoryActionModalProps> = ({ show, onClo
 	};
 
 	const handleSubmit = async () => {
-		if (selectedItems.length === 0) return;
+		if (selectedItems.length === 0) {
+			showToast('Vui lòng chọn ít nhất 1 sản phẩm', 'warning');
+			return;
+		}
+		if (!owner?.ownerId) {
+			showToast('Lỗi: Không xác định được chủ cửa hàng', 'error');
+			return;
+		}
 		setLoading(true);
 		try {
-			// Create log first
-			const logData = {
-				action: type === 'import' ? 'Nhập kho' : 'Xuất kho',
-				type: type,
-				items: selectedItems.map(i => ({
-					productId: i.product.id,
-					name: i.product.name,
-					sku: i.product.sku || '',
-					quantity: i.quantity,
-					previousStock: i.product.stock,
-					newStock: type === 'import' ? i.product.stock + i.quantity : i.product.stock - i.quantity
-				})),
-				note,
-				createdAt: serverTimestamp(),
-				ownerId: owner.ownerId,
-				user: owner.currentUser?.displayName || 'Unknown'
-			};
-			await addDoc(collection(db, 'inventory_logs'), logData);
-
-			// Update product stocks
+			// Validate all items have required fields
 			for (const item of selectedItems) {
-				const newStock = type === 'import' ? item.product.stock + item.quantity : item.product.stock - item.quantity;
+				if (!item.product?.id) {
+					throw new Error('Sản phẩm không hợp lệ: thiếu ID');
+				}
+				if (typeof item.product.stock !== 'number') {
+					throw new Error(`Sản phẩm "${item.product.name || '?'}" không có số lượng tồn kho`);
+				}
+				const qty = parseInt(item.quantity, 10);
+				if (!qty || qty <= 0) {
+					showToast(`Vui lòng nhập số lượng cho "${item.product.name || '?'}"`, 'warning');
+					setLoading(false);
+					return;
+				}
+			}
+
+			const actionLabel = type === 'import' ? 'Nhập kho' : 'Xuất kho';
+			const userName = auth?.currentUser?.displayName || auth?.currentUser?.email || 'Unknown';
+
+			console.log('[InventoryAction] Saving log:', { actionLabel, itemCount: selectedItems.length, ownerId: owner.ownerId });
+
+			// Write ONE inventory_log per product (matching flat structure used by stats calculator)
+			for (const item of selectedItems) {
+				const qty = parseInt(item.quantity, 10) || 0;
+				const newStock = type === 'import'
+					? Number(item.product.stock) + qty
+					: Number(item.product.stock) - qty;
+
+				const logEntry = {
+					productId: item.product.id,
+					productName: item.product.name,
+					sku: item.product.sku || '',
+					unit: item.product.unit || '',
+					qty: qty,
+					type: type,
+					action: actionLabel,
+					previousStock: Number(item.product.stock),
+					newStock: newStock,
+					note: note,
+					createdAt: serverTimestamp(),
+					ownerId: owner.ownerId,
+					user: userName
+				};
+
+				console.log(`[InventoryAction] Writing log for ${item.product.id}:`, logEntry);
+				await addDoc(collection(db, 'inventory_logs'), logEntry);
+
+				// Update product stock
+				console.log(`[InventoryAction] Updating ${item.product.id}: ${item.product.stock} → ${newStock}`);
 				await updateDoc(doc(db, 'products', item.product.id), {
 					stock: newStock
 				});
+				console.log(`[InventoryAction] Updated ${item.product.id} OK`);
 			}
 
+			showToast(`Đã lưu phiếu ${actionLabel.toLowerCase()} thành công!`, 'success');
 			onClose();
 			setSelectedItems([]);
 			setNote('');
-		} catch (error) {
-			console.error("Error creating inventory action:", error);
-			alert("Có lỗi xảy ra khi lưu phiếu kho!");
+
+			// Auto-reload sau 0.8s để hiển thị số liệu mới
+			setTimeout(() => {
+				window.location.reload();
+			}, 800);
+		} catch (error: any) {
+			console.error('[InventoryAction] Error:', error);
+			showToast('Lỗi khi lưu: ' + (error?.message || 'Không xác định'), 'error');
 		} finally {
 			setLoading(false);
 		}
@@ -160,10 +205,11 @@ const InventoryActionModal: React.FC<InventoryActionModalProps> = ({ show, onClo
 									</div>
 									<div className="flex items-center gap-2">
 										<input 
-											type="number" 
-											min="1"
+											type="text"
+											inputMode="numeric"
+											pattern="[0-9]*"
 											value={item.quantity}
-											onChange={(e) => handleQuantityChange(item.product.id, Number(e.target.value))}
+											onChange={(e) => handleQuantityChange(item.product.id, e.target.value)}
 											className="w-20 text-center bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg py-1.5 font-black text-indigo-600 dark:text-indigo-400 outline-none focus:border-indigo-500"
 										/>
 										<button onClick={() => handleRemove(item.product.id)} className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg transition-colors">

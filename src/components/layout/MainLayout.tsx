@@ -63,7 +63,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 					onScroll={handleScroll}
 					className={`flex-1 overflow-y-auto no-scrollbar lg:pt-0 ${window.location.pathname.includes('/price-list') ? 'pt-0' : 'pt-20'} print:overflow-visible print:h-auto print:block print:pt-0`}
 				>
-					<div className="min-h-full print:block print:h-auto">
+					<div className="min-h-full print:block print:h-auto w-full max-w-[1920px] mx-auto px-4 md:px-6 lg:px-8 2xl:px-12 transition-all">
 						{children}
 					</div>
 

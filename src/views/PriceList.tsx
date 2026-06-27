@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, collection, addDoc, deleteDoc, query, where } from 'firebase/firestore';
+import { usePriceLists } from '../hooks/usePriceLists';
 import {
 	FileSpreadsheet, Upload, Link as LinkIcon, Download,
 	Printer, Search, Trash2, Globe, ArrowLeft, Building2,
@@ -9,7 +10,6 @@ import {
 	Calendar, User, ChevronRight, Maximize2, Check, Save,
 	Lock, Crown
 } from 'lucide-react';
-import { collection, query, where, orderBy, onSnapshot, addDoc, deleteDoc } from 'firebase/firestore';
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
 
@@ -33,7 +33,15 @@ const PriceList = () => {
 
 	// New states
 	const [viewMode, setViewMode] = useState<'list' | 'detail'>('list');
+	const { priceLists: _fetchedLists, loading: _listsLoading, error: _listsError } = usePriceLists({ ownerId: owner.ownerId, enabled: !owner.loading && !!owner.ownerId });
 	const [priceLists, setPriceLists] = useState<any[]>([]);
+
+	// Sync fetched lists into state
+	useEffect(() => {
+		if (_fetchedLists.length > 0) {
+			setPriceLists(_fetchedLists);
+		}
+	}, [_fetchedLists]);
 	const [legacyList, setLegacyList] = useState<any>(null);
 	const [selectedList, setSelectedList] = useState<any>(null);
 	const [zoomScale, setZoomScale] = useState(1);
@@ -51,37 +59,34 @@ const PriceList = () => {
 	}, [location, navigate]);
 
 	useEffect(() => {
-		if (owner.loading || !owner.ownerId) return;
+		if (owner.loading || !owner.ownerId) {
+			setLoading(false);
+			return;
+		}
+
+		let completed = 0;
+		const totalTasks = 2;
+		const finishTask = () => { completed++; if (completed >= totalTasks) setLoading(false); };
 
 		// 1. Get Company Info
 		const fetchSettings = async () => {
-			const settingsRef = doc(db, 'settings', owner.ownerId);
-			const settingsSnap = await getDoc(settingsRef);
-			if (settingsSnap.exists()) {
-				setCompanyInfo(settingsSnap.data());
+			try {
+				const settingsRef = doc(db, 'settings', owner.ownerId);
+				const settingsSnap = await getDoc(settingsRef);
+				if (settingsSnap.exists()) {
+					setCompanyInfo(settingsSnap.data());
+				}
+			} catch (err) {
+				console.error("Settings fetch error:", err);
+			} finally {
+				finishTask();
 			}
 		};
 		fetchSettings();
 
-		// 2. Fetch Price Lists (Unified listener approach)
-		const q = query(
-			collection(db, 'price_lists'),
-			where('ownerId', '==', owner.ownerId)
-		);
-
-		// Listen to collection changes
-		const unsubscribe = onSnapshot(q, (snapshot) => {
-			const collectionLists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-			setPriceLists(collectionLists);
-			setLoading(false);
-		}, (err) => {
-			console.error("Error fetching lists:", err);
-			setLoading(false);
-		});
-
-		// 3. Check for Legacy Doc
+		// 2. Check for Legacy Doc
 		const checkLegacy = async () => {
-			if (!owner.ownerId) return;
+			if (!owner.ownerId) { finishTask(); return; }
 			try {
 				const legacyRef = doc(db, 'price_lists', owner.ownerId);
 				const legacySnap = await getDoc(legacyRef);
@@ -90,11 +95,11 @@ const PriceList = () => {
 				}
 			} catch (err) {
 				console.error("Legacy fetch error:", err);
+			} finally {
+				finishTask();
 			}
 		};
 		checkLegacy();
-
-		return () => unsubscribe();
 	}, [owner.loading, owner.ownerId]);
 
 	useEffect(() => {
@@ -634,7 +639,7 @@ const PriceList = () => {
 		return withEllipsis;
 	};
 
-	if (loading) return (
+	if (loading || _listsLoading) return (
 		<div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-950">
 			<div className="flex flex-col items-center gap-4">
 				<RefreshCw className="w-10 h-10 text-indigo-600 animate-spin" />

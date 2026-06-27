@@ -3,12 +3,13 @@ import { List } from 'react-window';
 import { AutoSizer } from 'react-virtualized-auto-sizer';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, where, limit } from 'firebase/firestore';
+import { collection, query, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, where, limit } from 'firebase/firestore';
 import BulkImport from '../components/shared/BulkImport';
 import CustomerMap from '../components/CustomerMap';
 import { Camera, Plus, Trash, X, FileText, Image as ImageIcon, Mail } from 'lucide-react';
 
 import { useOwner } from '../hooks/useOwner';
+import { useCustomers } from '../hooks/useCustomers';
 import { useScroll } from '../context/ScrollContext';
 import { useToast } from '../components/shared/Toast';
 import { CustomerSchema, getOptimizedImageUrl } from '../utils/validation';
@@ -209,31 +210,25 @@ const CustomerList = () => {
 		}));
 	};
 
+	// 🔧 REFACTOR: Sử dụng useCustomers hook thay vì raw onSnapshot
+	const { customers: hookCustomers, loading: hookLoading, error: hookError } = useCustomers({
+		ownerId: owner.ownerId,
+		enabled: !owner.loading && !!owner.ownerId,
+	});
+
+	// Sync hook data to local state
 	useEffect(() => {
-		if (owner.loading || !owner.ownerId) return;
+		setCustomers(hookCustomers);
+		setLoading(hookLoading);
+	}, [hookCustomers, hookLoading]);
 
-		// 🔓 Dùng chung: Admin & Nhân viên đều thấy toàn bộ danh sách khách hàng
-		const q = query(
-			collection(db, 'customers'),
-			where('ownerId', '==', owner.ownerId)
-		);
-
-		const unsubscribe = onSnapshot(q, (snapshot: any) => {
-			const docs = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
-			const sortedDocs = [...docs].sort((a, b) => {
-				const dateA = a.createdAt?.seconds || 0;
-				const dateB = b.createdAt?.seconds || 0;
-				return dateB - dateA;
-			});
-			setCustomers(sortedDocs);
-			setLoading(false);
-		}, (error: any) => {
-			console.error("Lỗi khi tải dữ liệu khách hàng:", error);
-			showToast("Không thể tải dữ liệu: " + error.message, "error");
-			setLoading(false);
-		});
-		return unsubscribe;
-	}, [owner.loading, owner.ownerId, owner.role, owner.isEmployee]);
+	// Show error toast when hook fails
+	useEffect(() => {
+		if (hookError) {
+			console.error("Lỗi khi tải dữ liệu khách hàng:", hookError);
+			showToast("Không thể tải dữ liệu: " + hookError.message, "error");
+		}
+	}, [hookError]);
 
 	const { search, state } = useLocation();
 	useEffect(() => {
@@ -1162,7 +1157,7 @@ const CustomerList = () => {
 												type="button"
 												onClick={handleGetLocation}
 												disabled={gettingLocation}
-												className="size-14 bg-[#1A237E] dark:bg-indigo-600 text-white rounded-2xl shrink-0 flex items-center justify-center hover:bg-black dark:hover:bg-indigo-800 transition-all active:scale-95 disabled:opacity-50 shadow-lg shadow-blue-500/20"
+												className="size-14 bg-gradient-to-br from-[#1A237E] to-[#283593] text-white rounded-2xl shrink-0 flex items-center justify-center hover:bg-black dark:hover:bg-indigo-800 transition-all active:scale-95 disabled:opacity-50 shadow-lg shadow-blue-500/20"
 											>
 												<span className="material-symbols-outlined">{gettingLocation ? 'sync' : 'location_on'}</span>
 											</button>
@@ -1193,222 +1188,177 @@ const CustomerList = () => {
 				)
 			}
 
-			{/* DETAIL MODAL */}
+			{/* DETAIL MODAL — Full screen clean */}
 			{
 				showDetail && selectedCustomer && (
-					<div className="fixed inset-0 z-[160] flex items-end sm:items-center justify-center bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm transition-all duration-500 overflow-hidden">
-						<div className="absolute inset-0" onClick={() => setShowDetail(false)}></div>
-						<div className="bg-white dark:bg-slate-900 w-full sm:max-w-lg rounded-t-[2.5rem] sm:rounded-[3rem] shadow-2xl relative z-10 transition-all duration-500 animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-0 sm:zoom-in-95 max-h-[90vh] sm:max-h-[85vh] overflow-y-auto custom-scrollbar border-t sm:border border-white/20 dark:border-slate-800">
-							<div className="w-12 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full mx-auto mt-4 mb-2 sm:hidden"></div>
-							<div className="px-6 sm:px-10 py-6 sm:pt-10 pb-20 sm:pb-12 flex flex-col items-center text-center relative">
-								<div className="absolute top-0 left-0 w-full h-40 bg-gradient-to-b from-[#1A237E]/5 dark:from-indigo-500/5 to-transparent pointer-events-none"></div>
-								<button onClick={() => setShowDetail(false)} className="absolute top-4 sm:top-6 right-4 sm:right-6 p-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-rose-500 transition-all shadow-sm">
-									<span className="material-symbols-outlined text-xl">close</span>
-								</button>
-								<div className="size-20 sm:size-28 rounded-[2rem] bg-[#1A237E] dark:bg-indigo-600 text-white flex items-center justify-center text-3xl sm:text-4xl font-black mb-6 shadow-2xl shadow-blue-500/30 ring-8 ring-white dark:ring-slate-900 relative z-10">
-									{(selectedCustomer.name?.[0] || 'K').toUpperCase()}
-								</div>
-								<div className="space-y-1 mb-2 relative z-10">
-									<h3 className="text-2xl sm:text-3xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight">{selectedCustomer.name}</h3>
-									{selectedCustomer.businessName && (
-										<p className="text-sm font-black text-slate-500 dark:text-slate-400 mb-2 relative z-10 flex items-center justify-center gap-1.5 uppercase">
-											<span className="material-symbols-outlined text-base">domain</span>
-											{selectedCustomer.businessName}
-										</p>
-									)}
-								</div>
-								<div className="w-full grid grid-cols-2 gap-3 sm:gap-4 mb-3 text-center">
-									<div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-3xl border border-slate-100 dark:border-slate-800 flex flex-col items-center shadow-sm">
-										<p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest">Tuyến bán hàng</p>
-										<p className="font-black text-indigo-600 dark:text-indigo-400 text-sm italic uppercase">{selectedCustomer.route || 'Chưa phân tuyến'}</p>
-									</div>
-									<div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-3xl border border-slate-100 dark:border-slate-800 flex flex-col items-center shadow-sm">
-										<p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest">Loại khách</p>
-										<p className="font-black text-[#FF6D00] dark:text-orange-400 text-sm uppercase">{selectedCustomer.type}</p>
-									</div>
-								</div>
-								<div className="w-full grid grid-cols-2 gap-3 sm:gap-4 mb-6 text-center">
-									<div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-3xl border border-slate-100 dark:border-slate-800 flex flex-col items-center shadow-sm">
-										<p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest">Hạn mức công nợ</p>
-										<p className="font-black text-rose-500 text-sm uppercase">{(selectedCustomer.creditLimit && selectedCustomer.creditLimit > 0) ? `${selectedCustomer.creditLimit.toLocaleString('vi-VN')} đ` : 'Không giới hạn'}</p>
-									</div>
-									<div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-3xl border border-slate-100 dark:border-slate-800 flex flex-col items-center shadow-sm">
-										<p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest">Trạng thái</p>
-										<div className="flex items-center gap-1.5">
-											<div className={`size-1.5 rounded-full ${selectedCustomer.status === 'Hoạt động' ? 'bg-green-500 animate-pulse' : 'bg-slate-400'}`}></div>
-											<p className="font-black text-green-600 dark:text-green-400 text-sm uppercase">{selectedCustomer.status}</p>
-										</div>
-									</div>
-								</div>
-								<div className="w-full grid grid-cols-1 mb-6 text-center">
-									<div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-3xl border border-slate-100 dark:border-slate-800 flex flex-col items-center shadow-sm">
-										<p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest">Liên hệ (SĐT)</p>
-										<a href={`tel:${selectedCustomer.phone}`} className="font-black text-[#1A237E] dark:text-indigo-300 text-base hover:underline">{selectedCustomer.phone}</a>
-									</div>
-								</div>
-								<div className="w-full space-y-4 text-left">
-									{/* ADDRESS & TAX INFO */}
-									<div className="space-y-4">
-										<div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-3xl border border-slate-100 dark:border-slate-800">
-											<div className="flex justify-between items-center mb-2">
-												<p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-													<span className="material-symbols-outlined text-sm">mail</span>
-													Email khách hàng
-												</p>
-												{selectedCustomer.email && (
-													<button
-														onClick={(e) => {
-															e.stopPropagation();
-															navigator.clipboard.writeText(selectedCustomer.email);
-															showToast("Đã chép email", "success");
-														}}
-														className="p-1 px-2 rounded-lg bg-orange-50 dark:bg-orange-900/20 text-[9px] font-black text-[#FF6D00] uppercase flex items-center gap-1 active:scale-90 transition-transform"
-													>
-														<span className="material-symbols-outlined text-[14px]">content_copy</span> Chép
-													</button>
-												)}
-											</div>
-											<a href={selectedCustomer.email ? `mailto:${selectedCustomer.email}` : '#'} className={`text-sm font-bold ${selectedCustomer.email ? 'text-blue-600 dark:text-blue-400 hover:underline' : 'text-slate-700 dark:text-white'} truncate block`}>
-												{selectedCustomer.email || 'Chưa cung cấp'}
-											</a>
-										</div>
+					<div className="fixed inset-0 z-[160] bg-white dark:bg-slate-950 flex flex-col animate-in fade-in duration-200">
+						{/* Header */}
+						<div className="flex-none flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950">
+							<button onClick={() => setShowDetail(false)} className="p-2 -ml-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors">
+								<span className="material-symbols-outlined text-2xl">arrow_back</span>
+							</button>
+							<h2 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-widest">Chi tiết khách hàng</h2>
+							<div className="size-10"></div>
+						</div>
 
-										<div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-3xl border border-slate-100 dark:border-slate-800">
-											<p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-2 tracking-widest flex items-center gap-1.5">
-												<span className="material-symbols-outlined text-sm">location_on</span>
-												Địa chỉ công trình
+						{/* Scrollable content */}
+						<div className="flex-1 overflow-y-auto custom-scrollbar">
+							<div className="max-w-2xl mx-auto px-5 py-6">
+								{/* Avatar + Name */}
+								<div className="flex items-center gap-4 mb-6">
+									<div className="size-16 rounded-2xl bg-gradient-to-br from-[#1A237E] to-[#283593] text-white flex items-center justify-center text-2xl font-black shrink-0 shadow-md shadow-indigo-500/10">
+										{(selectedCustomer.name?.[0] || 'K').toUpperCase()}
+									</div>
+									<div className="min-w-0">
+										<h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight truncate">{selectedCustomer.name}</h3>
+										{selectedCustomer.businessName && (
+											<p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1">
+												<span className="material-symbols-outlined text-sm">store</span>
+												{selectedCustomer.businessName}
 											</p>
-											<p className="text-sm font-bold text-slate-700 dark:text-white leading-relaxed">{selectedCustomer.address || 'Chưa cung cấp'}</p>
-										</div>
-
-										<div className="bg-indigo-50/50 dark:bg-indigo-900/10 p-5 rounded-3xl border border-indigo-100/50 dark:border-indigo-900/30">
-											<div className="flex items-center justify-between">
-												<div className="flex items-center gap-2">
-													<div className="size-8 rounded-xl bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-														<span className="material-symbols-outlined text-sm">receipt</span>
-													</div>
-													<div>
-														<p className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Thông tin hóa đơn</p>
-														<p className="text-[9px] text-slate-500 dark:text-slate-500">MST, Tên đơn vị, Địa chỉ VAT</p>
-													</div>
-												</div>
-												<button
-													type="button"
-													onClick={(e) => { e.stopPropagation(); setShowTaxDetail(!showTaxDetail); }}
-													className={`w-12 h-6 rounded-full transition-all duration-300 relative ${showTaxDetail ? 'bg-[#FF6D00]' : 'bg-slate-200 dark:bg-slate-700'} shadow-inner`}
-												>
-													<div className={`absolute top-1 size-4 bg-white rounded-full transition-all duration-300 ${showTaxDetail ? 'left-7 shadow-lg' : 'left-1 shadow-sm'}`}></div>
-												</button>
-											</div>
-
-											{showTaxDetail && (
-												<div className="mt-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
-													<div className="bg-white dark:bg-slate-800 p-3 rounded-2xl border border-slate-100 dark:border-slate-700">
-														<div className="flex justify-between items-center mb-1">
-															<p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Tên đơn vị</p>
-															<button onClick={() => { navigator.clipboard.writeText(selectedCustomer.taxName || ""); showToast("Đã chép tên", "success"); }} className="p-1 px-2 rounded-lg bg-orange-50 dark:bg-orange-900/20 text-[9px] font-black text-[#FF6D00] uppercase flex items-center gap-1 active:scale-90 transition-transform">
-																<span className="material-symbols-outlined text-xs">content_copy</span> Chép
-															</button>
-														</div>
-														<p className="text-xs font-black text-slate-700 dark:text-indigo-300 uppercase leading-snug">
-															{selectedCustomer.taxName || 'Chưa cập nhật'}
-														</p>
-													</div>
-
-													<div className="grid grid-cols-2 gap-3">
-														<div className="bg-white dark:bg-slate-800 p-3 rounded-2xl border border-slate-100 dark:border-slate-700">
-															<div className="flex justify-between items-center mb-1">
-																<p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">MST</p>
-																<button onClick={() => { navigator.clipboard.writeText(selectedCustomer.taxCode || ""); showToast("Đã chép MST", "success"); }} className="p-1 rounded-lg text-[#FF6D00]">
-																	<span className="material-symbols-outlined text-xs">content_copy</span>
-																</button>
-															</div>
-															<p className="text-xs font-bold text-slate-700 dark:text-white">{selectedCustomer.taxCode || 'N/A'}</p>
-														</div>
-														<div className="bg-white dark:bg-slate-800 p-3 rounded-2xl border border-slate-100 dark:border-slate-700">
-															<div className="flex justify-between items-center mb-1">
-																<p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">SĐT HĐ</p>
-																<button onClick={() => { navigator.clipboard.writeText(selectedCustomer.taxPhone || selectedCustomer.phone || ""); showToast("Đã chép SĐT", "success"); }} className="p-1 rounded-lg text-[#FF6D00]">
-																	<span className="material-symbols-outlined text-xs">content_copy</span>
-																</button>
-															</div>
-															<p className="text-xs font-bold text-slate-700 dark:text-white line-clamp-1">{selectedCustomer.taxPhone || selectedCustomer.phone || 'N/A'}</p>
-														</div>
-													</div>
-
-													<div className="bg-white dark:bg-slate-800 p-3 rounded-2xl border border-slate-100 dark:border-slate-700">
-														<div className="flex justify-between items-center mb-1">
-															<p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Địa chỉ VAT</p>
-															<button onClick={() => { navigator.clipboard.writeText(selectedCustomer.taxAddress || ""); showToast("Đã chép địa chỉ", "success"); }} className="p-1 rounded-lg text-[#FF6D00]">
-																<span className="material-symbols-outlined text-xs">content_copy</span>
-															</button>
-														</div>
-														<p className="text-xs font-medium text-slate-600 dark:text-slate-300 italic leading-relaxed">
-															{selectedCustomer.taxAddress || 'Chưa cập nhật'}
-														</p>
-													</div>
-												</div>
-											)}
+										)}
+										<div className="flex items-center gap-2 mt-1.5">
+											<span className={`size-2 rounded-full ${selectedCustomer.status === 'Hoạt động' ? 'bg-green-500 animate-pulse' : 'bg-slate-300'}`}></span>
+											<span className="text-xs font-bold text-slate-400 uppercase">{selectedCustomer.status}</span>
 										</div>
 									</div>
+								</div>
 
-									<div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-3xl border border-slate-100 dark:border-slate-800">
-										<div className="flex justify-between items-start mb-2">
-											<p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-												<span className="material-symbols-outlined text-sm">assignment</span>
-												Ghi chú chi tiết
-											</p>
-											{selectedCustomer.note && (
-												<button
-													onClick={() => {
-														navigator.clipboard.writeText(selectedCustomer.note);
-														showToast("Đã sao chép ghi chú", "success");
-													}}
-													className="text-[10px] font-black text-[#FF6D00] uppercase flex items-center gap-1 hover:opacity-70 transition-opacity"
-												>
-													<span className="material-symbols-outlined text-sm">content_copy</span>
-													Sao chép
-												</button>
-											)}
-										</div>
-										<p className="text-sm font-bold text-slate-700 dark:text-white leading-relaxed whitespace-pre-wrap italic">
-											{selectedCustomer.note || 'Không có ghi chú nào được thêm.'}
-										</p>
-										<div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
-											<p className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
-												<span className="material-symbols-outlined text-[12px]">account_circle</span>
-												NV phụ trách:
-											</p>
-											<p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 lowercase truncate max-w-[150px]">
-												{selectedCustomer.createdByEmail || 'N/A'}
-											</p>
-										</div>
+								{/* Quick Info Cards */}
+								<div className="grid grid-cols-2 gap-3 mb-5">
+									<div className="bg-slate-50 dark:bg-slate-900 rounded-2xl p-4">
+										<p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Tuyến</p>
+										<p className="text-sm font-bold text-[#1A237E] dark:text-indigo-400 uppercase">{selectedCustomer.route || 'Chưa phân'}</p>
 									</div>
-									{/* Actions */}
-									<div className="flex flex-wrap gap-3 pt-4 pb-2">
-										{!!(selectedCustomer.lat && selectedCustomer.lng) && (
-											<button
-												onClick={() => {
-													const url = `https://www.google.com/maps/dir/?api=1&destination=${selectedCustomer.lat},${selectedCustomer.lng}`;
-													window.open(url, '_blank');
-												}}
-												className="flex-1 min-w-[140px] bg-green-500 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-green-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 h-14"
-											>
-												<span className="material-symbols-outlined text-lg">directions</span> Tới vị trí
+									<div className="bg-slate-50 dark:bg-slate-900 rounded-2xl p-4">
+										<p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Loại</p>
+										<p className="text-sm font-bold text-[#FF6D00] uppercase">{selectedCustomer.type}</p>
+									</div>
+									<div className="bg-slate-50 dark:bg-slate-900 rounded-2xl p-4">
+										<p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Số điện thoại</p>
+										<a href={`tel:${selectedCustomer.phone}`} className="text-sm font-bold text-[#1A237E] dark:text-indigo-300">{selectedCustomer.phone}</a>
+									</div>
+									<div className="bg-slate-50 dark:bg-slate-900 rounded-2xl p-4">
+										<p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Hạn mức</p>
+										<p className="text-sm font-bold text-rose-500">{(selectedCustomer.creditLimit && selectedCustomer.creditLimit > 0) ? `${selectedCustomer.creditLimit.toLocaleString('vi-VN')}đ` : 'Không GH'}</p>
+									</div>
+								</div>
+
+								{/* Detail Rows */}
+								<div className="space-y-3">
+									{/* Email */}
+									<div className="flex items-center gap-3 py-3 border-b border-slate-50 dark:border-slate-900">
+										<span className="material-symbols-outlined text-slate-400">mail</span>
+										<div className="flex-1 min-w-0">
+											<p className="text-[10px] font-black text-slate-400 uppercase">Email</p>
+											<p className="text-sm font-semibold text-slate-700 dark:text-slate-300 truncate">{selectedCustomer.email || 'Chưa cung cấp'}</p>
+										</div>
+										{selectedCustomer.email && (
+											<button onClick={() => { navigator.clipboard.writeText(selectedCustomer.email); showToast('Đã chép email', 'success'); }} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-[#FF6D00] transition-all">
+												<span className="material-symbols-outlined text-lg">content_copy</span>
 											</button>
 										)}
-										<button onClick={() => { setShowDetail(false); openEdit(selectedCustomer); }} className="flex-1 min-w-[140px] bg-[#1A237E] dark:bg-indigo-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 h-14">
-											<span className="material-symbols-outlined text-lg">edit_square</span> Sửa hồ sơ
-										</button>
-										<button onClick={() => handleDeleteCustomer(selectedCustomer.id)} className="flex-1 min-w-[140px] bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-900/30 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all active:scale-95 flex items-center justify-center gap-2 h-14">
-											<span className="material-symbols-outlined text-lg">delete</span> Xóa khách
-										</button>
+									</div>
+
+									{/* Address */}
+									<div className="flex items-center gap-3 py-3 border-b border-slate-50 dark:border-slate-900">
+										<span className="material-symbols-outlined text-slate-400">location_on</span>
+										<div className="flex-1 min-w-0">
+											<p className="text-[10px] font-black text-slate-400 uppercase">Địa chỉ công trình</p>
+											<p className="text-sm font-semibold text-slate-700 dark:text-slate-300">{selectedCustomer.address || 'Chưa cung cấp'}</p>
+										</div>
+									</div>
+
+									{/* Tax Info */}
+									<div className="py-3 border-b border-slate-50 dark:border-slate-900">
+										<div className="flex items-center justify-between mb-2">
+											<div className="flex items-center gap-3">
+												<span className="material-symbols-outlined text-slate-400">receipt</span>
+												<div>
+													<p className="text-[10px] font-black text-slate-400 uppercase">Thông tin hóa đơn</p>
+												</div>
+											</div>
+											<button onClick={(e) => { e.stopPropagation(); setShowTaxDetail(!showTaxDetail); }} className={`w-11 h-6 rounded-full transition-all duration-300 relative ${showTaxDetail ? 'bg-[#FF6D00]' : 'bg-slate-200 dark:bg-slate-700'}`}>
+												<div className={`absolute top-1 size-4 bg-white rounded-full transition-all duration-300 ${showTaxDetail ? 'left-6 shadow-sm' : 'left-1'}`}></div>
+											</button>
+										</div>
+										{showTaxDetail && (
+											<div className="mt-3 space-y-3 pl-9 animate-in fade-in slide-in-from-top-2 duration-200">
+												<div>
+													<div className="flex items-center justify-between mb-0.5">
+														<p className="text-[10px] font-black text-slate-400 uppercase">Tên đơn vị</p>
+														<button onClick={() => { navigator.clipboard.writeText(selectedCustomer.taxName || ''); showToast('Đã chép', 'success'); }} className="text-[10px] font-bold text-[#FF6D00] uppercase">Chép</button>
+													</div>
+													<p className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase">{selectedCustomer.taxName || 'Chưa cập nhật'}</p>
+												</div>
+												<div className="grid grid-cols-2 gap-3">
+													<div>
+														<div className="flex items-center justify-between mb-0.5">
+															<p className="text-[10px] font-black text-slate-400 uppercase">MST</p>
+															<button onClick={() => { navigator.clipboard.writeText(selectedCustomer.taxCode || ''); showToast('Đã chép', 'success'); }} className="text-[10px] font-bold text-[#FF6D00] uppercase">Chép</button>
+														</div>
+														<p className="text-sm font-semibold text-slate-700 dark:text-slate-300">{selectedCustomer.taxCode || 'N/A'}</p>
+													</div>
+													<div>
+														<div className="flex items-center justify-between mb-0.5">
+															<p className="text-[10px] font-black text-slate-400 uppercase">SĐT HĐ</p>
+															<button onClick={() => { navigator.clipboard.writeText(selectedCustomer.taxPhone || selectedCustomer.phone || ''); showToast('Đã chép', 'success'); }} className="text-[10px] font-bold text-[#FF6D00] uppercase">Chép</button>
+														</div>
+														<p className="text-sm font-semibold text-slate-700 dark:text-slate-300">{selectedCustomer.taxPhone || selectedCustomer.phone || 'N/A'}</p>
+													</div>
+												</div>
+												<div>
+													<div className="flex items-center justify-between mb-0.5">
+														<p className="text-[10px] font-black text-slate-400 uppercase">Địa chỉ VAT</p>
+														<button onClick={() => { navigator.clipboard.writeText(selectedCustomer.taxAddress || ''); showToast('Đã chép', 'success'); }} className="text-[10px] font-bold text-[#FF6D00] uppercase">Chép</button>
+													</div>
+													<p className="text-sm font-medium text-slate-500 dark:text-slate-400 italic">{selectedCustomer.taxAddress || 'Chưa cập nhật'}</p>
+												</div>
+											</div>
+										)}
+									</div>
+
+									{/* Notes */}
+									{selectedCustomer.note && (
+										<div className="flex items-start gap-3 py-3 border-b border-slate-50 dark:border-slate-900">
+											<span className="material-symbols-outlined text-amber-500 mt-0.5">sticky_note_2</span>
+											<div className="flex-1 min-w-0">
+												<p className="text-[10px] font-black text-amber-600 uppercase mb-1">Ghi chú</p>
+												<p className="text-sm font-medium text-amber-800 dark:text-amber-200">{selectedCustomer.note}</p>
+											</div>
+										</div>
+									)}
+
+									{/* NV phụ trách */}
+									<div className="flex items-center gap-3 py-3">
+										<span className="material-symbols-outlined text-slate-400">person</span>
+										<div className="flex-1 min-w-0">
+											<p className="text-[10px] font-black text-slate-400 uppercase">NV phụ trách</p>
+											<p className="text-sm font-medium text-slate-500">{selectedCustomer.createdByEmail || 'N/A'}</p>
+										</div>
+										<span className="text-[10px] font-medium text-slate-300 dark:text-slate-600">{selectedCustomer.createdAt?.seconds ? new Date(selectedCustomer.createdAt.seconds * 1000).toLocaleDateString('vi-VN') : ''}</span>
 									</div>
 								</div>
 							</div>
 						</div>
+
+						{/* Bottom Actions */}
+						<div className="flex-none px-4 py-3 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 flex gap-3">
+							<button onClick={() => { setShowDetail(false); openEdit(selectedCustomer); }} className="flex-1 bg-[#1A237E] hover:bg-[#283593] text-white py-3 rounded-2xl font-black text-xs uppercase tracking-wider active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 shadow-sm">
+								<span className="material-symbols-outlined text-base">edit</span> Chỉnh sửa
+							</button>
+							<button onClick={() => handleDeleteCustomer(selectedCustomer.id)} className="bg-white dark:bg-slate-800 text-rose-500 border border-rose-100 dark:border-rose-900/30 py-3 px-4 rounded-2xl font-black text-xs uppercase tracking-wider hover:bg-rose-50 dark:hover:bg-rose-900/20 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5">
+								<span className="material-symbols-outlined text-base">delete</span>
+							</button>
+							{!!(selectedCustomer.lat && selectedCustomer.lng) && (
+								<button onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${selectedCustomer.lat},${selectedCustomer.lng}`, '_blank')} className="bg-green-500 hover:bg-green-600 text-white py-3 px-4 rounded-2xl font-black text-xs uppercase tracking-wider active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 shadow-sm">
+									<span className="material-symbols-outlined text-base">directions</span>
+								</button>
+							)}
+						</div>
 					</div>
 				)
+			
 			}
 			{showMap && <CustomerMap customers={customers} onClose={() => setShowMap(false)} />}
 		</div>

@@ -10,7 +10,7 @@ const MobileNav = () => {
 
 	return (
 		<div
-			className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-100 dark:border-slate-800 flex items-center z-[100] h-20 shadow-[0_-8px_30px_rgba(0,0,0,0.08)] print:hidden"
+			className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-100 dark:border-slate-800 flex items-center z-[40] h-20 shadow-[0_-8px_30px_rgba(0,0,0,0.08)] print:hidden"
 			style={{
 				WebkitBackdropFilter: 'blur(20px)',
 				paddingBottom: 'env(safe-area-inset-bottom, 0px)'
@@ -24,6 +24,7 @@ const MobileNav = () => {
 					return (
 						<div key={`nav-${idx}`} className="flex-1 relative flex flex-col items-center justify-center h-full">
 							<button
+								type="button"
 								onClick={() => {
 									if (item.path.startsWith('event:')) {
 										window.dispatchEvent(new CustomEvent(item.path.split(':')[1]));
@@ -44,16 +45,22 @@ const MobileNav = () => {
 
 				return (
 					<button
+						type="button"
 						key={`nav-${idx}`}
 						onClick={() => {
+							if (item.path.startsWith('event:')) {
+								window.dispatchEvent(new CustomEvent(item.path.split(':')[1]));
+								return;
+							}
+
 							const isSearchBtn = item.path.includes('search=focus');
 							if (isSearchBtn) {
-								const searchablePaths = ['/customers', '/debts', '/orders', '/inventory', '/price-list', '/products'];
+								const searchablePaths = ['/customers', '/debts', '/orders', '/inventory', '/price-list', '/products', '/suppliers', '/supplier-debts', '/purchase-orders'];
 								const isSearchable = searchablePaths.some(p => currentPath.startsWith(p));
 								if (isSearchable) {
 									window.dispatchEvent(new CustomEvent('open-mobile-search'));
 								} else {
-									navigate('/products?search=focus');
+									navigate('/orders?search=focus');
 								}
 							} else {
 								navigate(item.path);

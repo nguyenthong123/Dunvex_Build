@@ -1,17 +1,22 @@
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 import { signOut } from 'firebase/auth';
-import { collection, query, where, onSnapshot, updateDoc, doc, writeBatch, getDocs, limit, orderBy } from 'firebase/firestore';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useNavigationConfig } from '../hooks/useNavigationConfig';
 import { Eye, EyeOff, TrendingUp, TrendingDown, AlertTriangle, Wallet, Gift, Trophy, User as UserIcon } from 'lucide-react';
 
 import { useOwner } from '../hooks/useOwner';
+// 🔧 REFACTOR: Dùng hooks mới thay vì Firestore trực tiếp
+import { useProducts } from '../hooks/useProducts';
+import { useOrders } from '../hooks/useOrders';
+import { useCustomers } from '../hooks/useCustomers';
+import { usePayments } from '../hooks/usePayments';
+import { useAuditLogs } from '../hooks/useAuditLogs';
 import QRScanner from '../components/shared/QRScanner';
 import { QrCode } from 'lucide-react';
 import { useToast } from '../components/shared/Toast';
 import { maskSensitiveData } from '../utils/validation';
-import NotificationBell from '../components/NotificationBell';
 
 const Home = () => {
 	const navigate = useNavigate();
@@ -19,86 +24,78 @@ const Home = () => {
 	const isAdmin = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
 	const { showToast } = useToast();
 	const { sidebarItems } = useNavigationConfig();
-	// --- Removed redundant notification state ---
 
-	// Real Data State
-	const [orders, setOrders] = useState<any[]>([]);
-	const [customers, setCustomers] = useState<any[]>([]);
-	const [payments, setPayments] = useState<any[]>([]);
-	const [products, setProducts] = useState<any[]>([]);
-	const [auditLogs, setAuditLogs] = useState<any[]>([]);
+	// 🔧 REFACTOR: Data từ hooks tập trung — KHÔNG còn Firestore queries rải rác
+	const { products, loading: productsLoading } = useProducts({
+		ownerId: owner.ownerId,
+		enabled: !owner.loading && !!owner.ownerId,
+	});
+	const { orders } = useOrders({
+		ownerId: owner.ownerId,
+		enabled: !owner.loading && !!owner.ownerId,
+		maxResults: 500,
+	});
+	const { customers } = useCustomers({
+		ownerId: owner.ownerId,
+		enabled: !owner.loading && !!owner.ownerId,
+	});
+	const { payments } = usePayments({
+		ownerId: owner.ownerId,
+		enabled: !owner.loading && !!owner.ownerId,
+		maxResults: 500,
+	});
+	const { logs: auditLogs } = useAuditLogs({
+		ownerId: owner.ownerId,
+		enabled: !owner.loading && !!owner.ownerId,
+		maxResults: 100,
+	});
+
 	const [showProfit, setShowProfit] = useState(false);
 	const [chartFilter, setChartFilter] = useState('7days');
 	const [showScanner, setShowScanner] = useState(false);
 
+	// ─── FIX: Fetch tất cả đơn chốt (không limit 500) để tính tổng doanh số chính xác ───
+	const [allTimeStats, setAllTimeStats] = useState({ revenue: 0, count: 0, loading: true });
+
 	useEffect(() => {
-		if (!auth.currentUser || owner.loading || !owner.ownerId) return;
-
-		// ... removed redundant notification snapshot ...
-
-		// 3. Fetch Data for Dashboard Calculations (Owner specific)
-		const isAdmin = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
-
-		let qOrders, qAudit, qCust, qPay;
-
-		if (isAdmin) {
-			qOrders = query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId), limit(500));
-			qAudit = query(collection(db, 'audit_logs'), where('ownerId', '==', owner.ownerId), limit(100));
-			qCust = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
-			qPay = query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId), limit(500));
-		} else {
-			// For employees, we still query by ownerId but filter by user email/id client-side 
-			// to avoid needing composite indexes (Firestore requires indexes for multiple equality filters sometimes)
-			qOrders = query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId), limit(500));
-			qAudit = query(collection(db, 'audit_logs'), where('ownerId', '==', owner.ownerId), limit(100));
-			qCust = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
-			qPay = query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId), limit(500));
-		}
-
-		// ... inside onSnapshot or effects, apply filtering if not admin
-		const unsubAudit = onSnapshot(qAudit, (snap) => {
-			const logs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-			// Apply client-side filter for employees
-			const filteredLogs = isAdmin ? logs : logs.filter((l: any) => l.userId === auth.currentUser?.uid);
-
-			const sorted = filteredLogs.sort((a: any, b: any) => {
-				const timeA = a.createdAt?.seconds || 0;
-				const timeB = b.createdAt?.seconds || 0;
-				return timeB - timeA;
-			});
-			setAuditLogs(sorted.slice(0, 10));
-		}, (err) => console.error("Home: Audit Logs Error:", err));
-
-		const qProd = query(collection(db, 'products'), where('ownerId', '==', owner.ownerId));
-
-		const unsubOrders = onSnapshot(qOrders, (snap) => {
-			const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-			setOrders(docs);
-		}, (err: any) => console.error("Home: Orders Error:", err));
-
-		const unsubCust = onSnapshot(qCust, (snap) => {
-			const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-			setCustomers(docs);
-		}, (err: any) => console.error("Home: Customers Error:", err));
-
-		const unsubPay = onSnapshot(qPay, (snap) => {
-			const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-			setPayments(docs);
-		}, (err: any) => console.error("Home: Payments Error:", err));
-
-		const unsubProd = onSnapshot(qProd, (snap) => {
-			setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-		}, (err: any) => console.error("Home: Products Error:", err));
-
-		return () => {
-			// unsubscribeNotif(); // removed
-			unsubOrders();
-			unsubCust();
-			unsubPay();
-			unsubProd();
-			unsubAudit();
+		if (!owner.ownerId) return;
+		const fetchAll = async () => {
+			try {
+				const q = query(
+					collection(db, 'orders'),
+					where('ownerId', '==', owner.ownerId),
+					where('status', '==', 'Đơn chốt')
+				);
+				const snap = await getDocs(q);
+				const userEmail = auth.currentUser?.email || '';
+				let total = 0;
+				let count = 0;
+				snap.forEach(doc => {
+					const data = doc.data();
+					if (data.createdByEmail === userEmail) {
+						total += Number(data.totalAmount) || 0;
+						count++;
+					}
+				});
+				setAllTimeStats({ revenue: total, count, loading: false });
+			} catch (e) {
+				console.error('Failed to fetch all orders:', e);
+				setAllTimeStats(prev => ({ ...prev, loading: false }));
+			}
 		};
-	}, [owner.loading, owner.ownerId, owner.role, owner.isEmployee]);
+		fetchAll();
+	}, [owner.ownerId]);
+
+	// Format tiền rút gọn cho số lớn
+	const formatCompactPrice = (price: number) => {
+		if (price >= 1_000_000_000) return (price / 1_000_000_000).toFixed(1).replace('.0', '') + ' Tỷ';
+		if (price >= 1_000_000) return (price / 1_000_000).toFixed(1).replace('.0', '') + ' Triệu';
+		return price.toLocaleString('vi-VN') + 'đ';
+	};
+
+	// 🔧 REFACTOR: useEffect Firestore queries đã chuyển vào hooks — xoá 65 dòng code
+	// Các hook useProducts/useOrders/useCustomers/usePayments/useAuditLogs
+	// tự động subscribe/unsubscribe realtime qua dataAccess layer
 
 	// --- Removed redundant notification handlers ---
 
@@ -197,7 +194,11 @@ const Home = () => {
 	// 1.3 Personal Performance (for the current login user)
 	const personalOrders = orders.filter(o => o.createdByEmail === auth.currentUser?.email && o.status === 'Đơn chốt');
 	const personalChartData = getDailyChartData(personalOrders);
-	const personalTotalRevenue = personalOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+	// FIX: Dùng allTimeStats (fetch toàn bộ, không limit) khi đã load xong; fallback listener 500 đơn
+	const personalTotalRevenue = allTimeStats.loading
+		? personalOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0)
+		: allTimeStats.revenue;
+	const personalOrderCount = allTimeStats.loading ? personalOrders.length : allTimeStats.count;
 
 	// Calculate Today's Growth (comparison with yesterday)
 	const yesterday = new Date();
@@ -366,11 +367,11 @@ const Home = () => {
 							<div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
 								<div className="bg-black/20 px-3 py-1 rounded-lg border border-white/5">
 									<p className="text-[10px] text-white/50 font-bold uppercase">Tổng doanh số</p>
-									<p className="text-lg font-black text-[#ffcc00]">{formatPrice(personalTotalRevenue)}</p>
+									<p className="text-lg font-black text-[#ffcc00]">{formatCompactPrice(personalTotalRevenue)}</p>
 								</div>
 								<div className="bg-black/20 px-3 py-1 rounded-lg border border-white/5">
 									<p className="text-[10px] text-white/50 font-bold uppercase">Đơn đã chốt</p>
-									<p className="text-lg font-black text-white">{personalOrders.length} Đơn</p>
+									<p className="text-lg font-black text-white">{personalOrderCount} Đơn</p>
 								</div>
 							</div>
 						</div>

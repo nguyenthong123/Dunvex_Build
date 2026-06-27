@@ -41,18 +41,23 @@ const InventoryDetailModal: React.FC<InventoryDetailModalProps> = ({
 		: 0;
 
 	return (
-		<div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-[#1A237E]/80 dark:bg-black/80 backdrop-blur-sm">
-			<div className="bg-white dark:bg-slate-900 w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] md:max-h-[85vh] transition-colors duration-300">
-				<div className="px-6 py-4 bg-[#1A237E] dark:bg-indigo-900 text-white flex items-center justify-between sticky top-0 z-10">
-					<h3 className="text-xl font-black">Chi Tiết Sản Phẩm</h3>
-					<button onClick={onClose} className="size-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors">
-						<span className="material-symbols-outlined">close</span>
-					</button>
-				</div>
+		<div className="fixed inset-0 z-[160] bg-white dark:bg-slate-950 flex flex-col animate-in fade-in duration-200">
+			{/* Header */}
+			<div className="flex-none flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950">
+				<button onClick={onClose} className="p-2 -ml-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors">
+					<span className="material-symbols-outlined text-2xl">arrow_back</span>
+				</button>
+				<h2 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-widest">Chi tiết sản phẩm</h2>
+				<div className="size-10"></div>
+			</div>
 
-				<div className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
-					<div className="flex items-center gap-4 border-b border-slate-100 dark:border-slate-800 pb-6">
-						<div className="size-24 rounded-2xl bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 flex items-center justify-center overflow-hidden border border-gray-100 dark:border-slate-700 shadow-inner shrink-0 leading-none">
+			{/* Scrollable content */}
+			<div className="flex-1 overflow-y-auto custom-scrollbar">
+				<div className="max-w-2xl mx-auto px-5 py-6">
+					
+					{/* Image + Name / SKU section */}
+					<div className="flex items-center gap-4 mb-8">
+						<div className="size-20 rounded-2xl bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 flex items-center justify-center overflow-hidden border border-gray-100 dark:border-slate-800 shadow-inner shrink-0 leading-none">
 							{selectedProduct.imageUrl ? (
 								<img
 									src={getImageUrl(selectedProduct.imageUrl)}
@@ -65,131 +70,170 @@ const InventoryDetailModal: React.FC<InventoryDetailModalProps> = ({
 							)}
 						</div>
 						<div className="flex-1 min-w-0">
-							<p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider mb-1">{selectedProduct.category}</p>
-							<h2 className="text-xl font-black text-[#1A237E] dark:text-indigo-400 leading-tight break-words">{selectedProduct.name}</h2>
-							<div className="flex flex-wrap items-center gap-2 mt-2">
-								<div
-									className="flex items-center gap-2 cursor-pointer group/copy bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded-lg border border-slate-100 dark:border-slate-700"
+							<p className="text-[10px] font-bold text-[#FF6D00] uppercase tracking-wider mb-1">{selectedProduct.category}</p>
+							<h3 className="text-xl font-black text-slate-900 dark:text-white leading-tight mb-2 break-words">{selectedProduct.name}</h3>
+							
+							<div className="flex flex-wrap items-center gap-2">
+								<div 
+									className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1 cursor-pointer hover:text-blue-500 transition-colors" 
 									onClick={() => copyToClipboard(selectedProduct.sku || selectedProduct.id, 'mã SKU')}
-									title="Copy mã SKU"
 								>
-									<p className="text-xs font-bold text-slate-500 dark:text-slate-400">SKU: {selectedProduct.sku || '---'}</p>
-									{(selectedProduct.sku || selectedProduct.id) && (
-										<span className="material-symbols-outlined text-[14px] text-gray-300 group-hover/copy:text-blue-500 transition-colors">content_copy</span>
-									)}
+									<span className="material-symbols-outlined text-[14px]">qr_code_scanner</span>
+									SKU: {selectedProduct.sku || '---'}
 								</div>
 								{selectedProduct.serialNumber && (
-									<div
-										className="flex items-center gap-1.5 bg-orange-50 dark:bg-orange-900/30 px-2 py-1 rounded-lg border border-orange-100 dark:border-orange-800/50 cursor-pointer group/copy hover:bg-orange-100/50 transition-all active:scale-95"
-										onClick={() => copyToClipboard(selectedProduct.serialNumber, 'số Seri')}
-										title="Copy số Seri"
-									>
-										<span className="material-symbols-outlined text-[14px] text-orange-500">fingerprint</span>
-										<span className="text-xs font-bold text-orange-600 dark:text-orange-300">SN: {selectedProduct.serialNumber}</span>
-										<span className="material-symbols-outlined text-[12px] text-orange-400 opacity-0 group-hover/copy:opacity-100 transition-opacity">content_copy</span>
-									</div>
+									<>
+										<span className="text-slate-300 dark:text-slate-600">•</span>
+										<div 
+											className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1 cursor-pointer hover:text-orange-500 transition-colors" 
+											onClick={() => copyToClipboard(selectedProduct.serialNumber, 'số Seri')}
+										>
+											<span className="material-symbols-outlined text-[14px]">fingerprint</span>
+											SN: {selectedProduct.serialNumber}
+										</div>
+									</>
 								)}
-								<div className="flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-1 rounded-lg border border-indigo-100 dark:border-indigo-800/50">
-									<span className="material-symbols-outlined text-[14px] text-indigo-500">category</span>
-									<span className="text-xs font-bold text-indigo-600 dark:text-indigo-300">{selectedProduct.category}</span>
+							</div>
+						</div>
+					</div>
+
+					{/* Detail Rows */}
+					<div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-12 gap-y-1">
+						{/* Price Sell */}
+						<div className="flex items-center gap-4 py-4 border-b border-slate-100 dark:border-slate-800/50">
+							<span className="material-symbols-outlined text-slate-400">payments</span>
+							<div className="flex-1 min-w-0">
+								<p className="text-[10px] font-black text-slate-400 uppercase">Giá bán công bố</p>
+								<p className="text-base font-bold text-blue-600 dark:text-blue-400">{formatPrice(selectedProduct.priceSell)}</p>
+							</div>
+						</div>
+
+						{/* Stock */}
+						<div className="flex items-center gap-4 py-4 border-b border-slate-100 dark:border-slate-800/50">
+							<span className="material-symbols-outlined text-slate-400">inventory_2</span>
+							<div className="flex-1 min-w-0">
+								<p className="text-[10px] font-black text-slate-400 uppercase">Tồn kho hiện tại</p>
+								<p className="text-base font-bold text-[#1A237E] dark:text-indigo-400">
+									{groupedStock} <span className="text-sm font-semibold">{selectedProduct.unit}</span>
+								</p>
+								{skuCount > 1 && (
+									<p className="text-[9px] text-slate-400 italic">Tổng gộp từ {skuCount} bản ghi SKU</p>
+								)}
+							</div>
+						</div>
+
+						{hasManagePermission && (
+							<>
+								{/* Price Import */}
+								<div className="flex items-center gap-4 py-4 border-b border-slate-100 dark:border-slate-800/50">
+									<span className="material-symbols-outlined text-slate-400">storefront</span>
+									<div className="flex-1 min-w-0">
+										<p className="text-[10px] font-black text-slate-400 uppercase">Giá nhập kho</p>
+										<p className="text-base font-bold text-orange-600 dark:text-orange-400">{formatPrice(selectedProduct.priceImport)}</p>
+									</div>
 								</div>
+								{/* Profit */}
+								<div className="flex items-center gap-4 py-4 border-b border-slate-100 dark:border-slate-800/50">
+									<span className="material-symbols-outlined text-slate-400">trending_up</span>
+									<div className="flex-1 min-w-0">
+										<p className="text-[10px] font-black text-slate-400 uppercase">Lợi nhuận ước tính</p>
+										<p className="text-base font-bold text-emerald-600 dark:text-emerald-400">{formatPrice(selectedProduct.priceSell - selectedProduct.priceImport)}</p>
+									</div>
+								</div>
+							</>
+						)}
+
+						{/* Specification */}
+						<div className="flex items-center gap-4 py-4 border-b border-slate-100 dark:border-slate-800/50">
+							<span className="material-symbols-outlined text-slate-400">straighten</span>
+							<div className="flex-1 min-w-0">
+								<p className="text-[10px] font-black text-slate-400 uppercase">Quy cách</p>
+								<p className="text-sm font-semibold text-slate-700 dark:text-slate-300">{selectedProduct.specification || '---'}</p>
+							</div>
+						</div>
+
+						{/* Packaging */}
+						<div className="flex items-center gap-4 py-4 border-b border-slate-100 dark:border-slate-800/50">
+							<span className="material-symbols-outlined text-slate-400">package_2</span>
+							<div className="flex-1 min-w-0">
+								<p className="text-[10px] font-black text-slate-400 uppercase">Đóng gói</p>
+								<p className="text-sm font-semibold text-slate-700 dark:text-slate-300">{selectedProduct.packaging || '---'}</p>
+							</div>
+						</div>
+
+						{/* Weight */}
+						<div className="flex items-center gap-4 py-4 border-b border-slate-100 dark:border-slate-800/50">
+							<span className="material-symbols-outlined text-slate-400">scale</span>
+							<div className="flex-1 min-w-0">
+								<p className="text-[10px] font-black text-slate-400 uppercase">Trọng lượng</p>
+								<p className="text-sm font-semibold text-slate-700 dark:text-slate-300">{selectedProduct.density || '---'}</p>
+							</div>
+						</div>
+
+						{/* Expiry */}
+						<div className="flex items-center gap-4 py-4 border-b border-slate-100 dark:border-slate-800/50">
+							<span className="material-symbols-outlined text-slate-400">event_busy</span>
+							<div className="flex-1 min-w-0">
+								<p className="text-[10px] font-black text-slate-400 uppercase">Ngày hết hạn (Auto-Delete)</p>
+								<p className="text-sm font-semibold text-orange-600 dark:text-orange-400">
+									{selectedProduct.expiryDate ? new Date(selectedProduct.expiryDate).toLocaleDateString('vi-VN') : 'Không giới hạn'}
+								</p>
+							</div>
+						</div>
+
+						{/* Note */}
+						<div className="flex items-start gap-4 py-4 border-b border-slate-100 dark:border-slate-800/50 md:col-span-2">
+							<span className="material-symbols-outlined text-slate-400 mt-1">description</span>
+							<div className="flex-1 min-w-0">
+								<p className="text-[10px] font-black text-slate-400 uppercase mb-1">Mô tả / Ghi chú</p>
+								<p className="text-sm font-semibold text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{selectedProduct.note || 'Không có ghi chú'}</p>
+							</div>
+						</div>
+
+						{/* Created By */}
+						<div className="flex items-center gap-4 py-4 border-b border-slate-100 dark:border-slate-800/50 md:col-span-2">
+							<span className="material-symbols-outlined text-slate-400">account_circle</span>
+							<div className="flex-1 min-w-0">
+								<p className="text-[10px] font-black text-slate-400 uppercase">Người tạo</p>
+								<p className="text-sm font-semibold text-blue-500 truncate">{selectedProduct.createdByEmail || 'N/A'}</p>
 							</div>
 						</div>
 					</div>
 
-					<div className="grid grid-cols-2 gap-4">
-						<div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl">
-							<p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase mb-1">Giá bán công bố</p>
-							<p className="text-blue-600 dark:text-blue-400 font-black text-lg">{formatPrice(selectedProduct.priceSell)}</p>
-						</div>
-						<div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl">
-							<p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase mb-1">Tồn kho hiện tại</p>
-							<p className="text-[#1A237E] dark:text-indigo-400 font-black text-lg">
-								{groupedStock}
-								<span className="text-xs"> {selectedProduct.unit}</span>
-							</p>
-							{skuCount > 1 && (
-								<p className="text-[9px] text-slate-400 italic">Tổng gộp từ {skuCount} bản ghi SKU</p>
-							)}
-						</div>
+					{/* QR Code Section */}
+					<div className="mt-8 flex flex-col items-center justify-center p-6 bg-slate-50 dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800">
+						<QRCodeCanvas
+							ref={qrRef}
+							value={selectedProduct.id}
+							size={300}
+							level="H"
+							includeMargin={false}
+							className="rounded-xl shadow-sm bg-white p-2"
+							style={{ width: 140, height: 140 }}
+						/>
+						<p className="text-[10px] font-black text-slate-400 uppercase mt-4 tracking-widest">QR ID Sản phẩm</p>
+						<button
+							onClick={() => printQRLabel(selectedProduct)}
+							className="mt-4 flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold shadow-sm border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all active:scale-95"
+						>
+							<span className="material-symbols-outlined text-base">print</span>
+							In Tem QR
+						</button>
 					</div>
 
-					{hasManagePermission && (
-						<div className="grid grid-cols-2 gap-4">
-							<div className="bg-orange-50 dark:bg-slate-800 p-4 rounded-2xl border border-orange-100 dark:border-orange-500/20">
-								<p className="text-[10px] font-bold text-orange-500 uppercase mb-1">Giá nhập kho</p>
-								<p className="text-orange-600 dark:text-orange-400 font-black text-xl">{formatPrice(selectedProduct.priceImport)}</p>
-							</div>
-							<div className="bg-emerald-50 dark:bg-slate-800 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-500/20">
-								<p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-500 uppercase mb-1">Lợi nhuận ước tính</p>
-								<p className="text-emerald-600 dark:text-emerald-400 font-black text-xl">{formatPrice(selectedProduct.priceSell - selectedProduct.priceImport)}</p>
-							</div>
-						</div>
-					)}
-
-					<div className="grid grid-cols-2 gap-3">
-						<div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
-							<p className="text-[9px] font-bold text-gray-400 dark:text-slate-500 uppercase mb-1">Quy cách</p>
-							<p className="text-xs font-black text-[#1A237E] dark:text-indigo-300">{selectedProduct.specification || '---'}</p>
-						</div>
-						<div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
-							<p className="text-[9px] font-bold text-gray-400 dark:text-slate-500 uppercase mb-1">Đóng gói</p>
-							<p className="text-xs font-black text-[#1A237E] dark:text-indigo-300">{selectedProduct.packaging || '---'}</p>
-						</div>
-						<div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
-							<p className="text-[9px] font-bold text-gray-400 dark:text-slate-500 uppercase mb-1">Trọng lượng</p>
-							<p className="text-xs font-black text-[#1A237E] dark:text-indigo-300">{selectedProduct.density || '---'}</p>
-						</div>
-						<div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
-							<p className="text-[9px] font-bold text-orange-500 uppercase mb-1">Ngày hết hạn (Auto-Delete)</p>
-							<p className="text-xs font-black text-orange-600 dark:text-orange-400">
-								{selectedProduct.expiryDate ? new Date(selectedProduct.expiryDate).toLocaleDateString('vi-VN') : 'Không giới hạn'}
-							</p>
-						</div>
-					</div>
-
-					<div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-6">
-						<div className="flex-1">
-							<p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase mb-1">Mô tả / Ghi chú</p>
-							<p className="text-slate-600 dark:text-slate-300 italic whitespace-pre-wrap">{selectedProduct.note || 'Không có ghi chú'}</p>
-							<div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
-								<p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase mb-1">Người tạo</p>
-								<p className="text-[10px] text-blue-500 font-bold truncate max-w-[200px]">{selectedProduct.createdByEmail || 'N/A'}</p>
-							</div>
-						</div>
-						<div className="flex flex-col items-center p-4 bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-700 shrink-0">
-							<QRCodeCanvas
-								ref={qrRef}
-								value={selectedProduct.id}
-								size={300}
-								level="H"
-								includeMargin={false}
-								className="rounded-lg"
-								style={{ width: 120, height: 120 }}
-							/>
-							<p className="text-[9px] font-black text-slate-400 uppercase mt-3 tracking-widest">QR ID Sản phẩm</p>
-							<button
-								onClick={() => printQRLabel(selectedProduct)}
-								className="mt-3 flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 rounded-lg text-[10px] font-black uppercase hover:bg-orange-100 transition-all border border-orange-100 dark:border-orange-800"
-							>
-								<span className="material-symbols-outlined text-sm">print</span>
-								In Tem QR
-							</button>
-						</div>
-					</div>
-
-					<div className="flex gap-3 pt-2 pb-6">
+					{/* Actions */}
+					<div className="flex gap-3 pt-8 pb-10">
 						<button
 							onClick={() => { onClose(); openEdit(selectedProduct); }}
-							className="flex-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
+							className="flex-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 py-3.5 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all active:scale-[0.98]"
 						>
-							<span className="material-symbols-outlined text-lg">edit</span> Chỉnh sửa
+							<span className="material-symbols-outlined">edit</span> Chỉnh sửa
 						</button>
 						<button
 							onClick={() => { onClose(); handleDeleteProduct(selectedProduct.id); }}
-							className="flex-1 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
+							className="flex-1 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 py-3.5 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-red-100 dark:hover:bg-red-900/40 transition-all active:scale-[0.98]"
 						>
-							<span className="material-symbols-outlined text-lg">delete</span> Xóa sản phẩm
+							<span className="material-symbols-outlined">delete</span> Xóa sản phẩm
 						</button>
 					</div>
 				</div>

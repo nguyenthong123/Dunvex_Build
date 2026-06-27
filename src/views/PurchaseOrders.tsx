@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Store, Plus, Search, Trash, X, ArrowLeft, CheckCircle2, Package, History, MessageCircle, Send, Loader } from 'lucide-react';
+import { Store, Plus, Search, Trash, X, ArrowLeft, CheckCircle2, Package, History, MessageCircle, Send, Loader, Edit3 } from 'lucide-react';
 import { useOwner } from '../hooks/useOwner';
 import { useSuppliers } from '../hooks/useSuppliers';
 import { useProducts } from '../hooks/useProducts';
 import { usePurchaseOrders } from '../hooks/usePurchaseOrders';
 import { useSupplierDebts } from '../hooks/useSupplierDebts';
 import { useToast } from '../components/shared/Toast';
-import { serverTimestamp, runTransaction, doc, collection, writeBatch, increment, addDoc } from 'firebase/firestore';
+import { serverTimestamp, runTransaction, doc, collection, writeBatch, increment, addDoc, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { inventoryService } from '../services/dataAccess';
 import { parseSupplyMessage } from '../services/supplyBotService';
@@ -82,6 +82,7 @@ const PurchaseOrders = () => {
 	const [expandedPO, setExpandedPO] = useState<string | null>(null);
 	const [deletingPO, setDeletingPO] = useState<string | null>(null); // PO đang chờ xác nhận xoá
 	const [cancellingPO, setCancellingPO] = useState<string | null>(null); // PO đang được xoá (loading)
+	const [editingPO, setEditingPO] = useState<any>(null); // PO đang được chỉnh sửa
 	const chatEndRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
@@ -233,10 +234,80 @@ const PurchaseOrders = () => {
 			debtAmount: unpaidAmount,
 			note: orderNote,
 			status: 'Hoàn thành',
-			orderDate: new Date().toISOString()
+			orderDate: editingPO ? editingPO.orderDate : new Date().toISOString()
 		};
 
 		try {
+			// 🔄 CHỈNH SỬA ĐƠN: Cập nhật thay vì tạo mới
+			if (editingPO) {
+				// Tính chênh lệch tồn kho
+				const oldItems: Record<string, number> = {};
+				(editingPO.items || []).forEach((item: any) => {
+					if (item.productId) oldItems[item.productId] = (oldItems[item.productId] || 0) + Number(item.qty || 0);
+				});
+				const newItems: Record<string, number> = {};
+				validItems.forEach(item => {
+					newItems[item.productId] = (newItems[item.productId] || 0) + Number(item.qty);
+				});
+
+				const allProductIds = [...new Set([...Object.keys(oldItems), ...Object.keys(newItems)])];
+				
+				// Đọc tất cả product docs
+				const productRefs = allProductIds.map(id => doc(db, 'products', id));
+				const productSnaps = await Promise.all(productRefs.map(ref => getDoc(ref)));
+
+				// Cập nhật stock + debt trong transaction
+				await runTransaction(db, async (transaction) => {
+					for (let i = 0; i < allProductIds.length; i++) {
+						const pid = allProductIds[i];
+						const snap = productSnaps[i];
+						if (!snap.exists()) continue;
+						const oldQty = oldItems[pid] || 0;
+						const newQty = newItems[pid] || 0;
+						const diff = newQty - oldQty;
+						if (diff !== 0) {
+							const data = snap.data();
+							const currentStock = Number(data.stock) || 0;
+							transaction.update(productRefs[i], {
+								stock: currentStock + diff,
+								priceImport: newItems[pid] > 0 ? validItems.find(v => v.productId === pid)?.priceImport : data.priceImport
+							});
+						}
+					}
+
+					// Cập nhật debt
+					const supplierRef = doc(db, 'suppliers', selectedSupplier.id);
+					const supplierSnap = await transaction.get(supplierRef);
+					const supplierData = supplierSnap.data() || {};
+					const oldDebt = editingPO.debtAmount || 0;
+					const debtDiff = unpaidAmount - oldDebt;
+					if (debtDiff !== 0) {
+						transaction.update(supplierRef, {
+							totalDebt: (supplierData.totalDebt || 0) + debtDiff
+						});
+						if (debtDiff > 0) {
+							const debtRef = doc(collection(db, 'supplier_debts'));
+							transaction.set(debtRef, {
+								ownerId: owner.ownerId, supplierId: selectedSupplier.id, supplierName: selectedSupplier.name,
+								type: 'debt_increase', amount: debtDiff,
+								note: `Điều chỉnh nợ - sửa PO #${editingPO.id.slice(0, 8)}`,
+								orderId: editingPO.id, createdBy: owner.ownerId, createdAt: serverTimestamp()
+							});
+						}
+					}
+
+					// Cập nhật PO document
+					transaction.update(doc(db, 'purchase_orders', editingPO.id), {
+						...orderData,
+						updatedAt: serverTimestamp()
+					});
+				});
+
+				showToast("Đã cập nhật phiếu nhập kho", "success");
+				resetEditForm();
+				return;
+			}
+
 			// ─── P0 FIX: Atomic Firestore transaction ───
 			// Tất cả các bước (tạo PO + update stock + tạo debt + update totalDebt) chạy trong 1 transaction
 			const orderId = await runTransaction(db, async (transaction) => {
@@ -318,17 +389,40 @@ const PurchaseOrders = () => {
 			// If paidAmount > 0, we should record a payment transaction too, but to keep it simple, it's just "tiền trả ngay".
 
 			showToast("Đã hoàn thành phiếu nhập kho", "success");
-			setActiveTab('list');
-			
-			// Reset Form
-			setSelectedSupplier(null);
-			setOrderNote('');
-			setItems([{ id: crypto.randomUUID(), productId: '', name: '', qty: '', priceImport: 0 }]);
-			setPaidAmount('');
+			resetEditForm();
 		} catch (error) {
 			console.error(error);
 			showToast("Có lỗi xảy ra", "error");
 		}
+	};
+
+	// Reset form sau khi tạo hoặc sửa đơn
+	const resetEditForm = () => {
+		setEditingPO(null);
+		setSelectedSupplier(null);
+		setOrderNote('');
+		setItems([{ id: crypto.randomUUID(), productId: '', name: '', qty: '', priceImport: 0 }]);
+		setPaidAmount('');
+		setActiveTab('list');
+	};
+
+	// P1 #4.5: Chỉnh sửa đơn nhập hàng → chuyển sang tab Tạo đơn với dữ liệu cũ
+	const handleEditPO = (po: any) => {
+		setEditingPO(po);
+		setSelectedSupplier({ id: po.supplierId, name: po.supplierName });
+		setOrderNote(po.note || '');
+		setPaidAmount(String(po.paidAmount || 0));
+		setItems((po.items || []).map((item: any) => ({
+			id: crypto.randomUUID(),
+			productId: item.productId || '',
+			name: item.name || '',
+			qty: String(item.qty || ''),
+			priceImport: Number(item.priceImport || 0)
+		})));
+		if ((po.items || []).length === 0) {
+			setItems([{ id: crypto.randomUUID(), productId: '', name: '', qty: '', priceImport: 0 }]);
+		}
+		setActiveTab('create');
 	};
 
 	// P1 #4: Huỷ đơn nhập hàng + rollback stock/debt trong transaction
@@ -781,7 +875,7 @@ const PurchaseOrders = () => {
 							onClick={() => setActiveTab('create')}
 							className={`flex-1 py-3 text-sm font-bold uppercase tracking-wider border-b-2 transition-colors ${activeTab === 'create' ? 'border-[#FF6D00] text-[#FF6D00]' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
 						>
-							Tạo Đơn Mới
+							{editingPO ? 'Chỉnh Sửa Đơn' : 'Tạo Đơn Mới'}
 						</button>
 					</div>
 				</div>
@@ -832,13 +926,22 @@ const PurchaseOrders = () => {
 											<span className="text-xs text-red-500">Đang xoá...</span>
 										</div>
 									) : (
-										<button
-											onClick={(e) => { e.stopPropagation(); handleCancelPO(po); }}
-											className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-											title="Huỷ đơn nhập hàng"
-										>
-											<Trash size={16} />
-										</button>
+										<div className="flex items-center gap-1">
+											<button
+												onClick={(e) => { e.stopPropagation(); handleEditPO(po); }}
+												className="p-2 text-slate-300 hover:text-[#FF6D00] hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+												title="Chỉnh sửa đơn nhập hàng"
+											>
+												<Edit3 size={16} />
+											</button>
+											<button
+												onClick={(e) => { e.stopPropagation(); handleCancelPO(po); }}
+												className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+												title="Huỷ đơn nhập hàng"
+											>
+												<Trash size={16} />
+											</button>
+										</div>
 									)}
 									</div>
 								</div>
@@ -875,6 +978,25 @@ const PurchaseOrders = () => {
 				</div>
 			) : (
 				<div className="mt-4 space-y-6">
+					{/* Banner khi đang sửa đơn */}
+					{editingPO && (
+						<div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-2xl p-4 flex items-center justify-between">
+							<div className="flex items-center gap-3">
+								<Edit3 size={18} className="text-[#FF6D00]" />
+								<div>
+									<div className="font-black text-[#FF6D00] text-sm uppercase">Đang chỉnh sửa đơn #{editingPO.id.slice(0, 8).toUpperCase()}</div>
+									<div className="text-xs text-slate-500 mt-0.5">{editingPO.supplierName} • {editingPO.items?.length || 0} SP</div>
+								</div>
+							</div>
+							<button
+								onClick={resetEditForm}
+								className="px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-600 hover:text-red-500 transition-colors"
+							>
+								Huỷ chỉnh sửa
+							</button>
+						</div>
+					)}
+
 					{/* Chọn Nhà Cung Cấp */}
 					<div className="bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
 						<h3 className="font-black text-slate-800 dark:text-white uppercase tracking-tight mb-4 flex items-center gap-2">
@@ -1078,7 +1200,7 @@ const PurchaseOrders = () => {
 								onClick={handleSubmit}
 								className="w-full mt-6 py-4 bg-[#FF6D00] text-white font-black rounded-xl shadow-lg shadow-orange-500/30 hover:bg-[#E66000] active:scale-[0.98] transition-all flex justify-center items-center gap-2 uppercase tracking-wide text-lg"
 							>
-								<CheckCircle2 size={24} /> Hoàn Thành Nhập Kho
+								<CheckCircle2 size={24} /> {editingPO ? 'Cập Nhật Đơn Nhập' : 'Hoàn Thành Nhập Kho'}
 							</button>
 						</div>
 					</div>

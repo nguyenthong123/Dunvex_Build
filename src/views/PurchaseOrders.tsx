@@ -7,8 +7,8 @@ import { useProducts } from '../hooks/useProducts';
 import { usePurchaseOrders } from '../hooks/usePurchaseOrders';
 import { useSupplierDebts } from '../hooks/useSupplierDebts';
 import { useToast } from '../components/shared/Toast';
-import { serverTimestamp, runTransaction, doc, collection, writeBatch, increment, addDoc } from 'firebase/firestore';
-import { db } from '../services/firebase';
+import { serverTimestamp, runTransaction, doc, collection, writeBatch, increment, addDoc, getDoc, setDoc } from 'firebase/firestore';
+import { db, auth } from '../services/firebase';
 import { inventoryService } from '../services/dataAccess';
 import { parseSupplyMessage } from '../services/supplyBotService';
 
@@ -78,6 +78,41 @@ const PurchaseOrders = () => {
 		{ role: 'bot', text: '👋 Chào anh! Tôi là trợ lý nhập hàng. Tôi có thể giúp anh:\n• Tạo nhà cung cấp mới\n• Tạo đơn nhập hàng\n• Ghi nhận trả nợ NCC\n• Nhập hàng từ Google Sheet' }
 	]);
 	const [chatLoading, setChatLoading] = useState(false);
+	const chatInitialLoad = useRef(true);
+
+	// 🔄 Lưu & tải lịch sử chat từ Firestore
+	const supplyChatDocId = owner.ownerId && auth.currentUser?.uid ? `supply_bot_${owner.ownerId}_${auth.currentUser.uid}` : null;
+
+	useEffect(() => {
+		if (!supplyChatDocId) return;
+		const loadChat = async () => {
+			try {
+				const snap = await getDoc(doc(db, 'supply_bot_chats', supplyChatDocId));
+				if (snap.exists()) {
+					const data = snap.data();
+					if (data.messages && data.messages.length > 0) {
+						setChatMessages(data.messages);
+					}
+				}
+			} catch (err) {
+				console.error('Load supply chat error:', err);
+			} finally {
+				setTimeout(() => { chatInitialLoad.current = false; }, 200);
+			}
+		};
+		loadChat();
+	}, [supplyChatDocId]);
+
+	useEffect(() => {
+		if (chatInitialLoad.current || !supplyChatDocId) return;
+		const recent = chatMessages.slice(-30);
+		setDoc(doc(db, 'supply_bot_chats', supplyChatDocId), {
+			ownerId: owner.ownerId,
+			userId: auth.currentUser?.uid,
+			messages: recent,
+			updatedAt: serverTimestamp()
+		}, { merge: true }).catch(err => console.error('Save supply chat error:', err));
+	}, [chatMessages, supplyChatDocId, owner.ownerId]);
 	const [pendingSheetOrder, setPendingSheetOrder] = useState<{ items: any[]; total: number; notFound: string[] } | null>(null);
 	const [expandedPO, setExpandedPO] = useState<string | null>(null);
 	const [deletingPO, setDeletingPO] = useState<string | null>(null); // PO đang chờ xác nhận xoá

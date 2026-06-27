@@ -837,7 +837,7 @@ const PurchaseOrders = () => {
 			// Giá: ưu tiên "đơn giá" > "giá bán" > "giá nhập" > "giá" > "dongia" > "price"
 			const priceCandidates = [
 				{ match: (h: string) => h.includes('dongia') || h.includes('don gia'), label: 'đơn giá' },
-				{ match: (h: string) => h.includes('giaban') || h.includes('gia ban') || h.includes('ban'), label: 'giá bán' },
+				{ match: (h: string) => h.includes('giaban') || h.includes('gia ban'), label: 'giá bán' },
 				{ match: (h: string) => h.includes('gianhap') || h.includes('gia nhap') || h.includes('nhap'), label: 'giá nhập' },
 				{ match: (h: string) => h.includes('price'), label: 'price' },
 				{ match: (h: string) => h.includes('gia') && !h.includes('ghichu') && !h.includes('danhgia') && !h.includes('thanh'), label: 'giá' },
@@ -866,7 +866,30 @@ const PurchaseOrders = () => {
 				if (!rowName) continue;
 
 				const rowQty = qtyColIdx >= 0 ? parseInt(cols[qtyColIdx], 10) || 1 : 1;
-				const rowPrice = priceColIdx >= 0 ? parseFloat((cols[priceColIdx] || '0').replace(/[^\d.,-]/g, '').replace(/\./g, '').replace(',', '.')) || 0 : 0;
+				const rawPrice = (cols[priceColIdx] || '0').replace(/[^\d.,-]/g, '').trim();
+				let rowPrice = 0;
+				if (rawPrice) {
+					// Xử lý format tiếng Việt: dấu , là phân cách hàng nghìn, . là thập phân (nếu có)
+					// VD: "79,000" → 79000, "1,234.56" → 1234.56, "1.234,56" → 1234.56
+					if (rawPrice.includes('.') && rawPrice.includes(',')) {
+						const lastDot = rawPrice.lastIndexOf('.');
+						const lastComma = rawPrice.lastIndexOf(',');
+						if (lastDot > lastComma) {
+							rowPrice = parseFloat(rawPrice.replace(/,/g, '')) || 0;
+						} else {
+							rowPrice = parseFloat(rawPrice.replace(/\./g, '').replace(',', '.')) || 0;
+						}
+					} else if (rawPrice.includes(',')) {
+						const afterComma = rawPrice.split(',').pop() || '';
+						if (afterComma.length <= 2 && !/,\d{3}$/.test(rawPrice)) {
+							rowPrice = parseFloat(rawPrice.replace(',', '.')) || 0;
+						} else {
+							rowPrice = parseFloat(rawPrice.replace(/,/g, '')) || 0;
+						}
+					} else {
+						rowPrice = parseFloat(rawPrice) || 0;
+					}
+				}
 
 				const product = findMatchingProduct(rowName, products);
 				if (product) {

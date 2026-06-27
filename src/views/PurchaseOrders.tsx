@@ -512,28 +512,40 @@ const PurchaseOrders = () => {
 				}
 			}
 			
-			// Xoá công nợ gốc (thay vì tạo offset payment như cũ)
-			if ((po.debtAmount || 0) > 0 && po.supplierId) {
+			// Xoá TẤT CẢ công nợ liên quan đến PO này (kể cả debt_increase + payment/cancellation cũ)
+			// Dùng getDocs toàn bộ rồi lọc — tránh cần composite index
+			if (po.supplierId) {
 				try {
-					// Tìm VÀ xoá TẤT CẢ bản ghi công nợ liên quan đến PO này (gồm debt_increase + payment/cancellation cũ)
-					const debtQuery = query(
+					const allDebtsQuery = query(
 						collection(db, 'supplier_debts'),
-						where('ownerId', '==', owner.ownerId),
-						where('orderId', '==', po.id)
+						where('ownerId', '==', owner.ownerId)
 					);
-					const debtSnapshot = await getDocs(debtQuery);
+					const allDebtsSnap = await getDocs(allDebtsQuery);
+					// Lọc manually theo orderId (tránh cần index ownerId+orderId)
+					const matchedDocs = allDebtsSnap.docs.filter(d => d.data().orderId === po.id);
 					
-					// Xoá tất cả bản ghi nợ liên quan đến PO này
-					const deletePromises = debtSnapshot.docs.map(d => deleteDoc(d.ref));
-					await Promise.all(deletePromises);
+					if (matchedDocs.length > 0) {
+						await Promise.all(matchedDocs.map(d => deleteDoc(d.ref)));
+						console.log(`🧹 Đã xoá ${matchedDocs.length} bản ghi công nợ cho PO ${po.id.slice(0, 8)}`);
+					} else {
+						console.warn(`⚠️ Không tìm thấy bản ghi công nợ cho PO ${po.id.slice(0, 8)}`);
+					}
 					
 					// Cập nhật totalDebt của NCC
-					const supplierRef = doc(db, 'suppliers', po.supplierId);
-					await updateDoc(supplierRef, {
-						totalDebt: increment(-po.debtAmount)
-					});
+					const totalCleaned = matchedDocs.reduce((sum, d) => {
+						const data = d.data();
+						if (data.type === 'debt_increase') return sum + (Number(data.amount) || 0);
+						if (data.type === 'payment' || data.type === 'cancellation') return sum - (Number(data.amount) || 0);
+						return sum;
+					}, 0);
+					if (totalCleaned !== 0) {
+						const supplierRef = doc(db, 'suppliers', po.supplierId);
+						await updateDoc(supplierRef, {
+							totalDebt: increment(-totalCleaned)
+						});
+					}
 				} catch (e) {
-					console.warn('Debt cleanup failed:', e);
+					console.error('❌ Debt cleanup failed:', e);
 				}			}
 		} catch (error: any) {
 			setCancellingPO(null);

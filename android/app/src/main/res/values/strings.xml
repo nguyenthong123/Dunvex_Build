@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Dunvex Build</string>
+    <string name="title_activity_main">Dunvex Build</string>
+    <string name="package_name">com.dunvex.build</string>
+    <string name="custom_url_scheme">com.dunvex.build</string>
+</resources>

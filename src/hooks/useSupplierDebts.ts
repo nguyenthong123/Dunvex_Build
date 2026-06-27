@@ -35,5 +35,9 @@ export function useSupplierDebts() {
     return await supplierDebtService.create({ ...data, ownerId: owner.ownerId });
   };
 
-  return { debts, loading, addDebt };
+  const removeDebt = async (id: string) => {
+    return await supplierDebtService.remove(id);
+  };
+
+  return { debts, loading, addDebt, removeDebt };
 }

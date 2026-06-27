@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "479067154630",
+    "project_id": "dunvex-89461",
+    "storage_bucket": "dunvex-89461.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:479067154630:android:0ca39d41aaaa1ca0564fc7",
+        "android_client_info": {
+          "package_name": "com.dunvex.build"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "479067154630-q5kqmoetn87667selc90la709n9au5de.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB4kchTdeuw12GcyeKN2giScJR1Ye9TSpE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "479067154630-q5kqmoetn87667selc90la709n9au5de.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

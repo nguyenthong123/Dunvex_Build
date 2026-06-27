@@ -42,3 +42,4 @@ GAS_*
 # Project Roadmap/Internal
 # PROJECT_SITEMAP.md
 .vercel
+.env*

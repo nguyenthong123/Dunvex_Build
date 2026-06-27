@@ -1,20 +1,25 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useOwner } from '../hooks/useOwner';
 import { useSuppliers } from '../hooks/useSuppliers';
 import { useSupplierDebts } from '../hooks/useSupplierDebts';
+import { usePurchaseOrders } from '../hooks/usePurchaseOrders';
 import { useToast } from '../components/shared/Toast';
-import { Search, FileText, CheckCircle2, History, X, Plus } from 'lucide-react';
-import { serverTimestamp, increment } from 'firebase/firestore';
+import { Search, FileText, CheckCircle2, History, X, Plus, Trash2, ChevronLeft } from 'lucide-react';
+import { serverTimestamp } from 'firebase/firestore';
 
 const SupplierDebts = () => {
 	const owner = useOwner();
 	const { showToast } = useToast();
 	const { suppliers, updateSupplier } = useSuppliers();
-	const { debts, addDebt } = useSupplierDebts();
+	const { debts, addDebt, removeDebt } = useSupplierDebts();
+	const { purchaseOrders } = usePurchaseOrders();
 
 	const [activeTab, setActiveTab] = useState<'debts' | 'history'>('debts');
 	const [searchTerm, setSearchTerm] = useState('');
 	const searchInputRef = useRef<HTMLInputElement>(null);
+
+	const [showStatement, setShowStatement] = useState(false);
+	const [statementSupplier, setStatementSupplier] = useState<any>(null);
 
 	useEffect(() => {
 		const handleOpenSearch = () => {
@@ -104,20 +109,19 @@ const SupplierDebts = () => {
 		}
 
 		try {
-
+			// Ghi nhận TRẢ NỢ (giảm nợ), không phải ghi nợ mới
 			await addDebt({
 				supplierId: debtSupplier.id,
 				supplierName: debtSupplier.name,
-				type: 'debt_increase',
+				type: 'payment',
 				amount: amountNum,
-				note: debtNote || 'Ghi nợ bổ sung',
+				method: 'Chuyển khoản',
+				note: debtNote || 'Ghi nhận trả nợ',
 				createdBy: owner.ownerId,
 				createdAt: serverTimestamp()
 			});
 
-			// P0 #2: totalDebt tự động tính từ debts listener
-
-			showToast("Đã ghi nợ thành công", "success");
+			showToast("Đã ghi nhận trả nợ thành công", "success");
 			setShowAddDebtForm(false);
 			setDebtSupplier(null);
 			setDebtAmountInput('');
@@ -126,6 +130,22 @@ const SupplierDebts = () => {
 			console.error(error);
 			showToast("Có lỗi xảy ra", "error");
 		}
+	};
+
+	const handleDeleteDebt = async (debt: any) => {
+		if (!window.confirm(`Xoá giao dịch ${debt.type === 'payment' ? 'trả nợ' : 'ghi nợ'} ${debt.amount?.toLocaleString('vi-VN') || '0'}đ của ${debt.supplierName}?`)) return;
+		try {
+			await removeDebt(debt.id);
+			showToast("Đã xoá giao dịch", "success");
+		} catch (error: any) {
+			console.error(error);
+			showToast(`Lỗi khi xoá: ${error.message || 'Không xác định'}`, "error");
+		}
+	};
+
+	const openStatement = (supplier: any) => {
+		setStatementSupplier(supplier);
+		setShowStatement(true);
 	};
 
 	const formatCurrency = (val: any) => {
@@ -185,7 +205,7 @@ const SupplierDebts = () => {
 
 					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 						{filteredSuppliers.map(supplier => (
-							<div key={supplier.id} className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+							<div key={supplier.id} className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between cursor-pointer hover:border-[#FF6D00]/30 transition-all" onClick={() => openStatement(supplier)}>
 								<div>
 									<h3 className="font-bold text-lg text-slate-800 dark:text-white mb-1">{supplier.name}</h3>
 									<p className="text-sm text-slate-500 dark:text-slate-400 mb-4">{supplier.phone}</p>
@@ -196,7 +216,7 @@ const SupplierDebts = () => {
 										<div className="text-xl font-black text-red-600 dark:text-red-400">{formatCurrency(supplier.totalDebt)} đ</div>
 									</div>
 									<button
-										onClick={() => { setSelectedSupplier(supplier); setShowPaymentForm(true); }}
+										onClick={(e) => { e.stopPropagation(); setSelectedSupplier(supplier); setShowPaymentForm(true); }}
 										className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/30 transition-all flex items-center gap-2"
 									>
 										<CheckCircle2 size={18} />
@@ -214,37 +234,48 @@ const SupplierDebts = () => {
 				</div>
 			) : (
 				<div className="mt-4 space-y-3">
-					{debts.filter(d => ['payment', 'debt_increase'].includes(d.type)).map(payment => {
+					{debts.filter(d => ['payment', 'debt_increase', 'cancellation'].includes(d.type)).map(payment => {
 						const isIncrease = payment.type === 'debt_increase';
-						const colorClass = isIncrease ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400';
-						const bgClass = isIncrease ? 'bg-red-100 dark:bg-red-900/30' : 'bg-emerald-100 dark:bg-emerald-900/30';
-						const sign = isIncrease ? '+' : '-';
-						const typeLabel = payment.type === 'payment' ? 'Thanh toán trả nợ' : 'Ghi nợ mới';
+						const isCancellation = payment.type === 'cancellation';
+						const colorClass = isIncrease ? 'text-red-600 dark:text-red-400' : isCancellation ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400';
+						const bgClass = isIncrease ? 'bg-red-100 dark:bg-red-900/30' : isCancellation ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-emerald-100 dark:bg-emerald-900/30';
+						const icon = isCancellation ? '↩️' : null;
+						const sign = isIncrease ? '+' : isCancellation ? '↩' : '-';
+						const typeLabel = payment.type === 'payment' ? 'Thanh toán trả nợ' : payment.type === 'cancellation' ? 'Huỷ đơn nhập hàng' : 'Ghi nợ mới';
 
 						return (
-							<div key={payment.id} className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
-								<div className="flex items-center gap-4">
-									<div className={`size-10 rounded-full flex items-center justify-center ${bgClass} ${colorClass}`}>
-										<History size={20} />
+							<div key={payment.id} className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between group">
+								<div className="flex items-center gap-4 flex-1 min-w-0">
+									<div className={`size-10 rounded-full flex items-center justify-center shrink-0 ${bgClass} ${colorClass}`}>
+										{icon ? <span className="text-lg">{icon}</span> : <History size={20} />}
 									</div>
-									<div>
-										<h4 className="font-bold text-slate-800 dark:text-white">{payment.supplierName}</h4>
+									<div className="min-w-0">
+										<h4 className="font-bold text-slate-800 dark:text-white truncate">{payment.supplierName}</h4>
 										<div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
 											{payment.createdAt ? new Date(payment.createdAt.seconds * 1000).toLocaleString('vi-VN') : 'Đang xử lý...'}
 											<span className="mx-2">•</span>
 											<span className="font-semibold">{typeLabel}</span>
 											{payment.method && <><span className="mx-2">•</span>{payment.method}</>}
 										</div>
-										{payment.note && <div className="text-sm mt-1 text-slate-600 dark:text-slate-300">{payment.note}</div>}
+										{payment.note && <div className="text-sm mt-1 text-slate-600 dark:text-slate-300 truncate">{payment.note}</div>}
 									</div>
 								</div>
-								<div className="text-right">
-									<div className={`font-black text-lg ${colorClass}`}>{sign}{formatCurrency(payment.amount)} đ</div>
+								<div className="flex items-center gap-3">
+									<div className="text-right">
+										<div className={`font-black text-lg ${colorClass}`}>{sign}{formatCurrency(payment.amount)} đ</div>
+									</div>
+									<button
+										onClick={(e) => { e.stopPropagation(); handleDeleteDebt(payment); }}
+										className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+										title="Xoá giao dịch"
+									>
+										<Trash2 size={16} />
+									</button>
 								</div>
 							</div>
 						);
 					})}
-					{debts.filter(d => ['payment', 'debt_increase'].includes(d.type)).length === 0 && (
+					{debts.filter(d => ['payment', 'debt_increase', 'cancellation'].includes(d.type)).length === 0 && (
 						<div className="py-12 text-center text-slate-500 dark:text-slate-400 bg-white/50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800">
 							Chưa có lịch sử chi trả nào.
 						</div>
@@ -325,7 +356,7 @@ const SupplierDebts = () => {
 				<div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
 					<div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col">
 						<div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800">
-							<h3 className="font-black text-lg text-slate-800 dark:text-white uppercase tracking-tight">Ghi Nợ Mới</h3>
+							<h3 className="font-black text-lg text-slate-800 dark:text-white uppercase tracking-tight">Ghi Nhận Trả Nợ NCC</h3>
 							<button onClick={() => setShowAddDebtForm(false)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-full transition-colors">
 								<X size={20} />
 							</button>
@@ -408,9 +439,167 @@ const SupplierDebts = () => {
 							<button onClick={() => setShowAddDebtForm(false)} className="flex-1 px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-50 transition-colors">
 								Huỷ
 							</button>
-							<button type="submit" form="addDebtForm" className="flex-1 px-4 py-3 text-white font-bold rounded-xl shadow-lg transition-all flex justify-center items-center gap-2 bg-red-500 hover:bg-red-600 shadow-red-500/30">
-								<CheckCircle2 size={20} /> Xác Nhận Ghi Nợ
+							<button type="submit" form="addDebtForm" className="flex-1 px-4 py-3 text-white font-bold rounded-xl shadow-lg transition-all flex justify-center items-center gap-2 bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30">
+								<CheckCircle2 size={20} /> Xác Nhận Trả Nợ
 							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* === STATEMENT MODAL: Phiếu chi tiết công nợ NCC === */}
+			{showStatement && statementSupplier && (
+				<div className="fixed inset-0 z-[150] bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-0 md:p-4">
+					<div className="bg-transparent w-full max-w-3xl max-h-screen md:max-h-[95vh] relative flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
+						{/* Close button */}
+						<button onClick={() => setShowStatement(false)} className="absolute top-3 right-3 z-30 size-10 rounded-full bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex items-center justify-center shadow-sm transition-all">
+							<X size={18} />
+						</button>
+
+						{/* Scrollable content */}
+						<div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar px-4 sm:px-6 py-4 sm:py-6">
+							{(() => {
+								const supplierPOs = purchaseOrders.filter(po => po.supplierId === statementSupplier.id);
+								const supplierPayments = debts.filter(d => d.supplierId === statementSupplier.id && d.type === 'payment');
+
+								// Tổng nhập hàng từ đơn PO (đây là nguồn nợ gốc)
+								const totalImport = supplierPOs.reduce((sum, po) => sum + Number(po.totalAmount || 0), 0);
+								// Tổng đã trả (chỉ payment thật, không tính huỷ đơn)
+								const totalPaid = supplierPayments.reduce((sum, d) => sum + Number(d.amount || 0), 0);
+								// Còn nợ = tổng nhập - đã trả
+								const remainingDebt = totalImport - totalPaid;
+
+								return (
+									<div className="w-full max-w-full sm:w-fit sm:mx-auto">
+										{/* Header */}
+										<header className="mb-6 text-center">
+											<h1 className="text-lg sm:text-xl font-black text-slate-900 uppercase tracking-[2px] mb-2">Chi Tiết Công Nợ NCC</h1>
+											<div className="flex justify-center items-center gap-3 sm:gap-6 text-[10px] sm:text-xs flex-wrap">
+												<div className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 rounded-lg">
+													<span className="text-slate-400 font-bold uppercase tracking-widest text-[9px]">NCC</span>
+													<span className="font-bold text-[#1A237E]">{statementSupplier.name}</span>
+												</div>
+												<div className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 rounded-lg">
+													<span className="text-slate-400 font-bold uppercase tracking-widest text-[9px]">Ngày lập</span>
+													<span className="font-bold text-slate-700">{new Date().toLocaleDateString('vi-VN')}</span>
+												</div>
+												<span className={`inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${remainingDebt > 0 ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-emerald-50 text-emerald-600 border border-emerald-200'}`}>
+													{remainingDebt > 0 ? 'Còn nợ' : 'Đã tất toán'}
+												</span>
+											</div>
+										</header>
+
+										{/* Supplier Info Card */}
+										<section className="mb-6">
+											<div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+												<div className="px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3">
+													<div>
+														<span className="font-black text-slate-900 text-base sm:text-lg uppercase tracking-tight">{statementSupplier.name}</span>
+														{statementSupplier.phone && <p className="text-[10px] text-slate-400 font-bold mt-0.5">{statementSupplier.phone}</p>}
+													</div>
+													<span className={`shrink-0 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider ${remainingDebt > 0 ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-emerald-50 text-emerald-600 border border-emerald-200'}`}>
+														{remainingDebt > 0 ? 'Còn nợ' : 'Đã tất toán'}
+													</span>
+												</div>
+											</div>
+										</section>
+
+										{/* Summary Card */}
+										<div className="rounded-2xl bg-white border border-slate-200 shadow-sm mb-6 overflow-hidden">
+											<div className="px-4 sm:px-6 pt-4 sm:pt-5 pb-3 text-center">
+												<p className="text-[10px] font-black text-slate-400 uppercase tracking-[2px] mb-2">Tổng công nợ hiện tại</p>
+												<p className="font-black text-[#FF6D00] text-2xl sm:text-3xl tracking-tight">{formatCurrency(remainingDebt)} đ</p>
+											</div>
+											<div className="bg-slate-50 px-4 sm:px-6 py-3 flex justify-center gap-8 sm:gap-12 text-xs border-t border-slate-100">
+												<div className="text-center">
+													<span className="text-slate-400 uppercase tracking-wider text-[9px] font-black">Đã nhập</span>
+													<p className="font-bold text-red-600">{formatCurrency(totalImport)} đ</p>
+												</div>
+												<div className="w-px bg-slate-200"></div>
+												<div className="text-center">
+													<span className="text-slate-400 uppercase tracking-wider text-[9px] font-black">Đã trả</span>
+													<p className="font-bold text-emerald-600">-{formatCurrency(totalPaid)} đ</p>
+												</div>
+											</div>
+										</div>
+
+										{/* Purchase Orders */}
+										<div className="mb-8">
+											<div className="bg-[#1A237E] rounded-t-2xl px-4 sm:px-6 py-3 flex items-center gap-2">
+												<span className="material-symbols-outlined text-white text-base">receipt_long</span>
+												<h3 className="text-white font-black text-xs sm:text-sm uppercase tracking-[2px]">Đơn nhập hàng</h3>
+											</div>
+											<div className="border-x border-b border-slate-200 rounded-b-2xl overflow-x-auto">
+												<table className="w-full text-xs sm:text-sm">
+													<thead className="bg-slate-100 text-slate-500 font-black uppercase tracking-widest text-[9px]">
+														<tr>
+															<th className="py-3 px-3 text-left">Ngày</th>
+															<th className="py-3 px-3 text-left">Mã đơn</th>
+															<th className="py-3 px-3 text-right">Giá trị</th>
+														</tr>
+													</thead>
+													<tbody className="divide-y divide-slate-100">
+														{supplierPOs.map((po, idx) => (
+															<tr key={idx} className="hover:bg-slate-50 font-bold">
+																<td className="py-3 px-3 text-xs">{new Date(po.orderDate).toLocaleDateString('vi-VN')}</td>
+																<td className="py-3 px-3 text-[#1A237E] text-xs">#{po.id?.slice(0, 8).toUpperCase()}</td>
+																<td className="py-3 px-3 text-right text-sm">{formatCurrency(po.totalAmount)} đ</td>
+															</tr>
+														))}
+														{supplierPOs.length === 0 && (
+															<tr><td colSpan={3} className="py-3 text-center text-slate-400 italic text-xs">Chưa có đơn nhập hàng</td></tr>
+														)}
+														<tr className="bg-[#1A237E] font-black">
+															<td colSpan={2} className="py-3 px-3 uppercase text-white text-[10px] tracking-[2px]">Tổng nhập</td>
+															<td className="py-3 px-3 text-right text-base text-white">{formatCurrency(totalImport)} đ</td>
+														</tr>
+													</tbody>
+												</table>
+											</div>
+										</div>
+
+										{/* Payment History */}
+										<div className="mb-12">
+											<div className="bg-emerald-700 rounded-t-2xl px-4 sm:px-6 py-3 flex items-center gap-2">
+												<span className="material-symbols-outlined text-emerald-200 text-base">schedule</span>
+												<h3 className="text-white font-black text-xs sm:text-sm uppercase tracking-[2px]">Lịch sử trả nợ</h3>
+											</div>
+											<div className="border-x border-b border-slate-200 rounded-b-2xl overflow-x-auto">
+												<table className="w-full text-xs sm:text-sm">
+													<thead className="bg-slate-100 text-slate-500 font-black uppercase tracking-widest text-[9px]">
+														<tr>
+															<th className="py-3 px-3 text-left">Ngày</th>
+															<th className="py-3 px-3 text-left">Nội dung</th>
+															<th className="py-3 px-3 text-right">Số tiền</th>
+														</tr>
+													</thead>
+													<tbody className="divide-y divide-slate-100">
+														{supplierPayments.map((pay, idx) => (
+															<tr key={idx} className="hover:bg-slate-50 font-bold">
+																<td className="py-3 px-3 text-xs">{pay.createdAt ? new Date(pay.createdAt.seconds * 1000).toLocaleDateString('vi-VN') : '...'}</td>
+																<td className="py-3 px-3 text-xs">{pay.note || 'Thanh toán công nợ'}</td>
+																<td className="py-3 px-3 text-right text-sm text-emerald-700">{formatCurrency(pay.amount)} đ</td>
+															</tr>
+														))}
+														{supplierPayments.length === 0 && (
+															<tr><td colSpan={3} className="py-3 text-center text-slate-400 italic text-xs">Chưa có thanh toán nào</td></tr>
+														)}
+														<tr className="bg-emerald-50 font-black">
+															<td colSpan={2} className="py-3 px-3 uppercase text-emerald-800 text-[10px] tracking-[2px]">Tổng đã trả</td>
+															<td className="py-3 px-3 text-right text-base text-emerald-700">{formatCurrency(totalPaid)} đ</td>
+														</tr>
+													</tbody>
+												</table>
+											</div>
+										</div>
+
+										{/* Bottom note */}
+										<div className="text-center text-[10px] text-slate-400 font-bold uppercase tracking-wider pb-4">
+											{remainingDebt > 0 ? `Còn nợ: ${formatCurrency(remainingDebt)} đ` : '✅ Đã tất toán toàn bộ'}
+										</div>
+									</div>
+								);
+							})()}
 						</div>
 					</div>
 				</div>

@@ -505,6 +505,10 @@ export const supplierDebtService = {
     });
     return ref.id;
   },
+
+  async remove(id: string): Promise<void> {
+    await deleteDoc(doc(COLLECTIONS.supplierDebts(), id));
+  },
 };
 
 // ─── Utility: Batch Write ───────────────────────────────────

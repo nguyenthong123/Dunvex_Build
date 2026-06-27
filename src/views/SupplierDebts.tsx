@@ -3,14 +3,15 @@ import { useOwner } from '../hooks/useOwner';
 import { useSuppliers } from '../hooks/useSuppliers';
 import { useSupplierDebts } from '../hooks/useSupplierDebts';
 import { useToast } from '../components/shared/Toast';
-import { Search, FileText, CheckCircle2, History, X, Plus } from 'lucide-react';
-import { serverTimestamp, increment } from 'firebase/firestore';
+import { Search, FileText, CheckCircle2, History, X, Plus, Trash2 } from 'lucide-react';
+import { serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
+import { db } from '../services/firebase';
 
 const SupplierDebts = () => {
 	const owner = useOwner();
 	const { showToast } = useToast();
 	const { suppliers, updateSupplier } = useSuppliers();
-	const { debts, addDebt } = useSupplierDebts();
+	const { debts, addDebt, removeDebt } = useSupplierDebts();
 
 	const [activeTab, setActiveTab] = useState<'debts' | 'history'>('debts');
 	const [searchTerm, setSearchTerm] = useState('');
@@ -104,20 +105,19 @@ const SupplierDebts = () => {
 		}
 
 		try {
-
+			// Ghi nhận TRẢ NỢ (giảm nợ), không phải ghi nợ mới
 			await addDebt({
 				supplierId: debtSupplier.id,
 				supplierName: debtSupplier.name,
-				type: 'debt_increase',
+				type: 'payment',
 				amount: amountNum,
-				note: debtNote || 'Ghi nợ bổ sung',
+				method: 'Chuyển khoản',
+				note: debtNote || 'Ghi nhận trả nợ',
 				createdBy: owner.ownerId,
 				createdAt: serverTimestamp()
 			});
 
-			// P0 #2: totalDebt tự động tính từ debts listener
-
-			showToast("Đã ghi nợ thành công", "success");
+			showToast("Đã ghi nhận trả nợ thành công", "success");
 			setShowAddDebtForm(false);
 			setDebtSupplier(null);
 			setDebtAmountInput('');
@@ -125,6 +125,17 @@ const SupplierDebts = () => {
 		} catch (error) {
 			console.error(error);
 			showToast("Có lỗi xảy ra", "error");
+		}
+	};
+
+	const handleDeleteDebt = async (debt: any) => {
+		if (!window.confirm(`Xoá giao dịch ${debt.type === 'payment' ? 'trả nợ' : 'ghi nợ'} ${debt.amount?.toLocaleString('vi-VN') || '0'}đ của ${debt.supplierName}?`)) return;
+		try {
+			await removeDebt(debt.id);
+			showToast("Đã xoá giao dịch", "success");
+		} catch (error: any) {
+			console.error(error);
+			showToast(`Lỗi khi xoá: ${error.message || 'Không xác định'}`, "error");
 		}
 	};
 
@@ -222,24 +233,33 @@ const SupplierDebts = () => {
 						const typeLabel = payment.type === 'payment' ? 'Thanh toán trả nợ' : 'Ghi nợ mới';
 
 						return (
-							<div key={payment.id} className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
-								<div className="flex items-center gap-4">
-									<div className={`size-10 rounded-full flex items-center justify-center ${bgClass} ${colorClass}`}>
+							<div key={payment.id} className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between group">
+								<div className="flex items-center gap-4 flex-1 min-w-0">
+									<div className={`size-10 rounded-full flex items-center justify-center shrink-0 ${bgClass} ${colorClass}`}>
 										<History size={20} />
 									</div>
-									<div>
-										<h4 className="font-bold text-slate-800 dark:text-white">{payment.supplierName}</h4>
+									<div className="min-w-0">
+										<h4 className="font-bold text-slate-800 dark:text-white truncate">{payment.supplierName}</h4>
 										<div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
 											{payment.createdAt ? new Date(payment.createdAt.seconds * 1000).toLocaleString('vi-VN') : 'Đang xử lý...'}
 											<span className="mx-2">•</span>
 											<span className="font-semibold">{typeLabel}</span>
 											{payment.method && <><span className="mx-2">•</span>{payment.method}</>}
 										</div>
-										{payment.note && <div className="text-sm mt-1 text-slate-600 dark:text-slate-300">{payment.note}</div>}
+										{payment.note && <div className="text-sm mt-1 text-slate-600 dark:text-slate-300 truncate">{payment.note}</div>}
 									</div>
 								</div>
-								<div className="text-right">
-									<div className={`font-black text-lg ${colorClass}`}>{sign}{formatCurrency(payment.amount)} đ</div>
+								<div className="flex items-center gap-3">
+									<div className="text-right">
+										<div className={`font-black text-lg ${colorClass}`}>{sign}{formatCurrency(payment.amount)} đ</div>
+									</div>
+									<button
+										onClick={(e) => { e.stopPropagation(); handleDeleteDebt(payment); }}
+										className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+										title="Xoá giao dịch"
+									>
+										<Trash2 size={16} />
+									</button>
 								</div>
 							</div>
 						);
@@ -325,7 +345,7 @@ const SupplierDebts = () => {
 				<div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
 					<div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col">
 						<div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800">
-							<h3 className="font-black text-lg text-slate-800 dark:text-white uppercase tracking-tight">Ghi Nợ Mới</h3>
+							<h3 className="font-black text-lg text-slate-800 dark:text-white uppercase tracking-tight">Ghi Nhận Trả Nợ NCC</h3>
 							<button onClick={() => setShowAddDebtForm(false)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-full transition-colors">
 								<X size={20} />
 							</button>
@@ -408,8 +428,8 @@ const SupplierDebts = () => {
 							<button onClick={() => setShowAddDebtForm(false)} className="flex-1 px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-50 transition-colors">
 								Huỷ
 							</button>
-							<button type="submit" form="addDebtForm" className="flex-1 px-4 py-3 text-white font-bold rounded-xl shadow-lg transition-all flex justify-center items-center gap-2 bg-red-500 hover:bg-red-600 shadow-red-500/30">
-								<CheckCircle2 size={20} /> Xác Nhận Ghi Nợ
+							<button type="submit" form="addDebtForm" className="flex-1 px-4 py-3 text-white font-bold rounded-xl shadow-lg transition-all flex justify-center items-center gap-2 bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30">
+								<CheckCircle2 size={20} /> Xác Nhận Trả Nợ
 							</button>
 						</div>
 					</div>

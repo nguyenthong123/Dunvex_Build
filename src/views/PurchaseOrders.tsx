@@ -837,8 +837,8 @@ const PurchaseOrders = () => {
 			// Giá: ưu tiên "đơn giá" > "giá bán" > "giá nhập" > "giá" > "dongia" > "price"
 			const priceCandidates = [
 				{ match: (h: string) => h.includes('dongia') || h.includes('don gia'), label: 'đơn giá' },
-				{ match: (h: string) => h.includes('giaban') || h.includes('gia ban'), label: 'giá bán' },
-				{ match: (h: string) => h.includes('gianhap') || h.includes('gia nhap') || h.includes('nhap'), label: 'giá nhập' },
+				{ match: (h: string) => h.includes('gianhap') || h.includes('gia nhap') || h.startsWith('nhap') || h.includes('import'), label: 'giá nhập' },
+				{ match: (h: string) => h.includes('giaban') || h.includes('gia ban') || h.startsWith('ban'), label: 'giá bán' },
 				{ match: (h: string) => h.includes('price'), label: 'price' },
 				{ match: (h: string) => h.includes('gia') && !h.includes('ghichu') && !h.includes('danhgia') && !h.includes('thanh'), label: 'giá' },
 			];
@@ -856,8 +856,12 @@ const PurchaseOrders = () => {
 				if (!name) continue;
 				const rawQty = qtyColIdx >= 0 ? (cols[qtyColIdx] || '').trim() : 'N/A';
 				const rawPrice = priceColIdx >= 0 ? (cols[priceColIdx] || '').trim() : 'N/A';
-				const parsedQty = qtyColIdx >= 0 ? (parseInt(rawQty.replace(/[^\d]/g, ''), 10) || 1) : '?';
-				sampleRows.push(`  ▸ ${name}: SL="${rawQty}"→${parsedQty} Giá="${rawPrice}"`);
+				const parsedQty = qtyColIdx >= 0 ? (parseInt(rawQty.replace(/[^\d]/g, ''), 10) || 1) : 1;
+				const matchedProduct = findMatchingProduct(name, products);
+				const dbPrice = matchedProduct ? Number(matchedProduct.priceImport) || 0 : 0;
+				const finalPrice = priceColIdx >= 0 ? parseFloat(rawPrice.replace(/[^\d.,]/g, '').replace(/,/g, '')) || 0 : (dbPrice || 0);
+				const subtotal = parsedQty * finalPrice;
+				sampleRows.push(`  ▸ ${name}: SL="${rawQty}"→${parsedQty} Giá="${rawPrice}" DB=${dbPrice.toLocaleString('vi-VN')}đ →${finalPrice.toLocaleString('vi-VN')}đ (${subtotal.toLocaleString('vi-VN')}đ)`);
 			}
 			const sampleInfo = sampleRows.length > 0 ? `\n\n📋 **Dữ liệu đọc được (dòng đầu):**\n${sampleRows.join('\n')}` : '';
 
@@ -906,7 +910,9 @@ const PurchaseOrders = () => {
 
 				const product = findMatchingProduct(rowName, products);
 				if (product) {
-					orderItems.push({ productId: product.id, name: product.name, qty: rowQty, priceImport: rowPrice || Number(product.priceImport) || 0 });
+					// Nếu sheet có cột giá và giá = 0 (KM/tặng) → giữ 0, không fallback DB
+					const finalPrice = priceColIdx >= 0 ? rowPrice : (rowPrice || Number(product.priceImport) || 0);
+					orderItems.push({ productId: product.id, name: product.name, qty: rowQty, priceImport: finalPrice });
 				} else {
 					notFound.push(rowName);
 				}

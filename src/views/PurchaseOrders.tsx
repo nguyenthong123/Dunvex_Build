@@ -252,12 +252,19 @@ const PurchaseOrders = () => {
 
 				const allProductIds = [...new Set([...Object.keys(oldItems), ...Object.keys(newItems)])];
 
-				// Atomic transaction: đọc + ghi trong cùng transaction
+				// Atomic transaction: PHẢI ĐỌC TẤT CẢ trước khi ghi bất kỳ gì
 				await runTransaction(db, async (transaction) => {
-					// Đọc tất cả product docs TRONG transaction (bắt buộc của Firestore)
+					// ── BƯỚC 1: ĐỌC TẤT CẢ DOCS (bắt buộc trước mọi write) ──
 					const productRefs = allProductIds.map(id => doc(db, 'products', id));
 					const productSnaps = await Promise.all(productRefs.map(ref => transaction.get(ref)));
 
+					const supplierRef = doc(db, 'suppliers', selectedSupplier.id);
+					const supplierSnap = await transaction.get(supplierRef);
+					const supplierData = supplierSnap.exists() ? (supplierSnap.data() || {}) : {};
+
+					const poRef = doc(db, 'purchase_orders', editingPO.id);
+
+					// ── BƯỚC 2: GHI TẤT CẢ (sau khi đọc xong) ──
 					for (let i = 0; i < allProductIds.length; i++) {
 						const pid = allProductIds[i];
 						const snap = productSnaps[i];
@@ -275,10 +282,6 @@ const PurchaseOrders = () => {
 						}
 					}
 
-					// Cập nhật debt của NCC
-					const supplierRef = doc(db, 'suppliers', selectedSupplier.id);
-					const supplierSnap = await transaction.get(supplierRef);
-					const supplierData = supplierSnap.exists() ? (supplierSnap.data() || {}) : {};
 					const oldDebt = editingPO.debtAmount || 0;
 					const debtDiff = unpaidAmount - oldDebt;
 					if (debtDiff !== 0) {
@@ -286,7 +289,6 @@ const PurchaseOrders = () => {
 							totalDebt: (supplierData.totalDebt || 0) + debtDiff
 						});
 					}
-					// Ghi log nợ riêng (nếu debt tăng)
 					if (debtDiff > 0) {
 						const debtRef = doc(collection(db, 'supplier_debts'));
 						transaction.set(debtRef, {
@@ -297,8 +299,7 @@ const PurchaseOrders = () => {
 						});
 					}
 
-					// Cập nhật PO document
-					transaction.update(doc(db, 'purchase_orders', editingPO.id), {
+					transaction.update(poRef, {
 						...orderData,
 						updatedAt: serverTimestamp()
 					});

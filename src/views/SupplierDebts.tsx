@@ -234,18 +234,20 @@ const SupplierDebts = () => {
 				</div>
 			) : (
 				<div className="mt-4 space-y-3">
-					{debts.filter(d => ['payment', 'debt_increase'].includes(d.type)).map(payment => {
+					{debts.filter(d => ['payment', 'debt_increase', 'cancellation'].includes(d.type)).map(payment => {
 						const isIncrease = payment.type === 'debt_increase';
-						const colorClass = isIncrease ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400';
-						const bgClass = isIncrease ? 'bg-red-100 dark:bg-red-900/30' : 'bg-emerald-100 dark:bg-emerald-900/30';
-						const sign = isIncrease ? '+' : '-';
-						const typeLabel = payment.type === 'payment' ? 'Thanh toán trả nợ' : 'Ghi nợ mới';
+						const isCancellation = payment.type === 'cancellation';
+						const colorClass = isIncrease ? 'text-red-600 dark:text-red-400' : isCancellation ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400';
+						const bgClass = isIncrease ? 'bg-red-100 dark:bg-red-900/30' : isCancellation ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-emerald-100 dark:bg-emerald-900/30';
+						const icon = isCancellation ? '↩️' : null;
+						const sign = isIncrease ? '+' : isCancellation ? '↩' : '-';
+						const typeLabel = payment.type === 'payment' ? 'Thanh toán trả nợ' : payment.type === 'cancellation' ? 'Huỷ đơn nhập hàng' : 'Ghi nợ mới';
 
 						return (
 							<div key={payment.id} className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between group">
 								<div className="flex items-center gap-4 flex-1 min-w-0">
 									<div className={`size-10 rounded-full flex items-center justify-center shrink-0 ${bgClass} ${colorClass}`}>
-										<History size={20} />
+										{icon ? <span className="text-lg">{icon}</span> : <History size={20} />}
 									</div>
 									<div className="min-w-0">
 										<h4 className="font-bold text-slate-800 dark:text-white truncate">{payment.supplierName}</h4>
@@ -273,7 +275,7 @@ const SupplierDebts = () => {
 							</div>
 						);
 					})}
-					{debts.filter(d => ['payment', 'debt_increase'].includes(d.type)).length === 0 && (
+					{debts.filter(d => ['payment', 'debt_increase', 'cancellation'].includes(d.type)).length === 0 && (
 						<div className="py-12 text-center text-slate-500 dark:text-slate-400 bg-white/50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800">
 							Chưa có lịch sử chi trả nào.
 						</div>
@@ -462,7 +464,7 @@ const SupplierDebts = () => {
 
 								// Tổng nhập hàng từ đơn PO (đây là nguồn nợ gốc)
 								const totalImport = supplierPOs.reduce((sum, po) => sum + Number(po.totalAmount || 0), 0);
-								// Tổng đã trả
+								// Tổng đã trả (chỉ payment thật, không tính huỷ đơn)
 								const totalPaid = supplierPayments.reduce((sum, d) => sum + Number(d.amount || 0), 0);
 								// Còn nợ = tổng nhập - đã trả
 								const remainingDebt = totalImport - totalPaid;

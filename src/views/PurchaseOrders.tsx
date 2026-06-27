@@ -7,7 +7,7 @@ import { useProducts } from '../hooks/useProducts';
 import { usePurchaseOrders } from '../hooks/usePurchaseOrders';
 import { useSupplierDebts } from '../hooks/useSupplierDebts';
 import { useToast } from '../components/shared/Toast';
-import { serverTimestamp, runTransaction, doc, collection, writeBatch, increment, addDoc, getDoc, setDoc } from 'firebase/firestore';
+import { serverTimestamp, runTransaction, doc, collection, writeBatch, increment, addDoc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { db, auth } from '../services/firebase';
 import { inventoryService } from '../services/dataAccess';
 import { parseSupplyMessage } from '../services/supplyBotService';
@@ -514,9 +514,11 @@ const PurchaseOrders = () => {
 			
 			// Debt offset ngầm
 			if ((po.debtAmount || 0) > 0) {
+				updateDoc(doc(db, 'suppliers', po.supplierId), { totalDebt: increment(-Number(po.debtAmount)) })
+					.catch(e => console.warn('Supplier debt rollback failed:', e));
 				addDoc(collection(db, 'supplier_debts'), {
 					ownerId: owner.ownerId, supplierId: po.supplierId || '', supplierName: po.supplierName || '',
-					type: 'payment', amount: po.debtAmount,
+					type: 'cancellation', amount: po.debtAmount,
 					note: `Huỷ đơn nhập hàng - PO #${po.id.slice(0, 8)}`,
 					orderId: po.id, createdBy: owner.ownerId, createdAt: serverTimestamp()
 				}).catch(e => console.warn('Debt offset failed:', e));

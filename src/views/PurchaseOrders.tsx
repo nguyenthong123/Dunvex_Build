@@ -848,8 +848,20 @@ const PurchaseOrders = () => {
 				if (idx >= 0) { priceColIdx = idx; priceColLabel = c.label; break; }
 			}
 
-			// Debug: hiện headers + cột đã detect
-			const debugInfo = `📊 **Các cột phát hiện:**\n• Tên SP: cột ${nameColIdx + 1} (${headersRaw[nameColIdx] || '?'})\n• Số lượng: ${qtyColIdx >= 0 ? `cột ${qtyColIdx + 1} (${headersRaw[qtyColIdx]})` : '❌ KHÔNG TÌM THẤY (mặc định = 1)'}\n• Giá: ${priceColIdx >= 0 ? `cột ${priceColIdx + 1} (${headersRaw[priceColIdx]}) → loại: ${priceColLabel}` : '❌ KHÔNG TÌM THẤY (mặc định = giá nhập trong kho)'}\n\n📋 Tất cả cột: ${headersRaw.join(' | ')}`;
+			// Debug: hiện headers + cột đã detect + sample dữ liệu dòng đầu
+			const sampleRows: string[] = [];
+			for (let i = 1; i < Math.min(lines.length, 5); i++) {
+				const cols = parseCSVLine(lines[i]);
+				const name = (cols[nameColIdx] || '').trim();
+				if (!name) continue;
+				const rawQty = qtyColIdx >= 0 ? (cols[qtyColIdx] || '').trim() : 'N/A';
+				const rawPrice = priceColIdx >= 0 ? (cols[priceColIdx] || '').trim() : 'N/A';
+				const parsedQty = qtyColIdx >= 0 ? (parseInt(rawQty.replace(/[^\d]/g, ''), 10) || 1) : '?';
+				sampleRows.push(`  ▸ ${name}: SL="${rawQty}"→${parsedQty} Giá="${rawPrice}"`);
+			}
+			const sampleInfo = sampleRows.length > 0 ? `\n\n📋 **Dữ liệu đọc được (dòng đầu):**\n${sampleRows.join('\n')}` : '';
+
+			const debugInfo = `📊 **Các cột phát hiện:**\n• Tên SP: cột ${nameColIdx + 1} (${headersRaw[nameColIdx] || '?'})\n• Số lượng: ${qtyColIdx >= 0 ? `cột ${qtyColIdx + 1} (${headersRaw[qtyColIdx]})` : '❌ KHÔNG TÌM THẤY (mặc định = 1)'}\n• Giá: ${priceColIdx >= 0 ? `cột ${priceColIdx + 1} (${headersRaw[priceColIdx]}) → loại: ${priceColLabel}` : '❌ KHÔNG TÌM THẤY (mặc định = giá nhập trong kho)'}\n\n📋 Tất cả cột: ${headersRaw.join(' | ')}${sampleInfo}`;
 
 			if (nameColIdx < 0) {
 				setChatMessages(prev => [...prev, { role: 'bot',
@@ -865,7 +877,8 @@ const PurchaseOrders = () => {
 				const rowName = (cols[nameColIdx] || '').trim();
 				if (!rowName) continue;
 
-				const rowQty = qtyColIdx >= 0 ? parseInt(cols[qtyColIdx], 10) || 1 : 1;
+				const rawQty = (cols[qtyColIdx] || '').trim();
+				const rowQty = qtyColIdx >= 0 ? (parseInt(rawQty.replace(/[^\d]/g, ''), 10) || 1) : 1;
 				const rawPrice = (cols[priceColIdx] || '0').replace(/[^\d.,-]/g, '').trim();
 				let rowPrice = 0;
 				if (rawPrice) {

@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useOwner } from '../hooks/useOwner';
 import { useSuppliers } from '../hooks/useSuppliers';
 import { useSupplierDebts } from '../hooks/useSupplierDebts';
-import { usePurchaseOrders } from '../hooks/usePurchaseOrders';
 import { useToast } from '../components/shared/Toast';
 import { Search, FileText, CheckCircle2, History, X, Plus, Trash2, ChevronLeft } from 'lucide-react';
 import { serverTimestamp } from 'firebase/firestore';
@@ -12,7 +11,6 @@ const SupplierDebts = () => {
 	const { showToast } = useToast();
 	const { suppliers, updateSupplier } = useSuppliers();
 	const { debts, addDebt, removeDebt } = useSupplierDebts();
-	const { purchaseOrders } = usePurchaseOrders();
 
 	const [activeTab, setActiveTab] = useState<'debts' | 'history'>('debts');
 	const [searchTerm, setSearchTerm] = useState('');
@@ -459,14 +457,27 @@ const SupplierDebts = () => {
 						{/* Scrollable content */}
 						<div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar px-4 sm:px-6 py-4 sm:py-6">
 							{(() => {
-								const supplierPOs = purchaseOrders.filter(po => po.supplierId === statementSupplier.id);
-								const supplierPayments = debts.filter(d => d.supplierId === statementSupplier.id && d.type === 'payment');
+								// Merge tất cả giao dịch: debt_increase (từ đơn nhập) + payment (trả nợ) → 1 timeline
+								const allTx = debts
+									.filter(d => d.supplierId === statementSupplier.id && ['debt_increase', 'payment'].includes(d.type))
+									.map(d => ({
+										...d,
+										amount: Number(d.amount || 0),
+										type: d.type as 'debt_increase' | 'payment',
+										ts: d.createdAt?.seconds ? new Date(d.createdAt.seconds * 1000) : new Date(0)
+									}))
+									.sort((a, b) => a.ts.getTime() - b.ts.getTime());
 
-								// Tổng nợ gốc từ đơn PO (dùng debtAmount — phần chưa trả ngay)
-								const totalImport = supplierPOs.reduce((sum, po) => sum + Number(po.debtAmount || 0), 0);
-								// Tổng đã trả (chỉ payment thật, không tính huỷ đơn)
-								const totalPaid = supplierPayments.reduce((sum, d) => sum + Number(d.amount || 0), 0);
-								// Còn nợ = tổng nợ gốc - đã trả
+								// Tính running balance
+								let running = 0;
+								const txWithBalance = allTx.map(tx => {
+									if (tx.type === 'debt_increase') running += tx.amount;
+									else running -= tx.amount;
+									return { ...tx, balance: running };
+								});
+
+								const totalImport = allTx.filter(t => t.type === 'debt_increase').reduce((s, t) => s + t.amount, 0);
+								const totalPaid = allTx.filter(t => t.type === 'payment').reduce((s, t) => s + t.amount, 0);
 								const remainingDebt = totalImport - totalPaid;
 
 								return (
@@ -523,71 +534,50 @@ const SupplierDebts = () => {
 											</div>
 										</div>
 
-										{/* Purchase Orders */}
-										<div className="mb-8">
+										{/* Merged Timeline: 1 bảng duy nhất — đơn nhập + trả nợ + số dư chạy */}
+										<div className="mb-10">
 											<div className="bg-[#1A237E] rounded-t-2xl px-4 sm:px-6 py-3 flex items-center gap-2">
-												<span className="material-symbols-outlined text-white text-base">receipt_long</span>
-												<h3 className="text-white font-black text-xs sm:text-sm uppercase tracking-[2px]">Đơn nhập hàng</h3>
+												<span className="material-symbols-outlined text-white text-base">timeline</span>
+												<h3 className="text-white font-black text-xs sm:text-sm uppercase tracking-[2px]">Lịch sử giao dịch</h3>
 											</div>
 											<div className="border-x border-b border-slate-200 rounded-b-2xl overflow-x-auto">
 												<table className="w-full text-xs sm:text-sm">
 													<thead className="bg-slate-100 text-slate-500 font-black uppercase tracking-widest text-[9px]">
 														<tr>
-															<th className="py-3 px-3 text-left">Ngày</th>
-															<th className="py-3 px-3 text-left">Mã đơn</th>
-															<th className="py-3 px-3 text-right">Giá trị</th>
+															<th className="py-3 px-2 text-left">Ngày</th>
+															<th className="py-3 px-2 text-left">Diễn giải</th>
+															<th className="py-3 px-2 text-right">PS Nợ</th>
+															<th className="py-3 px-2 text-right">PS Có</th>
+															<th className="py-3 px-2 text-right">Dư nợ</th>
 														</tr>
 													</thead>
 													<tbody className="divide-y divide-slate-100">
-														{supplierPOs.map((po, idx) => (
-															<tr key={idx} className="hover:bg-slate-50 font-bold">
-																<td className="py-3 px-3 text-xs">{new Date(po.orderDate).toLocaleDateString('vi-VN')}</td>
-																<td className="py-3 px-3 text-[#1A237E] text-xs">#{po.id?.slice(0, 8).toUpperCase()}</td>
-																<td className="py-3 px-3 text-right text-sm">{formatCurrency(po.totalAmount)} đ</td>
-															</tr>
-														))}
-														{supplierPOs.length === 0 && (
-															<tr><td colSpan={3} className="py-3 text-center text-slate-400 italic text-xs">Chưa có đơn nhập hàng</td></tr>
+														{txWithBalance.map((tx, idx) => {
+															const isDebt = tx.type === 'debt_increase';
+															return (
+																<tr key={idx} className="hover:bg-slate-50 font-bold">
+																	<td className="py-3 px-2 text-[10px] text-slate-500">
+																		{tx.ts.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+																	</td>
+																	<td className="py-3 px-2">
+																		<div className="text-slate-700">{isDebt ? 'Nhập hàng' : 'Trả nợ'}</div>
+																		{tx.note && <div className="text-[10px] text-slate-400 mt-0.5">{tx.note}</div>}
+																	</td>
+																	<td className={`py-3 px-2 text-right ${isDebt ? 'text-red-600' : ''}`}>
+																		{isDebt ? formatCurrency(tx.amount) : ''}
+																	</td>
+																	<td className={`py-3 px-2 text-right ${!isDebt ? 'text-emerald-600' : ''}`}>
+																		{!isDebt ? formatCurrency(tx.amount) : ''}
+																	</td>
+																	<td className={`py-3 px-2 text-right font-black ${tx.balance > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+																		{formatCurrency(tx.balance)}
+																	</td>
+																</tr>
+															);
+														})}
+														{txWithBalance.length === 0 && (
+															<tr><td colSpan={5} className="py-6 text-center text-slate-400 italic text-xs">Chưa có giao dịch nào</td></tr>
 														)}
-														<tr className="bg-[#1A237E] font-black">
-															<td colSpan={2} className="py-3 px-3 uppercase text-white text-[10px] tracking-[2px]">Tổng nhập</td>
-															<td className="py-3 px-3 text-right text-base text-white">{formatCurrency(totalImport)} đ</td>
-														</tr>
-													</tbody>
-												</table>
-											</div>
-										</div>
-
-										{/* Payment History */}
-										<div className="mb-12">
-											<div className="bg-emerald-700 rounded-t-2xl px-4 sm:px-6 py-3 flex items-center gap-2">
-												<span className="material-symbols-outlined text-emerald-200 text-base">schedule</span>
-												<h3 className="text-white font-black text-xs sm:text-sm uppercase tracking-[2px]">Lịch sử trả nợ</h3>
-											</div>
-											<div className="border-x border-b border-slate-200 rounded-b-2xl overflow-x-auto">
-												<table className="w-full text-xs sm:text-sm">
-													<thead className="bg-slate-100 text-slate-500 font-black uppercase tracking-widest text-[9px]">
-														<tr>
-															<th className="py-3 px-3 text-left">Ngày</th>
-															<th className="py-3 px-3 text-left">Nội dung</th>
-															<th className="py-3 px-3 text-right">Số tiền</th>
-														</tr>
-													</thead>
-													<tbody className="divide-y divide-slate-100">
-														{supplierPayments.map((pay, idx) => (
-															<tr key={idx} className="hover:bg-slate-50 font-bold">
-																<td className="py-3 px-3 text-xs">{pay.createdAt ? new Date(pay.createdAt.seconds * 1000).toLocaleDateString('vi-VN') : '...'}</td>
-																<td className="py-3 px-3 text-xs">{pay.note || 'Thanh toán công nợ'}</td>
-																<td className="py-3 px-3 text-right text-sm text-emerald-700">{formatCurrency(pay.amount)} đ</td>
-															</tr>
-														))}
-														{supplierPayments.length === 0 && (
-															<tr><td colSpan={3} className="py-3 text-center text-slate-400 italic text-xs">Chưa có thanh toán nào</td></tr>
-														)}
-														<tr className="bg-emerald-50 font-black">
-															<td colSpan={2} className="py-3 px-3 uppercase text-emerald-800 text-[10px] tracking-[2px]">Tổng đã trả</td>
-															<td className="py-3 px-3 text-right text-base text-emerald-700">{formatCurrency(totalPaid)} đ</td>
-														</tr>
 													</tbody>
 												</table>
 											</div>

@@ -462,11 +462,11 @@ const SupplierDebts = () => {
 								const supplierPOs = purchaseOrders.filter(po => po.supplierId === statementSupplier.id);
 								const supplierPayments = debts.filter(d => d.supplierId === statementSupplier.id && d.type === 'payment');
 
-								// Tổng nhập hàng từ đơn PO (đây là nguồn nợ gốc)
-								const totalImport = supplierPOs.reduce((sum, po) => sum + Number(po.totalAmount || 0), 0);
+								// Tổng nợ gốc từ đơn PO (dùng debtAmount — phần chưa trả ngay)
+								const totalImport = supplierPOs.reduce((sum, po) => sum + Number(po.debtAmount || 0), 0);
 								// Tổng đã trả (chỉ payment thật, không tính huỷ đơn)
 								const totalPaid = supplierPayments.reduce((sum, d) => sum + Number(d.amount || 0), 0);
-								// Còn nợ = tổng nhập - đã trả
+								// Còn nợ = tổng nợ gốc - đã trả
 								const remainingDebt = totalImport - totalPaid;
 
 								return (

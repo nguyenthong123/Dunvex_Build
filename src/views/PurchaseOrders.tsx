@@ -515,12 +515,11 @@ const PurchaseOrders = () => {
 			// Xoá công nợ gốc (thay vì tạo offset payment như cũ)
 			if ((po.debtAmount || 0) > 0 && po.supplierId) {
 				try {
-					// Tìm bản ghi nợ gốc theo orderId
+					// Tìm VÀ xoá TẤT CẢ bản ghi công nợ liên quan đến PO này (gồm debt_increase + payment/cancellation cũ)
 					const debtQuery = query(
 						collection(db, 'supplier_debts'),
 						where('ownerId', '==', owner.ownerId),
-						where('orderId', '==', po.id),
-						where('type', '==', 'debt_increase')
+						where('orderId', '==', po.id)
 					);
 					const debtSnapshot = await getDocs(debtQuery);
 					

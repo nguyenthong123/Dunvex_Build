@@ -1,21 +1,25 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useOwner } from '../hooks/useOwner';
 import { useSuppliers } from '../hooks/useSuppliers';
 import { useSupplierDebts } from '../hooks/useSupplierDebts';
+import { usePurchaseOrders } from '../hooks/usePurchaseOrders';
 import { useToast } from '../components/shared/Toast';
-import { Search, FileText, CheckCircle2, History, X, Plus, Trash2 } from 'lucide-react';
-import { serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
-import { db } from '../services/firebase';
+import { Search, FileText, CheckCircle2, History, X, Plus, Trash2, ChevronLeft } from 'lucide-react';
+import { serverTimestamp } from 'firebase/firestore';
 
 const SupplierDebts = () => {
 	const owner = useOwner();
 	const { showToast } = useToast();
 	const { suppliers, updateSupplier } = useSuppliers();
 	const { debts, addDebt, removeDebt } = useSupplierDebts();
+	const { purchaseOrders } = usePurchaseOrders();
 
 	const [activeTab, setActiveTab] = useState<'debts' | 'history'>('debts');
 	const [searchTerm, setSearchTerm] = useState('');
 	const searchInputRef = useRef<HTMLInputElement>(null);
+
+	const [showStatement, setShowStatement] = useState(false);
+	const [statementSupplier, setStatementSupplier] = useState<any>(null);
 
 	useEffect(() => {
 		const handleOpenSearch = () => {
@@ -139,6 +143,11 @@ const SupplierDebts = () => {
 		}
 	};
 
+	const openStatement = (supplier: any) => {
+		setStatementSupplier(supplier);
+		setShowStatement(true);
+	};
+
 	const formatCurrency = (val: any) => {
 		return Number(val || 0).toLocaleString('vi-VN');
 	};
@@ -196,7 +205,7 @@ const SupplierDebts = () => {
 
 					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 						{filteredSuppliers.map(supplier => (
-							<div key={supplier.id} className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+							<div key={supplier.id} className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between cursor-pointer hover:border-[#FF6D00]/30 transition-all" onClick={() => openStatement(supplier)}>
 								<div>
 									<h3 className="font-bold text-lg text-slate-800 dark:text-white mb-1">{supplier.name}</h3>
 									<p className="text-sm text-slate-500 dark:text-slate-400 mb-4">{supplier.phone}</p>
@@ -207,7 +216,7 @@ const SupplierDebts = () => {
 										<div className="text-xl font-black text-red-600 dark:text-red-400">{formatCurrency(supplier.totalDebt)} đ</div>
 									</div>
 									<button
-										onClick={() => { setSelectedSupplier(supplier); setShowPaymentForm(true); }}
+										onClick={(e) => { e.stopPropagation(); setSelectedSupplier(supplier); setShowPaymentForm(true); }}
 										className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/30 transition-all flex items-center gap-2"
 									>
 										<CheckCircle2 size={18} />
@@ -431,6 +440,167 @@ const SupplierDebts = () => {
 							<button type="submit" form="addDebtForm" className="flex-1 px-4 py-3 text-white font-bold rounded-xl shadow-lg transition-all flex justify-center items-center gap-2 bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30">
 								<CheckCircle2 size={20} /> Xác Nhận Trả Nợ
 							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* === STATEMENT MODAL: Phiếu chi tiết công nợ NCC === */}
+			{showStatement && statementSupplier && (
+				<div className="fixed inset-0 z-[150] bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-0 md:p-4">
+					<div className="bg-transparent w-full max-w-3xl max-h-screen md:max-h-[95vh] relative flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
+						{/* Close button */}
+						<button onClick={() => setShowStatement(false)} className="absolute top-3 right-3 z-30 size-10 rounded-full bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex items-center justify-center shadow-sm transition-all">
+							<X size={18} />
+						</button>
+
+						{/* Scrollable content */}
+						<div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar px-4 sm:px-6 py-4 sm:py-6">
+							{(() => {
+								const supplierPOs = purchaseOrders.filter(po => po.supplierId === statementSupplier.id);
+								const supplierPayments = debts.filter(d => d.supplierId === statementSupplier.id && d.type === 'payment');
+								const supplierDebtIncreases = debts.filter(d => d.supplierId === statementSupplier.id && d.type === 'debt_increase');
+
+								// Tổng nhập hàng
+								const totalImport = supplierPOs.reduce((sum, po) => sum + Number(po.totalAmount || 0), 0);
+								// Tổng nợ tăng thêm (manual)
+								const totalDebtIncrease = supplierDebtIncreases.reduce((sum, d) => sum + Number(d.amount || 0), 0);
+								// Tổng đã trả
+								const totalPaid = supplierPayments.reduce((sum, d) => sum + Number(d.amount || 0), 0);
+								// Còn nợ
+								const remainingDebt = totalImport + totalDebtIncrease - totalPaid;
+
+								return (
+									<div className="w-full max-w-full sm:w-fit sm:mx-auto">
+										{/* Header */}
+										<header className="mb-6 text-center">
+											<h1 className="text-lg sm:text-xl font-black text-slate-900 uppercase tracking-[2px] mb-2">Chi Tiết Công Nợ NCC</h1>
+											<div className="flex justify-center items-center gap-3 sm:gap-6 text-[10px] sm:text-xs flex-wrap">
+												<div className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 rounded-lg">
+													<span className="text-slate-400 font-bold uppercase tracking-widest text-[9px]">NCC</span>
+													<span className="font-bold text-[#1A237E]">{statementSupplier.name}</span>
+												</div>
+												<div className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 rounded-lg">
+													<span className="text-slate-400 font-bold uppercase tracking-widest text-[9px]">Ngày lập</span>
+													<span className="font-bold text-slate-700">{new Date().toLocaleDateString('vi-VN')}</span>
+												</div>
+												<span className={`inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${remainingDebt > 0 ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-emerald-50 text-emerald-600 border border-emerald-200'}`}>
+													{remainingDebt > 0 ? 'Còn nợ' : 'Đã tất toán'}
+												</span>
+											</div>
+										</header>
+
+										{/* Supplier Info Card */}
+										<section className="mb-6">
+											<div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+												<div className="px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3">
+													<div>
+														<span className="font-black text-slate-900 text-base sm:text-lg uppercase tracking-tight">{statementSupplier.name}</span>
+														{statementSupplier.phone && <p className="text-[10px] text-slate-400 font-bold mt-0.5">{statementSupplier.phone}</p>}
+													</div>
+													<span className={`shrink-0 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider ${remainingDebt > 0 ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-emerald-50 text-emerald-600 border border-emerald-200'}`}>
+														{remainingDebt > 0 ? 'Còn nợ' : 'Đã tất toán'}
+													</span>
+												</div>
+											</div>
+										</section>
+
+										{/* Summary Card */}
+										<div className="rounded-2xl bg-white border border-slate-200 shadow-sm mb-6 overflow-hidden">
+											<div className="px-4 sm:px-6 pt-4 sm:pt-5 pb-3 text-center">
+												<p className="text-[10px] font-black text-slate-400 uppercase tracking-[2px] mb-2">Tổng công nợ hiện tại</p>
+												<p className="font-black text-[#FF6D00] text-2xl sm:text-3xl tracking-tight">{formatCurrency(remainingDebt)} đ</p>
+											</div>
+											<div className="bg-slate-50 px-4 sm:px-6 py-3 flex justify-center gap-8 sm:gap-12 text-xs border-t border-slate-100">
+												<div className="text-center">
+													<span className="text-slate-400 uppercase tracking-wider text-[9px] font-black">Đã nhập</span>
+													<p className="font-bold text-red-600">{formatCurrency(totalImport)} đ</p>
+												</div>
+												<div className="w-px bg-slate-200"></div>
+												<div className="text-center">
+													<span className="text-slate-400 uppercase tracking-wider text-[9px] font-black">Đã trả</span>
+													<p className="font-bold text-emerald-600">-{formatCurrency(totalPaid)} đ</p>
+												</div>
+											</div>
+										</div>
+
+										{/* Purchase Orders */}
+										<div className="mb-8">
+											<div className="bg-[#1A237E] rounded-t-2xl px-4 sm:px-6 py-3 flex items-center gap-2">
+												<span className="material-symbols-outlined text-white text-base">receipt_long</span>
+												<h3 className="text-white font-black text-xs sm:text-sm uppercase tracking-[2px]">Đơn nhập hàng</h3>
+											</div>
+											<div className="border-x border-b border-slate-200 rounded-b-2xl overflow-x-auto">
+												<table className="w-full text-xs sm:text-sm">
+													<thead className="bg-slate-100 text-slate-500 font-black uppercase tracking-widest text-[9px]">
+														<tr>
+															<th className="py-3 px-3 text-left">Ngày</th>
+															<th className="py-3 px-3 text-left">Mã đơn</th>
+															<th className="py-3 px-3 text-right">Giá trị</th>
+														</tr>
+													</thead>
+													<tbody className="divide-y divide-slate-100">
+														{supplierPOs.map((po, idx) => (
+															<tr key={idx} className="hover:bg-slate-50 font-bold">
+																<td className="py-3 px-3 text-xs">{new Date(po.orderDate).toLocaleDateString('vi-VN')}</td>
+																<td className="py-3 px-3 text-[#1A237E] text-xs">#{po.id?.slice(0, 8).toUpperCase()}</td>
+																<td className="py-3 px-3 text-right text-sm">{formatCurrency(po.totalAmount)} đ</td>
+															</tr>
+														))}
+														{supplierPOs.length === 0 && (
+															<tr><td colSpan={3} className="py-3 text-center text-slate-400 italic text-xs">Chưa có đơn nhập hàng</td></tr>
+														)}
+														<tr className="bg-[#1A237E] font-black">
+															<td colSpan={2} className="py-3 px-3 uppercase text-white text-[10px] tracking-[2px]">Tổng nhập</td>
+															<td className="py-3 px-3 text-right text-base text-white">{formatCurrency(totalImport)} đ</td>
+														</tr>
+													</tbody>
+												</table>
+											</div>
+										</div>
+
+										{/* Payment History */}
+										<div className="mb-12">
+											<div className="bg-emerald-700 rounded-t-2xl px-4 sm:px-6 py-3 flex items-center gap-2">
+												<span className="material-symbols-outlined text-emerald-200 text-base">schedule</span>
+												<h3 className="text-white font-black text-xs sm:text-sm uppercase tracking-[2px]">Lịch sử trả nợ</h3>
+											</div>
+											<div className="border-x border-b border-slate-200 rounded-b-2xl overflow-x-auto">
+												<table className="w-full text-xs sm:text-sm">
+													<thead className="bg-slate-100 text-slate-500 font-black uppercase tracking-widest text-[9px]">
+														<tr>
+															<th className="py-3 px-3 text-left">Ngày</th>
+															<th className="py-3 px-3 text-left">Nội dung</th>
+															<th className="py-3 px-3 text-right">Số tiền</th>
+														</tr>
+													</thead>
+													<tbody className="divide-y divide-slate-100">
+														{supplierPayments.map((pay, idx) => (
+															<tr key={idx} className="hover:bg-slate-50 font-bold">
+																<td className="py-3 px-3 text-xs">{pay.createdAt ? new Date(pay.createdAt.seconds * 1000).toLocaleDateString('vi-VN') : '...'}</td>
+																<td className="py-3 px-3 text-xs">{pay.note || 'Thanh toán công nợ'}</td>
+																<td className="py-3 px-3 text-right text-sm text-emerald-700">{formatCurrency(pay.amount)} đ</td>
+															</tr>
+														))}
+														{supplierPayments.length === 0 && (
+															<tr><td colSpan={3} className="py-3 text-center text-slate-400 italic text-xs">Chưa có thanh toán nào</td></tr>
+														)}
+														<tr className="bg-emerald-50 font-black">
+															<td colSpan={2} className="py-3 px-3 uppercase text-emerald-800 text-[10px] tracking-[2px]">Tổng đã trả</td>
+															<td className="py-3 px-3 text-right text-base text-emerald-700">{formatCurrency(totalPaid)} đ</td>
+														</tr>
+													</tbody>
+												</table>
+											</div>
+										</div>
+
+										{/* Bottom note */}
+										<div className="text-center text-[10px] text-slate-400 font-bold uppercase tracking-wider pb-4">
+											{remainingDebt > 0 ? `Còn nợ: ${formatCurrency(remainingDebt)} đ` : '✅ Đã tất toán toàn bộ'}
+										</div>
+									</div>
+								);
+							})()}
 						</div>
 					</div>
 				</div>

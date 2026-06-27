@@ -416,6 +416,11 @@ const InventoryPage = () => {
 				return;
 			}
 
+			if (!owner.ownerId) {
+				showToast("Đang tải dữ liệu người dùng, vui lòng thử lại sau", "warning");
+				return;
+			}
+
 			// NEW: Check if SKU exists for this Admin
 			if (formData.sku) {
 				const normalize = (s: string) => String(s || '').toLowerCase().replace(/\s+/g, '').trim();
@@ -482,8 +487,9 @@ const InventoryPage = () => {
 			setShowAddForm(false);
 			resetForm();
 			showToast("Thêm sản phẩm thành công", "success");
-		} catch (error) {
-			showToast("Lỗi khi thêm sản phẩm", "error");
+		} catch (error: any) {
+			console.error("Add product error:", error);
+			showToast(`Lỗi khi thêm sản phẩm: ${error?.message || 'Không xác định'}`, "error");
 		}
 	};
 

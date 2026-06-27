@@ -7,7 +7,7 @@ import { useProducts } from '../hooks/useProducts';
 import { usePurchaseOrders } from '../hooks/usePurchaseOrders';
 import { useSupplierDebts } from '../hooks/useSupplierDebts';
 import { useToast } from '../components/shared/Toast';
-import { serverTimestamp, runTransaction, doc, collection, writeBatch, increment, addDoc, getDoc } from 'firebase/firestore';
+import { serverTimestamp, runTransaction, doc, collection, writeBatch, increment, addDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { inventoryService } from '../services/dataAccess';
 import { parseSupplyMessage } from '../services/supplyBotService';
@@ -251,13 +251,13 @@ const PurchaseOrders = () => {
 				});
 
 				const allProductIds = [...new Set([...Object.keys(oldItems), ...Object.keys(newItems)])];
-				
-				// Đọc tất cả product docs
-				const productRefs = allProductIds.map(id => doc(db, 'products', id));
-				const productSnaps = await Promise.all(productRefs.map(ref => getDoc(ref)));
 
-				// Cập nhật stock + debt trong transaction
+				// Atomic transaction: đọc + ghi trong cùng transaction
 				await runTransaction(db, async (transaction) => {
+					// Đọc tất cả product docs TRONG transaction (bắt buộc của Firestore)
+					const productRefs = allProductIds.map(id => doc(db, 'products', id));
+					const productSnaps = await Promise.all(productRefs.map(ref => transaction.get(ref)));
+
 					for (let i = 0; i < allProductIds.length; i++) {
 						const pid = allProductIds[i];
 						const snap = productSnaps[i];
@@ -270,30 +270,31 @@ const PurchaseOrders = () => {
 							const currentStock = Number(data.stock) || 0;
 							transaction.update(productRefs[i], {
 								stock: currentStock + diff,
-								priceImport: newItems[pid] > 0 ? validItems.find(v => v.productId === pid)?.priceImport : data.priceImport
+								priceImport: newItems[pid] > 0 ? (validItems.find(v => v.productId === pid)?.priceImport ?? data.priceImport) : data.priceImport
 							});
 						}
 					}
 
-					// Cập nhật debt
+					// Cập nhật debt của NCC
 					const supplierRef = doc(db, 'suppliers', selectedSupplier.id);
 					const supplierSnap = await transaction.get(supplierRef);
-					const supplierData = supplierSnap.data() || {};
+					const supplierData = supplierSnap.exists() ? (supplierSnap.data() || {}) : {};
 					const oldDebt = editingPO.debtAmount || 0;
 					const debtDiff = unpaidAmount - oldDebt;
 					if (debtDiff !== 0) {
 						transaction.update(supplierRef, {
 							totalDebt: (supplierData.totalDebt || 0) + debtDiff
 						});
-						if (debtDiff > 0) {
-							const debtRef = doc(collection(db, 'supplier_debts'));
-							transaction.set(debtRef, {
-								ownerId: owner.ownerId, supplierId: selectedSupplier.id, supplierName: selectedSupplier.name,
-								type: 'debt_increase', amount: debtDiff,
-								note: `Điều chỉnh nợ - sửa PO #${editingPO.id.slice(0, 8)}`,
-								orderId: editingPO.id, createdBy: owner.ownerId, createdAt: serverTimestamp()
-							});
-						}
+					}
+					// Ghi log nợ riêng (nếu debt tăng)
+					if (debtDiff > 0) {
+						const debtRef = doc(collection(db, 'supplier_debts'));
+						transaction.set(debtRef, {
+							ownerId: owner.ownerId, supplierId: selectedSupplier.id, supplierName: selectedSupplier.name,
+							type: 'debt_increase', amount: debtDiff,
+							note: `Điều chỉnh nợ - sửa PO #${editingPO.id.slice(0, 8)}`,
+							orderId: editingPO.id, createdBy: owner.ownerId, createdAt: serverTimestamp()
+						});
 					}
 
 					// Cập nhật PO document
@@ -302,6 +303,24 @@ const PurchaseOrders = () => {
 						updatedAt: serverTimestamp()
 					});
 				});
+
+				// Ghi inventory logs cho chênh lệch (ngoài transaction)
+				await Promise.all(allProductIds.map(async (pid) => {
+					const oldQty = oldItems[pid] || 0;
+					const newQty = newItems[pid] || 0;
+					const diff = newQty - oldQty;
+					if (diff === 0) return;
+					const item = validItems.find(v => v.productId === pid);
+					await inventoryService.addLog({
+						ownerId: owner.ownerId,
+						productId: pid,
+						productName: item?.name || pid,
+						type: diff > 0 ? 'import' : 'export',
+						change: Math.abs(diff),
+						note: `Sửa đơn nhập - PO #${editingPO.id.slice(0, 8)} (chênh lệch ${diff > 0 ? '+' : ''}${diff})`,
+						priceImport: Number(item?.priceImport || 0),
+					}).catch(e => console.warn('Inventory log failed:', e));
+				}));
 
 				showToast("Đã cập nhật phiếu nhập kho", "success");
 				resetEditForm();
@@ -390,9 +409,9 @@ const PurchaseOrders = () => {
 
 			showToast("Đã hoàn thành phiếu nhập kho", "success");
 			resetEditForm();
-		} catch (error) {
-			console.error(error);
-			showToast("Có lỗi xảy ra", "error");
+		} catch (error: any) {
+			console.error('Submit PO error:', error);
+			showToast(`Có lỗi xảy ra: ${error?.message || 'Không xác định'}`, "error");
 		}
 	};
 

@@ -19,6 +19,7 @@ const InventoryPage = lazy(() => import('./views/InventoryPage'));
 const OrderList = lazy(() => import('./views/OrderList'));
 const Checkin = lazy(() => import('./views/Checkin'));
 const Attendance = lazy(() => import('./views/Attendance'));
+const LeaveManagement = lazy(() => import('./views/LeaveManagement'));
 const Pricing = lazy(() => import('./views/Pricing'));
 const PriceList = lazy(() => import('./views/PriceList'));
 const SubscriptionServices = lazy(() => import('./views/SubscriptionServices'));
@@ -129,6 +130,10 @@ function App() {
 						<Route
 							path="/attendance"
 							element={currentUser ? <MainLayout><Attendance /></MainLayout> : <Navigate to="/login" />}
+						/>
+						<Route
+							path="/leaves"
+							element={currentUser ? <MainLayout><LeaveManagement /></MainLayout> : <Navigate to="/login" />}
 						/>
 						<Route
 							path="/quick-order"

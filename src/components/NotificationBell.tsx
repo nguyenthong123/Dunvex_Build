@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, CheckCircle2, XCircle, Clock, X, AlertTriangle, Coins, Database, ChevronLeft, ChevronRight, Trash2, Gift, TrendingUp } from 'lucide-react';
+import { Bell, CheckCircle2, XCircle, Clock, X, AlertTriangle, Coins, Database, ChevronLeft, ChevronRight, Trash2, Gift, TrendingUp, CalendarDays } from 'lucide-react';
 import { db, auth } from '../services/firebase';
 import { collection, query, where, orderBy, onSnapshot, updateDoc, doc, limit, serverTimestamp, setDoc, deleteDoc, getDocs } from 'firebase/firestore';
 import { useToast } from './shared/Toast';
@@ -142,6 +142,7 @@ const NotificationBell = ({ placement = 'down', align = 'right', className = "" 
 														n.type === 'auto_sync' ? 'bg-emerald-500/10 text-emerald-500' :
 														n.type === 'subscription' ? 'bg-violet-500/10 text-violet-500' :
 															n.type === 'eod_sales' ? 'bg-blue-500/10 text-blue-500' :
+												n.type === 'attendance_request' ? 'bg-purple-500/10 text-purple-500' :
 															'bg-indigo-500/10 text-indigo-500'
 											}`}>
 											{n.type === 'lock' && <XCircle size={16} />}
@@ -152,6 +153,7 @@ const NotificationBell = ({ placement = 'down', align = 'right', className = "" 
 											{n.type === 'payment' && <Bell size={16} />}
 										{n.type === 'subscription' && <Gift size={16} />}
 										{n.type === 'eod_sales' && <TrendingUp size={16} />}
+											{n.type === 'attendance_request' && <CalendarDays size={16} />}
 											{(n.type === 'order' || !n.type) && <Bell size={16} />}
 										</div>
 										<div className="flex-1">

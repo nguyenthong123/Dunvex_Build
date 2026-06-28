@@ -179,6 +179,7 @@ export const useNavigationConfig = () => {
 		{ icon: 'location_on', label: 'Checkin', path: '/checkin?action=history', permissionKey: 'checkin_create' }, // 7
 		{ icon: 'confirmation_number', label: 'Ưu đãi', path: '/coupons' },                                    // 8
 		{ icon: 'timer', label: 'Chấm công', path: '/attendance' },                                           // 9
+		{ icon: 'event_available', label: 'Nghỉ phép', path: '/leaves' },                                          // 9.5
 		{ icon: 'workspace_premium', label: 'Dịch vụ', path: '/services' },                                          // 10
 		{ icon: 'admin_panel_settings', label: 'Quản trị', path: '/admin', permissionKey: 'admin' },          // 11
 		{ icon: 'settings', label: 'Cài đặt', path: '/settings' },                                            // 12

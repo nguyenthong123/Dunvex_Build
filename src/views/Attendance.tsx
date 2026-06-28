@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 import {
@@ -11,6 +12,8 @@ import {
 	Smartphone, ArrowLeft, LogOut, Coffee, FileText, Send, X
 } from 'lucide-react';
 import { useToast } from '../components/shared/Toast';
+import LeaveCalendar from '../components/shared/LeaveCalendar';
+import { createAdminNotification, createUserNotification } from '../utils/notifications';
 
 const Attendance = () => {
 	const navigate = useNavigate();
@@ -26,7 +29,7 @@ const Attendance = () => {
 	const [checking, setChecking] = useState(false);
 	const [deviceId, setDeviceId] = useState('');
 	const [showRequestModal, setShowRequestModal] = useState(false);
-	const [requestData, setRequestData] = useState({ type: 'leave', note: '' });
+	const [requestData, setRequestData] = useState({ type: 'leave', note: '', selectedDates: [] as string[] });
 
 	// Initialize Device ID
 	useEffect(() => {
@@ -165,27 +168,57 @@ const Attendance = () => {
 	};
 
 	const handleRequestSubmit = async () => {
+		if (requestData.type === 'leave' && requestData.selectedDates.length === 0) {
+			return showToast("Vui lòng chọn ít nhất 1 ngày nghỉ trên lịch", "warning");
+		}
 		if (!requestData.note) return showToast("Vui lòng nhập lý do", "warning");
 		setChecking(true);
 		try {
 			const today = new Date().toISOString().split('T')[0];
+			const userName = auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên';
+			const userEmail = auth.currentUser?.email || '';
+			const userId = auth.currentUser?.uid || '';
+
 			await addDoc(collection(db, 'attendance_logs'), {
 				ownerId: owner.ownerId,
-				userId: auth.currentUser?.uid || "",
-				userName: auth.currentUser?.displayName || auth.currentUser?.email,
-				userEmail: auth.currentUser?.email,
+				userId,
+				userName,
+				userEmail,
 				date: today,
 				type: 'request',
 				requestType: requestData.type,
 				note: requestData.note,
+				dates: requestData.type === 'leave' ? requestData.selectedDates : [today],
 				status: 'pending',
 				createdAt: serverTimestamp()
 			});
-			showToast("Gửi yêu cầu thành công!", "success");
+
+			// Gửi thông báo cho admin
+			const leaveLabel = requestData.type === 'leave' ? 'NGHỈ PHÉP' : 'ĐI MUỘN';
+			const dateInfo = requestData.type === 'leave'
+				? `${requestData.selectedDates.length} ngày (${requestData.selectedDates.join(', ')})`
+				: `ngày ${today}`;
+
+			await createAdminNotification(owner.ownerId, {
+				title: `📋 Yêu cầu ${leaveLabel} mới`,
+				body: `${userName} đã đăng ký ${leaveLabel} ${dateInfo}\nLý do: ${requestData.note}`,
+				type: 'attendance_request',
+				priority: 'high'
+			});
+
+			// Gửi thông báo xác nhận cho người gửi
+			await createUserNotification(userId, {
+				title: `✅ Đã gửi yêu cầu ${leaveLabel}`,
+				body: `Yêu cầu ${leaveLabel.toLowerCase()} ${dateInfo} đã được gửi. Vui lòng chờ admin phê duyệt.`,
+				type: 'attendance_request',
+				priority: 'normal'
+			});
+
+			showToast("Gửi yêu cầu thành công! Admin sẽ được thông báo.", "success");
 			setShowRequestModal(false);
-			setRequestData({ type: 'leave', note: '' });
+			setRequestData({ type: 'leave', note: '', selectedDates: [] });
 		} catch (error) {
-			showToast("Lỗi khi gửi yêu cầu", "error");
+			showToast("Lỗi khi gửi yêu cầu: " + error, "error");
 		} finally {
 			setChecking(false);
 		}
@@ -301,51 +334,96 @@ const Attendance = () => {
 
 					{/* Request Modal */}
 					{showRequestModal && (
-						<div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-							<div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in duration-300">
-								<div className="flex justify-between items-center mb-6">
-									<h4 className="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tight">Đăng ký mới</h4>
-									<button onClick={() => setShowRequestModal(false)} className="text-slate-400"><X size={20} /></button>
+						<div className="fixed inset-0 z-[2000] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-0 md:p-4">
+							<motion.div
+								initial={{ opacity: 0 }}
+								animate={{ opacity: 1 }}
+								exit={{ opacity: 0 }}
+								onClick={() => setShowRequestModal(false)}
+								className="absolute inset-0 bg-[#1A237E]/80 dark:bg-black/90 backdrop-blur-md"
+							/>
+							<motion.div
+								initial={{ y: "100%", scale: 0.95 }}
+								animate={{ y: 0, scale: 1 }}
+								exit={{ y: "100%", scale: 0.95 }}
+								transition={{ type: "spring", damping: 25, stiffness: 300 }}
+								className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-t-[3rem] md:rounded-[3rem] shadow-2xl flex flex-col max-h-[95vh] md:max-h-[90vh] overflow-hidden relative z-10"
+							>
+								<div className="px-8 py-5 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between shrink-0">
+									<h4 className="text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight">ĐĂNG KÝ MỚI</h4>
+									<button onClick={() => setShowRequestModal(false)} className="size-10 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-500 transition-all">
+										<X size={18} />
+									</button>
 								</div>
 
-								<div className="space-y-4">
+								<div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 custom-scrollbar">
+									{/* Type Selection */}
 									<div>
-										<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Loại đăng ký</label>
-										<div className="grid grid-cols-2 gap-2">
+										<label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px] mb-3 block">LOẠI ĐĂNG KÝ</label>
+										<div className="grid grid-cols-2 gap-3">
 											<button
 												onClick={() => setRequestData({ ...requestData, type: 'leave' })}
-												className={`py-3 rounded-xl font-bold text-xs transition-all ${requestData.type === 'leave' ? 'bg-[#1A237E] text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}
+												className={`py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all ${
+													requestData.type === 'leave'
+														? 'bg-[#1A237E] dark:bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
+														: 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+												}`}
 											>
 												NGHỈ PHÉP
 											</button>
 											<button
 												onClick={() => setRequestData({ ...requestData, type: 'late' })}
-												className={`py-3 rounded-xl font-bold text-xs transition-all ${requestData.type === 'late' ? 'bg-[#1A237E] text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}
+												className={`py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all ${
+													requestData.type === 'late'
+														? 'bg-[#1A237E] dark:bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
+														: 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+												}`}
 											>
 												ĐI MUỘN
 											</button>
 										</div>
 									</div>
 
+									{/* Calendar - only for leave */}
+									{requestData.type === 'leave' && (
+										<motion.div
+											initial={{ opacity: 0, height: 0 }}
+											animate={{ opacity: 1, height: 'auto' }}
+											exit={{ opacity: 0, height: 0 }}
+										>
+											<label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px] mb-3 block">CHỌN NGÀY NGHỈ</label>
+											<div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 border border-slate-100 dark:border-slate-700">
+												<LeaveCalendar
+													selectedDates={requestData.selectedDates}
+													onDatesChange={(dates) => setRequestData(prev => ({ ...prev, selectedDates: dates }))}
+												/>
+											</div>
+										</motion.div>
+									)}
+
+									{/* Reason */}
 									<div>
-										<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Lý do cụ thể</label>
+										<label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[2px] mb-3 block">LÝ DO CỤ THỂ</label>
 										<textarea
-											className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-4 text-sm font-bold dark:text-white min-h-[100px] outline-none focus:ring-2 focus:ring-indigo-500/20"
+											className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl p-5 text-sm font-bold dark:text-white min-h-[100px] outline-none focus:ring-2 focus:ring-indigo-500/20 placeholder:text-slate-400 resize-none"
 											placeholder="Nhập lý do..."
 											value={requestData.note}
 											onChange={(e) => setRequestData({ ...requestData, note: e.target.value })}
 										/>
 									</div>
+								</div>
 
+								{/* Submit Button */}
+								<div className="px-6 md:px-8 pb-6 md:pb-8 pt-2 shrink-0">
 									<button
 										onClick={handleRequestSubmit}
 										disabled={checking}
-										className="w-full py-4 bg-[#FF6D00] text-white rounded-xl font-black uppercase tracking-widest text-xs shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 hover:bg-orange-600 transition-all disabled:opacity-50"
+										className="w-full py-4 bg-[#FF6D00] hover:bg-orange-600 text-white rounded-2xl font-black uppercase tracking-widest text-sm shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50 active:scale-[0.98]"
 									>
-										<Send size={16} /> {checking ? 'Đang gửi...' : 'Gửi Yêu Cầu'}
+										<Send size={18} /> {checking ? 'ĐANG GỬI...' : 'GỬI YÊU CẦU'}
 									</button>
 								</div>
-							</div>
+							</motion.div>
 						</div>
 					)}
 

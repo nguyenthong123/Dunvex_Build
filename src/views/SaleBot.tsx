@@ -558,6 +558,97 @@ const SaleBot = () => {
                     data.message = `Dạ, anh/chị muốn cập nhật cho khách hàng nào ạ? Em chưa nhận diện được tên khách hàng.`;
                     data.customer = undefined;
                 }
+            } else if (data.intent === 'CREATE_PAYMENT' && data.customer?.name && owner.ownerId) {
+                // Pre-check: Tìm khách hàng trước khi xác nhận thu công nợ
+                const qP = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
+                const snapP = await getDocs(qP);
+                const queryRawP = data.customer.name.toLowerCase();
+                const queryNameP = queryRawP.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+                const matchesP = snapP.docs.filter(d => {
+                    const dbName = (d.data().name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                    const dbBiz = (d.data().businessName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                    const matchName = dbName && (dbName.includes(queryNameP) || queryNameP.includes(dbName));
+                    const matchBiz = dbBiz && (dbBiz.includes(queryNameP) || queryNameP.includes(dbBiz));
+                    return matchName || matchBiz;
+                });
+
+                let foundP = null;
+                if (matchesP.length === 1) {
+                    foundP = matchesP[0];
+                } else if (matchesP.length > 1) {
+                    foundP = matchesP.find(d => {
+                        const dbName = (d.data().name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                        const dbBiz = (d.data().businessName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                        return dbName === queryNameP || dbBiz === queryNameP;
+                    });
+                }
+
+                if (foundP) {
+                    data.customer.id = foundP.id;
+                    data.customer.name = foundP.data().businessName || foundP.data().name;
+                    const debt = foundP.data().debt || foundP.data().totalDebt || 0;
+                    const debtInfo = debt > 0 ? ` (còn nợ ${debt.toLocaleString('vi-VN')}đ)` : ' (không còn nợ)';
+                    data.message = `👤 Đã tìm thấy: **${data.customer.name}**${debtInfo}\n${data.message || 'Anh/chị muốn thu bao nhiêu ạ?'}`;
+                } else {
+                    const originalNameP = data.customer.name;
+                    let suggestionsP = matchesP.map(d => ({ id: d.id, ...d.data() })).slice(0, 3);
+                    if (suggestionsP.length === 0) {
+                        const wordsP = queryNameP.split(' ').filter(Boolean);
+                        suggestionsP = snapP.docs
+                            .map(d => ({ id: d.id, ...d.data() }))
+                            .filter((c: any) => {
+                                const cName = (c.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                                const cBiz = (c.businessName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                                return wordsP.some((w: string) => cName.includes(w) || cBiz.includes(w));
+                            })
+                            .slice(0, 3);
+                    }
+
+                    data.intent = 'UNKNOWN';
+                    data.customer = undefined;
+                    if (suggestionsP.length > 0) {
+                        data.message = `Em không tìm thấy khách hàng "${originalNameP}". Có phải anh/chị muốn thu tiền của một trong những khách hàng dưới đây không ạ?`;
+                        data.searchResults = suggestionsP;
+                    } else {
+                        data.message = `Em không tìm thấy khách hàng "${originalNameP}" trong hệ thống. Anh/chị kiểm tra lại tên hoặc tạo mới khách hàng trước nhé!`;
+                    }
+                }
+            } else if (data.intent === 'CREATE_ORDER' && data.customer?.name && owner.ownerId) {
+                // Pre-check: Tìm khách hàng để fill vào form lên đơn chính xác
+                const qO = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
+                const snapO = await getDocs(qO);
+                const queryRawO = data.customer.name.toLowerCase();
+                const queryNameO = queryRawO.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+                const matchesO = snapO.docs.filter(d => {
+                    const dbName = (d.data().name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                    const dbBiz = (d.data().businessName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                    const dbPhone = (d.data().phone || '').replace(/[^0-9]/g, '');
+                    const queryDigits = queryRawO.replace(/[^0-9]/g, '');
+                    const matchName = dbName && (dbName.includes(queryNameO) || queryNameO.includes(dbName));
+                    const matchBiz = dbBiz && (dbBiz.includes(queryNameO) || queryNameO.includes(dbBiz));
+                    return matchName || matchBiz || (queryDigits.length >= 3 && dbPhone.includes(queryDigits));
+                });
+
+                let foundO = null;
+                if (matchesO.length === 1) {
+                    foundO = matchesO[0];
+                } else if (matchesO.length > 1) {
+                    foundO = matchesO.find(d => {
+                        const dbName = (d.data().name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                        const dbBiz = (d.data().businessName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                        return dbName === queryNameO || dbBiz === queryNameO;
+                    });
+                }
+
+                if (foundO) {
+                    data.customer.id = foundO.id;
+                    data.customer.name = foundO.data().businessName || foundO.data().name;
+                    data.customer.phone = foundO.data().phone || '';
+                    data.customer.address = foundO.data().address || '';
+                    data.customer.type = foundO.data().type || 'Chủ nhà';
+                }
             }
 
             setMessages(prev => [...prev, {
@@ -1816,7 +1907,10 @@ const SaleBot = () => {
 
                 if (!targetId) {
                     setIsLoading(false);
-                    alert(`Không tìm thấy dữ liệu khách hàng "${data.customer?.name || ''}" trong hệ thống để cập nhật.`);
+                    setMessages(prev => [...prev, {
+                        id: crypto.randomUUID(), role: 'bot',
+                        content: `Không tìm thấy khách hàng "${data.customer?.name || ''}" để cập nhật. Anh/chị kiểm tra lại tên hoặc tạo khách hàng mới trước nhé!`
+                    }]);
                     return;
                 }
 
@@ -1910,7 +2004,33 @@ const SaleBot = () => {
 
                 if (!targetId) {
                     setIsLoading(false);
-                    alert(`Không tìm thấy dữ liệu khách hàng "${data.customer?.name || ''}" trong hệ thống.`);
+                    // Gợi ý các khách hàng gần giống thay vì alert
+                    const qS = query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId));
+                    const snapS = await getDocs(qS);
+                    const searchName = (data.customer?.name || '').toLowerCase();
+                    const queryNameS = searchName.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                    const words = queryNameS.split(' ').filter(Boolean);
+                    const suggestions = snapS.docs
+                        .map(d => ({ id: d.id, ...d.data() }))
+                        .filter((c: any) => {
+                            const cName = (c.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                            const cBiz = (c.businessName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                            return words.some((w: string) => cName.includes(w) || cBiz.includes(w));
+                        })
+                        .slice(0, 3);
+                    
+                    if (suggestions.length > 0) {
+                        setMessages(prev => [...prev, {
+                            id: crypto.randomUUID(), role: 'bot',
+                            content: `Em không tìm thấy khách hàng "${data.customer?.name || ''}". Có phải anh/chị muốn thu tiền của một trong những khách hàng dưới đây không ạ?`,
+                            parsedData: { intent: 'UNKNOWN', searchResults: suggestions }
+                        }]);
+                    } else {
+                        setMessages(prev => [...prev, {
+                            id: crypto.randomUUID(), role: 'bot',
+                            content: `Không tìm thấy dữ liệu khách hàng "${data.customer?.name || ''}" trong hệ thống. Anh/chị vui lòng kiểm tra lại hoặc tạo khách hàng mới trước nhé!`
+                        }]);
+                    }
                     return;
                 }
 

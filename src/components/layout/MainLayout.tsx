@@ -4,6 +4,9 @@ import MobileNav from './MobileNav';
 import NotificationBell from '../NotificationBell';
 import SystemAlertManager from '../SystemAlertManager';
 import { useScroll } from '../../context/ScrollContext';
+import { useNavigationConfig } from '../../hooks/useNavigationConfig';
+import { X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 interface MainLayoutProps {
 	children: React.ReactNode;
@@ -15,6 +18,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 		const saved = localStorage.getItem('sidebar-visible');
 		return saved === null ? true : saved === 'true';
 	});
+	const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
 	useEffect(() => {
 		localStorage.setItem('sidebar-visible', String(isSidebarVisible));
@@ -43,8 +47,14 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 							</h1>
 						</div>
 
-						<div className="flex items-center">
+						<div className="flex items-center gap-2">
 							<NotificationBell />
+							<button
+								onClick={() => setMobileMenuOpen(true)}
+								className="size-9 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500"
+							>
+								<span className="material-symbols-outlined text-xl">menu</span>
+							</button>
 						</div>
 					</header>
 				)}
@@ -82,7 +92,67 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 				</div>
 
 				<MobileNav />
-			</main>
+			{/* Mobile Menu Drawer */}
+			{mobileMenuOpen && (
+				<div className="fixed inset-0 z-[110] lg:hidden">
+					<div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
+					<div className="absolute right-0 top-0 bottom-0 w-72 bg-white dark:bg-slate-900 shadow-2xl animate-in slide-in-from-right duration-200 flex flex-col">
+						<div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+							<h3 className="text-sm font-black text-slate-800 dark:text-white uppercase">Menu</h3>
+							<button onClick={() => setMobileMenuOpen(false)} className="size-9 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800">
+								<X size={16} className="text-slate-500" />
+							</button>
+						</div>
+						<div className="flex-1 overflow-y-auto p-2">
+							<MobileDrawerItems onClose={() => setMobileMenuOpen(false)} />
+						</div>
+					</div>
+				</div>
+			)}
+		</main>
+	</div>
+	);
+};
+
+const MobileDrawerItems = ({ onClose }: { onClose: () => void }) => {
+	const navigate = useNavigate();
+	const { sidebarItems, currentPath } = useNavigationConfig();
+	const hasPermission = (key?: string) => {
+		if (!key) return true;
+		return true; // Simplified — permission handled by useNavigationConfig
+	};
+
+	return (
+		<div className="space-y-1">
+			{sidebarItems.map((item, idx) => {
+				const isActive = currentPath === item.path || (item.path !== '/' && currentPath.startsWith(item.path));
+				return (
+					<button
+						key={`drawer-${idx}`}
+						onClick={() => {
+							if (item.path.startsWith('event:')) {
+								window.dispatchEvent(new CustomEvent(item.path.split(':')[1]));
+							} else {
+								navigate(item.path);
+							}
+							onClose();
+						}}
+						className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all ${
+							isActive
+								? 'bg-indigo-50 dark:bg-indigo-900/20 text-[#1A237E] dark:text-indigo-400'
+								: 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+						}`}
+					>
+						<span
+							className={`material-symbols-outlined text-xl ${isActive ? 'filled' : ''}`}
+							style={isActive ? { fontVariationSettings: "'FILL' 1" } : {}}
+						>
+							{item.icon}
+						</span>
+						<span className="text-xs font-bold uppercase tracking-wide">{item.label}</span>
+					</button>
+				);
+			})}
 		</div>
 	);
 };

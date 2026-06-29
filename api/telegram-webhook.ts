@@ -215,10 +215,13 @@ export default async function handler(req: any, res: any) {
     ], 50, { field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' });
     
     const ordersData = recentOrders.map((o: any) => {
+      const emailName = o.fields?.createdByEmail?.stringValue ? o.fields.createdByEmail.stringValue.split('@')[0] : '';
+      const fallbackStaff = o.fields?.createdBy?.stringValue === ownerId ? adminName : (emailName || 'Nhân viên');
+      
       return {
         customerName: o.fields?.customerName?.stringValue || '',
         totalAmount: Number(o.fields?.totalAmount?.integerValue || o.fields?.totalAmount?.doubleValue || 0),
-        staffName: o.fields?.staffName?.stringValue || o.fields?.createdBy?.stringValue || 'Admin',
+        staffName: o.fields?.staffName?.stringValue || fallbackStaff,
         date: o.fields?.orderDate?.stringValue || ''
       };
     });
@@ -227,10 +230,12 @@ export default async function handler(req: any, res: any) {
     const systemPrompt = `Bạn là trợ lý AI (Telegram Bot) phục vụ ĐỘC QUYỀN cho tài khoản: ${adminName} của phần mềm quản lý Dunvex Build.
 Nhiệm vụ của bạn: Trả lời tự nhiên, thân thiện và cung cấp thông tin chính xác từ hệ thống.
 QUY TẮC QUAN TRỌNG: 
-1. Hiện tại bạn CHỈ ĐƯỢC PHÉP TRẢ LỜI CÂU HỎI THÔNG TIN (đơn hàng, doanh thu, công nợ).
-2. NẾU NGƯỜI DÙNG YÊU CẦU TẠO, SỬA, HAY XÓA ĐƠN HÀNG/KHÁCH HÀNG: Bạn PHẢI TỪ CHỐI và yêu cầu người dùng truy cập vào Web App của hệ thống Dunvex Build để xử lý. Bạn không có quyền thay đổi dữ liệu thông qua Telegram.
-3. Báo cáo doanh thu hoặc công nợ một cách dễ hiểu, format tiền tệ VNĐ (ví dụ: 10,000,000đ).
-4. Nhắc đến tên admin là ${adminName} nếu người dùng hỏi bạn đang phục vụ ai hoặc làm việc cho tài khoản nào.
+1. BẮT BUỘC SỬ DỤNG HTML ĐỂ ĐỊNH DẠNG (ví dụ: <b>chữ đậm</b>, <i>chữ nghiêng</i>). 
+2. TUYỆT ĐỐI KHÔNG DÙNG MARKDOWN (không dùng dấu * hay ** hay #). Các danh sách hãy dùng gạch đầu dòng (-) hoặc các emoji (👉, 📦, 💰, 👤).
+3. Hiện tại bạn CHỈ ĐƯỢC PHÉP TRẢ LỜI CÂU HỎI THÔNG TIN (đơn hàng, doanh thu, công nợ).
+4. NẾU NGƯỜI DÙNG YÊU CẦU TẠO, SỬA, HAY XÓA ĐƠN HÀNG/KHÁCH HÀNG: Bạn PHẢI TỪ CHỐI và yêu cầu người dùng truy cập vào Web App.
+5. Báo cáo doanh thu hoặc công nợ một cách dễ hiểu, format tiền tệ VNĐ (ví dụ: 10.000.000đ).
+6. Nhắc đến tên admin là ${adminName} nếu người dùng hỏi bạn đang phục vụ ai.
 
 --- DỮ LIỆU HIỆN TẠI TỪ HỆ THỐNG CỦA ADMIN: ${adminName} ---
 Khách hàng đang có công nợ (Khách hàng nợ mình):

@@ -128,9 +128,10 @@ export default async function handler(req: any, res: any) {
 Nhiệm vụ: Dựa vào số liệu dưới đây, hãy viết 1 tin nhắn BÁO CÁO CUỐI NGÀY gửi cho sếp.
 YÊU CẦU:
 1. Dùng emoji phù hợp, lời văn kính trọng, thân thiện và động viên tinh thần.
-2. Format tiền tệ VNĐ (ví dụ: 10,000,000đ).
-3. Sử dụng HTML tags để làm nổi bật (Ví dụ: <b>chữ đậm</b>).
-4. Nội dung báo cáo cần ngắn gọn, chia làm 2 phần chính: TỔNG KẾT DOANH THU HÔM NAY và DANH SÁCH NHẮC NỢ (chỉ liệt kê 5 khách nợ nhiều nhất nếu danh sách quá dài).
+2. Format tiền tệ VNĐ (ví dụ: 10.000.000đ).
+3. BẮT BUỘC SỬ DỤNG HTML TAGS để làm nổi bật (Ví dụ: <b>chữ đậm</b>, <i>chữ nghiêng</i>).
+4. TUYỆT ĐỐI KHÔNG DÙNG MARKDOWN (không dùng dấu * hay ** hay #). Các mục danh sách hãy dùng gạch đầu dòng (-) hoặc emoji (👉, 📦).
+5. Nội dung báo cáo cần ngắn gọn, chia làm 2 phần chính: TỔNG KẾT DOANH THU HÔM NAY và DANH SÁCH NHẮC NỢ (chỉ liệt kê 5 khách nợ nhiều nhất nếu danh sách quá dài).
 
 === DỮ LIỆU ===
 DOANH THU HÔM NAY: ${totalRevenue.toLocaleString('vi-VN')} đ

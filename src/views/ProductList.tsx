@@ -567,14 +567,9 @@ const ProductList = () => {
 				// 1. Quick local check
 				if (localSkus.includes(candidate)) continue;
 				
-				// 2. Global Check: Verify uniqueness across the ENTIRE system (all owners)
-				// This prevents SKU collisions between different administrators
-				const qGlobal = query(collection(db, 'products'), where('sku', '==', candidate), limit(1));
-				const snap = await getDocs(qGlobal);
-				
-				if (snap.empty) {
-					return candidate;
-				}
+				// 2. Since Firestore blocks cross-owner reads, and localSkus contains all products for this owner,
+				// the local check is sufficient to guarantee uniqueness within the user's workspace.
+				return candidate;
 			}
 			
 			// If 10 random attempts for 3-digits fail, it's likely many are taken globally.

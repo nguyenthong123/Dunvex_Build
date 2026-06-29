@@ -918,6 +918,10 @@ const QuickOrder = () => {
 				});
 
 				await batch.commit();
+
+				if (orderStatus === 'Đơn chốt') {
+					sendTelegramNotification(owner.ownerId, `📦 <b>ĐƠN HÀNG MỚI (CHỐT)</b>\n- Khách hàng: <b>${orderData.customerName}</b>\n- Tổng tiền: <b>${finalTotal.toLocaleString('vi-VN')} đ</b>\n- Nhân viên lên đơn: ${auth.currentUser?.displayName || 'Admin'}`);
+				}
 			}
 			vibrate([100, 50, 100]);
 			setShowSuccessModal(true);

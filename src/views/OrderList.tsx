@@ -6,6 +6,7 @@ import { updateDoc, doc, getDoc, deleteDoc, serverTimestamp, addDoc, getDocs, wr
 // 🔧 REFACTOR: Dùng hooks mới thay vì onSnapshot trực tiếp
 import { useOrders } from '../hooks/useOrders';
 import { useProducts } from '../hooks/useProducts';
+import { sendTelegramNotification } from '../utils/telegramNotify';
 import OrderTicket from '../components/OrderTicket';
 import UpgradeModal from '../components/UpgradeModal';
 import { Lock, Crown } from 'lucide-react';
@@ -222,6 +223,10 @@ const OrderList = () => {
 				
 				await batch.commit();
 				showToast("Đã chốt đơn và xuất kho thành công", "success");
+
+				if (newStatus === 'Đơn chốt') {
+					sendTelegramNotification(owner.ownerId, `📦 <b>ĐƠN HÀNG MỚI (CHỐT)</b>\n- Khách hàng: <b>${order?.customerName}</b>\n- Tổng tiền: <b>${formatPrice(order?.totalAmount || 0)}</b>\n- Người thao tác: ${auth.currentUser?.displayName || 'Admin'}`);
+				}
 				return;
 			}
 
@@ -241,6 +246,10 @@ const OrderList = () => {
 				createdAt: serverTimestamp()
 			});
 			showToast("Đã cập nhật trạng thái", "success");
+
+			if (newStatus === 'Đã hủy') {
+				sendTelegramNotification(owner.ownerId, `❌ <b>ĐƠN HÀNG ĐÃ HỦY</b>\n- Khách hàng: <b>${order?.customerName}</b>\n- Tổng tiền: <b>${formatPrice(order?.totalAmount || 0)}</b>\n- Người thao tác: ${auth.currentUser?.displayName || 'Admin'}`);
+			}
 		} catch (error) {
 			console.error("Lỗi cập nhật trạng thái:", error);
 			showToast("Lỗi khi cập nhật trạng thái", "error");
@@ -305,6 +314,10 @@ const OrderList = () => {
 
 				setShowDetail(false);
 				showToast("Đã xóa đơn hàng và hoàn lại kho", "success");
+
+				if (order?.status === 'Đơn chốt') {
+					sendTelegramNotification(owner.ownerId, `🗑️ <b>ĐƠN CHỐT ĐÃ BỊ XÓA</b>\n- Khách hàng: <b>${order?.customerName}</b>\n- Tổng tiền: <b>${formatPrice(order?.totalAmount || 0)}</b>\n- Người thao tác: ${auth.currentUser?.displayName || 'Admin'}`);
+				}
 			} catch (error) {
 				showToast("Lỗi khi xóa đơn hàng", "error");
 				console.error(error);

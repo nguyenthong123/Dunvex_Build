@@ -145,6 +145,19 @@ export default async function handler(req: any, res: any) {
       return res.status(403).json({ error: 'Invalid or disabled bot token' });
     }
 
+    // Save telegramChatId to Firestore if it's missing or different (for active notifications later)
+    if (!kf.telegramChatId?.stringValue || kf.telegramChatId.stringValue !== String(chatId)) {
+      await fetch(`${FIRESTORE_BASE}/api_keys/${ownerId}?updateMask.fieldPaths=telegramChatId`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fields: {
+            telegramChatId: { stringValue: String(chatId) }
+          }
+        })
+      });
+    }
+
     // Lấy thông tin user (admin)
     const userDoc = await restGet(token, `users/${ownerId}`);
     const adminName = userDoc?.fields?.displayName?.stringValue || userDoc?.fields?.email?.stringValue || 'Admin';

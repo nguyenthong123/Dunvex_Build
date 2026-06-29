@@ -160,12 +160,12 @@ export default async function handler(req: any, res: any) {
       }
     ]);
     const customersWithDebt = customers.filter((c: any) => {
-      const debt = Number(c.fields?.totalDebt?.integerValue || c.fields?.totalDebt?.doubleValue || 0);
+      const debt = Number(c.fields?.debt?.integerValue || c.fields?.debt?.doubleValue || 0);
       return debt > 0;
     }).map((c: any) => {
       return {
         name: c.fields?.name?.stringValue || '',
-        debt: Number(c.fields?.totalDebt?.integerValue || c.fields?.totalDebt?.doubleValue || 0),
+        debt: Number(c.fields?.debt?.integerValue || c.fields?.debt?.doubleValue || 0),
         days: c.fields?.debtDays?.integerValue || 0
       };
     });

@@ -145,6 +145,10 @@ export default async function handler(req: any, res: any) {
       return res.status(403).json({ error: 'Invalid or disabled bot token' });
     }
 
+    // Lấy thông tin user (admin)
+    const userDoc = await restGet(token, `users/${ownerId}`);
+    const adminName = userDoc?.fields?.displayName?.stringValue || userDoc?.fields?.email?.stringValue || 'Admin';
+
     // 1. Fetch data for context (Customers with debt)
     const customers = await runStructuredQuery(token, 'customers', [
       {
@@ -163,6 +167,26 @@ export default async function handler(req: any, res: any) {
         name: c.fields?.name?.stringValue || '',
         debt: Number(c.fields?.totalDebt?.integerValue || c.fields?.totalDebt?.doubleValue || 0),
         days: c.fields?.debtDays?.integerValue || 0
+      };
+    });
+
+    // 1.5 Fetch Suppliers with debt
+    const suppliers = await runStructuredQuery(token, 'suppliers', [
+      {
+        fieldFilter: {
+          field: { fieldPath: 'ownerId' },
+          op: 'EQUAL',
+          value: { stringValue: ownerId }
+        }
+      }
+    ]);
+    const suppliersWithDebt = suppliers.filter((s: any) => {
+      const debt = Number(s.fields?.totalDebt?.integerValue || s.fields?.totalDebt?.doubleValue || 0);
+      return debt > 0;
+    }).map((s: any) => {
+      return {
+        name: s.fields?.name?.stringValue || '',
+        debt: Number(s.fields?.totalDebt?.integerValue || s.fields?.totalDebt?.doubleValue || 0)
       };
     });
 
@@ -187,16 +211,20 @@ export default async function handler(req: any, res: any) {
     });
 
     // 3. Construct prompt
-    const systemPrompt = `Bạn là trợ lý AI (Telegram Bot) của phần mềm quản lý Dunvex Build.
+    const systemPrompt = `Bạn là trợ lý AI (Telegram Bot) phục vụ ĐỘC QUYỀN cho tài khoản: ${adminName} của phần mềm quản lý Dunvex Build.
 Nhiệm vụ của bạn: Trả lời tự nhiên, thân thiện và cung cấp thông tin chính xác từ hệ thống.
 QUY TẮC QUAN TRỌNG: 
 1. Hiện tại bạn CHỈ ĐƯỢC PHÉP TRẢ LỜI CÂU HỎI THÔNG TIN (đơn hàng, doanh thu, công nợ).
 2. NẾU NGƯỜI DÙNG YÊU CẦU TẠO, SỬA, HAY XÓA ĐƠN HÀNG/KHÁCH HÀNG: Bạn PHẢI TỪ CHỐI và yêu cầu người dùng truy cập vào Web App của hệ thống Dunvex Build để xử lý. Bạn không có quyền thay đổi dữ liệu thông qua Telegram.
 3. Báo cáo doanh thu hoặc công nợ một cách dễ hiểu, format tiền tệ VNĐ (ví dụ: 10,000,000đ).
+4. Nhắc đến tên admin là ${adminName} nếu người dùng hỏi bạn đang phục vụ ai hoặc làm việc cho tài khoản nào.
 
---- DỮ LIỆU HIỆN TẠI TỪ HỆ THỐNG CỦA ADMIN ---
-Khách hàng đang có công nợ (Tên / Nợ / Số ngày nợ):
+--- DỮ LIỆU HIỆN TẠI TỪ HỆ THỐNG CỦA ADMIN: ${adminName} ---
+Khách hàng đang có công nợ (Khách hàng nợ mình):
 ${customersWithDebt.map((c: any) => `- ${c.name}: Nợ ${c.debt.toLocaleString('vi-VN')}đ (Số ngày: ${c.days})`).join('\n') || 'Không có khách nợ.'}
+
+Nhà cung cấp đang có công nợ (Mình nợ NCC):
+${suppliersWithDebt.map((s: any) => `- ${s.name}: Đang nợ ${s.debt.toLocaleString('vi-VN')}đ`).join('\n') || 'Không có nợ nhà cung cấp.'}
 
 50 Đơn hàng gần nhất (Khách hàng / Doanh thu / Nhân viên / Ngày):
 ${ordersData.map((o: any) => `- ${o.customerName}: ${o.totalAmount.toLocaleString('vi-VN')}đ (Nhân viên: ${o.staffName}, Ngày: ${new Date(o.date).toLocaleDateString('vi-VN')})`).join('\n') || 'Chưa có đơn hàng.'}

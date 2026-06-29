@@ -129,6 +129,19 @@ export default async function handler(req: any, res: any) {
 
     const userMessage = body.message.text;
     const chatId = body.message.chat.id;
+    const chatType = body.message.chat.type; // 'private', 'group', 'supergroup', etc.
+
+    // Nếu là group, chỉ phản hồi khi được tag (@dunvexbot), dùng lệnh (/...), reply tin nhắn của bot, hoặc có chữ "bot"
+    if (chatType === 'group' || chatType === 'supergroup') {
+      const hasMentionOrCommand = body.message.entities?.some((e: any) => e.type === 'mention' || e.type === 'bot_command');
+      const isReply = !!body.message.reply_to_message;
+      const containsBotKeyword = userMessage.toLowerCase().includes('bot') || userMessage.includes('@');
+      
+      if (!hasMentionOrCommand && !isReply && !containsBotKeyword) {
+        // Bỏ qua tin nhắn trò chuyện bình thường của các thành viên trong nhóm
+        return res.status(200).json({ status: 'ignored_group_chatter' });
+      }
+    }
 
     const token = await getAccessToken();
 

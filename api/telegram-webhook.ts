@@ -1,0 +1,246 @@
+import crypto from 'crypto';
+
+/**
+ * Vercel Serverless: POST /api/telegram-webhook
+ * Webhook nhận sự kiện trực tiếp từ Telegram.
+ *
+ * Query params:
+ * ?ownerId=[OWNER_ID]
+ *
+ * POST body:
+ * Theo chuẩn Telegram Update Object
+ */
+
+const PROJECT_ID = 'dunvex-89461';
+const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '';
+
+async function getAccessToken(): Promise<string> {
+  const json = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (!json) throw new Error('Missing FIREBASE_SERVICE_ACCOUNT env');
+  const sa = JSON.parse(json);
+
+  const header = { alg: 'RS256', typ: 'JWT', kid: sa.private_key_id };
+  const now = Math.floor(Date.now() / 1000);
+  const claim = {
+    iss: sa.client_email, sub: sa.client_email,
+    aud: 'https://oauth2.googleapis.com/token',
+    iat: now, exp: now + 3600,
+    scope: 'https://www.googleapis.com/auth/datastore',
+  };
+
+  const b64obj = (obj: any) => Buffer.from(JSON.stringify(obj)).toString('base64url');
+  const sign = (pk: string, data: string) => {
+    return crypto.createSign('RSA-SHA256').update(data).sign(pk, 'base64url');
+  };
+  const partial = `${b64obj(header)}.${b64obj(claim)}`;
+  const jwt = `${partial}.${sign(sa.private_key, partial)}`;
+
+  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
+  });
+  const td = await tokenRes.json();
+  if (td.error) throw new Error(`Auth: ${td.error_description || td.error}`);
+  return td.access_token;
+}
+
+async function restGet(token: string, path: string) {
+  const res = await fetch(`${FIRESTORE_BASE}/${path}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Firestore GET ${path}: ${res.status}`);
+  return res.json();
+}
+
+async function runStructuredQuery(token: string, collectionId: string, fieldFilters: any[], limit?: number, orderBy?: any): Promise<any[]> {
+  const url = `${FIRESTORE_BASE}:runQuery`;
+  const filter = fieldFilters.length === 1
+    ? fieldFilters[0]
+    : {
+        compositeFilter: {
+          op: 'AND',
+          filters: fieldFilters
+        }
+      };
+
+  const body: any = {
+    structuredQuery: {
+      from: [{ collectionId }],
+      where: filter
+    }
+  };
+  
+  if (limit) body.structuredQuery.limit = limit;
+  if (orderBy) body.structuredQuery.orderBy = [orderBy];
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`Firestore query failed: ${res.status} ${txt}`);
+  }
+
+  const data = await res.json();
+  if (!Array.isArray(data)) return [];
+  return data
+    .filter((item: any) => item.document)
+    .map((item: any) => item.document);
+}
+
+export default async function handler(req: any, res: any) {
+  // CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed. Use POST.' });
+  }
+
+  if (!GEMINI_API_KEY) {
+    console.error('GEMINI_API_KEY not configured on server');
+    return res.status(500).json({ error: 'GEMINI_API_KEY not configured on server' });
+  }
+
+  try {
+    const ownerId = req.query.ownerId;
+    if (!ownerId) {
+      console.error('Missing ownerId in query');
+      return res.status(400).json({ error: 'Missing ownerId' });
+    }
+
+    const body = req.body;
+    // Telegram webhook sends { update_id, message: { message_id, from, chat, date, text } }
+    if (!body || !body.message || !body.message.text || !body.message.chat) {
+      // Ignore non-message updates (like edited_message, channel_post) to avoid errors
+      return res.status(200).json({ status: 'ignored' });
+    }
+
+    const userMessage = body.message.text;
+    const chatId = body.message.chat.id;
+
+    const token = await getAccessToken();
+
+    // Lấy API Key doc để tìm telegramBotToken
+    const keyDoc = await restGet(token, `api_keys/${ownerId}`);
+    if (!keyDoc) {
+      console.error('API key doc not found for owner:', ownerId);
+      return res.status(403).json({ error: 'Owner not found' });
+    }
+    const kf = keyDoc.fields || {};
+    const botToken = kf.telegramBotToken?.stringValue;
+    if (!botToken || kf.enabled?.booleanValue !== true) {
+      console.error('Invalid or disabled bot token for owner:', ownerId);
+      return res.status(403).json({ error: 'Invalid or disabled bot token' });
+    }
+
+    // 1. Fetch data for context (Customers with debt)
+    const customers = await runStructuredQuery(token, 'customers', [
+      {
+        fieldFilter: {
+          field: { fieldPath: 'ownerId' },
+          op: 'EQUAL',
+          value: { stringValue: ownerId }
+        }
+      }
+    ]);
+    const customersWithDebt = customers.filter((c: any) => {
+      const debt = Number(c.fields?.totalDebt?.integerValue || c.fields?.totalDebt?.doubleValue || 0);
+      return debt > 0;
+    }).map((c: any) => {
+      return {
+        name: c.fields?.name?.stringValue || '',
+        debt: Number(c.fields?.totalDebt?.integerValue || c.fields?.totalDebt?.doubleValue || 0),
+        days: c.fields?.debtDays?.integerValue || 0
+      };
+    });
+
+    // 2. Fetch data for context (Recent orders for revenue info)
+    const recentOrders = await runStructuredQuery(token, 'orders', [
+      {
+        fieldFilter: {
+          field: { fieldPath: 'ownerId' },
+          op: 'EQUAL',
+          value: { stringValue: ownerId }
+        }
+      }
+    ], 50, { field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' });
+    
+    const ordersData = recentOrders.map((o: any) => {
+      return {
+        customerName: o.fields?.customerName?.stringValue || '',
+        totalAmount: Number(o.fields?.totalAmount?.integerValue || o.fields?.totalAmount?.doubleValue || 0),
+        staffName: o.fields?.staffName?.stringValue || o.fields?.createdBy?.stringValue || 'Admin',
+        date: o.fields?.orderDate?.stringValue || ''
+      };
+    });
+
+    // 3. Construct prompt
+    const systemPrompt = `Bạn là trợ lý AI (Telegram Bot) của phần mềm quản lý Dunvex Build.
+Nhiệm vụ của bạn: Trả lời tự nhiên, thân thiện và cung cấp thông tin chính xác từ hệ thống.
+QUY TẮC QUAN TRỌNG: 
+1. Hiện tại bạn CHỈ ĐƯỢC PHÉP TRẢ LỜI CÂU HỎI THÔNG TIN (đơn hàng, doanh thu, công nợ).
+2. NẾU NGƯỜI DÙNG YÊU CẦU TẠO, SỬA, HAY XÓA ĐƠN HÀNG/KHÁCH HÀNG: Bạn PHẢI TỪ CHỐI và yêu cầu người dùng truy cập vào Web App của hệ thống Dunvex Build để xử lý. Bạn không có quyền thay đổi dữ liệu thông qua Telegram.
+3. Báo cáo doanh thu hoặc công nợ một cách dễ hiểu, format tiền tệ VNĐ (ví dụ: 10,000,000đ).
+
+--- DỮ LIỆU HIỆN TẠI TỪ HỆ THỐNG CỦA ADMIN ---
+Khách hàng đang có công nợ (Tên / Nợ / Số ngày nợ):
+${customersWithDebt.map((c: any) => `- ${c.name}: Nợ ${c.debt.toLocaleString('vi-VN')}đ (Số ngày: ${c.days})`).join('\n') || 'Không có khách nợ.'}
+
+50 Đơn hàng gần nhất (Khách hàng / Doanh thu / Nhân viên / Ngày):
+${ordersData.map((o: any) => `- ${o.customerName}: ${o.totalAmount.toLocaleString('vi-VN')}đ (Nhân viên: ${o.staffName}, Ngày: ${new Date(o.date).toLocaleDateString('vi-VN')})`).join('\n') || 'Chưa có đơn hàng.'}
+------------------------------------------------
+
+Câu hỏi của người dùng: "${userMessage}"
+Dựa vào dữ liệu trên, hãy trả lời câu hỏi:`;
+
+    // 4. Call Gemini
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: systemPrompt }] }],
+          generationConfig: { temperature: 0.2 }, // We want raw string output, not strict JSON.
+        }),
+      }
+    );
+
+    const data = await response.json();
+    if (!response.ok) {
+      console.error('Gemini error:', data);
+      return res.status(500).json({ error: 'Lỗi khi gọi AI', details: data });
+    }
+
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Xin lỗi, tôi không thể xử lý câu hỏi này lúc này.';
+    
+    // Gửi tin nhắn lại Telegram
+    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: text
+      })
+    });
+    
+    // Luôn trả về 200 OK cho Telegram Webhook để nó không gửi lại
+    return res.status(200).json({ success: true });
+  } catch (error: any) {
+    console.error('Telegram webhook error:', error);
+    // Trả về 200 ngay cả khi lỗi để Telegram không retry làm kẹt hàng đợi
+    return res.status(200).json({ error: error.message || 'Internal server error' });
+  }
+}

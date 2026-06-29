@@ -17,6 +17,9 @@ const AppSettings = () => {
 	const [apiKey, setApiKey] = React.useState('');
 	const [apiCopied, setApiCopied] = React.useState(false);
 	const [urlCopied, setUrlCopied] = React.useState(false);
+	const [urlCopiedAI, setUrlCopiedAI] = React.useState(false);
+	const [telegramBotToken, setTelegramBotToken] = React.useState('');
+	const [savingTelegram, setSavingTelegram] = React.useState(false);
 	const [generating, setGenerating] = React.useState(false);
 	const [apiEnabled, setApiEnabled] = React.useState(false);
 
@@ -30,6 +33,7 @@ const AppSettings = () => {
 					const data = snap.data();
 					setApiKey(data.key || '');
 					setApiEnabled(data.enabled === true);
+					setTelegramBotToken(data.telegramBotToken || '');
 				}
 			} catch (e) { console.error(e); }
 		};
@@ -72,6 +76,32 @@ const AppSettings = () => {
 	};
 
 	const webhookUrl = typeof window !== 'undefined' ? `${window.location.origin}/api/order-webhook` : '/api/order-webhook';
+	const telegramWebhookUrl = typeof window !== 'undefined' ? `${window.location.origin}/api/telegram-webhook` : '/api/telegram-webhook';
+
+	const handleConnectTelegram = async () => {
+		if (!apiKey) {
+			showToast('Vui lòng tạo API Key trước', 'error');
+			return;
+		}
+		setSavingTelegram(true);
+		try {
+			const res = await fetch('/api/setup-telegram', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+				body: JSON.stringify({ ownerId: owner.ownerId, botToken: telegramBotToken.trim() })
+			});
+			const data = await res.json();
+			if (data.success) {
+				showToast(data.message, 'success');
+			} else {
+				showToast(data.error || 'Lỗi kết nối Telegram', 'error');
+			}
+		} catch (err: any) {
+			showToast(err.message, 'error');
+		} finally {
+			setSavingTelegram(false);
+		}
+	};
 
 	React.useEffect(() => {
 		const params = new URLSearchParams(location.search);
@@ -323,6 +353,43 @@ const AppSettings = () => {
 							<button onClick={() => {{ navigator.clipboard.writeText(webhookUrl); setUrlCopied(true); showToast('Copy xong!', 'success'); setTimeout(() => setUrlCopied(false), 2000); }}} className="p-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg transition-all">{urlCopied ? <Check size={16} /> : <Copy size={16} />}</button>
 						</div>
 						<p className="text-[10px] text-slate-400 mt-2">Gửi POST request với header <code className="bg-slate-200 dark:bg-slate-700 px-1 rounded">x-api-key</code> và body JSON đơn hàng.</p>
+					</div>
+
+					{/* ─── Webhook Trợ Lý AI (Telegram) ─── */}
+					<div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800 mt-4">
+						<div className="flex items-center gap-2 mb-3">
+							<Globe size={16} className="text-blue-500" />
+							<span className="text-xs font-black text-slate-500 uppercase tracking-widest">Kết nối Trợ Lý AI (Telegram)</span>
+						</div>
+						
+						<div className="mb-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3.5 text-xs text-slate-600 dark:text-slate-300 shadow-sm">
+							<p className="font-bold text-slate-800 dark:text-white mb-2 flex items-center gap-1.5">
+								<span className="flex items-center justify-center w-4 h-4 bg-blue-100 text-blue-600 rounded-full text-[10px]">i</span> 
+								Hướng dẫn nhanh (3 bước)
+							</p>
+							<ol className="list-decimal list-inside space-y-2 ml-1 marker:text-slate-400 marker:font-medium">
+								<li>Mở Telegram, tìm và bắt đầu chat với <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="text-blue-500 hover:text-blue-600 hover:underline font-semibold transition-colors">@BotFather</a>.</li>
+								<li>Gõ lệnh <code className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-pink-500 font-mono">/newbot</code> và làm theo hướng dẫn để đặt tên.</li>
+								<li>Copy đoạn mã <strong>HTTP API Token</strong> được cấp và dán vào ô bên dưới.</li>
+							</ol>
+						</div>
+						<div className="flex items-center gap-2">
+							<input 
+								type="text" 
+								placeholder="VD: 123456789:ABCdefGHIjklMNO..." 
+								className="flex-1 px-3 py-2 bg-white dark:bg-slate-900 rounded-lg text-xs font-mono text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 outline-none focus:border-blue-500"
+								value={telegramBotToken}
+								onChange={(e) => setTelegramBotToken(e.target.value)}
+							/>
+							<button 
+								onClick={handleConnectTelegram} 
+								disabled={savingTelegram || !apiKey}
+								className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
+							>
+								{savingTelegram ? <RefreshCw size={14} className="animate-spin" /> : <Link size={14} />}
+								Kết nối
+							</button>
+						</div>
 					</div>
 				</div>
 

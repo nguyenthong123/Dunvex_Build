@@ -114,7 +114,14 @@ const PurchaseOrders = () => {
 			updatedAt: serverTimestamp()
 		}, { merge: true }).catch(err => console.error('Save supply chat error:', err));
 	}, [chatMessages, supplyChatDocId, owner.ownerId]);
-	const [pendingSheetOrder, setPendingSheetOrder] = useState<{ items: any[]; total: number; notFound: string[] } | null>(null);
+	const [pendingSheetOrder, setPendingSheetOrder] = useState<{ 
+		items: any[]; 
+		total: number; 
+		notFound: string[];
+		supplierId?: string;
+		supplierName?: string;
+		step: 'WAIT_SUPPLIER' | 'WAIT_STRATEGY';
+	} | null>(null);
 	const [expandedPO, setExpandedPO] = useState<string | null>(null);
 	const [deletingPO, setDeletingPO] = useState<string | null>(null); // PO đang chờ xác nhận xoá
 	const [cancellingPO, setCancellingPO] = useState<string | null>(null); // PO đang được xoá (loading)
@@ -515,69 +522,95 @@ const PurchaseOrders = () => {
 		setChatInput('');
 		setChatLoading(true);
 
-		// Nếu có pending sheet order → user đang nhập tên NCC để xác nhận
+		// Nếu có pending sheet order → user đang nhập tên NCC để xác nhận hoặc chọn chiến lược kho
 		if (pendingSheetOrder) {
 			try {
-				const supplier = suppliers.find(s => s.name.toLowerCase() === msg.toLowerCase());
-				if (!supplier) {
-					setChatMessages(prev => [...prev, { role: 'bot',
-						text: `❌ Không tìm thấy NCC "${msg}". Hãy tạo NCC trước hoặc nhập đúng tên.` }]);
+				if (pendingSheetOrder.step === 'WAIT_SUPPLIER') {
+					const supplier = suppliers.find(s => s.name.toLowerCase() === msg.toLowerCase());
+					if (!supplier) {
+						setChatMessages(prev => [...prev, { role: 'bot',
+							text: `❌ Không tìm thấy NCC "${msg}". Hãy tạo NCC trước hoặc nhập đúng tên.` }]);
+						setChatLoading(false);
+						return;
+					}
+					
+					setPendingSheetOrder({ ...pendingSheetOrder, supplierId: supplier.id, supplierName: supplier.name, step: 'WAIT_STRATEGY' });
+					setChatMessages(prev => [...prev, { role: 'bot', text: `✅ Đã chọn NCC: **${supplier.name}**\n\nBạn muốn xử lý Tồn kho như thế nào với số lượng trong file?\n\n1️⃣ Cộng dồn vào tồn kho hiện tại\n2️⃣ Ghi đè (thay thế) tồn kho hiện tại\n3️⃣ Chỉ tạo đơn nhập hàng (không xử lý tồn kho)\n\nVui lòng nhập số 1, 2, hoặc 3 để chọn:` }]);
 					setChatLoading(false);
 					return;
 				}
 
-				const items = pendingSheetOrder.items;
-				const totalAmount = pendingSheetOrder.total;
+				if (pendingSheetOrder.step === 'WAIT_STRATEGY') {
+					const choice = msg.trim();
+					if (!['1', '2', '3'].includes(choice)) {
+						setChatMessages(prev => [...prev, { role: 'bot', text: '⚠️ Vui lòng nhập số 1, 2, hoặc 3 để chọn cách xử lý tồn kho.' }]);
+						setChatLoading(false);
+						return;
+					}
 
-				await runTransaction(db, async (transaction) => {
-					const productRefs = items.map(i => doc(db, 'products', i.productId));
-					const snaps = await Promise.all(productRefs.map(ref => transaction.get(ref)));
-					const supplierRef = doc(db, 'suppliers', supplier.id);
-					const supplierSnap = await transaction.get(supplierRef);
-					const supplierData = supplierSnap.data() || {};
+					const strategy = choice === '1' ? 'accumulate' : choice === '2' ? 'overwrite' : 'skip';
+					
+					const items = pendingSheetOrder.items;
+					const totalAmount = pendingSheetOrder.total;
+					const supplierId = pendingSheetOrder.supplierId!;
+					const supplierName = pendingSheetOrder.supplierName!;
 
-					const poRef = doc(collection(db, 'purchase_orders'));
-					const poId = poRef.id;
-					transaction.set(poRef, {
-						ownerId: owner.ownerId,
-						supplierId: supplier.id,
-						supplierName: supplier.name,
-						items: items,
-						totalAmount, paidAmount: 0, debtAmount: totalAmount,
-						note: 'Tạo từ Google Sheet (AI)',
-						status: 'Hoàn thành',
-						orderDate: new Date().toISOString(),
-						createdAt: serverTimestamp(),
-						createdBy: owner.ownerId
+					await runTransaction(db, async (transaction) => {
+						const productRefs = items.map(i => doc(db, 'products', i.productId));
+						const snaps = await Promise.all(productRefs.map(ref => transaction.get(ref)));
+						const supplierRef = doc(db, 'suppliers', supplierId);
+						const supplierSnap = await transaction.get(supplierRef);
+						const supplierData = supplierSnap.data() || {};
+
+						const poRef = doc(collection(db, 'purchase_orders'));
+						const poId = poRef.id;
+						transaction.set(poRef, {
+							ownerId: owner.ownerId,
+							supplierId: supplierId,
+							supplierName: supplierName,
+							items: items,
+							totalAmount, paidAmount: 0, debtAmount: totalAmount,
+							note: `Tạo từ Google Sheet (AI) - Kho: ${strategy === 'accumulate' ? 'Cộng dồn' : strategy === 'overwrite' ? 'Ghi đè' : 'Không cập nhật'}`,
+							status: 'Hoàn thành',
+							orderDate: new Date().toISOString(),
+							createdAt: serverTimestamp(),
+							createdBy: owner.ownerId
+						});
+
+						for (let i = 0; i < items.length; i++) {
+							if (snaps[i].exists() && strategy !== 'skip') {
+								const oldStock = Number(snaps[i].data()?.stock) || 0;
+								let newStock = oldStock;
+								if (strategy === 'accumulate') newStock = oldStock + Number(items[i].qty);
+								else if (strategy === 'overwrite') newStock = Number(items[i].qty);
+								
+								transaction.update(productRefs[i], { stock: newStock, priceImport: Number(items[i].priceImport) });
+							}
+						}
+
+						if (totalAmount > 0) {
+							const debtRef = doc(collection(db, 'supplier_debts'));
+							transaction.set(debtRef, {
+								ownerId: owner.ownerId, supplierId: supplierId, supplierName: supplierName,
+								type: 'debt_increase', amount: totalAmount,
+								note: `Nợ đơn nhập hàng (AI Sheet) ${new Date().toLocaleDateString('vi-VN')}`,
+								orderId: poId, createdBy: owner.ownerId, createdAt: serverTimestamp()
+							});
+							transaction.update(supplierRef, { totalDebt: (supplierData.totalDebt || 0) + totalAmount });
+						}
 					});
 
-					for (let i = 0; i < items.length; i++) {
-						if (snaps[i].exists()) {
-							const oldStock = Number(snaps[i].data()?.stock) || 0;
-							transaction.update(productRefs[i], { stock: oldStock + Number(items[i].qty), priceImport: Number(items[i].priceImport) });
-						}
-					}
+					const itemsSummary = items.map(i =>
+						`• ${i.name} x${i.qty} = ${(Number(i.qty) * Number(i.priceImport)).toLocaleString('vi-VN')}đ`
+					).join('\n');
 
-					if (totalAmount > 0) {
-						const debtRef = doc(collection(db, 'supplier_debts'));
-						transaction.set(debtRef, {
-							ownerId: owner.ownerId, supplierId: supplier.id, supplierName: supplier.name,
-							type: 'debt_increase', amount: totalAmount,
-							note: `Nợ đơn nhập hàng (AI Sheet) ${new Date().toLocaleDateString('vi-VN')}`,
-							orderId: poId, createdBy: owner.ownerId, createdAt: serverTimestamp()
-						});
-						transaction.update(supplierRef, { totalDebt: (supplierData.totalDebt || 0) + totalAmount });
-					}
-				});
+					const strategyText = strategy === 'accumulate' ? 'Đã cộng dồn tồn kho' : strategy === 'overwrite' ? 'Đã ghi đè tồn kho' : 'Không cập nhật tồn kho';
+					
+					setChatMessages(prev => [...prev, { role: 'bot',
+						text: `✅ Đã tạo đơn nhập hàng từ Google Sheet!\n\n🏭 NCC: **${supplierName}**\n⚙️ Xử lý kho: ${strategyText}\n${itemsSummary}\n💰 Tổng: **${totalAmount.toLocaleString('vi-VN')}đ**\n📋 Nợ NCC: ${totalAmount.toLocaleString('vi-VN')}đ` }]);
 
-				const itemsSummary = items.map(i =>
-					`• ${i.name} x${i.qty} = ${(Number(i.qty) * Number(i.priceImport)).toLocaleString('vi-VN')}đ`
-				).join('\n');
-
-				setChatMessages(prev => [...prev, { role: 'bot',
-					text: `✅ Đã tạo đơn nhập hàng từ Google Sheet!\n\n🏭 NCC: **${supplier.name}**\n${itemsSummary}\n💰 Tổng: **${totalAmount.toLocaleString('vi-VN')}đ**\n📋 Nợ NCC: ${totalAmount.toLocaleString('vi-VN')}đ` }]);
-
-				setPendingSheetOrder(null);
+					setPendingSheetOrder(null);
+				}
 			} catch (err: any) {
 				console.error('pendingSheetOrder error:', err);
 				setChatMessages(prev => [...prev, { role: 'bot', text: `❌ Lỗi: ${err.message || 'Không xác định'}` }]);
@@ -913,7 +946,7 @@ const PurchaseOrders = () => {
 			setChatMessages(prev => [...prev, { role: 'bot', text: confirmMsg }]);
 
 			// Lưu pending order để xử lý khi user nhập tên NCC
-			setPendingSheetOrder({ items: orderItems, total: totalAmount, notFound });
+			setPendingSheetOrder({ items: orderItems, total: totalAmount, notFound, step: 'WAIT_SUPPLIER' });
 		} catch (err: any) {
 			console.error('importFromSheet error:', err);
 			setChatMessages(prev => [...prev, { role: 'bot', text: `❌ Lỗi: ${err.message || 'Không xác định'}` }]);

@@ -171,6 +171,12 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 						if (snSynonyms.some(s => cleanH.includes(s) || s.includes(cleanH))) return true;
 					}
 
+					// Synonyms for 'unit'
+					if (field.key === 'unit') {
+						const unitSynonyms = ['đvt', 'đơnvịtính', 'dvt', 'unit'];
+						if (unitSynonyms.some(s => cleanH.includes(s) || s.includes(cleanH))) return true;
+					}
+
 					return false;
 				});
 

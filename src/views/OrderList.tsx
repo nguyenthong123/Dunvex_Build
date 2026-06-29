@@ -205,11 +205,17 @@ const OrderList = () => {
 					});
 				});
 				
-				// Cập nhật trạng thái đơn
+				// Cập nhật trạng thái đơn và công nợ (nếu cần)
 				batch.update(doc(db, 'orders', id), {
 					status: newStatus,
 					updatedAt: serverTimestamp()
 				});
+
+				if (order?.customerId && order?.status !== 'Đơn chốt') {
+					batch.update(doc(db, 'customers', order.customerId), {
+						debt: increment(Number(order.totalAmount || 0))
+					});
+				}
 				
 				const auditRef = doc(collection(db, 'audit_logs'));
 				batch.set(auditRef, {
@@ -231,13 +237,20 @@ const OrderList = () => {
 			}
 
 			// 2. Chuyển các trạng thái khác (Không trừ tồn kho)
-			await updateDoc(doc(db, 'orders', id), {
+			const batch = writeBatch(db);
+			batch.update(doc(db, 'orders', id), {
 				status: newStatus,
 				updatedAt: serverTimestamp()
 			});
 
+			if (order?.customerId && order?.status === 'Đơn chốt') {
+				batch.update(doc(db, 'customers', order.customerId), {
+					debt: increment(-Number(order.totalAmount || 0))
+				});
+			}
+
 			// Log Status Update
-			await addDoc(collection(db, 'audit_logs'), {
+			batch.set(doc(collection(db, 'audit_logs')), {
 				action: 'Cập nhật trạng thái đơn',
 				user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
 				userId: auth.currentUser?.uid || "",
@@ -245,6 +258,8 @@ const OrderList = () => {
 				details: `Đã đổi đơn hàng của ${order?.customerName || 'Khách'} sang: ${newStatus}`,
 				createdAt: serverTimestamp()
 			});
+
+			await batch.commit();
 			showToast("Đã cập nhật trạng thái", "success");
 
 			if (newStatus === 'Đã hủy') {

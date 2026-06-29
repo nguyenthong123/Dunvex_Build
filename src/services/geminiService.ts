@@ -239,7 +239,7 @@ async function callViaProxy(prompt: string): Promise<any> {
         const res = await fetchWithTimeout('/api/gemini-proxy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt }),
+            body: JSON.stringify({ prompt, schema: botResponseSchema }),
         }, FETCH_TIMEOUT);
 
         if (!res.ok) {

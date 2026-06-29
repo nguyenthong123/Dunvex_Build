@@ -23,7 +23,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { prompt } = req.body;
+    const { prompt, schema } = req.body;
     if (!prompt) {
       return res.status(400).json({ error: 'Missing prompt' });
     }
@@ -44,6 +44,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           generationConfig: {
             responseMimeType: 'application/json',
             temperature: 0.1,
+            ...(schema ? { responseSchema: schema } : {})
           },
         }),
       }

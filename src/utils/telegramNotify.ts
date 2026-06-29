@@ -7,15 +7,18 @@ export const sendTelegramNotification = async (ownerId: string, message: string)
   if (!ownerId || !message) return false;
 
   try {
-    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    // Nếu chạy local, không gọi lên Vercel API thực tế để tránh lỗi (hoặc có thể trỏ thẳng lên Vercel URL thật)
-    // Để dễ test, nếu ở local thì bỏ qua hoặc log ra console.
-    if (isLocal) {
-      console.log('TELEGRAM NOTIFY (LOCAL):', message);
+    const isViteLocal = import.meta.env.DEV; // Vite local dev server
+    if (isViteLocal) {
+      console.log('TELEGRAM NOTIFY (LOCAL DEV):', message);
+      // Khi dev local có thể bỏ qua để không spam, hoặc nếu muốn test thật thì cmt return true lại.
       return true;
     }
 
-    const res = await fetch('/api/telegram-notify', {
+    // Nếu chạy trên Capacitor (Android/iOS), API phải trỏ đến tên miền thật của Vercel (vì Capacitor chạy localhost không có backend API)
+    const isCapacitor = window.location.protocol === 'capacitor:' || window.location.hostname === 'localhost';
+    const apiUrl = isCapacitor ? 'https://dunvex-build.vercel.app/api/telegram-notify' : '/api/telegram-notify';
+
+    const res = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ownerId, message })

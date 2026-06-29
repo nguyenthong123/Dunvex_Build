@@ -66,15 +66,18 @@ export default async function handler(req: any, res: any) {
     const apiKeys = await runStructuredQuery(token, 'api_keys', []);
     
     let processedCount = 0;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // Đầu ngày hôm nay
+    const now = new Date();
+    const offset = 7 * 60 * 60 * 1000; // ICT offset
+    const localNow = new Date(now.getTime() + offset);
+    localNow.setUTCHours(0, 0, 0, 0);
+    const startOfDayUTC = new Date(localNow.getTime() - offset);
 
     for (const keyDoc of apiKeys) {
       const kf = keyDoc.fields || {};
       const ownerId = keyDoc.id;
       const botToken = kf.telegramBotToken?.stringValue;
       const chatId = kf.telegramChatId?.stringValue;
-      const enabled = kf.enabled?.booleanValue;
+      const enabled = kf.enabled?.booleanValue !== false;
 
       if (!botToken || !chatId || !enabled) continue;
 
@@ -92,7 +95,7 @@ export default async function handler(req: any, res: any) {
         const orderDateStr = o.fields?.orderDate?.stringValue || o.fields?.createdAt?.timestampValue;
         if (!orderDateStr) return false;
         const d = new Date(orderDateStr);
-        return d >= today; // Đơn hàng tạo từ 00:00 hôm nay
+        return d >= startOfDayUTC; // Đơn hàng tạo từ 00:00 hôm nay (giờ VN)
       });
 
       // Thống kê doanh thu theo Nhân viên

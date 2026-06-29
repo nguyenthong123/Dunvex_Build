@@ -147,7 +147,7 @@ export async function parseSupplyMessage(
       const res = await fetch('/api/gemini-proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: fullPrompt }),
+        body: JSON.stringify({ prompt: fullPrompt, schema: supplyBotSchema }),
       });
       if (!res.ok) throw new Error(`Proxy error: ${res.status}`);
       const data = await res.json();

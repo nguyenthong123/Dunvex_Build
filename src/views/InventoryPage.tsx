@@ -372,9 +372,7 @@ const InventoryPage = () => {
 				const isDuplicate = products.some(p => normalize(p.sku) === cleanSku);
 
 				if (isDuplicate) {
-					if (!window.confirm(`Mã SKU "${formData.sku}" đã tồn tại cho một sản phẩm khác. Bạn có chắc chắn muốn tạo thêm một bản ghi trùng SKU không? (Số lượng tồn kho sẽ được cộng dồn khi lên đơn)`)) {
-						return;
-					}
+					showToast(`Lưu ý: Mã SKU "${formData.sku}" đã tồn tại. Hệ thống sẽ gộp chung tồn kho cho các sản phẩm cùng mã.`, "warning");
 				}
 			}
 
@@ -448,9 +446,7 @@ const InventoryPage = () => {
 				const isDuplicate = products.some(p => p.id !== selectedProduct.id && normalize(p.sku) === cleanSku);
 
 				if (isDuplicate) {
-					if (!window.confirm(`Mã SKU "${formData.sku}" đã bị trùng với sản phẩm khác. Tiếp tục cập nhật?`)) {
-						return;
-					}
+					showToast(`Lưu ý: Mã SKU "${formData.sku}" đã trùng với sản phẩm khác. Tồn kho sẽ được gộp chung.`, "warning");
 				}
 			}
 			const batch = writeBatch(db);

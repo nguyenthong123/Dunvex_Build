@@ -127,7 +127,7 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({ status: 'ignored' });
     }
 
-    const userMessage = body.message.text;
+    const userMessage = body.message.text || body.message.caption || '';
     const chatId = body.message.chat.id;
     const chatType = body.message.chat.type; // 'private', 'group', 'supergroup', etc.
 

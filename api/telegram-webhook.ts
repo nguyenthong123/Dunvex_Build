@@ -270,7 +270,8 @@ Dựa vào dữ liệu trên, hãy trả lời câu hỏi:`;
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: chatId,
-        text: text
+        text: text,
+        parse_mode: 'HTML'
       })
     });
     

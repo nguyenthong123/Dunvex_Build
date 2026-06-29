@@ -9,6 +9,7 @@ import { useCustomers } from '../hooks/useCustomers';
 import { usePayments } from '../hooks/usePayments';
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
+import { sendTelegramNotification } from '../utils/telegramNotify';
 
 const QuickOrder = () => {
 	const navigate = useNavigate();

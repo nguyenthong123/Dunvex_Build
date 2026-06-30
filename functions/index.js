@@ -194,13 +194,15 @@ exports.exportCompanyData = functions.https.onCall(async (data, context) => {
 	}
 });
 
+const { onDocumentWritten } = require("firebase-functions/v2/firestore");
+
 /**
  * Cloud Function to sync user ownerId and role to Custom Claims.
  * This runs automatically when a user document is created or updated.
  */
-exports.syncUserClaims = functions.firestore.document('users/{userId}').onWrite(async (change, context) => {
-	const userId = context.params.userId;
-	const userDoc = change.after.exists ? change.after.data() : null;
+exports.syncUserClaims = onDocumentWritten('users/{userId}', async (event) => {
+	const userId = event.params.userId;
+	const userDoc = event.data && event.data.after && event.data.after.exists ? event.data.after.data() : null;
 
 	if (!userDoc) {
 		return null;

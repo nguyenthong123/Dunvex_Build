@@ -1,4 +1,6 @@
 import { GoogleGenerativeAI, Schema, SchemaType } from "@google/generative-ai";
+import { db, auth } from "./firebase";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 // 🔐 API Key — only used as fallback in local dev. Production uses Vercel proxy.
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
@@ -330,19 +332,42 @@ async function callVisionViaSDK(prompt: string, images: { base64: string; mimeTy
 
 // ==================== EXPORTED FUNCTIONS ====================
 
+const logAiAnalytics = async (action: string, intent: string, latencyMs: number, success: boolean, errorMsg?: string) => {
+    try {
+        if (!auth?.currentUser) return;
+        await addDoc(collection(db, 'ai_analytics'), {
+            userId: auth.currentUser.uid,
+            userEmail: auth.currentUser.email,
+            action,
+            intent,
+            latencyMs,
+            success,
+            error: errorMsg || null,
+            createdAt: serverTimestamp()
+        });
+    } catch (e) {
+        console.warn("Failed to log AI metrics:", e);
+    }
+};
+
 /**
  * Parse tin nhắn văn bản từ người dùng
  */
 export const parseSaleMessage = async (message: string, context?: string, chatHistory?: any[]) => {
+    const startTime = Date.now();
     const prompt = buildPrompt(message, context, chatHistory);
 
     try {
+        let res;
         // 🔐 Dùng proxy trong production (key nằm server-side)
         if (USE_PROXY) {
-            return await callViaProxy(prompt);
-        }
+            res = await callViaProxy(prompt);
+        } else {
         // 🏠 Fallback SDK cho local dev
-        return await callViaSDK(prompt);
+            res = await callViaSDK(prompt);
+        }
+        logAiAnalytics('parse_text', res.intent || 'UNKNOWN', Date.now() - startTime, true);
+        return res;
     } catch (error: any) {
         console.error("Gemini API Error:", error);
 
@@ -350,13 +375,17 @@ export const parseSaleMessage = async (message: string, context?: string, chatHi
         if (USE_PROXY && apiKey) {
             // Proxy failed, trying direct SDK...
             try {
-                return await callViaSDK(prompt);
+                const resFallback = await callViaSDK(prompt);
+                logAiAnalytics('parse_text_fallback', resFallback.intent || 'UNKNOWN', Date.now() - startTime, true);
+                return resFallback;
             } catch (sdkError: any) {
                 console.error("SDK fallback also failed:", sdkError);
+                logAiAnalytics('parse_text', 'ERROR', Date.now() - startTime, false, sdkError.message || error.message);
                 throw new Error(error.message || sdkError.message || "Bot đang bận, anh/chị thử lại sau 1 phút nhé!");
             }
         }
-
+        
+        logAiAnalytics('parse_text', 'ERROR', Date.now() - startTime, false, error.message);
         // 📱 Thân thiện với người dùng
         if (error.message?.includes('429') || error.message?.includes('exhausted')) {
             throw new Error("Bot đang quá tải, anh/chị đợi 1-2 phút rồi thử lại nhé!");
@@ -418,19 +447,29 @@ ${message ? `\nTin nhắn kèm theo: "${message}"` : ''}
 Hãy trả lời dạng JSON theo schema, với intent phù hợp và message mô tả những gì bạn thấy trong ảnh.`;
 
     try {
+        const startTime = Date.now();
         if (USE_PROXY) {
             try {
-                return await callVisionViaProxy(prompt, images);
+                const res = await callVisionViaProxy(prompt, images);
+                logAiAnalytics('analyze_image', res.intent || 'UNKNOWN', Date.now() - startTime, true);
+                return res;
             } catch (proxyErr: any) {
                 // 🔄 Fallback: gọi thẳng SDK nếu proxy timeout hoặc lỗi
                 console.warn('Vision proxy failed, falling back to SDK:', proxyErr.message);
-                if (apiKey) return await callVisionViaSDK(prompt, images);
+                if (apiKey) {
+                    const fallbackRes = await callVisionViaSDK(prompt, images);
+                    logAiAnalytics('analyze_image_fallback', fallbackRes.intent || 'UNKNOWN', Date.now() - startTime, true);
+                    return fallbackRes;
+                }
                 throw proxyErr;
             }
         }
-        return await callVisionViaSDK(prompt, images);
+        const resSdk = await callVisionViaSDK(prompt, images);
+        logAiAnalytics('analyze_image', resSdk.intent || 'UNKNOWN', Date.now() - startTime, true);
+        return resSdk;
     } catch (error: any) {
         console.error("Vision API Error:", error);
+        logAiAnalytics('analyze_image', 'ERROR', 0, false, error.message);
         if (error.message?.includes('429') || error.message?.includes('exhausted')) {
             throw new Error("Bot đang quá tải, anh/chị đợi 1-2 phút rồi thử lại nhé!");
         }

@@ -42,24 +42,7 @@ const InventoryPage = () => {
 		maxResults: 1000,
 	});
 
-	const [showScanner, setShowScanner] = useState(false);
-	const [showImport, setShowImport] = useState(false);
-
-	// Sync tab with URL
-	const queryParams = new URLSearchParams(location.search);
-	const urlTab = queryParams.get('tab');
-	const [activeTab, setActiveTabState] = useState(urlTab === 'logs' ? 'logs' : 'inventory');
-
-	const setActiveTab = (tab: string) => {
-		setActiveTabState(tab);
-		navigate(`/inventory?tab=${tab}`, { replace: true });
-	};
-
-	useEffect(() => {
-		if (urlTab === 'logs' || urlTab === 'inventory') {
-			setActiveTabState(urlTab);
-		}
-	}, [urlTab]);
+	// Removed duplicated showScanner and activeTab (merged below)
 
 	const [showAddForm, setShowAddForm] = useState(false);
 	const [showEditForm, setShowEditForm] = useState(false);
@@ -67,6 +50,8 @@ const InventoryPage = () => {
 	const [showActionModal, setShowActionModal] = useState(false);
 	const [actionModalInitialProduct, setActionModalInitialProduct] = useState<any>(null);
 	const [selectedProduct, setSelectedProduct] = useState<any>(null);
+	const [showImport, setShowImport] = useState(false);
+	const [showScanner, setShowScanner] = useState(false);
 	const [searchTerm, setSearchTerm] = useState(() => {
 		// Khôi phục từ khóa tìm kiếm sau khi reload (để liền mạch công việc)
 		return sessionStorage.getItem('inventory_search') || '';
@@ -79,15 +64,32 @@ const InventoryPage = () => {
 	const [uploading, setUploading] = useState(false);
 	const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 	// 🔧 REFACTOR: inventoryLogs + orders đã chuyển qua hooks
-	const [activeTab, setActiveTab] = useState<'inventory' | 'logs'>(() => {
+	const queryParams = new URLSearchParams(location.search);
+	const urlTab = queryParams.get('tab');
+	
+	const [activeTabState, setActiveTabState] = useState<'inventory' | 'logs'>(() => {
+		if (urlTab === 'logs' || urlTab === 'inventory') return urlTab;
 		return (sessionStorage.getItem('inventory_activeTab') as 'inventory' | 'logs') || 'inventory';
 	});
+
+	const activeTab = activeTabState;
+	
+	const setActiveTab = (tab: 'inventory' | 'logs') => {
+		setActiveTabState(tab);
+		sessionStorage.setItem('inventory_activeTab', tab);
+		navigate(`/inventory?tab=${tab}`, { replace: true });
+	};
+
+	useEffect(() => {
+		if ((urlTab === 'logs' || urlTab === 'inventory') && urlTab !== activeTabState) {
+			setActiveTabState(urlTab);
+		}
+	}, [urlTab]);
 	const [expandedSkus, setExpandedSkus] = useState<Set<string>>(new Set());
 	const [currentPage, setCurrentPage] = useState(() => {
 		return Number(sessionStorage.getItem('inventory_currentPage')) || 1;
 	});
 	const [showMobileSearch, setShowMobileSearch] = useState(false);
-	const [showScanner, setShowScanner] = useState(false);
 	const [selectedIds, setSelectedIds] = useState<string[]>([]);
 	const [currentFilter, setCurrentFilter] = useState<string | null>(() => {
 		return sessionStorage.getItem('inventory_currentFilter') || null;

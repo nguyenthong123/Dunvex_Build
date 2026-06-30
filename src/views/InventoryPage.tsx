@@ -808,18 +808,18 @@ const InventoryPage = () => {
 				</div>
 
 				<div className="flex items-center gap-4">
-					<div className="hidden lg:flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 border border-slate-200 dark:border-slate-800">
+					<div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 border border-slate-200 dark:border-slate-800">
 						<button
 							onClick={() => { setActiveTab('inventory'); setCurrentFilter(null); }}
-							className={`px-3 xl:px-4 py-1.5 rounded-lg text-xs font-black transition-all ${activeTab === 'inventory' ? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm' : 'text-slate-400'}`}
+							className={`px-2 md:px-3 xl:px-4 py-1.5 rounded-lg text-[10px] md:text-xs font-black transition-all ${activeTab === 'inventory' ? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm' : 'text-slate-400'}`}
 						>
-							<span className="xl:inline">TỒN KHO </span>GỘP
+							<span className="hidden md:inline">TỒN KHO </span>GỘP
 						</button>
 						<button
 							onClick={() => { setActiveTab('logs'); setCurrentFilter(null); }}
-							className={`px-3 xl:px-4 py-1.5 rounded-lg text-xs font-black transition-all ${activeTab === 'logs' ? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm' : 'text-slate-400'}`}
+							className={`px-2 md:px-3 xl:px-4 py-1.5 rounded-lg text-[10px] md:text-xs font-black transition-all ${activeTab === 'logs' ? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm' : 'text-slate-400'}`}
 						>
-							<span className="xl:inline">LỊCH SỬ </span>KHO
+							<span className="hidden md:inline">LỊCH SỬ </span>KHO
 						</button>
 					</div>
 

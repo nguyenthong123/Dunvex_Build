@@ -31,13 +31,19 @@ const CustomerList = () => {
 	const [showMap, setShowMap] = useState(false);
 	const [showTaxDetail, setShowTaxDetail] = useState(false);
 	const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
-	const [searchTerm, setSearchTerm] = useState('');
-	const [selectedRoute, setSelectedRoute] = useState('All');
+	const [searchTerm, setSearchTerm] = useState(() => sessionStorage.getItem('customers_searchTerm') || '');
+	const [selectedRoute, setSelectedRoute] = useState(() => sessionStorage.getItem('customers_selectedRoute') || 'All');
 	const [showMobileSearch, setShowMobileSearch] = useState(false);
 	const searchInputRef = React.useRef<HTMLInputElement>(null);
 	const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-	const [currentPage, setCurrentPage] = useState(1);
+	const [currentPage, setCurrentPage] = useState(() => Number(sessionStorage.getItem('customers_currentPage')) || 1);
 	const ITEMS_PER_PAGE = 20;
+
+	useEffect(() => {
+		sessionStorage.setItem('customers_searchTerm', searchTerm);
+		sessionStorage.setItem('customers_selectedRoute', selectedRoute);
+		sessionStorage.setItem('customers_currentPage', currentPage.toString());
+	}, [searchTerm, selectedRoute, currentPage]);
 
 	useEffect(() => {
 		const handleOpenSearch = () => {
@@ -515,7 +521,7 @@ const CustomerList = () => {
 				<p className="text-slate-500 dark:text-slate-400 max-w-md">
 					Bạn không có quyền quản lý danh sách khách hàng. Vui lòng liên hệ Admin.
 				</p>
-				<button onClick={() => navigate('/')} className="mt-6 bg-[#1A237E] text-white px-6 py-2 rounded-xl font-bold">Quay lại</button>
+				<button onClick={() => window.history.length > 2 ? navigate(-1) : navigate('/')} className="mt-6 bg-[#1A237E] text-white px-6 py-2 rounded-xl font-bold">Quay lại</button>
 			</div>
 		);
 	}

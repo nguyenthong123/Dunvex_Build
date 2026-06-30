@@ -11,8 +11,12 @@ const SupplierList = () => {
 	const { showToast } = useToast();
 	const { suppliers, loading, addSupplier, updateSupplier, deleteSupplier } = useSuppliers();
 
-	const [searchTerm, setSearchTerm] = useState('');
+	const [searchTerm, setSearchTerm] = useState(() => sessionStorage.getItem('suppliers_searchTerm') || '');
 	const [showMobileSearch, setShowMobileSearch] = useState(false);
+
+	useEffect(() => {
+		sessionStorage.setItem('suppliers_searchTerm', searchTerm);
+	}, [searchTerm]);
 	const searchInputRef = useRef<HTMLInputElement>(null);
 
 	const [showAddForm, setShowAddForm] = useState(false);

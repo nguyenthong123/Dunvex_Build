@@ -829,7 +829,7 @@ const Debts: React.FC = () => {
 				<p className="text-slate-500 dark:text-slate-400 max-w-md">
 					Bạn không có quyền xem hoặc nhập công nợ. Vui lòng liên hệ Admin.
 				</p>
-				<button onClick={() => navigate('/')} className="mt-6 bg-[#1A237E] text-white px-6 py-2 rounded-xl font-bold">Quay lại</button>
+				<button onClick={() => window.history.length > 2 ? navigate(-1) : navigate('/')} className="mt-6 bg-[#1A237E] text-white px-6 py-2 rounded-xl font-bold">Quay lại</button>
 			</div>
 		);
 	}

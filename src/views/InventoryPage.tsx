@@ -61,16 +61,30 @@ const InventoryPage = () => {
 	const [uploading, setUploading] = useState(false);
 	const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 	// 🔧 REFACTOR: inventoryLogs + orders đã chuyển qua hooks
-	const [activeTab, setActiveTab] = useState<'inventory' | 'logs'>('inventory');
+	const [activeTab, setActiveTab] = useState<'inventory' | 'logs'>(() => {
+		return (sessionStorage.getItem('inventory_activeTab') as 'inventory' | 'logs') || 'inventory';
+	});
 	const [expandedSkus, setExpandedSkus] = useState<Set<string>>(new Set());
-	const [currentPage, setCurrentPage] = useState(1);
+	const [currentPage, setCurrentPage] = useState(() => {
+		return Number(sessionStorage.getItem('inventory_currentPage')) || 1;
+	});
 	const [showMobileSearch, setShowMobileSearch] = useState(false);
 	const [showScanner, setShowScanner] = useState(false);
 	const [selectedIds, setSelectedIds] = useState<string[]>([]);
-	const [currentFilter, setCurrentFilter] = useState<string | null>(null);
+	const [currentFilter, setCurrentFilter] = useState<string | null>(() => {
+		return sessionStorage.getItem('inventory_currentFilter') || null;
+	});
 	const ITEMS_PER_PAGE = 20;
 	const searchRef = useRef<HTMLInputElement>(null);
 	const qrRef = useRef<HTMLCanvasElement>(null);
+
+	// Persist state to sessionStorage
+	useEffect(() => {
+		sessionStorage.setItem('inventory_activeTab', activeTab);
+		sessionStorage.setItem('inventory_currentPage', currentPage.toString());
+		if (currentFilter) sessionStorage.setItem('inventory_currentFilter', currentFilter);
+		else sessionStorage.removeItem('inventory_currentFilter');
+	}, [activeTab, currentPage, currentFilter]);
 
 	// Enhanced Search Functions
 	const normalizeText = (text: any) => text ? String(text).normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase() : '';
@@ -787,7 +801,7 @@ const InventoryPage = () => {
 				<p className="text-slate-500 dark:text-slate-400 max-w-md">
 					Bạn không có quyền xem danh sách sản phẩm / kho. Vui lòng liên hệ Admin.
 				</p>
-				<button onClick={() => navigate('/')} className="mt-6 bg-[#1A237E] text-white px-6 py-2 rounded-xl font-bold">Quay lại</button>
+				<button onClick={() => window.history.length > 2 ? navigate(-1) : navigate('/')} className="mt-6 bg-[#1A237E] text-white px-6 py-2 rounded-xl font-bold">Quay lại</button>
 			</div>
 		);
 	}

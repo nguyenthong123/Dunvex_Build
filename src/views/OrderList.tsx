@@ -25,11 +25,16 @@ const OrderList = () => {
 		maxResults: 500,
 	});
 	const isAdmin = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
-	const [searchTerm, setSearchTerm] = useState('');
+	const [searchTerm, setSearchTerm] = useState(() => sessionStorage.getItem('orders_searchTerm') || '');
 	const [showDetail, setShowDetail] = useState(false);
 	const [selectedOrder, setSelectedOrder] = useState<any>(null);
 	const [showMobileSearch, setShowMobileSearch] = useState(false);
-	const [currentPage, setCurrentPage] = useState(1);
+	const [currentPage, setCurrentPage] = useState(() => Number(sessionStorage.getItem('orders_currentPage')) || 1);
+
+	useEffect(() => {
+		sessionStorage.setItem('orders_searchTerm', searchTerm);
+		sessionStorage.setItem('orders_currentPage', currentPage.toString());
+	}, [searchTerm, currentPage]);
 	const itemsPerPage = 10;
 	const searchRef = useRef<HTMLInputElement>(null);
 	const { search } = useLocation();

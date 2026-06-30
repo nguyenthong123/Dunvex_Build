@@ -67,8 +67,13 @@ const PurchaseOrders = () => {
 	const { purchaseOrders, loading, addPurchaseOrder, deletePurchaseOrder, updatePurchaseOrder } = usePurchaseOrders();
 	const { addDebt } = useSupplierDebts();
 
-	const [activeTab, setActiveTab] = useState<'list' | 'create'>('list');
-	const [searchTerm, setSearchTerm] = useState('');
+	const [activeTab, setActiveTab] = useState<'list' | 'create'>(() => (sessionStorage.getItem('purchaseOrders_activeTab') as 'list' | 'create') || 'list');
+	const [searchTerm, setSearchTerm] = useState(() => sessionStorage.getItem('purchaseOrders_searchTerm') || '');
+
+	useEffect(() => {
+		sessionStorage.setItem('purchaseOrders_activeTab', activeTab);
+		sessionStorage.setItem('purchaseOrders_searchTerm', searchTerm);
+	}, [activeTab, searchTerm]);
 
 	const searchInputRef = useRef<HTMLInputElement>(null);
 

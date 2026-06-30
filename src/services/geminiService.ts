@@ -348,7 +348,7 @@ export const parseSaleMessage = async (message: string, context?: string, chatHi
 
         // 🛡️ Fallback: nếu proxy lỗi, thử gọi thẳng SDK
         if (USE_PROXY && apiKey) {
-            console.log("Proxy failed, trying direct SDK...");
+            // Proxy failed, trying direct SDK...
             try {
                 return await callViaSDK(prompt);
             } catch (sdkError: any) {

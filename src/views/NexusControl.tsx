@@ -336,10 +336,10 @@ const NexusControl = () => {
 	// ✅ CHỈ 1 interval duy nhất — guard chặn chạy chồng lấn
 	const runAutonomousCycle = async (currentCustomers: any[], currentRequests: any[]) => {
 		if (!isAiActive) return;
-		if (isRunningRef.current) { console.log("Nexus AI: skipped (running)"); return; }
+		if (isRunningRef.current) { return; }
 		isRunningRef.current = true;
 		try {
-			console.log("Nexus AI: Starting cycle...");
+			// Starting cycle
 			if (currentCustomers.length === 0) return;
 			
 			// 0. Check bank transfer matches (mỗi 5 phút)
@@ -412,7 +412,7 @@ const NexusControl = () => {
 			if (res.ok) {
 				const data = await res.json();
 				if (data.matches > 0) {
-					console.log(`Nexus: Auto-matched ${data.matches} bank transfers`, data.details);
+					// Auto-matched bank transfers
 				}
 			}
 		} catch (e) {

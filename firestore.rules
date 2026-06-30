@@ -15,14 +15,12 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
     
-    function getUserData() {
-      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
-      return userDoc != null ? userDoc.data : null;
-    }
-
     function userOwnerId() {
-      let data = getUserData();
-      return data != null ? data.ownerId : null;
+      if (request.auth.token.ownerId != null) {
+        return request.auth.token.ownerId;
+      }
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      return userDoc != null ? userDoc.data.ownerId : null;
     }
 
     // Business Collections — dùng helpers an toàn với null user doc

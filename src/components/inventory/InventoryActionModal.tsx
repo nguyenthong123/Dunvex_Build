@@ -86,7 +86,7 @@ const InventoryActionModal: React.FC<InventoryActionModalProps> = ({ show, onClo
 			const actionLabel = type === 'import' ? 'Nhập kho' : 'Xuất kho';
 			const userName = auth?.currentUser?.displayName || auth?.currentUser?.email || 'Unknown';
 
-			console.log('[InventoryAction] Saving log:', { actionLabel, itemCount: selectedItems.length, ownerId: owner.ownerId });
+			// Ensure ownerId is set
 
 			// Write ONE inventory_log per product (matching flat structure used by stats calculator)
 			for (const item of selectedItems) {
@@ -111,15 +111,8 @@ const InventoryActionModal: React.FC<InventoryActionModalProps> = ({ show, onClo
 					user: userName
 				};
 
-				console.log(`[InventoryAction] Writing log for ${item.product.id}:`, logEntry);
 				await addDoc(collection(db, 'inventory_logs'), logEntry);
-
-				// Update product stock
-				console.log(`[InventoryAction] Updating ${item.product.id}: ${item.product.stock} → ${newStock}`);
-				await updateDoc(doc(db, 'products', item.product.id), {
-					stock: newStock
-				});
-				console.log(`[InventoryAction] Updated ${item.product.id} OK`);
+				await updateDoc(doc(db, 'products', item.product.id), { stock: newStock });
 			}
 
 			showToast(`Đã lưu phiếu ${actionLabel.toLowerCase()} thành công!`, 'success');

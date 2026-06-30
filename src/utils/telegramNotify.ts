@@ -9,8 +9,7 @@ export const sendTelegramNotification = async (ownerId: string, message: string)
   try {
     const isViteLocal = import.meta.env.DEV; // Vite local dev server
     if (isViteLocal) {
-      console.log('TELEGRAM NOTIFY (LOCAL DEV):', message);
-      // Khi dev local có thể bỏ qua để không spam, hoặc nếu muốn test thật thì cmt return true lại.
+      // LOCAL DEV: Khi dev local có thể bỏ qua để không spam
       return true;
     }
 

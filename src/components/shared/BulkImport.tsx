@@ -473,13 +473,12 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 		setImporting(true);
 
 		try {
-			console.log('[BulkImport] Starting import...', { type, ownerId, dataLength: data.length });
+			// Start import
 			
 			// 1. Fetch existing items to check for duplicates
 			const q = query(collection(db, type), where('ownerId', '==', ownerId));
 			const snapshot = await getDocs(q);
 			const existingItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
-			console.log('[BulkImport] Found existing items:', existingItems.length);
 
 			const batchSize = 500;
 			const totalBatches = Math.ceil(data.length / batchSize);
@@ -586,9 +585,7 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 					}
 				});
 
-				console.log(`[BulkImport] Committing batch ${i + 1}/${totalBatches}, chunk size: ${currentChunk.length}`);
 				await batch.commit();
-				console.log(`[BulkImport] Batch ${i + 1} committed successfully.`);
 			}
 
 			await addDoc(collection(db, 'audit_logs'), {

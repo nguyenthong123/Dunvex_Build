@@ -713,9 +713,9 @@ const QuickOrder = () => {
 				const profileSnap = await getDoc(profileRef);
 				if (profileSnap.exists()) {
 					staffPhone = profileSnap.data().phone || '';
-					console.log('📱 Staff phone from profile:', staffPhone);
+					// Found staff profile
 				} else {
-					console.log('📱 No profile found for', auth.currentUser?.uid);
+					// No profile found
 				}
 			} catch (e: any) {
 				console.error('📱 Profile fetch error:', e.message || e);

@@ -193,3 +193,30 @@ exports.exportCompanyData = functions.https.onCall(async (data, context) => {
 		throw new functions.https.HttpsError('internal', error.message || 'Internal Server Error');
 	}
 });
+
+/**
+ * Cloud Function to sync user ownerId and role to Custom Claims.
+ * This runs automatically when a user document is created or updated.
+ */
+exports.syncUserClaims = functions.firestore.document('users/{userId}').onWrite(async (change, context) => {
+	const userId = context.params.userId;
+	const userDoc = change.after.exists ? change.after.data() : null;
+
+	if (!userDoc) {
+		return null;
+	}
+
+	const claims = {
+		ownerId: userDoc.ownerId || userDoc.uid || null,
+		role: userDoc.role || null
+	};
+
+	try {
+		await admin.auth().setCustomUserClaims(userId, claims);
+		console.log(`Custom claims set for ${userId}:`, claims);
+	} catch (error) {
+		console.error(`Error setting custom claims for ${userId}:`, error);
+	}
+
+	return null;
+});

@@ -42,8 +42,26 @@ const InventoryPage = () => {
 		maxResults: 1000,
 	});
 
-	const [showAddForm, setShowAddForm] = useState(false);
+	const [showScanner, setShowScanner] = useState(false);
 	const [showImport, setShowImport] = useState(false);
+
+	// Sync tab with URL
+	const queryParams = new URLSearchParams(location.search);
+	const urlTab = queryParams.get('tab');
+	const [activeTab, setActiveTabState] = useState(urlTab === 'logs' ? 'logs' : 'inventory');
+
+	const setActiveTab = (tab: string) => {
+		setActiveTabState(tab);
+		navigate(`/inventory?tab=${tab}`, { replace: true });
+	};
+
+	useEffect(() => {
+		if (urlTab === 'logs' || urlTab === 'inventory') {
+			setActiveTabState(urlTab);
+		}
+	}, [urlTab]);
+
+	const [showAddForm, setShowAddForm] = useState(false);
 	const [showEditForm, setShowEditForm] = useState(false);
 	const [showDetail, setShowDetail] = useState(false);
 	const [showActionModal, setShowActionModal] = useState(false);
@@ -818,22 +836,25 @@ const InventoryPage = () => {
 						<span className="material-symbols-outlined text-xl group-hover:rotate-[-45deg] transition-transform">home</span>
 					</button>
 					<div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
-					<h2 className="text-sm lg:text-lg xl:text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight line-clamp-1">Quản Lý Tồn Kho</h2>
+					<h2 className="hidden md:block text-sm lg:text-lg xl:text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight line-clamp-1">Quản Lý Tồn Kho</h2>
 				</div>
 
 				<div className="flex items-center gap-4">
 					<div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 border border-slate-200 dark:border-slate-800">
 						<button
 							onClick={() => { setActiveTab('inventory'); setCurrentFilter(null); }}
-							className={`px-2 md:px-3 xl:px-4 py-1.5 rounded-lg text-[10px] md:text-xs font-black transition-all ${activeTab === 'inventory' ? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm' : 'text-slate-400'}`}
+							className={`px-3 xl:px-4 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${activeTab === 'inventory' ? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm' : 'text-slate-400'}`}
 						>
-							<span className="hidden md:inline">TỒN KHO </span>GỘP
+							<span className="material-symbols-outlined text-sm">inventory_2</span>
+							<span className="hidden sm:inline">TỒN KHO</span>
+							<span className="sm:hidden">KHO</span>
 						</button>
 						<button
 							onClick={() => { setActiveTab('logs'); setCurrentFilter(null); }}
-							className={`px-2 md:px-3 xl:px-4 py-1.5 rounded-lg text-[10px] md:text-xs font-black transition-all ${activeTab === 'logs' ? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm' : 'text-slate-400'}`}
+							className={`px-3 xl:px-4 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${activeTab === 'logs' ? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm' : 'text-slate-400'}`}
 						>
-							<span className="hidden md:inline">LỊCH SỬ </span>KHO
+							<span className="material-symbols-outlined text-sm">history</span>
+							LỊCH SỬ
 						</button>
 					</div>
 
@@ -1112,6 +1133,19 @@ const InventoryPage = () => {
 					/>
 				)
 			}
+
+			{/* Mobile FAB for adding inventory */}
+			{hasManagePermission && (
+				<button
+					onClick={() => {
+						setActionModalInitialProduct(null);
+						setShowActionModal(true);
+					}}
+					className="md:hidden fixed bottom-6 right-6 z-40 size-14 bg-[#FF6D00] text-white rounded-full flex items-center justify-center shadow-xl shadow-orange-500/30 active:scale-95 transition-all"
+				>
+					<span className="material-symbols-outlined text-3xl">add</span>
+				</button>
+			)}
 		</div>
 	);
 };

@@ -34,7 +34,7 @@ const InventoryMobileGrid: React.FC<InventoryMobileGridProps> = ({
 }) => {
 	if (loading) {
 		return (
-			<div className="md:hidden pb-4 space-y-4">
+			<div className="lg:hidden pb-4 space-y-4">
 				{[1, 2, 3].map(i => (
 					<div key={i} className="bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-slate-800 animate-pulse">
 						<div className="flex gap-3">
@@ -51,7 +51,7 @@ const InventoryMobileGrid: React.FC<InventoryMobileGridProps> = ({
 	}
 
 	return (
-		<div className="md:hidden pb-4 relative">
+		<div className="lg:hidden pb-4 relative">
 			<div className="grid grid-cols-1 gap-4 pb-12">
 				{activeTab === 'products' ? (
 					paginatedProducts.map((product) => (

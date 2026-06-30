@@ -8,7 +8,7 @@ const InventoryLogsTable: React.FC<InventoryLogsTableProps> = ({ inventoryLogs }
 	return (
 		<div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-800 overflow-hidden">
 			{/* Desktop Table */}
-			<div className="hidden md:block overflow-x-auto">
+			<div className="hidden lg:block overflow-x-auto">
 				<table className="w-full text-left">
 					<thead>
 						<tr className="bg-slate-100/50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
@@ -71,7 +71,7 @@ const InventoryLogsTable: React.FC<InventoryLogsTableProps> = ({ inventoryLogs }
 			</div>
 
 			{/* Mobile List View */}
-			<div className="block md:hidden divide-y divide-gray-100 dark:divide-slate-800">
+			<div className="block lg:hidden divide-y divide-gray-100 dark:divide-slate-800">
 				{inventoryLogs.length === 0 ? (
 					<div className="py-12 text-center text-slate-400">Chưa có lịch sử giao dịch kho</div>
 				) : (

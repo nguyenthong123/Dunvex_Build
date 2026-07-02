@@ -1655,16 +1655,13 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 				where('createdAt', '<=', Timestamp.fromDate(endDate))
 			);
 
-			const [checkinsSnap, attendanceSnap, profilesSnap] = await Promise.all([
+			const [checkinsSnap, attendanceSnap] = await Promise.all([
 				getDocs(checkinsQ),
-				getDocs(attendanceQ),
-				getDocs(query(collection(db, "profiles")))
+				getDocs(attendanceQ)
 			]);
 
 			const allCheckins: any[] = checkinsSnap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
 			const allAttendance: any[] = attendanceSnap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
-			const profilesMap = new Map();
-			profilesSnap.docs.forEach(d => profilesMap.set(d.id, d.data()));
 			setRawCheckins(allCheckins);
 			setRawAttendance(allAttendance);
 			
@@ -1696,12 +1693,11 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 				const dailyWage = monthlyWage > 0 
 					? Math.round(monthlyWage / WORKING_DAYS)
 					: (Number(user.dailyWage) || 0); // fallback lương ngày cũ
-				const profile = profilesMap.get(user.uid || user.id);
 				return {
 					userId: user.id,
-					bankCode: profile?.bankCode || "",
-					bankAccountNumber: profile?.bankAccountNumber || "",
-					bankAccountName: profile?.bankAccountName || "",
+					bankCode: user.bankCode || "",
+					bankAccountNumber: user.bankAccountNumber || "",
+					bankAccountName: user.bankAccountName || "",
 					name: user.displayName || user.email?.split('@')[0] || 'N/A',
 					email: user.email,
 					role: user.role,

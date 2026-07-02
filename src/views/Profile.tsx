@@ -61,6 +61,16 @@ const Profile = () => {
                 updatedAt: serverTimestamp(),
             }, { merge: true });
 
+            try {
+                await setDoc(doc(db, 'users', uid), {
+                    bankCode: profile.bankCode.trim(),
+                    bankAccountNumber: profile.bankAccountNumber.trim(),
+                    bankAccountName: profile.bankAccountName.trim().toUpperCase(),
+                }, { merge: true });
+            } catch (e) {
+                console.log('User is likely owner, ignore write to users collection');
+            }
+
             setSaved(true);
             showToast('✅ Đã lưu thông tin cá nhân!', 'success');
             setTimeout(() => setSaved(false), 2000);

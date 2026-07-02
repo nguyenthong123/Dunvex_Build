@@ -751,8 +751,8 @@ const AdminSettings = () => {
 	// - Staff Admin can only see Sales/Warehouse/etc. 
 	// - Owner (Super Admin) sees everyone.
 	const salaryUserList = useMemo(() => {
-		return userList.filter(u => u.uid !== owner.ownerId);
-	}, [userList, owner.ownerId]);
+		return userList;
+	}, [userList]);
 
 	const filteredUserList = useMemo(() => {
 		if (!owner.isEmployee) return userList; // Super Admin sees all

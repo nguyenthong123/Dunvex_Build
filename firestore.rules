@@ -42,7 +42,12 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read, write: if isAuthed() && (
+      allow read: if isAuthed() && (
+        request.auth.uid == userId || 
+        (resource != null && resource.data.ownerId == request.auth.uid) ||
+        (resource != null && userOwnerId() == resource.data.ownerId)
+      );
+      allow write: if isAuthed() && (
         request.auth.uid == userId || 
         (resource != null && resource.data.ownerId == request.auth.uid) ||
         (request.resource != null && request.resource.data.ownerId == request.auth.uid)

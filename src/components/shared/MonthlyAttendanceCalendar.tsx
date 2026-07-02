@@ -48,16 +48,14 @@ const MonthlyAttendanceCalendar: React.FC<MonthlyAttendanceCalendarProps> = ({ o
 				const q = query(
 					collection(db, 'attendance_logs'),
 					where('ownerId', '==', ownerId),
-					where('userId', '==', userId),
-					where('date', '>=', startStr),
-					where('date', '<', endStr)
+					where('userId', '==', userId)
 				);
 
 				const snap = await getDocs(q);
 				const dates = new Set<string>();
 				snap.docs.forEach(d => {
 					const data = d.data();
-					if (data.date && data.type !== 'request') { // Ignore leave requests
+					if (data.date && data.date >= startStr && data.date < endStr && data.type !== 'request') { // Ignore leave requests
 						dates.add(data.date);
 					}
 				});

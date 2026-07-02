@@ -1921,7 +1921,8 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 														{formatPrice(d.totalSalary)}đ
 													</span>
 													{d.bankCode && d.bankAccountNumber && (() => {
-														const amountToUse = customQRAmounts[d.userId] !== undefined ? Number(customQRAmounts[d.userId]) : d.totalSalary;
+														const rawStr = customQRAmounts[d.userId] !== undefined ? customQRAmounts[d.userId].replace(/\D/g, '') : '';
+														const amountToUse = customQRAmounts[d.userId] !== undefined ? Number(rawStr) : d.totalSalary;
 														if (amountToUse > 0) {
 															return (
 																<div className="relative group flex items-center">
@@ -2006,15 +2007,27 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 																<p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3">Mã QR Thanh Toán</p>
 																<div className="w-full mb-3">
 																	<input 
-																		type="number"
-																		value={customQRAmounts[d.userId] !== undefined ? customQRAmounts[d.userId] : (d.totalSalary || '')}
-																		onChange={(e) => setCustomQRAmounts(prev => ({ ...prev, [d.userId]: e.target.value }))}
+																		type="text"
+																		value={customQRAmounts[d.userId] !== undefined 
+																			? customQRAmounts[d.userId] 
+																			: (d.totalSalary ? formatPrice(d.totalSalary) : '')}
+																		onChange={(e) => {
+																			const val = e.target.value.replace(/\D/g, '');
+																			if (val === '') {
+																				setCustomQRAmounts(prev => ({ ...prev, [d.userId]: '' }));
+																			} else {
+																				setCustomQRAmounts(prev => ({ ...prev, [d.userId]: formatPrice(Number(val)) }));
+																			}
+																		}}
 																		className="w-full text-center px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-bold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
 																		placeholder="Số tiền cần chuyển"
 																	/>
 																</div>
 																{(() => {
-																	const amountToUse = customQRAmounts[d.userId] !== undefined ? Number(customQRAmounts[d.userId]) : d.totalSalary;
+																	const rawStr = customQRAmounts[d.userId] !== undefined ? customQRAmounts[d.userId].replace(/\D/g, '') : '';
+																	const amountToUse = customQRAmounts[d.userId] !== undefined 
+																		? Number(rawStr) 
+																		: d.totalSalary;
 																	if (amountToUse > 0) {
 																		return (
 																			<>

@@ -1932,7 +1932,7 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 																		<div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl p-3 border border-slate-100 dark:border-slate-700 w-48 text-center">
 																			<p className="text-[10px] font-black uppercase text-slate-400 mb-2">Quét để chuyển khoản</p>
 																			<img 
-																				src={`https://img.vietqr.io/image/${d.bankCode}-${d.bankAccountNumber}-compact2.png?amount=${amountToUse}&addInfo=Thanh toan luong ${month.replace('-', '')}&accountName=${d.bankAccountName || ''}`} 
+																				src={`https://img.vietqr.io/image/${d.bankCode}-${d.bankAccountNumber}-compact2.png?amount=${amountToUse}&addInfo=${encodeURIComponent("Thanh toan luong " + month.replace("-", ""))}&accountName=${encodeURIComponent(d.bankAccountName || "")}`}
 																				className="w-full aspect-square object-contain rounded-lg" 
 																				alt="QR" 
 																			/>
@@ -2019,7 +2019,7 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 																		return (
 																			<>
 																				<img
-																					src={`https://img.vietqr.io/image/${d.bankCode}-${d.bankAccountNumber}-compact2.png?amount=${amountToUse}&addInfo=Thanh toan luong ${month.replace("-", "")}&accountName=${d.bankAccountName || ""}`}
+																					src={`https://img.vietqr.io/image/${d.bankCode}-${d.bankAccountNumber}-compact2.png?amount=${amountToUse}&addInfo=${encodeURIComponent("Thanh toan luong " + month.replace("-", ""))}&accountName=${encodeURIComponent(d.bankAccountName || "")}`}
 																					alt="VietQR"
 																					className="w-48 h-48 rounded-xl object-contain mb-3"
 																				/>

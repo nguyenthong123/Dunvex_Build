@@ -935,44 +935,7 @@ const AdminSettings = () => {
 								</div>
 							</div>
 
-							<div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800">
-								<div className="flex items-center gap-4 mb-6">
-									<div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-xl text-amber-600 dark:text-amber-400">
-										<Crown size={24} />
-									</div>
-									<div>
-										<h3 className="text-xl font-bold dark:text-white">Gói Dịch Vụ</h3>
-									</div>
-								</div>
-								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-									<div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl flex items-center gap-4">
-										<div className={`p-3 rounded-xl ${owner.isPro ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>{owner.isPro ? <CheckCircle /> : <XCircle />}</div>
-										<div>
-											<p className="text-xs font-black text-slate-400 uppercase tracking-widest">Gói đăng ký</p>
-											<p className="text-lg font-black text-slate-800 dark:text-white uppercase">
-												{owner.planId === 'premium_yearly' ? 'Premium (1 Năm)' : owner.planId === 'premium_monthly' ? 'Premium (1 Tháng)' : owner.isPro ? 'Premium Pro' : 'Dùng thử'}
-											</p>
-										</div>
-									</div>
-									<div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl flex items-center gap-4">
-										<div className="p-3 rounded-xl bg-blue-50 text-blue-600"><Clock /></div>
-										<div>
-											<p className="text-xs font-black text-slate-400 uppercase tracking-widest">Thời gian còn lại</p>
-											<p className="text-lg font-black text-slate-800 dark:text-white">
-												{(() => {
-													const expireAt = owner.subscriptionExpiresAt || owner.trialEndsAt;
-													if (expireAt) {
-														const expireDate = expireAt.toDate ? expireAt.toDate() : new Date(expireAt);
-														const days = Math.ceil((expireDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
-														return days > 0 ? `${days} ngày` : 'Đã hết hạn';
-													}
-													return owner.subscriptionStatus === 'active' ? 'Vô thời hạn' : 'Hết hạn';
-												})()}
-											</p>
-										</div>
-									</div>
-								</div>
-							</div>
+
 						</div>
 					)}
 

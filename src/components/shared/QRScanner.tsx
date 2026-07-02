@@ -12,13 +12,15 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScan, onClose, title = "Quét m
 	const scannerRef = useRef<Html5QrcodeScanner | null>(null);
 
 	useEffect(() => {
-		// Initialize scanner
 		scannerRef.current = new Html5QrcodeScanner(
 			"qr-reader",
 			{
 				fps: 10,
 				qrbox: { width: 250, height: 250 },
-				aspectRatio: 1.0
+				aspectRatio: 1.0,
+				videoConstraints: {
+					facingMode: "environment"
+				}
 			},
 			/* verbose= */ false
 		);

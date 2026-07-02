@@ -164,6 +164,7 @@ export default async function handler(req: any, res: any) {
         method: 'PATCH',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          name: `projects/${PROJECT_ID}/databases/(default)/documents/api_keys/${ownerId}`,
           fields: {
             telegramChatId: { stringValue: String(chatId) }
           }
@@ -245,7 +246,7 @@ Dựa vào dữ liệu trên, hãy trả lời câu hỏi:`;
 
     // 4. Call Gemini
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

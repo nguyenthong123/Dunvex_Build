@@ -366,9 +366,11 @@ const LeaveManagement = () => {
                     'border-amber-100 dark:border-amber-900/30'
                   } ${isAdmin ? 'cursor-pointer active:scale-[0.98]' : ''}`}
                 >
-                  {req.userId === auth.currentUser?.uid && req.status === 'pending' && (
-                    <div className="absolute top-4 right-4 flex items-center gap-1">
-                      <button onClick={(e) => openEditModal(req, e)} className="p-2 text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"><Edit2 size={16}/></button>
+                  {((req.userId === auth.currentUser?.uid && req.status === 'pending') || isAdmin) && (
+                    <div className="absolute top-4 right-4 flex items-center gap-1 z-10">
+                      {req.userId === auth.currentUser?.uid && req.status === 'pending' && (
+                        <button onClick={(e) => openEditModal(req, e)} className="p-2 text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"><Edit2 size={16}/></button>
+                      )}
                       <button onClick={(e) => handleDeleteRequest(req, e)} className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg transition-colors"><Trash2 size={16}/></button>
                     </div>
                   )}

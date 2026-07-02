@@ -4,7 +4,7 @@ import {
 	Settings, User, Bell, Shield, Database, Globe, Moon, Sun, Users, Activity,
 	FileText, Save, Plus, Trash2, Edit2, Edit3, CheckCircle, XCircle, Crown, Clock,
 	Rocket, Lock, RefreshCcw, ExternalLink, MapPin, Calendar, X, AlertTriangle,
-	ChevronLeft, ChevronRight, Download
+	ChevronLeft, ChevronRight, Download, PieChart, QrCode
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { auth, db, functions } from '../services/firebase';
@@ -1801,9 +1801,30 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 												{d.dailyWage > 0 ? formatPrice(d.dailyWage) + 'đ' : <span className="text-slate-300 italic">-</span>}
 											</td>
 											<td className="px-4 py-3 text-right">
-												<span className={`font-black text-sm ${d.totalSalary > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-300'}`}>
-													{formatPrice(d.totalSalary)}đ
-												</span>
+												<div className="flex items-center justify-end gap-3">
+													<span className={`font-black text-sm ${d.totalSalary > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-300'}`}>
+														{formatPrice(d.totalSalary)}đ
+													</span>
+													{d.bankCode && d.bankAccountNumber && d.totalSalary > 0 && (
+														<div className="relative group flex items-center">
+															<button onClick={(e) => e.stopPropagation()} className="p-1.5 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition-colors">
+																<QrCode className="w-4 h-4" />
+															</button>
+															<div className="absolute right-0 bottom-full mb-2 hidden group-hover:block z-50">
+																<div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl p-3 border border-slate-100 dark:border-slate-700 w-48 text-center">
+																	<p className="text-[10px] font-black uppercase text-slate-400 mb-2">Quét để chuyển khoản</p>
+																	<img 
+																		src={`https://img.vietqr.io/image/${d.bankCode}-${d.bankAccountNumber}-compact2.png?amount=${d.totalSalary}&addInfo=Thanh toan luong ${month.replace('-', '')}&accountName=${d.bankAccountName || ''}`} 
+																		className="w-full aspect-square object-contain rounded-lg" 
+																		alt="QR" 
+																	/>
+																	<p className="text-xs font-bold text-slate-700 dark:text-slate-200 mt-2">{d.bankAccountName}</p>
+																	<p className="text-[10px] text-slate-500">{d.bankCode}</p>
+																</div>
+															</div>
+														</div>
+													)}
+												</div>
 											</td>
 										</tr>
 										{isExpanded && (

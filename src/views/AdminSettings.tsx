@@ -1619,6 +1619,16 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 	const [salaryData, setSalaryData] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [month, setMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+	const [standardDays, setStandardDays] = useState(() => {
+		const [year, mon] = new Date().toISOString().slice(0, 7).split('-').map(Number);
+		let days = 0;
+		const date = new Date(year, mon - 1, 1);
+		while (date.getMonth() === mon - 1) {
+			if (date.getDay() !== 0) days++;
+			date.setDate(date.getDate() + 1);
+		}
+		return days;
+	});
 	const [expandedUser, setExpandedUser] = useState<string | null>(null);
 	const [rawCheckins, setRawCheckins] = useState<any[]>([]);
 	const [rawAttendance, setRawAttendance] = useState<any[]>([]);
@@ -1633,7 +1643,7 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 		}
 		setExpandedUser(null);
 		loadSalaryData();
-	}, [ownerId, userList, month]);
+	}, [ownerId, userList, month, standardDays]);
 
 	const loadSalaryData = async () => {
 		setLoading(true);
@@ -1689,10 +1699,9 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 				});
 
 				const daysWorked = Object.keys(dailyDetails).length;
-				const WORKING_DAYS = 26; // Ngày công chuẩn / tháng
 				const monthlyWage = Number(user.monthlyWage) || 0;
 				const dailyWage = monthlyWage > 0 
-					? Math.round(monthlyWage / WORKING_DAYS)
+					? Math.round(monthlyWage / standardDays)
 					: (Number(user.dailyWage) || 0); // fallback lương ngày cũ
 				return {
 					userId: user.id,
@@ -1826,14 +1835,39 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 
 	return (
 		<div className="space-y-4">
-			<div className="flex items-center justify-between">
+			<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
 				<h3 className="text-lg font-black uppercase text-slate-800 dark:text-white">💰 Bảng lương nhân viên</h3>
-				<input
-					type="month"
-					value={month}
-					onChange={e => setMonth(e.target.value)}
-					className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-sm font-bold dark:text-white outline-none"
-				/>
+				<div className="flex items-center gap-4">
+					<div className="flex items-center gap-2">
+						<span className="text-xs font-bold text-slate-500 whitespace-nowrap">Ngày công chuẩn:</span>
+						<input
+							type="number"
+							value={standardDays}
+							onChange={e => setStandardDays(Number(e.target.value) || 1)}
+							className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-bold dark:text-white outline-none w-20 text-center"
+							min="1"
+							max="31"
+						/>
+					</div>
+					<input
+						type="month"
+						value={month}
+						onChange={e => {
+							setMonth(e.target.value);
+							if (e.target.value) {
+								const [year, mon] = e.target.value.split('-').map(Number);
+								let days = 0;
+								const date = new Date(year, mon - 1, 1);
+								while (date.getMonth() === mon - 1) {
+									if (date.getDay() !== 0) days++;
+									date.setDate(date.getDate() + 1);
+								}
+								setStandardDays(days);
+							}
+						}}
+						className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-sm font-bold dark:text-white outline-none"
+					/>
+				</div>
 			</div>
 			{loading ? (
 				<div className="text-center py-8 text-slate-400">Đang tính...</div>

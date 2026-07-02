@@ -30,13 +30,15 @@ async function getAccessToken(): Promise<string> {
   return td.access_token;
 }
 
-async function runStructuredQuery(token: string, collectionId: string, filters: any[] = []) {
+async function runStructuredQuery(token: string, collectionId: string, filters: any[] = [], limitNum?: number, orderByClause?: any) {
   const body: any = {
     structuredQuery: {
       from: [{ collectionId }],
-      where: filters.length > 0 ? { compositeFilter: { op: 'AND', filters } } : undefined
+      where: filters.length > 0 ? (filters.length === 1 ? filters[0] : { compositeFilter: { op: 'AND', filters } }) : undefined
     }
   };
+  if (limitNum) body.structuredQuery.limit = limitNum;
+  if (orderByClause) body.structuredQuery.orderBy = [orderByClause];
   const res = await fetch(`${FIRESTORE_BASE}:runQuery`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -44,6 +46,7 @@ async function runStructuredQuery(token: string, collectionId: string, filters: 
   });
   if (!res.ok) return [];
   const results = await res.json();
+  if (!Array.isArray(results)) return [];
   return results.filter((r: any) => r.document).map((r: any) => ({ id: r.document.name.split('/').pop(), fields: r.document.fields }));
 }
 
@@ -117,14 +120,47 @@ export default async function handler(req: any, res: any) {
       const customers = await runStructuredQuery(token, 'customers', [
         { fieldFilter: { field: { fieldPath: 'ownerId' }, op: 'EQUAL', value: { stringValue: ownerId } } }
       ]);
-      const debtors = customers.filter((c: any) => {
+      const debtorsRaw = customers.filter((c: any) => {
         const debt = Number(c.fields?.debt?.integerValue || c.fields?.debt?.doubleValue || 0);
         return debt > 0;
-      }).map((c: any) => ({
-        name: c.fields?.name?.stringValue || '',
-        debt: Number(c.fields?.debt?.integerValue || c.fields?.debt?.doubleValue || 0),
-        days: Number(c.fields?.debtDays?.integerValue || 0)
-      })).sort((a, b) => b.debt - a.debt); // Sắp xếp nợ nhiều nhất lên đầu
+      });
+      
+      const debtors = [];
+      for (const c of debtorsRaw) {
+        let days = Number(c.fields?.debtDays?.integerValue || 0);
+        try {
+          const lastOrders = await runStructuredQuery(token, 'orders', [
+            { fieldFilter: { field: { fieldPath: 'ownerId' }, op: 'EQUAL', value: { stringValue: ownerId } } },
+            { fieldFilter: { field: { fieldPath: 'customerId' }, op: 'EQUAL', value: { stringValue: c.id } } },
+            { fieldFilter: { field: { fieldPath: 'status' }, op: 'EQUAL', value: { stringValue: 'Đơn chốt' } } }
+          ], 1, { field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' });
+
+          const lastPayments = await runStructuredQuery(token, 'payments', [
+            { fieldFilter: { field: { fieldPath: 'ownerId' }, op: 'EQUAL', value: { stringValue: ownerId } } },
+            { fieldFilter: { field: { fieldPath: 'customerId' }, op: 'EQUAL', value: { stringValue: c.id } } }
+          ], 1, { field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' });
+
+          let lastTxTime = 0;
+          if (lastOrders.length > 0 && lastOrders[0].fields?.createdAt?.timestampValue) {
+            lastTxTime = Math.max(lastTxTime, new Date(lastOrders[0].fields.createdAt.timestampValue).getTime());
+          }
+          if (lastPayments.length > 0 && lastPayments[0].fields?.createdAt?.timestampValue) {
+            lastTxTime = Math.max(lastTxTime, new Date(lastPayments[0].fields.createdAt.timestampValue).getTime());
+          }
+
+          if (lastTxTime > 0) {
+            days = Math.floor((Date.now() - lastTxTime) / (1000 * 60 * 60 * 24));
+          }
+        } catch (e) {
+          console.error("Error fetching lastTx for debtor", c.id, e);
+        }
+        debtors.push({
+          name: c.fields?.name?.stringValue || '',
+          debt: Number(c.fields?.debt?.integerValue || c.fields?.debt?.doubleValue || 0),
+          days: days
+        });
+      }
+      debtors.sort((a, b) => b.debt - a.debt); // Sắp xếp nợ nhiều nhất lên đầu
 
       // 4. Tạo prompt cho Gemini
       const prompt = `Bạn là trợ lý AI (Telegram Bot) của phần mềm Dunvex Build, phục vụ sếp: ${adminName}.
@@ -152,7 +188,7 @@ Hãy viết báo cáo gửi sếp đi:`;
       let reportText = "Báo cáo cuối ngày không khả dụng do lỗi tạo văn bản.";
       try {
         const geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

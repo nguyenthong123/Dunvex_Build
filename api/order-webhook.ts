@@ -359,6 +359,31 @@ export default async function handler(req: any, res: any) {
       });
     }
 
+    // Gửi thông báo Telegram
+    try {
+      const keyDoc = await restGet(token, `api_keys/${body.ownerId}`);
+      if (keyDoc && keyDoc.fields) {
+        const kf = keyDoc.fields;
+        const botToken = kf.telegramBotToken?.stringValue;
+        const chatId = kf.telegramChatId?.stringValue;
+        if (botToken && chatId && kf.enabled?.booleanValue === true) {
+          const message = `📦 <b>ĐƠN HÀNG MỚI (CHỐT)</b>\n- Khách hàng: <b>${customerName || 'Khách vãng lai'}</b>\n- Tổng tiền: <b>${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(totalAmount)}</b>\n- Người thao tác: Bot Trợ Lý (Webhook)`;
+          
+          await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: message,
+              parse_mode: 'HTML'
+            })
+          });
+        }
+      }
+    } catch (teleErr) {
+      console.error('Failed to send Telegram notification in webhook:', teleErr);
+    }
+
     return res.status(200).json({
       success: true,
       orderId,

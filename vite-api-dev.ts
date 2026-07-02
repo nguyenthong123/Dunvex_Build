@@ -101,7 +101,7 @@ async function handleGeminiProxy(body: any): Promise<{ status: number; data: any
 
 	try {
 		const response = await fetch(
-			`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`,
+			`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`,
 			{
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -151,7 +151,7 @@ async function handleGeminiVision(body: any): Promise<{ status: number; data: an
 		}
 
 		const response = await fetch(
-			`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`,
+			`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`,
 			{
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },

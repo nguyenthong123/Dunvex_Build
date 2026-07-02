@@ -1757,16 +1757,16 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 			{loading ? (
 				<div className="text-center py-8 text-slate-400">Đang tính...</div>
 			) : (
-				<div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+				<div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-visible">
 					<table className="w-full text-left">
 						<thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-400">
 							<tr>
-								<th className="px-4 py-3">Nhân viên</th>
+								<th className="px-4 py-3 rounded-tl-2xl">Nhân viên</th>
 								<th className="px-4 py-3 text-center">Ngày làm</th>
 								<th className="px-4 py-3 text-center">Lượt chấm</th>
 								<th className="px-4 py-3 text-right">Lương/tháng</th>
 								<th className="px-4 py-3 text-right">Lương/ngày</th>
-								<th className="px-4 py-3 text-right">Thực lãnh</th>
+								<th className="px-4 py-3 text-right rounded-tr-2xl">Thực lãnh</th>
 							</tr>
 						</thead>
 						<tbody className="divide-y divide-slate-50 dark:divide-slate-800">
@@ -1892,8 +1892,8 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 						</tbody>
 						<tfoot className="bg-indigo-50 dark:bg-indigo-900/20">
 							<tr>
-								<td colSpan={5} className="px-4 py-3 text-xs font-black uppercase text-indigo-600 dark:text-indigo-400 text-right">TỔNG CỘNG</td>
-								<td className="px-4 py-3 text-right font-black text-lg text-indigo-600 dark:text-indigo-400">{formatPrice(totalAll)}đ</td>
+								<td colSpan={5} className="px-4 py-3 text-xs font-black uppercase text-indigo-600 dark:text-indigo-400 text-right rounded-bl-2xl">TỔNG CỘNG</td>
+								<td className="px-4 py-3 text-right font-black text-lg text-indigo-600 dark:text-indigo-400 rounded-br-2xl">{formatPrice(totalAll)}đ</td>
 							</tr>
 						</tfoot>
 					</table>

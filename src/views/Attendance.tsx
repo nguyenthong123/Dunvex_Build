@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '../components/shared/Toast';
 import LeaveCalendar from '../components/shared/LeaveCalendar';
+import MonthlyAttendanceCalendar from '../components/shared/MonthlyAttendanceCalendar';
 import { createAdminNotification, createUserNotification } from '../utils/notifications';
 
 const Attendance = () => {
@@ -427,7 +428,11 @@ const Attendance = () => {
 						</div>
 					)}
 
-					<div className="p-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 rounded-2xl">
+					<div className="mt-8">
+						<MonthlyAttendanceCalendar ownerId={owner.ownerId} userId={auth.currentUser?.uid || ''} />
+					</div>
+
+					<div className="p-4 mt-8 bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 rounded-2xl">
 						<p className="text-[9px] text-amber-700 dark:text-amber-500 leading-relaxed font-bold">
 							* Lưu ý: Hệ thống khóa chấm công theo thiết bị. Vui lòng không thay đổi điện thoại hoặc trình duyệt khi đã bắt đầu ca làm việc.
 						</p>

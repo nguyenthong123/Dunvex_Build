@@ -1622,6 +1622,7 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 	const [expandedUser, setExpandedUser] = useState<string | null>(null);
 	const [rawCheckins, setRawCheckins] = useState<any[]>([]);
 	const [rawAttendance, setRawAttendance] = useState<any[]>([]);
+	const [customQRAmounts, setCustomQRAmounts] = useState<Record<string, string>>({});
 
 	useEffect(() => {
 		if (!ownerId) return;
@@ -1805,25 +1806,31 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 													<span className={`font-black text-sm ${d.totalSalary > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-300'}`}>
 														{formatPrice(d.totalSalary)}đ
 													</span>
-													{d.bankCode && d.bankAccountNumber && d.totalSalary > 0 && (
-														<div className="relative group flex items-center">
-															<button onClick={(e) => e.stopPropagation()} className="p-1.5 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition-colors">
-																<QrCode className="w-4 h-4" />
-															</button>
-															<div className="absolute right-0 bottom-full mb-2 hidden group-hover:block z-50">
-																<div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl p-3 border border-slate-100 dark:border-slate-700 w-48 text-center">
-																	<p className="text-[10px] font-black uppercase text-slate-400 mb-2">Quét để chuyển khoản</p>
-																	<img 
-																		src={`https://img.vietqr.io/image/${d.bankCode}-${d.bankAccountNumber}-compact2.png?amount=${d.totalSalary}&addInfo=Thanh toan luong ${month.replace('-', '')}&accountName=${d.bankAccountName || ''}`} 
-																		className="w-full aspect-square object-contain rounded-lg" 
-																		alt="QR" 
-																	/>
-																	<p className="text-xs font-bold text-slate-700 dark:text-slate-200 mt-2">{d.bankAccountName}</p>
-																	<p className="text-[10px] text-slate-500">{d.bankCode}</p>
+													{d.bankCode && d.bankAccountNumber && (() => {
+														const amountToUse = customQRAmounts[d.userId] !== undefined ? Number(customQRAmounts[d.userId]) : d.totalSalary;
+														if (amountToUse > 0) {
+															return (
+																<div className="relative group flex items-center">
+																	<button onClick={(e) => e.stopPropagation()} className="p-1.5 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition-colors">
+																		<QrCode className="w-4 h-4" />
+																	</button>
+																	<div className="absolute right-0 bottom-full mb-2 hidden group-hover:block z-50">
+																		<div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl p-3 border border-slate-100 dark:border-slate-700 w-48 text-center">
+																			<p className="text-[10px] font-black uppercase text-slate-400 mb-2">Quét để chuyển khoản</p>
+																			<img 
+																				src={`https://img.vietqr.io/image/${d.bankCode}-${d.bankAccountNumber}-compact2.png?amount=${amountToUse}&addInfo=Thanh toan luong ${month.replace('-', '')}&accountName=${d.bankAccountName || ''}`} 
+																				className="w-full aspect-square object-contain rounded-lg" 
+																				alt="QR" 
+																			/>
+																			<p className="text-xs font-bold text-slate-700 dark:text-slate-200 mt-2">{d.bankAccountName}</p>
+																			<p className="text-[10px] text-slate-500">{d.bankCode}</p>
+																		</div>
+																	</div>
 																</div>
-															</div>
-														</div>
-													)}
+															);
+														}
+														return null;
+													})()}
 												</div>
 											</td>
 										</tr>
@@ -1870,16 +1877,36 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 															)}
 														</div>
 
-														{d.bankCode && d.bankAccountNumber && d.totalSalary > 0 && (
+														{d.bankCode && d.bankAccountNumber && (
 															<div className="w-full lg:w-64 shrink-0 bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-100 dark:border-slate-700 text-center flex flex-col items-center justify-center">
 																<p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3">Mã QR Thanh Toán</p>
-																<img
-																	src={`https://img.vietqr.io/image/${d.bankCode}-${d.bankAccountNumber}-compact2.png?amount=${d.totalSalary}&addInfo=Thanh toan luong ${month.replace("-", "")}&accountName=${d.bankAccountName || ""}`}
-																	alt="VietQR"
-																	className="w-48 h-48 rounded-xl object-contain mb-3"
-																/>
-																<p className="text-xs font-bold text-slate-600 dark:text-slate-300">{d.bankAccountName || ""}</p>
-																<p className="text-[10px] font-medium text-slate-500">{d.bankCode} - {d.bankAccountNumber}</p>
+																<div className="w-full mb-3">
+																	<input 
+																		type="number"
+																		value={customQRAmounts[d.userId] !== undefined ? customQRAmounts[d.userId] : (d.totalSalary || '')}
+																		onChange={(e) => setCustomQRAmounts(prev => ({ ...prev, [d.userId]: e.target.value }))}
+																		className="w-full text-center px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-bold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+																		placeholder="Số tiền cần chuyển"
+																	/>
+																</div>
+																{(() => {
+																	const amountToUse = customQRAmounts[d.userId] !== undefined ? Number(customQRAmounts[d.userId]) : d.totalSalary;
+																	if (amountToUse > 0) {
+																		return (
+																			<>
+																				<img
+																					src={`https://img.vietqr.io/image/${d.bankCode}-${d.bankAccountNumber}-compact2.png?amount=${amountToUse}&addInfo=Thanh toan luong ${month.replace("-", "")}&accountName=${d.bankAccountName || ""}`}
+																					alt="VietQR"
+																					className="w-48 h-48 rounded-xl object-contain mb-3"
+																				/>
+																				<p className="text-xs font-bold text-slate-600 dark:text-slate-300">{d.bankAccountName || ""}</p>
+																				<p className="text-[10px] font-medium text-slate-500">{d.bankCode} - {d.bankAccountNumber}</p>
+																			</>
+																		);
+																	} else {
+																		return <p className="text-sm text-slate-400 mt-4">Vui lòng nhập số tiền {'>'} 0</p>;
+																	}
+																})()}
 															</div>
 														)}
 													</div>

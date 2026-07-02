@@ -23,6 +23,7 @@ const isSameDay = (a: Date, b: Date): boolean =>
 const MonthlyAttendanceCalendar: React.FC<MonthlyAttendanceCalendarProps> = ({ ownerId, userId }) => {
 	const [viewDate, setViewDate] = useState(() => new Date());
 	const [attendanceDates, setAttendanceDates] = useState<Set<string>>(new Set());
+	const [leaveDates, setLeaveDates] = useState<Set<string>>(new Set());
 	const [loading, setLoading] = useState(false);
 
 	const today = new Date();
@@ -52,14 +53,19 @@ const MonthlyAttendanceCalendar: React.FC<MonthlyAttendanceCalendarProps> = ({ o
 				);
 
 				const snap = await getDocs(q);
-				const dates = new Set<string>();
+				const attendance = new Set<string>();
+				const leaves = new Set<string>();
+				
 				snap.docs.forEach(d => {
 					const data = d.data();
-					if (data.date && data.date >= startStr && data.date < endStr && data.type !== 'request') { // Ignore leave requests
-						dates.add(data.date);
+					if (data.type === 'request' && Array.isArray(data.dates)) {
+						data.dates.forEach((date: string) => leaves.add(date));
+					} else if (data.date && data.date >= startStr && data.date < endStr && data.type !== 'request') {
+						attendance.add(data.date);
 					}
 				});
-				setAttendanceDates(dates);
+				setAttendanceDates(attendance);
+				setLeaveDates(leaves);
 			} catch (e) {
 				console.error('Failed to fetch attendance history:', e);
 			} finally {
@@ -176,7 +182,7 @@ const MonthlyAttendanceCalendar: React.FC<MonthlyAttendanceCalendarProps> = ({ o
 						const dateStr = `${y}-${m}-${d}`;
 
 						const isCheckedIn = attendanceDates.has(dateStr);
-						const isToday = isSameDay(cell.date, today);
+						const isLeave = leaveDates.has(dateStr);
 						const sunday = cell.date.getDay() === 0;
 						const notCurrent = !cell.currentMonth;
 
@@ -186,7 +192,7 @@ const MonthlyAttendanceCalendar: React.FC<MonthlyAttendanceCalendarProps> = ({ o
 								className={`
 									relative aspect-square flex flex-col items-center justify-center rounded-xl text-xs font-semibold
 									${notCurrent ? 'text-slate-300 dark:text-slate-700' : 
-										isToday ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 ring-1 ring-indigo-200 dark:ring-indigo-800' :
+										isLeave ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 ring-1 ring-rose-200 dark:ring-rose-800' :
 										sunday ? 'text-rose-400' : 'text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50'
 									}
 								`}
@@ -206,8 +212,8 @@ const MonthlyAttendanceCalendar: React.FC<MonthlyAttendanceCalendarProps> = ({ o
 						Đã chấm công
 					</div>
 					<div className="flex items-center gap-1.5">
-						<span className="w-2 h-2 bg-indigo-100 dark:bg-indigo-900/50 ring-1 ring-indigo-200 rounded-full"></span>
-						Hôm nay
+						<span className="w-2 h-2 bg-rose-100 dark:bg-rose-900/50 ring-1 ring-rose-300 rounded-full"></span>
+						Xin nghỉ
 					</div>
 				</div>
 			</div>

@@ -1741,6 +1741,86 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 			}));
 	};
 
+	const handlePrintPdf = (userId: string, userName: string) => {
+		const details = getDetailForUser(userId);
+		const printWindow = window.open('', '', 'width=800,height=600');
+		if (!printWindow) return;
+
+		let html = `
+		<html>
+			<head>
+				<title>Chi tiết chấm công - ${userName} - Tháng ${month}</title>
+				<style>
+					body { font-family: Arial, sans-serif; padding: 20px; color: #333; line-height: 1.5; }
+					h2 { text-align: center; color: #1e3a8a; margin-bottom: 5px; }
+					.subtitle { text-align: center; color: #64748b; margin-top: 0; margin-bottom: 30px; font-size: 14px; }
+					table { border-collapse: collapse; width: 100%; margin-top: 20px; font-size: 14px; }
+					th, td { border: 1px solid #e2e8f0; padding: 10px; text-align: left; }
+					th { background-color: #f8fafc; color: #334155; font-weight: bold; text-transform: uppercase; font-size: 12px; }
+					.badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: bold; }
+					.badge-in { background: #dcfce7; color: #166534; }
+					.badge-out { background: #fee2e2; color: #991b1b; }
+					.badge-req { background: #fef9c3; color: #854d0e; }
+					.time { font-weight: bold; color: #0f172a; }
+					.note { color: #64748b; font-size: 12px; }
+				</style>
+			</head>
+			<body>
+				<h2>BẢNG CHI TIẾT CHẤM CÔNG</h2>
+				<p class="subtitle">Tháng ${month} - Nhân viên: <strong>${userName}</strong></p>
+				<table>
+					<thead>
+						<tr>
+							<th style="width: 15%">Ngày</th>
+							<th style="width: 25%">Giờ vào (Check-in)</th>
+							<th style="width: 60%">Chi tiết trong ngày</th>
+						</tr>
+					</thead>
+					<tbody>
+		`;
+
+		details.forEach((d: any) => {
+			html += `
+				<tr>
+					<td><strong>${d.day}</strong></td>
+					<td>
+						${d.checkinTime ? `<span class="time">${d.checkinTime}</span><br/><span class="note">${d.checkinNote}</span>` : '<span style="color:#94a3b8">Không có</span>'}
+					</td>
+					<td>
+						${d.attendances.length > 0 ? d.attendances.map((a: any) => {
+							let badge = 'badge-in';
+							let typeText = 'Check-in';
+							if (a.type === 'checkout') { badge = 'badge-out'; typeText = 'Check-out'; }
+							else if (a.type === 'request') { badge = 'badge-req'; typeText = 'Đơn từ'; }
+							
+							return `<div style="margin-bottom: 4px;"><span class="badge ${badge}">${typeText}</span> <span class="time">${a.time}</span> <span class="note">- ${a.note}</span></div>`;
+						}).join('') : '<span style="color:#94a3b8">Không có</span>'}
+					</td>
+				</tr>
+			`;
+		});
+
+		if (details.length === 0) {
+			html += `<tr><td colspan="3" style="text-align: center; color: #94a3b8; padding: 20px;">Không có dữ liệu chấm công trong tháng này.</td></tr>`;
+		}
+
+		html += `
+					</tbody>
+				</table>
+				<div style="margin-top: 30px; text-align: right; font-size: 14px; color: #475569;">
+					<p>Ngày xuất: ${new Date().toLocaleDateString('vi-VN')}</p>
+				</div>
+				<script>
+					window.onload = function() { window.print(); window.close(); }
+				</script>
+			</body>
+		</html>
+		`;
+
+		printWindow.document.write(html);
+		printWindow.document.close();
+	};
+
 	const formatPrice = (n: number) => n.toLocaleString('vi-VN');
 	const totalAll = salaryData.reduce((s, d) => s + d.totalSalary, 0);
 
@@ -1839,7 +1919,17 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 												<td colSpan={6} className="px-4 py-3 bg-slate-50/50 dark:bg-slate-800/30">
 													<div className="flex flex-col lg:flex-row gap-6">
 														<div className="flex-1 space-y-2">
-															<p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">📅 Chi tiết chấm công tháng {month}</p>
+															<div className="flex items-center gap-3 mb-2">
+																<p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">📅 Chi tiết chấm công tháng {month}</p>
+																<button
+																	onClick={() => handlePrintPdf(d.userId, d.name)}
+																	className="px-2 py-1.5 hover:bg-white dark:hover:bg-slate-700 text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 rounded-lg transition-colors border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm flex items-center gap-1.5"
+																	title="Xuất PDF chi tiết chấm công"
+																>
+																	<Download size={12} />
+																	<span className="text-[10px] font-bold">Xuất PDF</span>
+																</button>
+															</div>
 															{details.length > 0 ? (
 																<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
 															{details.map((day: any, di: number) => (

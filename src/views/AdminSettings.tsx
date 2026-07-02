@@ -1646,13 +1646,16 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 				where('createdAt', '<=', Timestamp.fromDate(endDate))
 			);
 
-			const [checkinsSnap, attendanceSnap] = await Promise.all([
+			const [checkinsSnap, attendanceSnap, profilesSnap] = await Promise.all([
 				getDocs(checkinsQ),
-				getDocs(attendanceQ)
+				getDocs(attendanceQ),
+				getDocs(query(collection(db, "profiles")))
 			]);
 
 			const allCheckins: any[] = checkinsSnap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
 			const allAttendance: any[] = attendanceSnap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+			const profilesMap = new Map();
+			profilesSnap.docs.forEach(d => profilesMap.set(d.id, d.data()));
 			setRawCheckins(allCheckins);
 			setRawAttendance(allAttendance);
 			
@@ -1684,8 +1687,12 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 				const dailyWage = monthlyWage > 0 
 					? Math.round(monthlyWage / WORKING_DAYS)
 					: (Number(user.dailyWage) || 0); // fallback lương ngày cũ
+				const profile = profilesMap.get(user.uid || user.id);
 				return {
 					userId: user.id,
+					bankCode: profile?.bankCode || "",
+					bankAccountNumber: profile?.bankAccountNumber || "",
+					bankAccountName: profile?.bankAccountName || "",
 					name: user.displayName || user.email?.split('@')[0] || 'N/A',
 					email: user.email,
 					role: user.role,
@@ -1794,12 +1801,14 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 												</span>
 											</td>
 										</tr>
-										{isExpanded && details.length > 0 && (
+										{isExpanded && (
 											<tr key={`detail-${i}`}>
 												<td colSpan={6} className="px-4 py-3 bg-slate-50/50 dark:bg-slate-800/30">
-													<div className="space-y-2">
-														<p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">📅 Chi tiết chấm công tháng {month}</p>
-														<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+													<div className="flex flex-col lg:flex-row gap-6">
+														<div className="flex-1 space-y-2">
+															<p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">📅 Chi tiết chấm công tháng {month}</p>
+															{details.length > 0 ? (
+																<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
 															{details.map((day: any, di: number) => (
 																<div key={di} className="bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-700 p-3">
 																	<div className="flex items-center justify-between mb-2">
@@ -1829,7 +1838,24 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 																	)}
 																</div>
 															))}
+																</div>
+															) : (
+																<p className="text-sm text-slate-400">Không có dữ liệu chấm công</p>
+															)}
 														</div>
+
+														{d.bankCode && d.bankAccountNumber && d.totalSalary > 0 && (
+															<div className="w-full lg:w-64 shrink-0 bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-100 dark:border-slate-700 text-center flex flex-col items-center justify-center">
+																<p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3">Mã QR Thanh Toán</p>
+																<img
+																	src={`https://img.vietqr.io/image/${d.bankCode}-${d.bankAccountNumber}-compact2.png?amount=${d.totalSalary}&addInfo=Thanh toan luong ${month.replace("-", "")}&accountName=${d.bankAccountName || ""}`}
+																	alt="VietQR"
+																	className="w-48 h-48 rounded-xl object-contain mb-3"
+																/>
+																<p className="text-xs font-bold text-slate-600 dark:text-slate-300">{d.bankAccountName || ""}</p>
+																<p className="text-[10px] font-medium text-slate-500">{d.bankCode} - {d.bankAccountNumber}</p>
+															</div>
+														)}
 													</div>
 												</td>
 											</tr>

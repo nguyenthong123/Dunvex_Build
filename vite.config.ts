@@ -86,17 +86,20 @@ export default defineConfig({
 	},
 	build: {
 		sourcemap: false,
-		// Xóa console.log/debugger khỏi production build
 		minify: 'esbuild',
 		esbuild: {
 			drop: ['console', 'debugger'],
 		},
+		chunkSizeWarningLimit: 1000,
 		rollupOptions: {
 			output: {
 				manualChunks: {
 					'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+					'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/storage'],
+					'vendor-ui': ['lucide-react', 'framer-motion'],
 					'vendor-map': ['leaflet', 'react-leaflet'],
-					'vendor-utils': ['xlsx', 'html5-qrcode']
+					'vendor-xlsx': ['xlsx'],
+					'vendor-qrcode': ['html5-qrcode']
 				}
 			}
 		}

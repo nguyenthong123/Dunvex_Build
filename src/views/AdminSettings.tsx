@@ -1732,22 +1732,60 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 		if (!user?.dailyDetails) return [];
 		return Object.entries(user.dailyDetails)
 			.sort(([a], [b]) => b.localeCompare(a))
-			.map(([day, detail]: [string, any]) => ({
-				day,
-				checkinTime: detail.checkin ? (() => {
+			.map(([day, detail]: [string, any]) => {
+				// Determine initial check-in time and note
+				let checkinTimeStr = null;
+				let checkinNote = '';
+
+				if (detail.checkin) {
 					const dt = detail.checkin.createdAt?.toDate?.() || new Date(detail.checkin.createdAt);
-					return dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-				})() : null,
-				checkinNote: detail.checkin?.note || detail.checkin?.location || '',
-				attendances: detail.attendances.map((a: any) => {
-					const dt = a.createdAt?.toDate?.() || new Date(a.createdAt);
-					return {
-						time: dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-						type: a.type || a.status || 'check',
-						note: a.note || a.location || ''
-					};
-				})
-			}));
+					checkinTimeStr = dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+					checkinNote = detail.checkin.note || (typeof detail.checkin.location === 'object' ? 'Có toạ độ GPS' : detail.checkin.location) || '';
+				} else if (detail.attendances && detail.attendances.length > 0) {
+					// Fallback for office workers who only have attendance_logs
+					const firstLog = detail.attendances[0];
+					const dt = firstLog.checkInAt?.toDate?.() || firstLog.createdAt?.toDate?.() || new Date(firstLog.createdAt);
+					checkinTimeStr = dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+					checkinNote = firstLog.note || (typeof firstLog.location === 'object' ? 'Có toạ độ GPS' : firstLog.location) || '';
+				}
+
+				const mappedAttendances: any[] = [];
+				detail.attendances.forEach((a: any) => {
+					if (a.type) {
+						// For leave requests or manual check-ins
+						const dt = a.createdAt?.toDate?.() || new Date(a.createdAt);
+						mappedAttendances.push({
+							time: dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+							type: a.type,
+							note: a.note || ''
+						});
+					} else {
+						// For office attendance logs
+						const dtIn = a.checkInAt?.toDate?.() || a.createdAt?.toDate?.() || new Date(a.createdAt);
+						mappedAttendances.push({
+							time: dtIn.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+							type: a.status || 'check-in',
+							note: a.note || (typeof a.location === 'object' ? 'Tại văn phòng' : a.location) || ''
+						});
+
+						if (a.checkOutAt) {
+							const dtOut = a.checkOutAt?.toDate?.() || new Date(a.checkOutAt);
+							mappedAttendances.push({
+								time: dtOut.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+								type: 'checkout',
+								note: a.checkOutNote || (typeof a.checkOutLocation === 'object' ? 'Tại văn phòng' : a.checkOutLocation) || ''
+							});
+						}
+					}
+				});
+
+				return {
+					day,
+					checkinTime: checkinTimeStr,
+					checkinNote: checkinNote,
+					attendances: mappedAttendances
+				};
+			});
 	};
 
 	const handlePrintPdf = (userId: string, userName: string) => {

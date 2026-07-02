@@ -750,6 +750,10 @@ const AdminSettings = () => {
 	// Filter user list based on hierarchy:
 	// - Staff Admin can only see Sales/Warehouse/etc. 
 	// - Owner (Super Admin) sees everyone.
+	const salaryUserList = useMemo(() => {
+		return userList.filter(u => u.uid !== owner.ownerId);
+	}, [userList, owner.ownerId]);
+
 	const filteredUserList = useMemo(() => {
 		if (!owner.isEmployee) return userList; // Super Admin sees all
 
@@ -989,7 +993,7 @@ const AdminSettings = () => {
 							handleUpdateUser={handleUpdateUser}
 						/>
 						<div className="mt-8">
-							<SalarySummary userList={filteredUserList} ownerId={owner.ownerId} />
+							<SalarySummary userList={salaryUserList} ownerId={owner.ownerId} />
 						</div>
 						</>
 					)}
@@ -1620,7 +1624,12 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 	const [rawAttendance, setRawAttendance] = useState<any[]>([]);
 
 	useEffect(() => {
-		if (!ownerId || userList.length === 0) return;
+		if (!ownerId) return;
+		if (userList.length === 0) {
+			setSalaryData([]);
+			setLoading(false);
+			return;
+		}
 		setExpandedUser(null);
 		loadSalaryData();
 	}, [ownerId, userList, month]);

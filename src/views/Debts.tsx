@@ -639,9 +639,9 @@ const Debts: React.FC = () => {
 	};
 
 	// Totals for KPIs
-	const totalReceivable = aggregatedData.reduce((sum: any, item: any) => sum + (item.currentDebt > 0 ? item.currentDebt : 0), 0);
-	const totalPayable = aggregatedData.reduce((sum: any, item: any) => sum + (item.currentDebt < 0 ? Math.abs(item.currentDebt) : 0), 0);
-	const overdueCount = aggregatedData.filter((item: any) => item.currentDebt > 100000000).length; // Dummy threshold for overdue count
+	const totalWaitedAll = aggregatedData.reduce((sum: any, item: any) => sum + ((item.currentDebt || 0) + (item.totalPaymentsAmount || 0)), 0);
+	const totalPaidAll = aggregatedData.reduce((sum: any, item: any) => sum + (item.totalPaymentsAmount || 0), 0);
+	const totalUnpaidAll = aggregatedData.reduce((sum: any, item: any) => sum + (item.currentDebt > 0 ? item.currentDebt : 0), 0);
 
 
 	const handlePaymentImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -931,44 +931,38 @@ const Debts: React.FC = () => {
 				<div className="max-w-7xl mx-auto flex flex-col gap-6 md:gap-8">
 					{/* KPI Cards Section */}
 					<div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 mb-0 transition-colors duration-300">
-						{/* KPI Card 1 */}
-						<div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border-l-[6px] border-[#10b981] relative overflow-hidden group transition-colors duration-300">
-							<div className="absolute right-0 top-1/2 -translate-y-1/2 p-4 opacity-10 group-hover:scale-110 transition-transform">
-								<span className="material-symbols-outlined text-7xl text-[#10b981]">download</span>
-							</div>
-							<div className="relative z-10 flex flex-col">
-								<p className="text-slate-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Tổng Phải thu</p>
-								<p className="text-[#1A237E] dark:text-indigo-400 text-2xl lg:text-3xl font-black tracking-tighter">{formatPrice(totalReceivable)}</p>
-								<p className="text-[10px] font-black text-[#10b981] mt-2 flex items-center gap-1 uppercase">
-									<span className="material-symbols-outlined text-xs">arrow_upward</span> {aggregatedData.filter(i => i.currentDebt > 0).length} KH ĐANG NỢ
-								</p>
-							</div>
-						</div>
-
-						{/* KPI Card 2 */}
+						{/* KPI Card 1: Tổng tiền nợ */}
 						<div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border-l-[6px] border-[#3b82f6] relative overflow-hidden group transition-colors duration-300">
 							<div className="absolute right-0 top-1/2 -translate-y-1/2 p-4 opacity-10 group-hover:scale-110 transition-transform">
-								<span className="material-symbols-outlined text-7xl text-[#3b82f6]">upload</span>
+								<span className="material-symbols-outlined text-7xl text-[#3b82f6]">receipt_long</span>
 							</div>
 							<div className="relative z-10 flex flex-col">
-								<p className="text-slate-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Tổng Phải trả</p>
-								<p className="text-[#1A237E] dark:text-indigo-400 text-2xl lg:text-3xl font-black tracking-tighter">{formatPrice(totalPayable)}</p>
-								<p className="text-[10px] font-black text-rose-500 mt-2 flex items-center gap-1 uppercase">
-									<span className="material-symbols-outlined text-xs">arrow_downward</span> CHIẾM {((totalPayable / (totalReceivable || 1)) * 100).toFixed(0)}% PHẢI THU
-								</p>
+								<p className="text-slate-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Tổng tiền nợ</p>
+								<p className="text-[#1A237E] dark:text-indigo-400 text-2xl lg:text-3xl font-black tracking-tighter">{formatPrice(totalWaitedAll)}</p>
 							</div>
 						</div>
 
-						{/* KPI Card 3 */}
+						{/* KPI Card 2: Tổng tiền đã trả */}
+						<div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border-l-[6px] border-[#10b981] relative overflow-hidden group transition-colors duration-300">
+							<div className="absolute right-0 top-1/2 -translate-y-1/2 p-4 opacity-10 group-hover:scale-110 transition-transform">
+								<span className="material-symbols-outlined text-7xl text-[#10b981]">payments</span>
+							</div>
+							<div className="relative z-10 flex flex-col">
+								<p className="text-slate-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Tổng tiền đã trả</p>
+								<p className="text-[#1A237E] dark:text-indigo-400 text-2xl lg:text-3xl font-black tracking-tighter">{formatPrice(totalPaidAll)}</p>
+							</div>
+						</div>
+
+						{/* KPI Card 3: Tổng dư nợ chưa trả */}
 						<div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border-l-[6px] border-rose-500 relative overflow-hidden group transition-colors duration-300">
 							<div className="absolute right-0 top-1/2 -translate-y-1/2 p-4 opacity-10 group-hover:scale-110 transition-transform">
 								<span className="material-symbols-outlined text-7xl text-rose-500">warning</span>
 							</div>
 							<div className="relative z-10 flex flex-col">
-								<p className="text-slate-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Nợ Quá hạn</p>
-								<p className="text-rose-600 text-2xl lg:text-3xl font-black tracking-tighter">{overdueCount}</p>
+								<p className="text-slate-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Tổng dư nợ chưa trả</p>
+								<p className="text-rose-600 text-2xl lg:text-3xl font-black tracking-tighter">{formatPrice(totalUnpaidAll)}</p>
 								<div className="bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 text-[8px] font-black uppercase px-2 py-1 rounded-full w-fit mt-2 animate-pulse">
-									KHOẢN NỢ LỚN
+									{aggregatedData.filter(i => i.currentDebt > 0).length} KH ĐANG NỢ
 								</div>
 							</div>
 						</div>

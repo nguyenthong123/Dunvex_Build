@@ -13,9 +13,9 @@ export const sendTelegramNotification = async (ownerId: string, message: string)
       return true;
     }
 
-    // Nếu chạy trên Capacitor (Android/iOS), API phải trỏ đến tên miền thật của Vercel (vì Capacitor chạy localhost không có backend API)
+    // Nếu chạy trên Capacitor (Android/iOS), API phải trỏ đến tên miền thật của VPS (vì Capacitor chạy localhost không có backend API)
     const isCapacitor = window.location.protocol === 'capacitor:' || window.location.hostname === 'localhost';
-    const apiUrl = isCapacitor ? 'https://dunvex-build.vercel.app/api/telegram-notify' : '/api/telegram-notify';
+    const apiUrl = isCapacitor ? 'https://dunvex.136-109-194-84.nip.io/api/telegram-notify' : '/api/telegram-notify';
 
     const res = await fetch(apiUrl, {
       method: 'POST',

@@ -467,9 +467,9 @@ const Debts: React.FC = () => {
 		const debtOrders = customerOrders.filter(o => confirmedStatuses.includes(o.status));
 		const totalWaited = debtOrders.reduce((sum: any, o: any) => sum + (o.totalAmount || 0), 0);
 		const totalPaid = customerPayments.reduce((sum: any, p: any) => sum + (p.amount || 0), 0);
-		// Calculate debt from fetched data for consistency with displayed totals
+		// Use actual debt from database for registered customers, because fetched orders are limited to 500
 		const calcDebt = totalWaited - totalPaid;
-		const currentDebt = calcDebt;
+		const currentDebt = c.isGuest ? calcDebt : (Number(c.debt) || 0);
 
 		// Column display values based on status filter
 		let displayTotalOrders = 0;
@@ -508,7 +508,7 @@ const Debts: React.FC = () => {
 			lastTx: allTx[0]?.date || null,
 			debtHealth,
 			turnoverDays,
-			hasStatusOrders: statusFilter === 'Tất cả' ? (customerOrders.length > 0 || customerPayments.length > 0) : customerOrders.some(o => o.status === statusFilter),
+			hasStatusOrders: statusFilter === 'Tất cả' ? (customerOrders.length > 0 || customerPayments.length > 0 || currentDebt > 0) : (customerOrders.some(o => o.status === statusFilter) || currentDebt > 0),
 			initials: String(c.name || '').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || 'KH'
 		};
 	}).filter((item: any) => {

@@ -24,9 +24,10 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 import apiRoutes from './server/routes/api.js';
 app.use('/api', apiRoutes);
 
-// Setup node-cron to run EOD job every day at 23:55
+// Setup node-cron to run EOD job at a random minute between 17:00 and 17:59 to avoid API overload
 import cron from 'node-cron';
-cron.schedule('55 23 * * *', async () => {
+const randomMinute = Math.floor(Math.random() * 60);
+cron.schedule(`${randomMinute} 17 * * *`, async () => {
   console.log('Running End-of-Day Cron Job...');
   try {
     const res = await fetch(`http://localhost:${PORT}/api/cron-eod`, {

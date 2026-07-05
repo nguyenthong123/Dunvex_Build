@@ -3,10 +3,17 @@
 # Dừng nếu có lỗi
 set -e
 
-VPS_IP="136.109.194.84"
-VPS_USER="zomby"
-VPS_DIR="/home/zomby/dunvex_app"
-SSH_KEY="~/.ssh/google_compute_engine"
+# Load environment variables from .env if it exists
+if [ -f .env ]; then
+  set -a
+  source .env
+  set +a
+fi
+
+VPS_IP="${VPS_IP:-136.109.194.84}"
+VPS_USER="${VPS_USER:-zomby}"
+VPS_DIR="${VPS_DIR:-/home/zomby/dunvex_app}"
+SSH_KEY="${SSH_KEY:-~/.ssh/google_compute_engine}"
 APP_NAME="dunvex_backend"
 
 echo "🚀 [1/4] Build Frontend (React/Vite)..."

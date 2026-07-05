@@ -438,11 +438,10 @@ const OrderList = () => {
 					</div>
 				)}
 				{/* Stats Cards */}
-				<div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-					<StatCard icon="receipt_long" label="Tổng đơn chốt" value={totalConfirmedCount.toString()} color="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400" />
-					<StatCard icon="trending_up" label="Lợi nhuận" value={formatPrice(totalProfit)} color="bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400" />
-					<StatCard icon="sell" label="Tổng chiết khấu" value={formatPrice(totalDiscount)} color="bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400" />
-					<StatCard icon="payments" label="Doanh thu" value={formatPrice(totalRevenue)} color="bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400" />
+				<div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+					<StatCard icon="receipt_long" label="Tổng các đơn chốt" value={totalConfirmedCount.toString()} color="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400" />
+					<StatCard icon="payments" label="Doanh thu đơn chốt" value={formatPrice(totalRevenue)} color="bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400" />
+					<StatCard icon="trending_up" label="Lợi nhuận thực tế" value={formatPrice(totalProfit)} color="bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400" />
 				</div>
 
 				{/* Desktop Table */}

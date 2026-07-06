@@ -470,3 +470,98 @@ exports.nexusAutonomousBot = onSchedule("every 1 hours", async (event) => {
 
 	console.log("Nexus Autonomous Bot: Cycle completed.");
 });
+
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+
+const genAI = new GoogleGenerativeAI("AIzaSyD4T4RU6J3g_DeakZrWb7kSS82SKYJRVic");
+
+exports.aiSecurityScanner = onDocumentCreated("audit_logs/{logId}", async (event) => {
+	const logDoc = event.data;
+	if (!logDoc) return null;
+	const logData = logDoc.data();
+	const ownerId = logData.ownerId;
+	if (!ownerId) return null;
+
+	// Fetch recent logs for context
+	const logsSnap = await db.collection("audit_logs")
+		.where("ownerId", "==", ownerId)
+		.orderBy("createdAt", "desc")
+		.limit(10)
+		.get();
+	
+	if (logsSnap.empty) return null;
+	
+	const recentLogs = logsSnap.docs.map(d => ({
+		action: d.data().action,
+		details: d.data().details,
+		user: d.data().user,
+		time: d.data().createdAt?.toDate ? d.data().createdAt.toDate().toISOString() : new Date().toISOString()
+	}));
+
+	// Optimize: Only trigger AI if there's a burst of activity (> 4 actions in 60s)
+	const now = Date.now();
+	const recentCount = recentLogs.filter(l => now - new Date(l.time).getTime() < 60000).length;
+	if (recentCount < 4) return null;
+
+	const prompt = `You are "Dunvex Security & Management AI".
+Analyze the following recent system actions performed by users of a specific company.
+Determine if there is malicious intent, bot spam, or rapid destructive behavior (like bulk deleting products, rapid unauthorized exports, spamming API).
+Respond ONLY with a JSON object in this exact format:
+{
+  "riskScore": <number 0-100>,
+  "reason": "<short explanation in Vietnamese>",
+  "action": "<'ignore' or 'lock'>"
+}
+Risk Score >= 80 means HIGH RISK.
+Recent Logs:
+${JSON.stringify(recentLogs, null, 2)}`;
+
+	try {
+		const model = genAI.getGenerativeModel({ model: "gemini-flash-lite-latest" });
+		const result = await model.generateContent(prompt);
+		let text = result.response.text();
+		text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+		const aiResponse = JSON.parse(text);
+
+		if (aiResponse.action === 'lock' || aiResponse.riskScore >= 80) {
+			// Lock the user
+			await db.collection('settings').doc(ownerId).set({
+				manualLockOrders: true,
+				manualLockDebts: true,
+				manualLockSheets: true,
+				manualLockAi: true,
+				aiLockedAt: admin.firestore.FieldValue.serverTimestamp(),
+				aiLockReason: aiResponse.reason
+			}, { merge: true });
+
+			// Record Anomaly
+			await db.collection('ai_anomalies').add({
+				ownerId,
+				email: logData.user,
+				action: 'LOCKED',
+				intent: 'SECURITY_THREAT',
+				success: false,
+				latencyMs: 1200,
+				reason: 'AI_DETECTED_ANOMALY',
+				details: aiResponse.reason,
+				riskScore: aiResponse.riskScore,
+				createdAt: admin.firestore.FieldValue.serverTimestamp()
+			});
+			
+			// Notify Admin
+			await db.collection('notifications').add({
+				userId: ownerId,
+				title: '🛑 TÀI KHOẢN BỊ KHÓA BỞI AI',
+				body: \`AI Vệ Sĩ đã phát hiện hành vi bất thường. Lý do: \${aiResponse.reason} (Risk: \${aiResponse.riskScore}/100)\`,
+				type: 'error',
+				priority: 'high',
+				read: false,
+				createdAt: admin.firestore.FieldValue.serverTimestamp()
+			});
+		}
+	} catch (e) {
+		console.error("AI Scanner Error:", e);
+	}
+	return null;
+});

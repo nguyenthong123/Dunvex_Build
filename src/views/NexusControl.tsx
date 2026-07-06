@@ -212,42 +212,16 @@ const NexusControl = () => {
 		const unsubLogs = onSnapshot(qLogs, (snap) => {
 			const newLogs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 			setLogs(newLogs);
+		});
 
-			// AI ANOMALY DETECTION (Pocket Click Logic)
+		// Listen to Real-time AI Anomalies
+		const qAnomalies = query(collection(db, 'ai_anomalies'), orderBy('createdAt', 'desc'), limit(20));
+		const unsubAnomalies = onSnapshot(qAnomalies, (snap) => {
 			if (isAiActive) {
-				const userActionCounts: Record<string, any[]> = {};
-				const now = Date.now();
-
-				newLogs.forEach((log: any) => {
-					const time = log.createdAt?.toMillis ? log.createdAt.toMillis() : 0;
-					if (now - time < 60000) { // Only check last 60 seconds
-						if (!userActionCounts[log.ownerId]) userActionCounts[log.ownerId] = [];
-						userActionCounts[log.ownerId].push(log);
-					}
-				});
-
-				const anomalies: any[] = [];
-				Object.entries(userActionCounts).forEach(([ownerId, actions]) => {
-					if (actions.length >= 10) { // 🟡 Threshold: 10 actions (tăng từ 5)
-						const times = actions.map(a => a.createdAt?.toMillis ? a.createdAt.toMillis() : 0).sort();
-						const span = times[times.length - 1] - times[0];
-						if (span < 30000) { // 🟡 30 giây (tăng từ 15s)
-							anomalies.push({
-								ownerId,
-								email: actions[0].user,
-								severity: 'high',
-								reason: 'RAPID_ACTIONS_DETECTED',
-								details: `Phát hiện ${actions.length} thao tác trong ${Math.round(span / 1000)}s — Nghi ngờ thao tác nhanh bất thường.`
-							});
-
-							// AUTO LOCK if enabled
-							if (systemConfig.ai_auto_lock) {
-								executeAiAutoLock(ownerId, actions[0].user);
-							}
-						}
-					}
-				});
-				setAiAnomalies(anomalies);
+				const newAnomalies = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+				setAiAnomalies(newAnomalies);
+			} else {
+				setAiAnomalies([]);
 			}
 		});
 

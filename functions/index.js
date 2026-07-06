@@ -222,3 +222,242 @@ exports.syncUserClaims = onDocumentWritten('users/{userId}', async (event) => {
 
 	return null;
 });
+
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+
+/**
+ * Autonomous AI Manager Bot
+ * Runs every hour to check bank transfers, provision users, and lock expired accounts.
+ */
+exports.nexusAutonomousBot = onSchedule("every 1 hours", async (event) => {
+	console.log("Nexus Autonomous Bot: Starting cycle...");
+	const now = new Date();
+
+	// 1. Check Bank Transfers
+	try {
+		const appscriptUrl = 'https://script.google.com/macros/s/AKfycbwu682rk8EZl4__DKtw-LgRLjozSvUk5Jj9QFQvvZnT5NLrUwdRn8a-1tfJ5oU5XIAABQ/exec';
+		const res = await fetch(`${appscriptUrl}?token=dunvex-nexus-2026&action=check_transfers`);
+		if (res.ok) {
+			const data = await res.json();
+			if (data.matches > 0 && Array.isArray(data.matchedCodes)) {
+				for (const code of data.matchedCodes) {
+					// Find pending request
+					const reqsSnap = await db.collection('payment_requests')
+						.where('transferCode', '==', code)
+						.where('status', '==', 'pending')
+						.limit(1).get();
+					
+					if (!reqsSnap.empty) {
+						const reqDoc = reqsSnap.docs[0];
+						const request = { id: reqDoc.id, ...reqDoc.data() };
+						console.log('Nexus AI: Auto-approving matched payment for', code);
+						
+						// Approve
+						await reqDoc.ref.update({
+							status: 'approved',
+							handledAt: admin.firestore.FieldValue.serverTimestamp(),
+							handledBy: 'nexus-autonomous-bot'
+						});
+
+						const planId = request.planId;
+						if (planId && planId.startsWith('addon_export')) {
+							const currentMonth = new Date().toISOString().slice(0, 7);
+							await db.collection('usage_limits').doc(`${request.ownerId}_${currentMonth}`).set({
+								extraExportLimit: admin.firestore.FieldValue.increment(5)
+							}, { merge: true });
+						} else if (planId === 'addon_ai_assistant') {
+							await db.collection('settings').doc(request.ownerId).set({
+								hasAIAssistant: true
+							}, { merge: true });
+						} else {
+							let durDays = 30;
+							try {
+								const planSnap = await db.collection('subscription_packages').doc(request.planId).get();
+								if (planSnap.exists && planSnap.data().durationDays) {
+									durDays = Number(planSnap.data().durationDays);
+								} else {
+									durDays = (planId === 'premium_yearly' || planId === 'addon_yearly') ? 365 : 30;
+								}
+							} catch (e) {}
+							const expireDate = new Date();
+							expireDate.setDate(expireDate.getDate() + durDays);
+
+							await db.collection('settings').doc(request.ownerId).set({
+								subscriptionStatus: 'active',
+								isPro: true,
+								planId: request.planId,
+								paymentConfirmedAt: admin.firestore.FieldValue.serverTimestamp(),
+								subscriptionExpiresAt: admin.firestore.Timestamp.fromDate(expireDate),
+								manualLockOrders: false,
+								manualLockDebts: false,
+								manualLockSheets: false,
+								manualLockAi: false
+							}, { merge: true });
+						}
+
+						// Notify
+						await db.collection('notifications').add({
+							userId: request.ownerId,
+							title: '✨ GIA HẠN THÀNH CÔNG',
+							body: `Hệ thống Nexus Bot đã nhận được thanh toán. Gói ${request.planName || request.planId} đã được kích hoạt.`,
+							type: 'success',
+							priority: 'high',
+							read: false,
+							createdAt: admin.firestore.FieldValue.serverTimestamp()
+						});
+					}
+				}
+			}
+		}
+	} catch (e) {
+		console.error("Bank check error:", e);
+	}
+
+	// 2. Fetch Users and Settings
+	const usersSnap = await db.collection('users').get();
+	const settingsSnap = await db.collection('settings').get();
+	const settingsMap = {};
+	settingsSnap.docs.forEach(d => settingsMap[d.id] = d.data());
+
+	const owners = usersSnap.docs
+		.map(d => ({ id: d.id, ...d.data(), uid: d.data().uid || d.id }))
+		.filter(u => u.uid === u.ownerId || !u.ownerId);
+
+	// Fetch Trial Package duration
+	let trialDays = 60;
+	try {
+		const pkgSnap = await db.collection('subscription_packages').where('price', '==', 0).limit(1).get();
+		if (!pkgSnap.empty) {
+			trialDays = Number(pkgSnap.docs[0].data().durationDays) || 60;
+		}
+	} catch (e) {}
+
+	const parseDate = (val) => {
+		if (!val) return null;
+		if (val.toDate) return val.toDate();
+		if (val.seconds) return new Date(val.seconds * 1000);
+		if (val instanceof Date) return val;
+		if (typeof val === 'string') return new Date(val);
+		return null;
+	};
+
+	for (const u of owners) {
+		if (u.email === 'dunvex.green@gmail.com') continue; // Skip master admin
+		const s = settingsMap[u.uid] || {};
+		const customer = {
+			...u,
+			isPro: s.isPro ?? u.isPro ?? false,
+			planId: s.planId || (s.isPro ? 'premium_monthly' : 'free'),
+			subscriptionStatus: s.subscriptionStatus || (u.isPro ? 'active' : 'trial'),
+			subscriptionExpiresAt: s.subscriptionExpiresAt || null,
+			paymentConfirmedAt: s.paymentConfirmedAt || u.createdAt || null,
+			manualLockOrders: s.manualLockOrders || false,
+			manualLockDebts: s.manualLockDebts || false,
+			manualLockSheets: s.manualLockSheets || false,
+			manualLockAi: s.manualLockAi || false,
+			isAiProcessed: s.isAiProcessed || false,
+			graceUntil: s.graceUntil || null,
+			aiLockedAt: s.aiLockedAt || null
+		};
+
+		// 3. Provision new users
+		if (!customer.planId && !customer.isAiProcessed) {
+			const expireDate = new Date();
+			expireDate.setDate(expireDate.getDate() + trialDays);
+			await db.collection('settings').doc(customer.uid).set({
+				planId: 'free_trial',
+				isPro: false,
+				subscriptionStatus: 'trial',
+				subscriptionExpiresAt: admin.firestore.Timestamp.fromDate(expireDate),
+				graceUntil: null,
+				isAiProcessed: true
+			}, { merge: true });
+			continue;
+		}
+
+		// Calculate Effective Status
+		const joinedAt = parseDate(customer.paymentConfirmedAt) || parseDate(customer.createdAt);
+		const expireAt = parseDate(customer.subscriptionExpiresAt);
+		let effectiveExpireAt = expireAt;
+		if (!effectiveExpireAt && joinedAt) {
+			const plan = customer.planId || (customer.isPro ? 'premium_monthly' : 'free');
+			const totalDays = plan === 'free' ? 60 : plan === 'premium_monthly' ? 30 : 365;
+			effectiveExpireAt = new Date(joinedAt.getTime());
+			effectiveExpireAt.setDate(effectiveExpireAt.getDate() + totalDays);
+		}
+		const isExpired = effectiveExpireAt ? effectiveExpireAt < now : false;
+
+		// 4. Grace Period and Locks
+		if (isExpired) {
+			const graceUntil = parseDate(customer.graceUntil);
+			if (!graceUntil && effectiveExpireAt) {
+				const graceEnd = new Date(effectiveExpireAt.getTime());
+				graceEnd.setDate(graceEnd.getDate() + 3);
+				if (now < graceEnd) {
+					await db.collection('settings').doc(customer.uid).set({
+						graceUntil: admin.firestore.Timestamp.fromDate(graceEnd),
+						subscriptionStatus: 'grace'
+					}, { merge: true });
+					await db.collection('notifications').add({
+						userId: customer.uid,
+						title: '⚠️ GÓI ĐÃ HẾT HẠN — 3 NGÀY ÂN HẠN',
+						body: `Gói đã hết hạn. Bạn có 3 ngày (đến ${graceEnd.toLocaleDateString('vi-VN')}) để gia hạn trước khi bị khoá.`,
+						type: 'warning',
+						priority: 'high',
+						read: false,
+						createdAt: admin.firestore.FieldValue.serverTimestamp()
+					});
+					continue;
+				}
+			}
+
+			if (graceUntil && now >= graceUntil) {
+				if (!customer.manualLockOrders || !customer.manualLockDebts || !customer.manualLockSheets || !customer.manualLockAi) {
+					await db.collection('settings').doc(customer.uid).set({
+						manualLockOrders: true,
+						manualLockDebts: true,
+						manualLockSheets: true,
+						manualLockAi: true,
+						subscriptionStatus: 'expired',
+						isPro: false,
+						graceUntil: null
+					}, { merge: true });
+					await db.collection('notifications').add({
+						userId: customer.uid,
+						title: '🔒 TÍNH NĂNG ĐÃ BỊ KHOÁ',
+						body: 'Gói đã hết hạn. Vui lòng gia hạn để tiếp tục.',
+						type: 'lock',
+						priority: 'high',
+						read: false,
+						createdAt: admin.firestore.FieldValue.serverTimestamp()
+					});
+				}
+			}
+		}
+
+		// 5. Auto-unlock after 30 min (Anomaly locked)
+		if (customer.manualLockAi && customer.aiLockedAt) {
+			const lockedAt = parseDate(customer.aiLockedAt);
+			if (lockedAt && (now.getTime() - lockedAt.getTime()) > 30 * 60 * 1000) {
+				await db.collection('settings').doc(customer.uid).set({
+					manualLockOrders: false,
+					manualLockDebts: false,
+					manualLockSheets: false,
+					manualLockAi: false,
+					aiLockedAt: null,
+					aiLockReason: null
+				}, { merge: true });
+				await db.collection('notifications').add({
+					userId: customer.uid,
+					title: '🔓 TỰ ĐỘNG MỞ KHOÁ',
+					body: 'Hệ thống đã tự mở khoá sau 30 phút.',
+					type: 'unlock',
+					read: false,
+					createdAt: admin.firestore.FieldValue.serverTimestamp()
+				});
+			}
+		}
+	}
+
+	console.log("Nexus Autonomous Bot: Cycle completed.");
+});

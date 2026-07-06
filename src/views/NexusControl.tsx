@@ -381,7 +381,7 @@ const NexusControl = () => {
 				}
 				// 2. Grace period
 				if (status.isExpired) {
-					const expireAt = parseExpireDate(customer.subscriptionExpiresAt);
+					const expireAt = status.expireAt;
 					const graceUntil = parseExpireDate(customer.graceUntil);
 					if (!graceUntil && expireAt) {
 						const graceEnd = new Date(expireAt.getTime());
@@ -418,7 +418,7 @@ const NexusControl = () => {
 		if (lastCheck && now - parseInt(lastCheck) < 5 * 60 * 1000) return; // Mỗi 5 phút
 		
 		try {
-			const appscriptUrl = 'https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec';
+			const appscriptUrl = 'https://script.google.com/macros/s/AKfycbwu682rk8EZl4__DKtw-LgRLjozSvUk5Jj9QFQvvZnT5NLrUwdRn8a-1tfJ5oU5XIAABQ/exec';
 			const res = await fetch(`${appscriptUrl}?token=dunvex-nexus-2026&action=check_transfers`, { method: 'GET' });
 			if (res.ok) {
 				const data = await res.json();
@@ -455,11 +455,13 @@ const NexusControl = () => {
 		return null;
 	};
 
-	// Interval 30 giây
+	// Interval 30 giây (ĐÃ TẮT - CHUYỂN LÊN CLOUD FUNCTIONS)
+	// Việc kiểm tra tự động giờ đây được chạy ngầm trên Firebase Cloud Functions mỗi giờ.
+	// Nút "Quét ngay" trên giao diện (nếu có) vẫn có thể dùng hàm runAutonomousCycle để ép quét tay.
 	useEffect(() => {
-		if (!isAiActive) return;
-		const interval = setInterval(() => runAutonomousCycle(customersRef.current, requests), 30000);
-		return () => clearInterval(interval);
+		// if (!isAiActive) return;
+		// const interval = setInterval(() => runAutonomousCycle(customersRef.current, requests), 30000);
+		// return () => clearInterval(interval);
 	}, [isAiActive]);
 
 	const handleUpdatePlan = async (ownerId: string, newPlan: string) => {
@@ -538,33 +540,34 @@ const NexusControl = () => {
 
 		const diffDays = joinedAt ? Math.floor((now.getTime() - joinedAt.getTime()) / (1000 * 60 * 60 * 24)) : 0;
 
-		// Calculate days remaining from expireAt
-		let daysRemaining = 0;
-		if (expireAt) {
-			daysRemaining = Math.max(0, Math.ceil((expireAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
-		} else if (joinedAt) {
-			// Legacy fallback: calculate remaining based on plan duration
+		let effectiveExpireAt = expireAt;
+		if (!effectiveExpireAt && joinedAt) {
 			const plan = c.planId || (c.isPro ? 'premium_monthly' : 'free');
 			const totalDays = plan === 'free' ? 60 : plan === 'premium_monthly' ? 30 : 365;
-			daysRemaining = Math.max(0, totalDays - diffDays);
+			effectiveExpireAt = new Date(joinedAt.getTime());
+			effectiveExpireAt.setDate(effectiveExpireAt.getDate() + totalDays);
 		}
 
-		let isExpired = false;
-		if (expireAt) {
-			isExpired = expireAt < now;
-		} else if (joinedAt) {
-			// Legacy fallback if expireAt is missing
-			const plan = c.planId || (c.isPro ? 'premium_monthly' : 'free');
-			if (plan === 'free' && diffDays > 60) isExpired = true;
-			else if (plan === 'premium_monthly' && diffDays > 30) isExpired = true;
-			else if (plan === 'premium_yearly' && diffDays > 365) isExpired = true;
+		const isExpired = effectiveExpireAt ? effectiveExpireAt < now : false;
+
+		let daysRemaining = 0;
+		let daysExpired = 0;
+
+		if (effectiveExpireAt) {
+			if (isExpired) {
+				daysExpired = Math.floor((now.getTime() - effectiveExpireAt.getTime()) / (1000 * 60 * 60 * 24));
+			} else {
+				daysRemaining = Math.ceil((effectiveExpireAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+			}
 		}
 
 		return {
 			isExpired,
 			daysUsed: diffDays,
 			daysRemaining,
-			joinedAt
+			daysExpired,
+			joinedAt,
+			expireAt: effectiveExpireAt
 		};
 	};
 
@@ -1156,8 +1159,8 @@ const NexusControl = () => {
 															{eff.isExpired ? 'ĐÃ HẾT HẠN' : 'ĐANG HIỆU LỰC'}
 														</div>
 														<div className="text-[10px] uppercase font-black tracking-tighter">
-															{eff.joinedAt ? eff.joinedAt.toLocaleDateString('vi-VN') : '---'}
-															<span className="ml-1 opacity-50">({eff.isExpired ? `${eff.daysUsed}D` : `${eff.daysRemaining}D`})</span>
+															{eff.expireAt ? eff.expireAt.toLocaleDateString('vi-VN') : '---'}
+															<span className="ml-1 opacity-50">({eff.isExpired ? `Trễ ${eff.daysExpired}D` : `Còn ${eff.daysRemaining}D`})</span>
 														</div>
 													</td>
 													<td className="px-3 py-6 text-center">

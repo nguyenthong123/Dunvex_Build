@@ -233,71 +233,116 @@ exports.nexusAutonomousBot = onSchedule("every 1 hours", async (event) => {
 	console.log("Nexus Autonomous Bot: Starting cycle...");
 	const now = new Date();
 
-	// 1. Check Bank Transfers
+	// 1. Check Bank Transfers & AI Fuzzy Matching
 	try {
-		const appscriptUrl = 'https://script.google.com/macros/s/AKfycbwu682rk8EZl4__DKtw-LgRLjozSvUk5Jj9QFQvvZnT5NLrUwdRn8a-1tfJ5oU5XIAABQ/exec';
-		const res = await fetch(`${appscriptUrl}?token=dunvex-nexus-2026&action=check_transfers`);
-		if (res.ok) {
-			const data = await res.json();
-			if (data.matches > 0 && Array.isArray(data.matchedCodes)) {
-				for (const code of data.matchedCodes) {
-					// Find pending request
-					const reqsSnap = await db.collection('payment_requests')
-						.where('transferCode', '==', code)
-						.where('status', '==', 'pending')
-						.limit(1).get();
+		const pendingReqsSnap = await db.collection('payment_requests').where('status', '==', 'pending').get();
+		if (!pendingReqsSnap.empty) {
+			const pendingRequests = pendingReqsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+			
+			const appscriptUrl = 'https://script.google.com/macros/s/AKfycbwu682rk8EZl4__DKtw-LgRLjozSvUk5Jj9QFQvvZnT5NLrUwdRn8a-1tfJ5oU5XIAABQ/exec';
+			const res = await fetch(`${appscriptUrl}?token=dunvex-nexus-2026&action=get_transactions`);
+			
+			if (res.ok) {
+				const data = await res.json();
+				if (data.data && Array.isArray(data.data)) {
+					// Filter incoming money only
+					const incomingTxs = data.data.filter(t => t['Phát sinh']?.startsWith('+')).slice(0, 50); // Last 50 incoming
 					
-					if (!reqsSnap.empty) {
-						const reqDoc = reqsSnap.docs[0];
-						const request = { id: reqDoc.id, ...reqDoc.data() };
-						console.log('Nexus AI: Auto-approving matched payment for', code);
-						
-						// Approve
-						await reqDoc.ref.update({
-							status: 'approved',
-							handledAt: admin.firestore.FieldValue.serverTimestamp(),
-							handledBy: 'nexus-autonomous-bot'
-						});
+					// Initialize Gemini
+					const { GoogleGenerativeAI } = require("@google/generative-ai");
+					const genAI = new GoogleGenerativeAI("AIzaSyD4T4RU6J3g_DeakZrWb7kSS82SKYJRVic");
+					const model = genAI.getGenerativeModel({ model: "gemini-flash-lite-latest" });
+					
+					const prompt = `You are an AI Accountant. 
+Match the following pending Payment Requests with the Incoming Bank Transactions.
+A match occurs when the transaction amount closely or exactly matches the payment request amount, AND the transaction description contains the user's email, name, transfer code, or plan ID.
+Respond ONLY with a valid JSON object in this exact format:
+{
+	"matches": [
+		{
+			"requestId": "the ID of the matched payment_request",
+			"transactionId": "the ID of the matched bank transaction",
+			"reason": "Short explanation in Vietnamese of why it matches"
+		}
+	]
+}
+If no matches are found, return { "matches": [] }.
 
-						const planId = request.planId;
-						if (planId && planId.startsWith('addon_export')) {
-							const currentMonth = new Date().toISOString().slice(0, 7);
-							await db.collection('usage_limits').doc(`${request.ownerId}_${currentMonth}`).set({
-								extraExportLimit: admin.firestore.FieldValue.increment(5)
-							}, { merge: true });
-						} else if (planId === 'addon_ai_assistant') {
-							await db.collection('settings').doc(request.ownerId).set({
-								hasAIAssistant: true
-							}, { merge: true });
-						} else {
-							let durMonths = 1;
-							try {
-								const planSnap = await db.collection('subscription_packages').doc(request.planId).get();
-								if (planSnap.exists) {
-									if (planSnap.data().durationMonths) {
-										durMonths = Number(planSnap.data().durationMonths);
-									} else if (planSnap.data().durationDays) {
-										durMonths = Math.round(Number(planSnap.data().durationDays) / 30) || 1;
+Pending Payment Requests:
+${JSON.stringify(pendingRequests.map(r => ({ id: r.id, email: r.ownerEmail, amount: r.amount, planId: r.planId, transferCode: r.transferCode })), null, 2)}
+
+Incoming Bank Transactions:
+${JSON.stringify(incomingTxs.map(t => ({ id: t['Transaction ID'], date: t['Ngày'], amount: t['Phát sinh'], description: t['Nội dung'] })), null, 2)}
+`;
+
+					const result = await model.generateContent(prompt);
+					let text = result.response.text();
+					text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+					const aiResponse = JSON.parse(text);
+
+					if (aiResponse.matches && aiResponse.matches.length > 0) {
+						for (const match of aiResponse.matches) {
+							const reqDoc = pendingReqsSnap.docs.find(d => d.id === match.requestId);
+							if (!reqDoc) continue;
+							
+							const request = reqDoc.data();
+							console.log('Nexus AI: Auto-approving matched payment for', request.ownerEmail, 'Reason:', match.reason);
+							
+							// Approve
+							await reqDoc.ref.update({
+								status: 'approved',
+								handledAt: admin.firestore.FieldValue.serverTimestamp(),
+								handledBy: 'nexus-ai-bot',
+								aiMatchReason: match.reason,
+								matchedTransactionId: match.transactionId
+							});
+
+							const planId = request.planId;
+							if (planId && planId.startsWith('addon_export')) {
+								const currentMonth = new Date().toISOString().slice(0, 7);
+								await db.collection('usage_limits').doc(`${request.ownerId}_${currentMonth}`).set({
+									extraExportLimit: admin.firestore.FieldValue.increment(5)
+								}, { merge: true });
+							} else if (planId === 'addon_ai_assistant') {
+								await db.collection('settings').doc(request.ownerId).set({
+									hasAIAssistant: true
+								}, { merge: true });
+							} else {
+								let durMonths = 1;
+								let durDays = 0;
+								try {
+									const planSnap = await db.collection('subscription_packages').doc(request.planId).get();
+									if (planSnap.exists) {
+										if (planSnap.data().durationMonths) {
+											durMonths = Number(planSnap.data().durationMonths);
+										} else if (planSnap.data().durationDays) {
+											durDays = Number(planSnap.data().durationDays);
+											durMonths = 0;
+										}
 									}
-								} else {
-									durMonths = (planId === 'premium_yearly' || planId === 'addon_yearly') ? 12 : 1;
-								}
-							} catch (e) {}
-							const expireDate = new Date();
-							expireDate.setMonth(expireDate.getMonth() + durMonths);
+								} catch (e) {}
 
-							await db.collection('settings').doc(request.ownerId).set({
-								subscriptionStatus: 'active',
-								isPro: true,
-								planId: request.planId,
-								paymentConfirmedAt: admin.firestore.FieldValue.serverTimestamp(),
-								subscriptionExpiresAt: admin.firestore.Timestamp.fromDate(expireDate),
-								manualLockOrders: false,
-								manualLockDebts: false,
-								manualLockSheets: false,
-								manualLockAi: false
-							}, { merge: true });
-						}
+								const sDoc = await db.collection('settings').doc(request.ownerId).get();
+								const currentExpire = sDoc.exists && sDoc.data().subscriptionExpiresAt ? sDoc.data().subscriptionExpiresAt.toDate() : new Date();
+								const newExpire = new Date(Math.max(now.getTime(), currentExpire.getTime()));
+								if (durMonths > 0) {
+									newExpire.setMonth(newExpire.getMonth() + durMonths);
+								} else if (durDays > 0) {
+									newExpire.setDate(newExpire.getDate() + durDays);
+								}
+
+								await db.collection('settings').doc(request.ownerId).set({
+									subscriptionStatus: 'active',
+									isPro: true,
+									planId: request.planId,
+									paymentConfirmedAt: admin.firestore.FieldValue.serverTimestamp(),
+									subscriptionExpiresAt: admin.firestore.Timestamp.fromDate(newExpire),
+									manualLockOrders: false,
+									manualLockDebts: false,
+									manualLockSheets: false,
+									manualLockAi: false
+								}, { merge: true });
+							}
 
 						// Notify
 						await db.collection('notifications').add({

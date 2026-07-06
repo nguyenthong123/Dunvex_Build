@@ -344,16 +344,17 @@ ${JSON.stringify(incomingTxs.map(t => ({ id: t['Transaction ID'], date: t['Ngày
 								}, { merge: true });
 							}
 
-						// Notify
-						await db.collection('notifications').add({
-							userId: request.ownerId,
-							title: '✨ GIA HẠN THÀNH CÔNG',
-							body: `Hệ thống Nexus Bot đã nhận được thanh toán. Gói ${request.planName || request.planId} đã được kích hoạt.`,
-							type: 'success',
-							priority: 'high',
-							read: false,
-							createdAt: admin.firestore.FieldValue.serverTimestamp()
-						});
+							// Notify
+							await db.collection('notifications').add({
+								userId: request.ownerId,
+								title: '✨ GIA HẠN THÀNH CÔNG',
+								body: `Hệ thống Nexus Bot đã nhận được thanh toán. Gói ${request.planName || request.planId} đã được kích hoạt.`,
+								type: 'success',
+								priority: 'high',
+								read: false,
+								createdAt: admin.firestore.FieldValue.serverTimestamp()
+							});
+						}
 					}
 				}
 			}

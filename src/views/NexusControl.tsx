@@ -526,7 +526,6 @@ const NexusControl = () => {
 
 	const getEffectiveStatus = (c: any) => {
 		const now = new Date();
-		// Try paymentConfirmedAt first, then fall back to user's createdAt (account creation date)
 		const parseDate = (val: any) => {
 			if (!val) return null;
 			if (val.toDate) return val.toDate();
@@ -535,17 +534,24 @@ const NexusControl = () => {
 			if (typeof val === 'string') return new Date(val);
 			return null;
 		};
-		const joinedAt = parseDate(c.paymentConfirmedAt) || parseDate(c.createdAt);
+		const createdAt = parseDate(c.createdAt);
+		const paymentConfirmedAt = parseDate(c.paymentConfirmedAt);
 		const expireAt = parseDate(c.subscriptionExpiresAt);
 
+		const joinedAt = paymentConfirmedAt || createdAt;
 		const diffDays = joinedAt ? Math.floor((now.getTime() - joinedAt.getTime()) / (1000 * 60 * 60 * 24)) : 0;
 
 		let effectiveExpireAt = expireAt;
 		if (!effectiveExpireAt && joinedAt) {
 			const plan = c.planId || (c.isPro ? 'premium_monthly' : 'free');
-			const totalDays = plan === 'free' ? 60 : plan === 'premium_monthly' ? 30 : 365;
 			effectiveExpireAt = new Date(joinedAt.getTime());
-			effectiveExpireAt.setDate(effectiveExpireAt.getDate() + totalDays);
+			if (plan === 'free') {
+				effectiveExpireAt.setMonth(effectiveExpireAt.getMonth() + 2); // 2 months
+			} else if (plan === 'premium_monthly') {
+				effectiveExpireAt.setMonth(effectiveExpireAt.getMonth() + 1); // 1 month
+			} else {
+				effectiveExpireAt.setFullYear(effectiveExpireAt.getFullYear() + 1); // 1 year
+			}
 		}
 
 		const isExpired = effectiveExpireAt ? effectiveExpireAt < now : false;
@@ -567,6 +573,8 @@ const NexusControl = () => {
 			daysRemaining,
 			daysExpired,
 			joinedAt,
+			createdAt,
+			paymentConfirmedAt,
 			expireAt: effectiveExpireAt
 		};
 	};

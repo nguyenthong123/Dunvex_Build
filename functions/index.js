@@ -514,7 +514,7 @@ ${JSON.stringify(incomingTxs.map(t => ({ id: t['Transaction ID'], date: t['Ngày
 								<div style="padding: 20px; color: #333;">
 									<p>Chào <b>${u.displayName || u.email}</b>,</p>
 									<p>Hệ thống tự động Nexus Bot xin thông báo: Gói dịch vụ của bạn trên hệ thống Dunvex chỉ còn <b>3 ngày</b> nữa là hết hạn (vào ngày <b>${effectiveExpireAt.toLocaleDateString('vi-VN')}</b>).</p>
-									<p>Vui lòng đăng nhập vào ứng dụng, truy cập trang <b>Dịch Vụ & Gói</b> để kiểm tra thông tin thanh toán và gia hạn kịp thời để không bị gián đoạn trải nghiệm.</p>
+									<p>Vui lòng đăng nhập vào ứng dụng, truy cập trang <b>Dịch Vụ & Gói</b> tại link <a href="https://www.dunvex.com/services" style="color: #1d4ed8; text-decoration: underline; font-weight: bold;">https://www.dunvex.com/services</a> để kiểm tra thông tin thanh toán và gia hạn theo gói mà bạn mong muốn để không bị gián đoạn trải nghiệm.</p>
 									<hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
 									<p style="font-size: 13px; color: #666;">
 										Nếu bạn có bất kỳ thắc mắc hay khiếu nại nào, vui lòng liên hệ ngay với chúng tôi qua email: <a href="mailto:dunvex.green@gmail.com" style="color: #16a34a; text-decoration: none; font-weight: bold;">dunvex.green@gmail.com</a>

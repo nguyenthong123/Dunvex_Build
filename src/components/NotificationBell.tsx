@@ -135,26 +135,16 @@ const NotificationBell = ({ placement = 'down', align = 'right', className = "" 
 										key={n.id}
 										className={`p-4 border-b border-slate-50 dark:border-slate-800/50 flex gap-3 transition-colors ${!n.read ? 'bg-indigo-50/30 dark:bg-indigo-500/5' : 'hover:bg-slate-50 dark:hover:bg-slate-800/20'}`}
 									>
-										<div className={`mt-0.5 size-8 rounded-lg flex items-center justify-center shrink-0 ${n.type === 'lock' ? 'bg-rose-500/10 text-rose-500' :
-											n.type === 'unlock' ? 'bg-emerald-500/10 text-emerald-500' :
-												n.type === 'low_stock' ? 'bg-orange-500/10 text-orange-500' :
-													n.type === 'debt_warning' ? 'bg-amber-500/10 text-amber-500' :
-														n.type === 'auto_sync' ? 'bg-emerald-500/10 text-emerald-500' :
-														n.type === 'subscription' ? 'bg-violet-500/10 text-violet-500' :
-															n.type === 'eod_sales' ? 'bg-blue-500/10 text-blue-500' :
-												n.type === 'attendance_request' ? 'bg-purple-500/10 text-purple-500' :
-															'bg-indigo-500/10 text-indigo-500'
-											}`}>
+										<div className={`mt-0.5 size-8 rounded-lg flex items-center justify-center shrink-0 ${
+											n.type === 'lock' ? 'bg-rose-500/10 text-rose-500' :
+											n.type === 'payment_success' ? 'bg-emerald-500/10 text-emerald-500' :
+											n.type === 'expiring_soon' ? 'bg-amber-500/10 text-amber-500' :
+											'bg-indigo-500/10 text-indigo-500'
+										}`}>
 											{n.type === 'lock' && <XCircle size={16} />}
-											{n.type === 'unlock' && <CheckCircle2 size={16} />}
-											{n.type === 'low_stock' && <AlertTriangle size={16} />}
-											{n.type === 'debt_warning' && <Coins size={16} />}
-											{n.type === 'auto_sync' && <Database size={16} />}
-											{n.type === 'payment' && <Bell size={16} />}
-										{n.type === 'subscription' && <Gift size={16} />}
-										{n.type === 'eod_sales' && <TrendingUp size={16} />}
-											{n.type === 'attendance_request' && <CalendarDays size={16} />}
-											{(n.type === 'order' || !n.type) && <Bell size={16} />}
+											{n.type === 'payment_success' && <CheckCircle2 size={16} />}
+											{n.type === 'expiring_soon' && <AlertTriangle size={16} />}
+											{(!n.type || !['lock', 'payment_success', 'expiring_soon'].includes(n.type)) && <Bell size={16} />}
 										</div>
 										<div className="flex-1">
 											<p className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-snug">{n.title}</p>

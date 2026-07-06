@@ -347,9 +347,9 @@ ${JSON.stringify(incomingTxs.map(t => ({ id: t['Transaction ID'], date: t['Ngày
 							// Notify
 							await db.collection('notifications').add({
 								userId: request.ownerId,
-								title: '✨ GIA HẠN THÀNH CÔNG',
+								title: '✅ ĐÃ THANH TOÁN THÀNH CÔNG',
 								body: `Hệ thống Nexus Bot đã nhận được thanh toán. Gói ${request.planName || request.planId} đã được kích hoạt.`,
-								type: 'success',
+								type: 'payment_success',
 								priority: 'high',
 								read: false,
 								createdAt: admin.firestore.FieldValue.serverTimestamp()
@@ -362,6 +362,16 @@ ${JSON.stringify(incomingTxs.map(t => ({ id: t['Transaction ID'], date: t['Ngày
 	} catch (e) {
 		console.error("Bank check error:", e);
 	}
+
+	// Email Transporter
+	const nodemailer = require('nodemailer');
+	const transporter = nodemailer.createTransport({
+		service: 'gmail',
+		auth: {
+			user: process.env.SMTP_EMAIL || 'dunvex.green@gmail.com',
+			pass: process.env.SMTP_PASSWORD
+		}
+	});
 
 	// 2. Fetch Users and Settings
 	const usersSnap = await db.collection('users').get();
@@ -407,7 +417,8 @@ ${JSON.stringify(incomingTxs.map(t => ({ id: t['Transaction ID'], date: t['Ngày
 			manualLockAi: s.manualLockAi || false,
 			isAiProcessed: s.isAiProcessed || false,
 			graceUntil: s.graceUntil || null,
-			aiLockedAt: s.aiLockedAt || null
+			aiLockedAt: s.aiLockedAt || null,
+			notifiedExpiringSoon: s.notifiedExpiringSoon || false
 		};
 
 		// 3. Provision new users
@@ -469,6 +480,59 @@ ${JSON.stringify(incomingTxs.map(t => ({ id: t['Transaction ID'], date: t['Ngày
 			}
 		}
 		const isExpired = effectiveExpireAt ? effectiveExpireAt < now : false;
+		const daysRemaining = effectiveExpireAt ? Math.ceil((effectiveExpireAt.getTime() - now.getTime()) / (1000 * 3600 * 24)) : 0;
+
+		// 3.5. Expiration Warning (3 days)
+		if (daysRemaining === 3 && !customer.notifiedExpiringSoon) {
+			try {
+				await db.collection('settings').doc(customer.uid).set({
+					notifiedExpiringSoon: true
+				}, { merge: true });
+
+				// Send In-App Notification
+				await db.collection('notifications').add({
+					userId: customer.uid,
+					title: '⏳ SẮP HẾT HẠN DỊCH VỤ',
+					body: `Gói dịch vụ của bạn sẽ hết hạn sau 3 ngày nữa (${effectiveExpireAt.toLocaleDateString('vi-VN')}). Vui lòng gia hạn để không bị gián đoạn.`,
+					type: 'expiring_soon',
+					priority: 'high',
+					read: false,
+					createdAt: admin.firestore.FieldValue.serverTimestamp()
+				});
+
+				// Send Email Notification
+				if (process.env.SMTP_PASSWORD && u.email) {
+					await transporter.sendMail({
+						from: `"Dunvex Nexus" <${process.env.SMTP_EMAIL || 'dunvex.green@gmail.com'}>`,
+						to: u.email,
+						subject: '⚠️ CẢNH BÁO: Gói dịch vụ của bạn sắp hết hạn (còn 3 ngày)',
+						html: `
+							<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px; overflow: hidden;">
+								<div style="background: #fef08a; padding: 20px; text-align: center;">
+									<h2 style="color: #ca8a04; margin: 0;">SẮP HẾT HẠN DỊCH VỤ</h2>
+								</div>
+								<div style="padding: 20px; color: #333;">
+									<p>Chào <b>${u.displayName || u.email}</b>,</p>
+									<p>Hệ thống tự động Nexus Bot xin thông báo: Gói dịch vụ của bạn trên hệ thống Dunvex chỉ còn <b>3 ngày</b> nữa là hết hạn (vào ngày <b>${effectiveExpireAt.toLocaleDateString('vi-VN')}</b>).</p>
+									<p>Vui lòng đăng nhập vào ứng dụng, truy cập trang <b>Dịch Vụ & Gói</b> để kiểm tra thông tin thanh toán và gia hạn kịp thời để không bị gián đoạn trải nghiệm.</p>
+									<hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+									<p style="font-size: 13px; color: #666;">
+										Nếu bạn có bất kỳ thắc mắc hay khiếu nại nào, vui lòng liên hệ ngay với chúng tôi qua email: <a href="mailto:dunvex.green@gmail.com" style="color: #16a34a; text-decoration: none; font-weight: bold;">dunvex.green@gmail.com</a>
+									</p>
+								</div>
+							</div>
+						`
+					});
+				}
+			} catch (e) {
+				console.error("Warning notification error:", e);
+			}
+		}
+
+		// Reset notified flag if they renew
+		if (daysRemaining > 3 && customer.notifiedExpiringSoon) {
+			await db.collection('settings').doc(customer.uid).set({ notifiedExpiringSoon: false }, { merge: true });
+		}
 
 		// 4. Grace Period and Locks
 		if (isExpired) {

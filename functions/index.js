@@ -250,7 +250,7 @@ exports.nexusAutonomousBot = onSchedule("every 1 hours", async (event) => {
 					
 					// Initialize Gemini
 					const { GoogleGenerativeAI } = require("@google/generative-ai");
-					const genAI = new GoogleGenerativeAI("AIzaSyD4T4RU6J3g_DeakZrWb7kSS82SKYJRVic");
+					const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 					const model = genAI.getGenerativeModel({ model: "gemini-flash-lite-latest" });
 					
 					const prompt = `You are an AI Accountant. 

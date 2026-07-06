@@ -1175,9 +1175,10 @@ const NexusControl = () => {
 															onChange={(e) => handleUpdatePlan(c.uid, e.target.value)}
 														>
 															<option value="test_expire">TEST HẾT HẠN</option>
-															<option value="free">FREE (60d)</option>
-															<option value="premium_monthly">1 THÁNG (30d)</option>
-															<option value="premium_yearly">1 NĂM (365d)</option>
+															<option value="free">FREE (Mặc định)</option>
+															{addons.map(addon => (
+																<option key={addon.id} value={addon.id}>{addon.name} ({addon.durationDays || addon.durationMonths * 30}d)</option>
+															))}
 															<option value="cancel_payment">⛔ HUỶ ĐĂNG KÝ (KHÓA)</option>
 														</select>
 													</td>
@@ -1270,9 +1271,10 @@ const NexusControl = () => {
 																onChange={(e) => handleUpdatePlan(c.uid, e.target.value)}
 															>
 																<option value="test_expire">TEST HẾT HẠN</option>
-																<option value="free">FREE</option>
-																<option value="premium_monthly">M-PRO</option>
-																<option value="premium_yearly">Y-PRO</option>
+																<option value="free">FREE (Mặc định)</option>
+																{addons.map(addon => (
+																	<option key={addon.id} value={addon.id}>{addon.name} ({addon.durationDays || addon.durationMonths * 30}d)</option>
+																))}
 																<option value="cancel_payment">⛔ HUỶ ĐĂNG KÝ (KHÓA)</option>
 															</select>
 														);

@@ -544,7 +544,7 @@ const NexusControl = () => {
 		let effectiveExpireAt = expireAt;
 		if (!effectiveExpireAt && joinedAt) {
 			const planId = c.planId || (c.isPro ? 'premium_monthly' : 'free');
-			const pkg = packages.find(p => p.id === planId);
+			const pkg = addons.find((p: any) => p.id === planId);
 			effectiveExpireAt = new Date(joinedAt.getTime());
 			
 			if (pkg) {

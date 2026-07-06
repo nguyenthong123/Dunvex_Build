@@ -96,10 +96,9 @@ async function handler(req, res) {
     const chatId = body.message.chat.id;
     const chatType = body.message.chat.type;
     if (chatType === "group" || chatType === "supergroup") {
-      const hasMentionOrCommand = body.message.entities?.some((e) => e.type === "mention" || e.type === "bot_command");
-      const isReply = !!body.message.reply_to_message;
-      const containsBotKeyword = userMessage.toLowerCase().includes("bot") || userMessage.includes("@");
-      if (!hasMentionOrCommand && !isReply && !containsBotKeyword) {
+      const lowerText = userMessage.toLowerCase();
+      const isCalledByName = lowerText.includes("dunvex bot");
+      if (!isCalledByName) {
         return res.status(200).json({ status: "ignored_group_chatter" });
       }
     }
@@ -163,7 +162,7 @@ async function handler(req, res) {
         date: o.fields?.orderDate?.stringValue || ""
       };
     });
-    const systemPrompt = `B\u1EA1n l\xE0 tr\u1EE3 l\xFD AI (Telegram Bot) ph\u1EE5c v\u1EE5 \u0110\u1ED8C QUY\u1EC0N cho t\xE0i kho\u1EA3n: ${adminName} c\u1EE7a ph\u1EA7n m\u1EC1m qu\u1EA3n l\xFD Dunvex Build.
+    const systemPrompt = `B\u1EA1n l\xE0 tr\u1EE3 l\xFD AI (t\xEAn l\xE0 dunvex bot) ph\u1EE5c v\u1EE5 \u0110\u1ED8C QUY\u1EC0N cho t\xE0i kho\u1EA3n: ${adminName} c\u1EE7a ph\u1EA7n m\u1EC1m qu\u1EA3n l\xFD Dunvex Build.
 Nhi\u1EC7m v\u1EE5 c\u1EE7a b\u1EA1n: Tr\u1EA3 l\u1EDDi t\u1EF1 nhi\xEAn, th\xE2n thi\u1EC7n v\xE0 cung c\u1EA5p th\xF4ng tin ch\xEDnh x\xE1c t\u1EEB h\u1EC7 th\u1ED1ng.
 QUY T\u1EAEC QUAN TR\u1ECCNG: 
 1. B\u1EAET BU\u1ED8C S\u1EEC D\u1EE4NG HTML \u0110\u1EC2 \u0110\u1ECANH D\u1EA0NG (v\xED d\u1EE5: <b>ch\u1EEF \u0111\u1EADm</b>, <i>ch\u1EEF nghi\xEAng</i>). 

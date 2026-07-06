@@ -131,13 +131,12 @@ export default async function handler(req: any, res: any) {
     const chatId = body.message.chat.id;
     const chatType = body.message.chat.type; // 'private', 'group', 'supergroup', etc.
 
-    // Nếu là group, chỉ phản hồi khi được tag (@dunvexbot), dùng lệnh (/...), reply tin nhắn của bot, hoặc có chữ "bot"
+    // Nếu là group, chỉ phản hồi khi được gọi đích danh (chứa "dunvex bot")
     if (chatType === 'group' || chatType === 'supergroup') {
-      const hasMentionOrCommand = body.message.entities?.some((e: any) => e.type === 'mention' || e.type === 'bot_command');
-      const isReply = !!body.message.reply_to_message;
-      const containsBotKeyword = userMessage.toLowerCase().includes('bot') || userMessage.includes('@');
+      const lowerText = userMessage.toLowerCase();
+      const isCalledByName = lowerText.includes('dunvex bot');
       
-      if (!hasMentionOrCommand && !isReply && !containsBotKeyword) {
+      if (!isCalledByName) {
         // Bỏ qua tin nhắn trò chuyện bình thường của các thành viên trong nhóm
         return res.status(200).json({ status: 'ignored_group_chatter' });
       }
@@ -220,7 +219,7 @@ export default async function handler(req: any, res: any) {
     });
 
     // 3. Construct prompt
-    const systemPrompt = `Bạn là trợ lý AI (Telegram Bot) phục vụ ĐỘC QUYỀN cho tài khoản: ${adminName} của phần mềm quản lý Dunvex Build.
+    const systemPrompt = `Bạn là trợ lý AI (tên là dunvex bot) phục vụ ĐỘC QUYỀN cho tài khoản: ${adminName} của phần mềm quản lý Dunvex Build.
 Nhiệm vụ của bạn: Trả lời tự nhiên, thân thiện và cung cấp thông tin chính xác từ hệ thống.
 QUY TẮC QUAN TRỌNG: 
 1. BẮT BUỘC SỬ DỤNG HTML ĐỂ ĐỊNH DẠNG (ví dụ: <b>chữ đậm</b>, <i>chữ nghiêng</i>). 

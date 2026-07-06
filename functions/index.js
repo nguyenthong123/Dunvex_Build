@@ -553,7 +553,7 @@ ${JSON.stringify(recentLogs, null, 2)}`;
 			await db.collection('notifications').add({
 				userId: ownerId,
 				title: '🛑 TÀI KHOẢN BỊ KHÓA BỞI AI',
-				body: \`AI Vệ Sĩ đã phát hiện hành vi bất thường. Lý do: \${aiResponse.reason} (Risk: \${aiResponse.riskScore}/100)\`,
+				body: `AI Vệ Sĩ đã phát hiện hành vi bất thường. Lý do: ${aiResponse.reason} (Risk: ${aiResponse.riskScore}/100)`,
 				type: 'error',
 				priority: 'high',
 				read: false,

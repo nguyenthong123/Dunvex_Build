@@ -349,12 +349,12 @@ exports.nexusAutonomousBot = onSchedule("every 1 hours", async (event) => {
 		if (u.email === 'dunvex.green@gmail.com') continue; // Skip master admin
 		const s = settingsMap[u.uid] || {};
 		const customer = {
-			...u,
-			isPro: s.isPro ?? u.isPro ?? false,
-			planId: s.planId || (s.isPro ? 'premium_monthly' : 'free'),
-			subscriptionStatus: s.subscriptionStatus || (u.isPro ? 'active' : 'trial'),
+			uid: u.uid,
+			createdAt: u.createdAt || null,
+			paymentConfirmedAt: s.paymentConfirmedAt || null,
+			planId: s.planId || null,
+			isPro: s.isPro || false,
 			subscriptionExpiresAt: s.subscriptionExpiresAt || null,
-			paymentConfirmedAt: s.paymentConfirmedAt || u.createdAt || null,
 			manualLockOrders: s.manualLockOrders || false,
 			manualLockDebts: s.manualLockDebts || false,
 			manualLockSheets: s.manualLockSheets || false,
@@ -366,6 +366,13 @@ exports.nexusAutonomousBot = onSchedule("every 1 hours", async (event) => {
 
 		// 3. Provision new users
 		if (!customer.planId && !customer.isAiProcessed) {
+			let trialDays = 60;
+			try {
+				const pkgSnap = await db.collection('subscription_packages').where('price', '==', 0).limit(1).get();
+				if (!pkgSnap.empty) {
+					trialDays = Number(pkgSnap.docs[0].data().durationDays) || 60;
+				}
+			} catch (e) {}
 			const expireDate = new Date();
 			expireDate.setDate(expireDate.getDate() + trialDays);
 			await db.collection('settings').doc(customer.uid).set({
@@ -379,19 +386,40 @@ exports.nexusAutonomousBot = onSchedule("every 1 hours", async (event) => {
 			continue;
 		}
 
+		const parseDate = (val) => {
+			if (!val) return null;
+			if (val.toDate) return val.toDate();
+			if (val.seconds) return new Date(val.seconds * 1000);
+			if (val instanceof Date) return val;
+			if (typeof val === 'string') return new Date(val);
+			return null;
+		};
+
 		// Calculate Effective Status
 		const joinedAt = parseDate(customer.paymentConfirmedAt) || parseDate(customer.createdAt);
 		const expireAt = parseDate(customer.subscriptionExpiresAt);
 		let effectiveExpireAt = expireAt;
 		if (!effectiveExpireAt && joinedAt) {
-			const plan = customer.planId || (customer.isPro ? 'premium_monthly' : 'free');
+			const planId = customer.planId || (customer.isPro ? 'premium_monthly' : 'free');
+			const pkg = packages.find(p => p.id === planId);
 			effectiveExpireAt = new Date(joinedAt.getTime());
-			if (plan === 'free') {
-				effectiveExpireAt.setMonth(effectiveExpireAt.getMonth() + 2); // 2 months approx 60 days
-			} else if (plan === 'premium_monthly') {
-				effectiveExpireAt.setMonth(effectiveExpireAt.getMonth() + 1); // 1 month
+			
+			if (pkg) {
+				if (pkg.durationMonths) {
+					effectiveExpireAt.setMonth(effectiveExpireAt.getMonth() + Number(pkg.durationMonths));
+				} else if (pkg.durationDays) {
+					effectiveExpireAt.setDate(effectiveExpireAt.getDate() + Number(pkg.durationDays));
+				} else {
+					effectiveExpireAt.setMonth(effectiveExpireAt.getMonth() + 1);
+				}
 			} else {
-				effectiveExpireAt.setFullYear(effectiveExpireAt.getFullYear() + 1); // 1 year
+				if (planId === 'free') {
+					effectiveExpireAt.setMonth(effectiveExpireAt.getMonth() + 2); // 2 months
+				} else if (planId === 'premium_monthly') {
+					effectiveExpireAt.setMonth(effectiveExpireAt.getMonth() + 1); // 1 month
+				} else {
+					effectiveExpireAt.setFullYear(effectiveExpireAt.getFullYear() + 1); // 1 year
+				}
 			}
 		}
 		const isExpired = effectiveExpireAt ? effectiveExpireAt < now : false;
@@ -469,99 +497,4 @@ exports.nexusAutonomousBot = onSchedule("every 1 hours", async (event) => {
 	}
 
 	console.log("Nexus Autonomous Bot: Cycle completed.");
-});
-
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-
-const genAI = new GoogleGenerativeAI("AIzaSyD4T4RU6J3g_DeakZrWb7kSS82SKYJRVic");
-
-exports.aiSecurityScanner = onDocumentCreated("audit_logs/{logId}", async (event) => {
-	const logDoc = event.data;
-	if (!logDoc) return null;
-	const logData = logDoc.data();
-	const ownerId = logData.ownerId;
-	if (!ownerId) return null;
-
-	// Fetch recent logs for context
-	const logsSnap = await db.collection("audit_logs")
-		.where("ownerId", "==", ownerId)
-		.orderBy("createdAt", "desc")
-		.limit(10)
-		.get();
-	
-	if (logsSnap.empty) return null;
-	
-	const recentLogs = logsSnap.docs.map(d => ({
-		action: d.data().action,
-		details: d.data().details,
-		user: d.data().user,
-		time: d.data().createdAt?.toDate ? d.data().createdAt.toDate().toISOString() : new Date().toISOString()
-	}));
-
-	// Optimize: Only trigger AI if there's a burst of activity (> 4 actions in 60s)
-	const now = Date.now();
-	const recentCount = recentLogs.filter(l => now - new Date(l.time).getTime() < 60000).length;
-	if (recentCount < 4) return null;
-
-	const prompt = `You are "Dunvex Security & Management AI".
-Analyze the following recent system actions performed by users of a specific company.
-Determine if there is malicious intent, bot spam, or rapid destructive behavior (like bulk deleting products, rapid unauthorized exports, spamming API).
-Respond ONLY with a JSON object in this exact format:
-{
-  "riskScore": <number 0-100>,
-  "reason": "<short explanation in Vietnamese>",
-  "action": "<'ignore' or 'lock'>"
-}
-Risk Score >= 80 means HIGH RISK.
-Recent Logs:
-${JSON.stringify(recentLogs, null, 2)}`;
-
-	try {
-		const model = genAI.getGenerativeModel({ model: "gemini-flash-lite-latest" });
-		const result = await model.generateContent(prompt);
-		let text = result.response.text();
-		text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-		const aiResponse = JSON.parse(text);
-
-		if (aiResponse.action === 'lock' || aiResponse.riskScore >= 80) {
-			// Lock the user
-			await db.collection('settings').doc(ownerId).set({
-				manualLockOrders: true,
-				manualLockDebts: true,
-				manualLockSheets: true,
-				manualLockAi: true,
-				aiLockedAt: admin.firestore.FieldValue.serverTimestamp(),
-				aiLockReason: aiResponse.reason
-			}, { merge: true });
-
-			// Record Anomaly
-			await db.collection('ai_anomalies').add({
-				ownerId,
-				email: logData.user,
-				action: 'LOCKED',
-				intent: 'SECURITY_THREAT',
-				success: false,
-				latencyMs: 1200,
-				reason: 'AI_DETECTED_ANOMALY',
-				details: aiResponse.reason,
-				riskScore: aiResponse.riskScore,
-				createdAt: admin.firestore.FieldValue.serverTimestamp()
-			});
-			
-			// Notify Admin
-			await db.collection('notifications').add({
-				userId: ownerId,
-				title: '🛑 TÀI KHOẢN BỊ KHÓA BỞI AI',
-				body: `AI Vệ Sĩ đã phát hiện hành vi bất thường. Lý do: ${aiResponse.reason} (Risk: ${aiResponse.riskScore}/100)`,
-				type: 'error',
-				priority: 'high',
-				read: false,
-				createdAt: admin.firestore.FieldValue.serverTimestamp()
-			});
-		}
-	} catch (e) {
-		console.error("AI Scanner Error:", e);
-	}
-	return null;
 });

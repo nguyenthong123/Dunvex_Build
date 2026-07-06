@@ -462,26 +462,52 @@ const Debts: React.FC = () => {
 			return p.customerId === c.id;
 		});
 
+		const hasDateFilter = !!(fromDate || toDate);
+		let periodOrders = customerOrders;
+		let periodPayments = customerPayments;
+
+		if (hasDateFilter) {
+			const start = fromDate || '0000-00-00';
+			const end = toDate || '9999-99-99';
+			periodOrders = customerOrders.filter(o => {
+				const txDate = o.orderDate || (o.createdAt?.seconds ? new Date(o.createdAt.seconds * 1000).toISOString().split('T')[0] : '');
+				return txDate >= start && txDate <= end;
+			});
+			periodPayments = customerPayments.filter(p => {
+				const txDate = p.date || (p.createdAt?.seconds ? new Date(p.createdAt.seconds * 1000).toISOString().split('T')[0] : '');
+				return txDate >= start && txDate <= end;
+			});
+		}
+
 		// Inclusion of 'Đơn chốt' as current debt
 		const confirmedStatuses = ['Đơn chốt'];
 		const debtOrders = customerOrders.filter(o => confirmedStatuses.includes(o.status));
-		const totalWaited = debtOrders.reduce((sum: any, o: any) => sum + (o.totalAmount || 0), 0);
-		const totalPaid = customerPayments.reduce((sum: any, p: any) => sum + (p.amount || 0), 0);
-		// Use actual debt from database for registered customers, because fetched orders are limited to 500
-		const calcDebt = totalWaited - totalPaid;
+		const lifetimeTotalWaited = debtOrders.reduce((sum: any, o: any) => sum + (o.totalAmount || 0), 0);
+		const lifetimeTotalPaid = customerPayments.reduce((sum: any, p: any) => sum + (p.amount || 0), 0);
+		
+		// Use actual debt from database for registered customers
+		const calcDebt = lifetimeTotalWaited - lifetimeTotalPaid;
 		const currentDebt = c.isGuest ? calcDebt : (Number(c.debt) || 0);
 
-		// Column display values based on status filter
+		// Column display values based on status filter and date filter
 		let displayTotalOrders = 0;
 		if (statusFilter === 'Tất cả') {
-			displayTotalOrders = customerOrders.reduce((sum: any, o: any) => sum + (o.totalAmount || 0), 0);
+			displayTotalOrders = periodOrders.reduce((sum: any, o: any) => sum + (o.totalAmount || 0), 0);
 		} else {
-			displayTotalOrders = customerOrders
+			displayTotalOrders = periodOrders
 				.filter(o => o.status === statusFilter)
 				.reduce((sum: any, o: any) => sum + (o.totalAmount || 0), 0);
 		}
 
-		// Get last transaction
+		// If no date filter is applied, we adjust displayTotalOrders to match currentDebt for accuracy 
+		// (since orders might be missing due to 500 limit).
+		if (!hasDateFilter && (statusFilter === 'Tất cả' || statusFilter === 'Đơn chốt')) {
+			displayTotalOrders = (currentDebt > 0 ? currentDebt : 0) + lifetimeTotalPaid;
+		}
+
+		const totalPaid = hasDateFilter ? periodPayments.reduce((sum: any, p: any) => sum + (p.amount || 0), 0) : lifetimeTotalPaid;
+
+		// Get last transaction (unfiltered for accurate sorting and health)
 		const allTx = [
 			...customerOrders.filter((o: any) => o.status === 'Đơn chốt').map((o: any) => ({ date: o.createdAt || o.orderDate, type: 'order' })),
 			...customerPayments.map((p: any) => ({ date: p.createdAt || p.date, type: 'payment' }))
@@ -490,7 +516,6 @@ const Debts: React.FC = () => {
 			const db = b.date?.seconds ? b.date.seconds * 1000 : (b.date ? new Date(b.date).getTime() : 0);
 			return db - da;
 		});
-
 
 		// Final AI Risk Analysis for each customer
 		const turnoverDays = allTx[0]?.date ? Math.floor((new Date().getTime() - (allTx[0].date?.seconds ? allTx[0].date.seconds * 1000 : new Date(allTx[0].date).getTime())) / (1000 * 60 * 60 * 24)) : 999;
@@ -508,45 +533,23 @@ const Debts: React.FC = () => {
 			lastTx: allTx[0]?.date || null,
 			debtHealth,
 			turnoverDays,
-			hasStatusOrders: statusFilter === 'Tất cả' ? (customerOrders.length > 0 || customerPayments.length > 0 || currentDebt > 0) : (customerOrders.some(o => o.status === statusFilter) || currentDebt > 0),
+			hasStatusOrders: statusFilter === 'Tất cả' ? (periodOrders.length > 0 || periodPayments.length > 0 || currentDebt > 0) : (periodOrders.some(o => o.status === statusFilter) || currentDebt > 0),
 			initials: String(c.name || '').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || 'KH'
 		};
 	}).filter((item: any) => {
 		const matchesName = !searchTerm ||
 			String(item.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
 			String(item.businessName || '').toLowerCase().includes(searchTerm.toLowerCase());
-		const matchesStatus = item.hasStatusOrders;
-
-		if (!matchesStatus) return false;
-
-		// Date filtering logic
+		
+		// When filtering by date, we only show customers who actually had transactions in that period
 		if (fromDate || toDate) {
-			const start = fromDate || '0000-00-00';
-			const end = toDate || '9999-99-99';
-
-			const hasTxInRange = [
-				...orders.filter((o: any) => {
-					const matchCust = item.isGuest
-						? (!o.customerId || !registeredMap.has(o.customerId)) && (o.customerName === item.name || (!o.customerName && item.name === 'Khách vãng lai'))
-						: o.customerId === item.id;
-					return matchCust && (statusFilter === 'Tất cả' || o.status === statusFilter);
-				}),
-				...payments.filter((p: any) => {
-					return item.isGuest
-						? (!p.customerId || !registeredMap.has(p.customerId)) && (p.customerName === item.name || (!p.customerName && item.name === 'Khách vãng lai'))
-						: p.customerId === item.id;
-				})
-			].some((tx: any) => {
-				const txDate = tx.orderDate || tx.date || (tx.createdAt?.seconds ? new Date(tx.createdAt.seconds * 1000).toISOString().split('T')[0] : '');
-				return txDate >= start && txDate <= end;
-			});
+			const hasTxInRange = item.totalOrdersAmount > 0 || item.totalPaymentsAmount > 0;
 			return matchesName && hasTxInRange;
 		}
 
-		return matchesName;
+		const matchesStatus = item.hasStatusOrders;
+		return matchesName && matchesStatus;
 	}).sort((a: any, b: any) => b.currentDebt - a.currentDebt);
-
-
 
 	const totalPages = Math.ceil(aggregatedData.length / ITEMS_PER_PAGE);
 	const paginatedData = aggregatedData.slice(
@@ -638,8 +641,8 @@ const Debts: React.FC = () => {
 		return withEllipsis;
 	};
 
-	// Totals for KPIs
-	const totalWaitedAll = aggregatedData.reduce((sum: any, item: any) => sum + ((item.currentDebt || 0) + (item.totalPaymentsAmount || 0)), 0);
+	// Totals for KPIs (perfectly aligned with displayed table columns)
+	const totalWaitedAll = aggregatedData.reduce((sum: any, item: any) => sum + (item.totalOrdersAmount || 0), 0);
 	const totalPaidAll = aggregatedData.reduce((sum: any, item: any) => sum + (item.totalPaymentsAmount || 0), 0);
 	const totalUnpaidAll = aggregatedData.reduce((sum: any, item: any) => sum + (item.currentDebt > 0 ? item.currentDebt : 0), 0);
 

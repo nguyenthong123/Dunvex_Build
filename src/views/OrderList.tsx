@@ -30,6 +30,9 @@ const OrderList = () => {
 	const [selectedOrder, setSelectedOrder] = useState<any>(null);
 	const [showMobileSearch, setShowMobileSearch] = useState(false);
 	const [currentPage, setCurrentPage] = useState(() => Number(sessionStorage.getItem('orders_currentPage')) || 1);
+	const [fromDate, setFromDate] = useState('');
+	const [toDate, setToDate] = useState('');
+	const [showFilterOptions, setShowFilterOptions] = useState(false);
 
 	useEffect(() => {
 		sessionStorage.setItem('orders_searchTerm', searchTerm);
@@ -50,16 +53,26 @@ const OrderList = () => {
 		}
 	}, [search, navigate]);
 
-	const filteredOrders = orders.filter(order =>
-		(String(order.customerName || '').toLowerCase().includes(searchTerm.toLowerCase())) ||
-		(String(order.customerBusinessName || '').toLowerCase().includes(searchTerm.toLowerCase())) ||
-		(String(order.id || '').toLowerCase().includes(searchTerm.toLowerCase())) ||
-		(String(order.customerPhone || '').includes(searchTerm))
-	);
+	const filteredOrders = orders.filter(order => {
+		const matchesSearch = (String(order.customerName || '').toLowerCase().includes(searchTerm.toLowerCase())) ||
+			(String(order.customerBusinessName || '').toLowerCase().includes(searchTerm.toLowerCase())) ||
+			(String(order.id || '').toLowerCase().includes(searchTerm.toLowerCase())) ||
+			(String(order.customerPhone || '').includes(searchTerm));
+
+		let matchesDate = true;
+		if (fromDate || toDate) {
+			const start = fromDate || '0000-00-00';
+			const end = toDate || '9999-99-99';
+			const txDate = order.orderDate || (order.createdAt?.seconds ? new Date(order.createdAt.seconds * 1000).toISOString().split('T')[0] : '');
+			matchesDate = txDate >= start && txDate <= end;
+		}
+
+		return matchesSearch && matchesDate;
+	});
 
 	useEffect(() => {
 		setCurrentPage(1);
-	}, [searchTerm]);
+	}, [searchTerm, fromDate, toDate]);
 
 	useEffect(() => {
 		const handleOpenSearch = () => {
@@ -345,8 +358,8 @@ const OrderList = () => {
 		}
 	};
 
-	// Stats - Only count "Đơn chốt" orders
-	const confirmedOrders = orders.filter(o => o.status === 'Đơn chốt');
+	// Stats - Only count "Đơn chốt" orders that match filters
+	const confirmedOrders = filteredOrders.filter(o => o.status === 'Đơn chốt');
 	const totalConfirmedCount = confirmedOrders.length;
 	const totalProfit = isAdmin ? confirmedOrders.reduce((sum, o) => sum + (o.totalProfit || 0), 0) : 0;
 	const totalDiscount = confirmedOrders.reduce((sum, o) => sum + (o.discountValue || 0), 0);
@@ -437,6 +450,41 @@ const OrderList = () => {
 						</div>
 					</div>
 				)}
+
+				{/* Filter Options */}
+				<div className="mb-6">
+					<button 
+						onClick={() => setShowFilterOptions(!showFilterOptions)}
+						className="flex items-center gap-2 text-sm font-bold text-[#1A237E] dark:text-indigo-400 bg-white dark:bg-slate-900 px-4 py-2 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 transition-all hover:bg-slate-50 dark:hover:bg-slate-800"
+					>
+						<span className="material-symbols-outlined text-lg">filter_alt</span>
+						Lọc thời gian
+					</button>
+					
+					{showFilterOptions && (
+						<div className="mt-4 bg-white dark:bg-slate-900 p-6 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-top-4 duration-300 transition-colors duration-300">
+							<div>
+								<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">Từ ngày</label>
+								<input
+									type="date"
+									className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#1A237E]/20 dark:focus:ring-indigo-500/20"
+									value={fromDate}
+									onChange={(e) => setFromDate(e.target.value)}
+								/>
+							</div>
+							<div>
+								<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">Đến ngày</label>
+								<input
+									type="date"
+									className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#1A237E]/20 dark:focus:ring-indigo-500/20"
+									value={toDate}
+									onChange={(e) => setToDate(e.target.value)}
+								/>
+							</div>
+						</div>
+					)}
+				</div>
+
 				{/* Stats Cards */}
 				<div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
 					<StatCard icon="receipt_long" label="Tổng các đơn chốt" value={totalConfirmedCount.toString()} color="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400" />

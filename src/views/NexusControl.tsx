@@ -544,7 +544,7 @@ const NexusControl = () => {
 		let effectiveExpireAt = expireAt;
 		if (!effectiveExpireAt && joinedAt) {
 			const planId = c.planId || (c.isPro ? 'premium_monthly' : 'free');
-			const pkg = addons.find((p: any) => p.id === planId);
+			const pkg = addons.find((p: any) => p.id === planId) || (planId === 'free' ? addons.find((p: any) => Number(p.price) === 0) : null);
 			effectiveExpireAt = new Date(joinedAt.getTime());
 			
 			if (pkg) {
@@ -557,7 +557,7 @@ const NexusControl = () => {
 				}
 			} else {
 				if (planId === 'free') {
-					effectiveExpireAt.setMonth(effectiveExpireAt.getMonth() + 2); // Fallback
+					effectiveExpireAt.setMonth(effectiveExpireAt.getMonth() + 1); // Fallback to 1 month
 				} else if (planId === 'premium_monthly') {
 					effectiveExpireAt.setMonth(effectiveExpireAt.getMonth() + 1); // Fallback
 				} else {
@@ -1271,7 +1271,7 @@ const NexusControl = () => {
 																onChange={(e) => handleUpdatePlan(c.uid, e.target.value)}
 															>
 																<option value="test_expire">TEST HẾT HẠN</option>
-																<option value="free">FREE (Mặc định)</option>
+																<option value="free">FREE (30d)</option>
 																{addons.map(addon => (
 																	<option key={addon.id} value={addon.id}>{addon.name} ({addon.durationDays || addon.durationMonths * 30}d)</option>
 																))}

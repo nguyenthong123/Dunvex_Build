@@ -447,7 +447,7 @@ ${JSON.stringify(incomingTxs.map(t => ({ id: t['Transaction ID'], date: t['Ngày
 		let effectiveExpireAt = expireAt;
 		if (!effectiveExpireAt && joinedAt) {
 			const planId = customer.planId || (customer.isPro ? 'premium_monthly' : 'free');
-			const pkg = packages.find(p => p.id === planId);
+			const pkg = packages.find(p => p.id === planId) || (planId === 'free' ? packages.find(p => Number(p.price) === 0) : null);
 			effectiveExpireAt = new Date(joinedAt.getTime());
 			
 			if (pkg) {
@@ -460,7 +460,7 @@ ${JSON.stringify(incomingTxs.map(t => ({ id: t['Transaction ID'], date: t['Ngày
 				}
 			} else {
 				if (planId === 'free') {
-					effectiveExpireAt.setMonth(effectiveExpireAt.getMonth() + 2); // 2 months
+					effectiveExpireAt.setMonth(effectiveExpireAt.getMonth() + 1); // 1 month
 				} else if (planId === 'premium_monthly') {
 					effectiveExpireAt.setMonth(effectiveExpireAt.getMonth() + 1); // 1 month
 				} else {

@@ -658,8 +658,26 @@ const InventoryPage = () => {
 
 
 	const openEdit = (product: any) => {
-		setActionModalInitialProduct(product);
-		setShowActionModal(true);
+		setSelectedProduct(product);
+		setFormData({
+			name: product.name || '',
+			sku: product.sku || '',
+			serialNumber: product.serialNumber || '',
+			category: product.category || 'Tôn lợp',
+			priceImport: product.priceImport || 0,
+			priceSell: product.priceSell || 0,
+			stock: product.stock || 0,
+			unit: product.unit || 'm2',
+			imageUrl: product.imageUrl || '',
+			note: product.note || '',
+			status: product.status || 'Kinh doanh',
+			specification: product.specification || '',
+			packaging: product.packaging || '',
+			density: product.density || '',
+			linkedProductId: product.linkedProductId || '',
+			expiryDate: product.expiryDate || ''
+		});
+		setShowEditForm(true);
 	};
 
 	const openDetail = (product: any) => {

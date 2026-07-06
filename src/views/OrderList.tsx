@@ -70,8 +70,13 @@ const OrderList = () => {
 		return matchesSearch && matchesDate;
 	});
 
+	const isInitialMount = useRef(true);
 	useEffect(() => {
-		setCurrentPage(1);
+		if (isInitialMount.current) {
+			isInitialMount.current = false;
+		} else {
+			setCurrentPage(1);
+		}
 	}, [searchTerm, fromDate, toDate]);
 
 	useEffect(() => {

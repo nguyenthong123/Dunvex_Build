@@ -1125,7 +1125,8 @@ const NexusControl = () => {
 											<th className="px-6 py-5">Doanh nghiệp</th>
 											<th className="px-6 py-5">Email Owner</th>
 											<th className="px-6 py-5">Gói</th>
-											<th className="px-6 py-5">Ngày vào trang</th>
+											<th className="px-6 py-5">Ngày tạo</th>
+											<th className="px-6 py-5">Trạng thái / Hết hạn</th>
 											<th className="px-3 py-5 text-center">Đơn</th>
 											<th className="px-3 py-5 text-center">Nợ</th>
 											<th className="px-3 py-5 text-center">Sheet</th>
@@ -1135,6 +1136,11 @@ const NexusControl = () => {
 									<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
 										{filteredCustomers.map((c) => {
 											const eff = getEffectiveStatus(c);
+											const planId = c.planId || (c.isPro ? 'premium_monthly' : 'free');
+											let planBg = "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700";
+											if (planId.includes('premium')) planBg = "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400 border-amber-200 dark:border-amber-500/30";
+											if (planId === 'free_trial' || planId === 'free') planBg = "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30";
+											
 											return (
 												<tr key={c.id} className="hover:bg-slate-800/30 transition-colors text-xs">
 													<td className="px-6 py-6 font-bold text-slate-900 dark:text-white uppercase truncate max-w-[150px]">
@@ -1143,24 +1149,27 @@ const NexusControl = () => {
 													<td className="px-6 py-6 text-slate-400">{c.email}</td>
 													<td className="px-6 py-6">
 														<select
-															className="bg-slate-800 text-slate-900 dark:text-white text-[10px] font-black rounded-lg px-2 py-1 outline-none border border-slate-700 hover:border-indigo-500 transition-colors cursor-pointer"
-															value={c.planId || (c.isPro ? 'premium_monthly' : 'free')}
+															className={`text-[10px] font-black rounded-lg px-2 py-1.5 outline-none border transition-colors cursor-pointer uppercase ${planBg}`}
+															value={planId}
 															onChange={(e) => handleUpdatePlan(c.uid, e.target.value)}
 														>
-															<option value="test_expire">TEST HẾT HẠN (-1d)</option>
+															<option value="test_expire">TEST HẾT HẠN</option>
 															<option value="free">FREE (60d)</option>
 															<option value="premium_monthly">1 THÁNG (30d)</option>
 															<option value="premium_yearly">1 NĂM (365d)</option>
 															<option value="cancel_payment">⛔ HUỶ ĐĂNG KÝ (KHÓA)</option>
 														</select>
 													</td>
+													<td className="px-6 py-6 text-slate-500 font-medium whitespace-nowrap">
+														{eff.joinedAt ? eff.joinedAt.toLocaleDateString('vi-VN') : '---'}
+													</td>
 													<td className="px-6 py-6 text-slate-500 whitespace-nowrap">
-														<div className={`font-bold text-[10px] ${eff.isExpired ? 'text-rose-500' : 'text-slate-600 dark:text-slate-300'}`}>
+														<div className={`font-bold text-[10px] mb-1 ${eff.isExpired ? 'text-rose-500' : 'text-emerald-500'}`}>
 															{eff.isExpired ? 'ĐÃ HẾT HẠN' : 'ĐANG HIỆU LỰC'}
 														</div>
 														<div className="text-[10px] uppercase font-black tracking-tighter">
 															{eff.expireAt ? eff.expireAt.toLocaleDateString('vi-VN') : '---'}
-															<span className="ml-1 opacity-50">({eff.isExpired ? `Trễ ${eff.daysExpired}D` : `Còn ${eff.daysRemaining}D`})</span>
+															<span className={`ml-1 ${eff.isExpired ? 'text-rose-400' : 'text-slate-400'}`}>({eff.isExpired ? `Trễ ${eff.daysExpired}D` : `Còn ${eff.daysRemaining}D`})</span>
 														</div>
 													</td>
 													<td className="px-3 py-6 text-center">
@@ -1225,17 +1234,25 @@ const NexusControl = () => {
 											<div className="grid grid-cols-2 gap-4">
 												<div className="bg-slate-800/40 p-4 rounded-2xl border border-slate-700/50">
 													<p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-2">Gói dịch vụ</p>
-													<select
-														className="w-full bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-[10px] font-black rounded-lg px-2 py-1.5 outline-none border border-slate-700"
-														value={c.planId || (c.isPro ? 'premium_monthly' : 'free')}
-														onChange={(e) => handleUpdatePlan(c.uid, e.target.value)}
-													>
-														<option value="test_expire">TEST HẾT HẠN</option>
-														<option value="free">FREE</option>
-														<option value="premium_monthly">M-PRO</option>
-														<option value="premium_yearly">Y-PRO</option>
-														<option value="cancel_payment">⛔ HUỶ ĐĂNG KÝ (KHÓA)</option>
-													</select>
+													{(() => {
+														const planId = c.planId || (c.isPro ? 'premium_monthly' : 'free');
+														let planBg = "bg-white text-slate-700 dark:bg-slate-900 dark:text-slate-300 border-slate-200 dark:border-slate-700";
+														if (planId.includes('premium')) planBg = "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400 border-amber-200 dark:border-amber-500/30";
+														if (planId === 'free_trial' || planId === 'free') planBg = "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30";
+														return (
+															<select
+																className={`w-full text-[10px] font-black rounded-lg px-2 py-1.5 outline-none border uppercase ${planBg}`}
+																value={planId}
+																onChange={(e) => handleUpdatePlan(c.uid, e.target.value)}
+															>
+																<option value="test_expire">TEST HẾT HẠN</option>
+																<option value="free">FREE</option>
+																<option value="premium_monthly">M-PRO</option>
+																<option value="premium_yearly">Y-PRO</option>
+																<option value="cancel_payment">⛔ HUỶ ĐĂNG KÝ (KHÓA)</option>
+															</select>
+														);
+													})()}
 												</div>
 												<div className="bg-slate-800/40 p-4 rounded-2xl border border-slate-700/50 flex flex-col justify-center">
 													<p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">{eff.isExpired ? 'Đã dùng' : 'Còn lại'}</p>

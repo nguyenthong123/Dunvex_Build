@@ -1175,7 +1175,7 @@ const NexusControl = () => {
 															onChange={(e) => handleUpdatePlan(c.uid, e.target.value)}
 														>
 															<option value="test_expire">TEST HẾT HẠN</option>
-															<option value="free">FREE (Mặc định)</option>
+															<option value="free">FREE (30d)</option>
 															{addons.map(addon => (
 																<option key={addon.id} value={addon.id}>{addon.name} ({addon.durationDays || addon.durationMonths * 30}d)</option>
 															))}

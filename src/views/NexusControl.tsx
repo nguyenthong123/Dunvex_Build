@@ -1125,7 +1125,8 @@ const NexusControl = () => {
 											<th className="px-6 py-5">Doanh nghiệp</th>
 											<th className="px-6 py-5">Email Owner</th>
 											<th className="px-6 py-5">Gói</th>
-											<th className="px-6 py-5">Ngày tạo</th>
+											<th className="px-6 py-5 whitespace-nowrap">Ngày vào (Tạo TK)</th>
+											<th className="px-6 py-5 whitespace-nowrap">Ngày đăng ký (Gia hạn)</th>
 											<th className="px-6 py-5">Trạng thái / Hết hạn</th>
 											<th className="px-3 py-5 text-center">Đơn</th>
 											<th className="px-3 py-5 text-center">Nợ</th>
@@ -1161,7 +1162,10 @@ const NexusControl = () => {
 														</select>
 													</td>
 													<td className="px-6 py-6 text-slate-500 font-medium whitespace-nowrap">
-														{eff.joinedAt ? eff.joinedAt.toLocaleDateString('vi-VN') : '---'}
+														{eff.createdAt ? eff.createdAt.toLocaleDateString('vi-VN') : '---'}
+													</td>
+													<td className="px-6 py-6 text-indigo-500 dark:text-indigo-400 font-bold whitespace-nowrap">
+														{eff.paymentConfirmedAt ? eff.paymentConfirmedAt.toLocaleDateString('vi-VN') : '---'}
 													</td>
 													<td className="px-6 py-6 text-slate-500 whitespace-nowrap">
 														<div className={`font-bold text-[10px] mb-1 ${eff.isExpired ? 'text-rose-500' : 'text-emerald-500'}`}>
@@ -1256,8 +1260,11 @@ const NexusControl = () => {
 												</div>
 												<div className="bg-slate-800/40 p-4 rounded-2xl border border-slate-700/50 flex flex-col justify-center">
 													<p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">{eff.isExpired ? 'Đã dùng' : 'Còn lại'}</p>
-													<p className={`font-black text-sm uppercase ${eff.isExpired ? 'text-rose-400' : 'text-slate-900 dark:text-white'}`}>{eff.isExpired ? `${eff.daysUsed} ngày` : `${eff.daysRemaining} ngày`}</p>
-													{eff.joinedAt && <p className="text-[8px] text-slate-600 font-medium mt-1">Vào: {eff.joinedAt.toLocaleDateString('vi-VN')}</p>}
+													<p className={`font-black text-sm uppercase mb-1 ${eff.isExpired ? 'text-rose-400' : 'text-slate-900 dark:text-white'}`}>{eff.isExpired ? `${eff.daysUsed} ngày` : `${eff.daysRemaining} ngày`}</p>
+													<div className="flex flex-col gap-0.5">
+														{eff.createdAt && <p className="text-[8px] text-slate-500 font-medium">Tạo TK: {eff.createdAt.toLocaleDateString('vi-VN')}</p>}
+														{eff.paymentConfirmedAt && <p className="text-[8px] text-indigo-400 font-medium">Gia hạn: {eff.paymentConfirmedAt.toLocaleDateString('vi-VN')}</p>}
+													</div>
 												</div>
 											</div>
 

@@ -270,17 +270,21 @@ exports.nexusAutonomousBot = onSchedule("every 1 hours", async (event) => {
 								hasAIAssistant: true
 							}, { merge: true });
 						} else {
-							let durDays = 30;
+							let durMonths = 1;
 							try {
 								const planSnap = await db.collection('subscription_packages').doc(request.planId).get();
-								if (planSnap.exists && planSnap.data().durationDays) {
-									durDays = Number(planSnap.data().durationDays);
+								if (planSnap.exists) {
+									if (planSnap.data().durationMonths) {
+										durMonths = Number(planSnap.data().durationMonths);
+									} else if (planSnap.data().durationDays) {
+										durMonths = Math.round(Number(planSnap.data().durationDays) / 30) || 1;
+									}
 								} else {
-									durDays = (planId === 'premium_yearly' || planId === 'addon_yearly') ? 365 : 30;
+									durMonths = (planId === 'premium_yearly' || planId === 'addon_yearly') ? 12 : 1;
 								}
 							} catch (e) {}
 							const expireDate = new Date();
-							expireDate.setDate(expireDate.getDate() + durDays);
+							expireDate.setMonth(expireDate.getMonth() + durMonths);
 
 							await db.collection('settings').doc(request.ownerId).set({
 								subscriptionStatus: 'active',
@@ -381,9 +385,14 @@ exports.nexusAutonomousBot = onSchedule("every 1 hours", async (event) => {
 		let effectiveExpireAt = expireAt;
 		if (!effectiveExpireAt && joinedAt) {
 			const plan = customer.planId || (customer.isPro ? 'premium_monthly' : 'free');
-			const totalDays = plan === 'free' ? 60 : plan === 'premium_monthly' ? 30 : 365;
 			effectiveExpireAt = new Date(joinedAt.getTime());
-			effectiveExpireAt.setDate(effectiveExpireAt.getDate() + totalDays);
+			if (plan === 'free') {
+				effectiveExpireAt.setMonth(effectiveExpireAt.getMonth() + 2); // 2 months approx 60 days
+			} else if (plan === 'premium_monthly') {
+				effectiveExpireAt.setMonth(effectiveExpireAt.getMonth() + 1); // 1 month
+			} else {
+				effectiveExpireAt.setFullYear(effectiveExpireAt.getFullYear() + 1); // 1 year
+			}
 		}
 		const isExpired = effectiveExpireAt ? effectiveExpireAt < now : false;
 

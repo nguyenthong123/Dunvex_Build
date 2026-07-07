@@ -463,7 +463,7 @@ const CustomerList = () => {
 	const filteredCustomers = customers.filter(c => {
 		const matchesSearch =
 			isMatch(c.name || '', searchTerm) ||
-			isMatch(c.businessName || '', searchTerm) ||
+			isMatch(c.name || '', searchTerm) ||
 			isMatch(c.phone || '', searchTerm) ||
 			isMatch(c.route || '', searchTerm) ||
 			isMatch(c.email || '', searchTerm);
@@ -678,9 +678,9 @@ const CustomerList = () => {
 												{(customer.businessName || customer.name || 'K')[0].toUpperCase()}
 											</div>
 											<div>
-												<div className="font-black text-slate-900 dark:text-indigo-400 uppercase tracking-tight">{customer.businessName || customer.name}</div>
+												<div className="font-black text-slate-900 dark:text-indigo-400 uppercase tracking-tight">{customer.name}</div>
 												<div className="text-[10px] text-slate-500 dark:text-slate-500 font-black tracking-widest">
-													{customer.businessName ? customer.name : `#${customer.id.slice(-6)}`}
+													{`#${customer.id.slice(-6)}`}
 												</div>
 											</div>
 										</div>
@@ -822,9 +822,9 @@ const CustomerList = () => {
 															{(customer.name?.[0] || 'K').toUpperCase()}
 														</div>
 														<div>
-															<div className="font-black text-[#1A237E] dark:text-indigo-400 uppercase truncate max-w-[150px]">{customer.businessName || customer.name}</div>
+															<div className="font-black text-[#1A237E] dark:text-indigo-400 uppercase truncate max-w-[150px]">{customer.name}</div>
 															<div className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-																{customer.businessName ? customer.name : customer.phone}
+																{customer.phone}
 															</div>
 														</div>
 													</div>
@@ -895,16 +895,6 @@ const CustomerList = () => {
 												className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
 												value={formData.name}
 												onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-											/>
-										</div>
-										<div>
-											<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Tên cơ sở kinh doanh</label>
-											<input
-												type="text"
-												className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
-												placeholder="VD: Cửa hàng VLXD Hưng Thịnh"
-												value={formData.businessName}
-												onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
 											/>
 										</div>
 									</div>

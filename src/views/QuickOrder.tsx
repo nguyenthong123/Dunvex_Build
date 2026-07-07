@@ -302,7 +302,7 @@ const QuickOrder = () => {
 				let foundCust = customers.find(c => {
 					if (data.customer.phone && c.phone === data.customer.phone) return true;
 					const cName = normalizeSmart(c.name);
-					const cBusiness = normalizeSmart(c.businessName || '');
+					const cBusiness = normalizeSmart(c.name || '');
 					return cName === queryName || cBusiness === queryName;
 				});
 
@@ -310,7 +310,7 @@ const QuickOrder = () => {
 				if (!foundCust) {
 					foundCust = customers.find(c => {
 						const cName = normalizeSmart(c.name);
-						const cBusiness = normalizeSmart(c.businessName || '');
+						const cBusiness = normalizeSmart(c.name || '');
 						
 						if (data.customer.phone && c.phone === data.customer.phone) return true;
 						
@@ -323,7 +323,7 @@ const QuickOrder = () => {
 				}
 				if (foundCust) {
 					setSelectedCustomer(foundCust);
-					setSearchCustomerQuery(foundCust.businessName || foundCust.name);
+					setSearchCustomerQuery(foundCust.name);
 					isCustomerFound = true;
 				} else {
 					setSearchCustomerQuery(data.customer.name);
@@ -695,7 +695,7 @@ const QuickOrder = () => {
 				const queryNorm = normalizeSmart(searchCustomerQuery);
 				const matched = customers.find(c => 
 					normalizeSmart(c.name) === queryNorm || 
-					normalizeSmart(c.businessName || '') === queryNorm ||
+					normalizeSmart(c.name || '') === queryNorm ||
 					c.phone === searchCustomerQuery
 				);
 				if (matched) finalCustomer = matched;
@@ -725,7 +725,7 @@ const QuickOrder = () => {
 				customerName: finalCustomer?.name || searchCustomerQuery || 'Khách vãng lai',
 				customerId: finalCustomer?.id || null,
 				customerPhone: finalCustomer?.phone || '',
-				customerBusinessName: finalCustomer?.businessName || '',
+				customerBusinessName: finalCustomer?.name || '',
 				orderDate: orderDate,
 				items: processedItems,
 				subTotal: Number(subTotal) || 0,
@@ -935,7 +935,7 @@ const QuickOrder = () => {
 
 	const filteredCustomers = customers.filter(c =>
 		isMatch(c.name || '', searchCustomerQuery) ||
-		isMatch(c.businessName || '', searchCustomerQuery) ||
+		isMatch(c.name || '', searchCustomerQuery) ||
 		isMatch(c.phone || '', searchCustomerQuery)
 	);
 
@@ -1052,20 +1052,20 @@ const QuickOrder = () => {
 														return;
 													}
 													setSelectedCustomer(c);
-													setSearchCustomerQuery(c.businessName || c.name);
+													setSearchCustomerQuery(c.name);
 													setShowCustomerResults(false);
 												}}
 											>
 												<div className="flex-1 min-w-0 pr-4">
 													<div className="flex items-center gap-2 mb-0.5">
 														<p className={`font-black text-sm uppercase truncate ${isOverLimit ? 'text-slate-500' : 'text-slate-800 dark:text-slate-200 group-hover:text-[#f27121]'}`}>
-															{c.businessName || c.name}
+															{c.name}
 														</p>
 														{isOverLimit && (
 															<span className="px-1.5 py-0.5 rounded-lg bg-rose-500 text-white text-[8px] font-black uppercase animate-pulse shrink-0">Vượt hạn mức</span>
 														)}
 													</div>
-													{c.businessName && (
+													{(
 														<p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1 uppercase">
 															<span className="material-symbols-outlined text-[12px]">person</span>
 															{c.name}

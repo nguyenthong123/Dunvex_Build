@@ -675,7 +675,7 @@ const CustomerList = () => {
 									<td className="py-4 px-6">
 										<div className="flex items-center gap-3">
 											<div className="size-10 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 flex items-center justify-center font-black text-xs border border-blue-200 dark:border-blue-800">
-												{(customer.businessName || customer.name || 'K')[0].toUpperCase()}
+												{(customer.name || 'K')[0].toUpperCase()}
 											</div>
 											<div>
 												<div className="font-black text-slate-900 dark:text-indigo-400 uppercase tracking-tight">{customer.name}</div>
@@ -1207,10 +1207,10 @@ const CustomerList = () => {
 									</div>
 									<div className="min-w-0">
 										<h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight truncate">{selectedCustomer.name}</h3>
-										{selectedCustomer.businessName && (
+										{(
 											<p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1">
 												<span className="material-symbols-outlined text-sm">store</span>
-												{selectedCustomer.businessName}
+												{selectedCustomer.name}
 											</p>
 										)}
 										<div className="flex items-center gap-2 mt-1.5">

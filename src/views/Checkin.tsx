@@ -189,7 +189,7 @@ const Checkin = () => {
                 ...formData,
                 imageUrl: formData.imageUrls[0] || '',
                 customerName: customer?.name || 'Vãng lai',
-                customerBusinessName: customer?.businessName || '',
+                customerBusinessName: customer?.name || '',
                 userId: auth.currentUser?.uid || "",
                 userEmail: auth.currentUser?.email,
                 ownerId: owner.ownerId,
@@ -404,10 +404,10 @@ const Checkin = () => {
                                         </div>
                                         {sheetOpen && (
                                             <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-2xl max-h-48 overflow-y-auto z-50">
-                                                {customers.filter(c => (c.businessName || c.name || '').toLowerCase().includes((formData.customerName || '').toLowerCase())).slice(0, 8).map(c => (
+                                                {customers.filter(c => (c.name || '').toLowerCase().includes((formData.customerName || '').toLowerCase())).slice(0, 8).map(c => (
                                                     <button key={c.id} className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-between"
-                                                        onClick={() => { setFormData(p => ({ ...p, customerName: c.businessName || c.name, customerId: c.id, address: c.address || '' })); setSheetOpen(false); }}>
-                                                        <span className="text-sm font-bold">{c.businessName || c.name}</span>
+                                                        onClick={() => { setFormData(p => ({ ...p, customerName: c.name, customerId: c.id, address: c.address || '' })); setSheetOpen(false); }}>
+                                                        <span className="text-sm font-bold">{c.name}</span>
                                                         <span className="text-[9px] text-slate-400">{c.address?.split(',')[0]}</span>
                                                     </button>
                                                 ))}

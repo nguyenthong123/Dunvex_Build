@@ -134,7 +134,7 @@ const CustomerMap: React.FC<CustomerMapProps> = ({ customers = [], onClose }) =>
 		? []
 		: validCustomers.filter(c =>
 			(c.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-			(c.businessName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+			(c.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
 			(c.phone || '').includes(searchQuery)
 		).slice(0, 5);
 
@@ -275,7 +275,7 @@ const CustomerMap: React.FC<CustomerMapProps> = ({ customers = [], onClose }) =>
 										<div className="p-1 min-w-[150px]">
 											<div className="flex items-center gap-2 mb-2">
 												<div className="size-8 rounded-lg bg-blue-50 dark:bg-blue-900/40 text-blue-600 flex items-center justify-center font-black text-xs shrink-0">
-													{(customer.businessName || customer.name || 'K')[0].toUpperCase()}
+													{(customer.name || 'K')[0].toUpperCase()}
 												</div>
 												<div className="overflow-hidden">
 													<h4 className="font-black text-[#1A237E] dark:text-indigo-300 uppercase text-xs leading-none truncate">

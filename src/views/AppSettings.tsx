@@ -267,7 +267,7 @@ const AppSettings = () => {
 											
 											const match = customersList.find(c => {
 												const cName = normalize(c.name || '');
-												const cBiz = normalize(c.businessName || '');
+												const cBiz = normalize(c.name || '');
 												
 												const exactMatch = (cName && (cName === oName || cName === oBiz)) || 
 																   (cBiz && (cBiz === oName || cBiz === oBiz));

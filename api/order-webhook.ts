@@ -222,9 +222,10 @@ export default async function handler(req: any, res: any) {
     const customerName = body.customerName || '';
     const customerPhone = body.customerPhone || '';
     const customerEmail = body.customerEmail || '';
-    let customerId = body.customerId || null;
+    // Luôn tìm customer qua tên/phone/email thay vì dùng customerId từ web (có thể sai)
+    let customerId: string | null = null;
 
-    if (!customerId) {
+    {
       let matchedCust: any = null;
       const filters: any[] = [
         {

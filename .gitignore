@@ -39,6 +39,38 @@ upload_script.gs
 GAS_*
 *.gs
 !upload_script.gs.example
+# VPS/Server code (không deploy lên Vercel)
+server/
+server.js
+ecosystem.config.cjs
+deploy_vps.sh
+deploy.tar.gz
+dunvex_nginx.conf
+cors.json
+.npm-cache/
+
+# Test & debug scripts
+test-*.js
+test-*.cjs
+check_*.js
+check_*.cjs
+fix_*.js
+fix_*.cjs
+refactor_*.cjs
+query_*.js
+
+# Google Apps Script
+*.gs
+appsscript.json
+.clasp.json
+.claspignore
+
+# Firebase (local only)
+.firebase/
+firebase.json
+firestore.indexes.json
+firestore.rules
+
 # Project Roadmap/Internal
 # PROJECT_SITEMAP.md
 .vercel

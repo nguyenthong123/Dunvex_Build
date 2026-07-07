@@ -340,7 +340,7 @@ export default async function handler(req: any, res: any) {
       totalProfit: fDouble(subTotal - totalCost),
       status: fString('Đơn chốt'),
       note: fString(body.note || 'Đơn từ Webhook API'),
-      orderDate: fString(new Date().toISOString()),
+      orderDate: fString(body.orderDate ? new Date(body.orderDate).toISOString() : new Date().toISOString()),
       createdAt: fTs(),
       updatedAt: fTs(),
       createdBy: fString(body.ownerId),
@@ -357,6 +357,19 @@ export default async function handler(req: any, res: any) {
         stock: fDouble(newStock),
         updatedAt: fTs(),
       });
+    }
+
+    // Cập nhật công nợ khách hàng
+    if (customerId) {
+      try {
+        const custDoc = await restGet(token, `customers/${customerId}`);
+        const currentDebt = Number(custDoc?.fields?.debt?.doubleValue || custDoc?.fields?.debt?.integerValue || 0);
+        await restUpdate(token, `customers/${customerId}`, {
+          debt: fDouble(currentDebt + totalAmount)
+        });
+      } catch (debtErr) {
+        console.error('Failed to update customer debt in webhook:', debtErr);
+      }
     }
 
     // Gửi thông báo Telegram

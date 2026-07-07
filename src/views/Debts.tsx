@@ -539,7 +539,7 @@ const Debts: React.FC = () => {
 	}).filter((item: any) => {
 		const matchesName = !searchTerm ||
 			String(item.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-			String(item.businessName || '').toLowerCase().includes(searchTerm.toLowerCase());
+			String(item.name || '').toLowerCase().includes(searchTerm.toLowerCase());
 		
 		// When filtering by date, we only show customers who actually had transactions in that period
 		if (fromDate || toDate) {
@@ -1094,11 +1094,11 @@ const Debts: React.FC = () => {
 													<td className="px-8 py-5">
 														<div className="flex items-center gap-4">
 															<div className={`size-12 rounded-2xl bg-[#1A237E]/10 dark:bg-indigo-500/10 flex items-center justify-center text-[#1A237E] dark:text-indigo-400 font-black text-sm shrink-0 shadow-sm border border-slate-200 dark:border-slate-800`}>
-																{(row.businessName || row.name || 'KH').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+																{(row.name || 'KH').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
 															</div>
 															<div>
-																<p className="text-sm font-black text-slate-900 dark:text-indigo-400 uppercase tracking-tight leading-tight">{row.businessName || row.name}</p>
-																<p className="text-[10px] text-slate-500 dark:text-slate-500 font-black mt-1 tracking-wider uppercase">{row.phone || (row.businessName ? row.name : row.id.slice(-6))}</p>
+																<p className="text-sm font-black text-slate-900 dark:text-indigo-400 uppercase tracking-tight leading-tight">{row.name}</p>
+																<p className="text-[10px] text-slate-500 dark:text-slate-500 font-black mt-1 tracking-wider uppercase">{row.phone || row.id.slice(-6)}</p>
 															</div>
 														</div>
 													</td>
@@ -1163,10 +1163,10 @@ const Debts: React.FC = () => {
 										<div key={row.id} className="p-5 active:bg-slate-50 dark:active:bg-slate-800 transition-colors" onClick={() => openStatement(row)}>
 											<div className="flex items-center gap-4 mb-4">
 												<div className={`size-12 rounded-2xl bg-[#1A237E]/10 dark:bg-indigo-500/10 flex items-center justify-center text-[#1A237E] dark:text-indigo-400 font-black text-sm shrink-0 border border-slate-200 dark:border-slate-800 transition-colors`}>
-													{(row.businessName || row.name || 'KH').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+													{(row.name || 'KH').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
 												</div>
 												<div className="flex-1 min-w-0">
-													<p className="text-sm font-black text-slate-900 dark:text-indigo-400 uppercase tracking-tight leading-tight truncate">{row.businessName || row.name}</p>
+													<p className="text-sm font-black text-slate-900 dark:text-indigo-400 uppercase tracking-tight leading-tight truncate">{row.name}</p>
 													<p className="text-[10px] text-slate-500 dark:text-slate-500 font-bold mt-1 tracking-wider uppercase">{row.phone || '#' + row.id.slice(-6).toUpperCase()}</p>
 												</div>
 												<div className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest ${
@@ -1506,25 +1506,22 @@ const Debts: React.FC = () => {
 									{showPaymentCustomerResults && (
 										<div className="absolute z-[200] top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden max-h-64 overflow-y-auto custom-scrollbar">
 											{aggregatedData
-												.filter(c => (c.totalOrdersAmount > 0 || c.totalPaymentsAmount > 0) && isMatch(c.businessName || c.name || '', paymentCustomerSearchQuery))
+												.filter(c => (c.totalOrdersAmount > 0 || c.totalPaymentsAmount > 0) && isMatch(c.name || '', paymentCustomerSearchQuery))
 												.slice(0, 50)
 												.map(c => (
 													<div
 														key={c.id}
 														className="px-5 py-4 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors border-b border-slate-50 dark:border-slate-700 last:border-none"
 														onClick={() => {
-															setPaymentData({ ...paymentData, customerId: c.id, customerName: c.businessName || c.name });
-															setPaymentCustomerSearchQuery(c.businessName || c.name);
+															setPaymentData({ ...paymentData, customerId: c.id, customerName: c.name });
+															setPaymentCustomerSearchQuery(c.name);
 															setShowPaymentCustomerResults(false);
 														}}
 													>
 														<div className="flex flex-col">
 															<span className="text-sm font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight">
-																{c.businessName || c.name}
+																{c.name}
 															</span>
-															{c.businessName && c.name !== c.businessName && (
-																<span className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{c.name}</span>
-															)}
 															<div className="flex items-center gap-3 mt-1">
 																<span className="text-[10px] text-slate-400 font-bold uppercase">{c.phone || '#' + c.id.slice(-6).toUpperCase()}</span>
 																{c.currentDebt > 0 && (
@@ -1534,7 +1531,7 @@ const Debts: React.FC = () => {
 														</div>
 													</div>
 												))}
-											{aggregatedData.filter(c => isMatch(c.businessName || c.name || '', paymentCustomerSearchQuery)).length === 0 && (
+											{aggregatedData.filter(c => isMatch(c.name || '', paymentCustomerSearchQuery)).length === 0 && (
 												<div className="px-5 py-8 text-center text-slate-400 text-[10px] font-black uppercase tracking-widest">
 													Không tìm thấy khách hàng
 												</div>
@@ -1753,7 +1750,7 @@ const Debts: React.FC = () => {
 									<div className="px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3">
 										<div>
 											<span className="font-black text-slate-900 text-base sm:text-lg uppercase tracking-tight">
-												{selectedCustomer.businessName || selectedCustomer.name}
+												{selectedCustomer.name}
 											</span>
 											<p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
 												Mã đối tác: #{selectedCustomer.id?.slice(-6).toUpperCase()}

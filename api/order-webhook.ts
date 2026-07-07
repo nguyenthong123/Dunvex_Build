@@ -131,6 +131,9 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Method not allowed. Use POST.' });
   }
 
+  // DEBUG: log request source
+  console.log('[order-webhook-vercel] Request from:', req.headers['origin'] || req.headers['referer'] || 'unknown', '| body.customerId:', (req.body as any)?.customerId, '| items[0].productId:', (req.body as any)?.items?.[0]?.productId, '| customerName:', (req.body as any)?.customerName, '| items count:', (req.body as any)?.items?.length);
+
   const apiKey = req.headers['x-api-key'] || req.headers['X-Api-Key'];
   if (!apiKey) return res.status(401).json({ error: 'Missing x-api-key header' });
 

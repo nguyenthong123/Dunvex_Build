@@ -240,22 +240,9 @@ export default async function handler(req: any, res: any) {
         }
       ];
 
-      // 1. Match by email
-      if (customerEmail) {
-        const docs = await runStructuredQuery(token, 'customers', [
-          ...filters,
-          {
-            fieldFilter: {
-              field: { fieldPath: 'email' },
-              op: 'EQUAL',
-              value: { stringValue: customerEmail }
-            }
-          }
-        ]);
-        if (docs.length > 0) matchedCust = docs[0];
-      }
+      // KHÔNG match bằng email vì email từ web thường là email người đăng nhập, không phải khách hàng
 
-      // 2. Match by phone
+      // 1. Match by phone
       if (!matchedCust && customerPhone) {
         const docs = await runStructuredQuery(token, 'customers', [
           ...filters,

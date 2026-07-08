@@ -172,8 +172,9 @@ const PriceList = () => {
 	};
 
 	// 📸 Upload ảnh sản phẩm lên Cloudinary
-	const handleImageUpload = async (rowIdx: number, file: File) => {
-		setUploadingImageIdx(rowIdx);
+	const handleImageUpload = async (targetRow: any, file: File) => {
+		// Dùng tham chiếu đối tượng để tìm đúng hàng (không phụ thuộc index)
+		setUploadingImageIdx(priceData.indexOf(targetRow));
 		try {
 			const fData = new FormData();
 			fData.append('file', file);
@@ -182,9 +183,10 @@ const PriceList = () => {
 			const res = await fetch('https://api.cloudinary.com/v1_1/dtx0uvb4e/image/upload', { method: 'POST', body: fData });
 			const data = await res.json();
 			if (data.secure_url) {
-				const updated = [...priceData];
-				updated[rowIdx] = { ...updated[rowIdx], imageUrl: data.secure_url };
-				setPriceData(updated);
+				// 🔧 Dùng functional update + tham chiếu — không lệ thuộc vào index
+				setPriceData(prev => prev.map(item =>
+					item === targetRow ? { ...item, imageUrl: data.secure_url } : item
+				));
 				showToast('✅ Đã tải ảnh lên!', 'success');
 			} else {
 				showToast('❌ Lỗi tải ảnh', 'error');
@@ -196,10 +198,11 @@ const PriceList = () => {
 		}
 	};
 
-	const handleImageRemove = (rowIdx: number) => {
-		const updated = [...priceData];
-		updated[rowIdx] = { ...updated[rowIdx], imageUrl: '' };
-		setPriceData(updated);
+	const handleImageRemove = (targetRow: any) => {
+		// 🔧 Dùng functional update + tham chiếu — không lệ thuộc vào index
+		setPriceData(prev => prev.map(item =>
+			item === targetRow ? { ...item, imageUrl: '' } : item
+		));
 	};
 
 	// Kiểm tra có item nào có ảnh không
@@ -1058,10 +1061,7 @@ const PriceList = () => {
 												</tr>
 											</thead>
 											<tbody className="divide-y divide-slate-200">
-												{filteredData.map((row, rowIdx) => {
-													// 🔧 Lấy index THỰC trong priceData
-													const realIdx = priceData.indexOf(row);
-													return (
+												{filteredData.map((row, rowIdx) => (
 													<tr key={rowIdx} className="hover:bg-orange-50/30 transition-colors">
 														<td className="py-4 px-4 text-[12px] font-black text-slate-500 text-center border border-slate-200 bg-slate-50/30">{rowIdx + 1}</td>
 														{/* 📸 Ảnh SP */}
@@ -1074,14 +1074,14 @@ const PriceList = () => {
 																		className="w-16 h-16 object-cover rounded-lg border border-slate-200 shadow-sm group-hover:scale-[2.5] group-hover:z-50 group-hover:shadow-xl transition-transform duration-200 origin-center"
 																	/>
 																	<button
-																		onClick={() => handleImageRemove(realIdx)}
+																		onClick={() => handleImageRemove(row)}
 																		className="absolute -top-2 -right-2 size-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
 																		title="Xoá ảnh"
 																	>
 																		<Trash2 size={10} />
 																	</button>
 																</div>
-															) : uploadingImageIdx === realIdx ? (
+															) : uploadingImageIdx === priceData.indexOf(row) ? (
 																<Loader2 className="w-5 h-5 animate-spin text-orange-500 mx-auto" />
 															) : (
 																<button
@@ -1100,7 +1100,7 @@ const PriceList = () => {
 																className="hidden"
 																onChange={(e) => {
 																	const file = e.target.files?.[0];
-																	if (file) handleImageUpload(realIdx, file);
+																	if (file) handleImageUpload(row, file);
 																	e.target.value = '';
 																}}
 															/>
@@ -1143,7 +1143,7 @@ const PriceList = () => {
 															);
 														})}
 													</tr>
-												)})}
+												))}
 											</tbody>
 										</table>
 									</div>

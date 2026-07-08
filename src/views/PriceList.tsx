@@ -1058,7 +1058,10 @@ const PriceList = () => {
 												</tr>
 											</thead>
 											<tbody className="divide-y divide-slate-200">
-												{filteredData.map((row, rowIdx) => (
+												{filteredData.map((row, rowIdx) => {
+													// 🔧 Lấy index THỰC trong priceData
+													const realIdx = priceData.indexOf(row);
+													return (
 													<tr key={rowIdx} className="hover:bg-orange-50/30 transition-colors">
 														<td className="py-4 px-4 text-[12px] font-black text-slate-500 text-center border border-slate-200 bg-slate-50/30">{rowIdx + 1}</td>
 														{/* 📸 Ảnh SP */}
@@ -1071,14 +1074,14 @@ const PriceList = () => {
 																		className="w-16 h-16 object-cover rounded-lg border border-slate-200 shadow-sm group-hover:scale-[2.5] group-hover:z-50 group-hover:shadow-xl transition-transform duration-200 origin-center"
 																	/>
 																	<button
-																		onClick={() => handleImageRemove(rowIdx)}
+																		onClick={() => handleImageRemove(realIdx)}
 																		className="absolute -top-2 -right-2 size-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
 																		title="Xoá ảnh"
 																	>
 																		<Trash2 size={10} />
 																	</button>
 																</div>
-															) : uploadingImageIdx === rowIdx ? (
+															) : uploadingImageIdx === realIdx ? (
 																<Loader2 className="w-5 h-5 animate-spin text-orange-500 mx-auto" />
 															) : (
 																<button
@@ -1097,7 +1100,7 @@ const PriceList = () => {
 																className="hidden"
 																onChange={(e) => {
 																	const file = e.target.files?.[0];
-																	if (file) handleImageUpload(rowIdx, file);
+																	if (file) handleImageUpload(realIdx, file);
 																	e.target.value = '';
 																}}
 															/>
@@ -1140,7 +1143,7 @@ const PriceList = () => {
 															);
 														})}
 													</tr>
-												))}
+												)})}
 											</tbody>
 										</table>
 									</div>

@@ -5,6 +5,7 @@ import { auth, db } from '../services/firebase';
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
+import SalesChart from '../components/profile/SalesChart';
 
 const Profile = () => {
     const navigate = useNavigate();
@@ -17,9 +18,6 @@ const Profile = () => {
         displayName: '',
         phone: '',
         email: '',
-        bankCode: '',
-        bankAccountNumber: '',
-        bankAccountName: ''
     });
 
     useEffect(() => {
@@ -37,9 +35,6 @@ const Profile = () => {
                 displayName: snap.exists() ? (snap.data().displayName || '') : (auth.currentUser?.displayName || ''),
                 phone: snap.exists() ? (snap.data().phone || '') : '',
                 email: auth.currentUser?.email || '',
-                bankCode: snap.exists() ? (snap.data().bankCode || '') : '',
-                bankAccountNumber: snap.exists() ? (snap.data().bankAccountNumber || '') : '',
-                bankAccountName: snap.exists() ? (snap.data().bankAccountName || '') : '',
             });
         } catch (e) {
             console.error('Load profile error:', e);
@@ -55,21 +50,8 @@ const Profile = () => {
                 displayName: profile.displayName.trim(),
                 phone: profile.phone.trim(),
                 email: auth.currentUser.email || '',
-                bankCode: profile.bankCode.trim(),
-                bankAccountNumber: profile.bankAccountNumber.trim(),
-                bankAccountName: profile.bankAccountName.trim().toUpperCase(),
                 updatedAt: serverTimestamp(),
             }, { merge: true });
-
-            try {
-                await setDoc(doc(db, 'users', uid), {
-                    bankCode: profile.bankCode.trim(),
-                    bankAccountNumber: profile.bankAccountNumber.trim(),
-                    bankAccountName: profile.bankAccountName.trim().toUpperCase(),
-                }, { merge: true });
-            } catch (e) {
-                console.log('User is likely owner, ignore write to users collection');
-            }
 
             setSaved(true);
             showToast('✅ Đã lưu thông tin cá nhân!', 'success');
@@ -170,58 +152,6 @@ const Profile = () => {
                         <p className="text-[10px] text-slate-400 mt-1 ml-1">Email đăng nhập — không thể thay đổi</p>
                     </div>
 
-                    {/* Bank Info */}
-                    <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-4">
-                        <h3 className="text-sm font-black uppercase text-slate-700 dark:text-slate-300">Thông tin nhận lương</h3>
-                        
-                        <div>
-                            <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-slate-500 mb-2">Ngân hàng</label>
-                            <select
-                                value={profile.bankCode}
-                                onChange={(e) => setProfile(prev => ({ ...prev, bankCode: e.target.value }))}
-                                className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-                            >
-                                <option value="">-- Chọn ngân hàng --</option>
-                                <option value="MB">MBBank (Quân Đội)</option>
-                                <option value="VCB">Vietcombank</option>
-                                <option value="TCB">Techcombank</option>
-                                <option value="ACB">ACB</option>
-                                <option value="VTB">VietinBank</option>
-                                <option value="BIDV">BIDV</option>
-                                <option value="VPB">VPBank</option>
-                                <option value="STB">Sacombank</option>
-                                <option value="TPB">TPBank</option>
-                                <option value="VIB">VIB</option>
-                                <option value="HDB">HDBank</option>
-                                <option value="SHB">SHB</option>
-                                <option value="SEA">SeABank</option>
-                                <option value="VBA">Agribank</option>
-                            </select>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-slate-500 mb-2">Số tài khoản</label>
-                                <input
-                                    type="text"
-                                    value={profile.bankAccountNumber}
-                                    onChange={(e) => setProfile(prev => ({ ...prev, bankAccountNumber: e.target.value }))}
-                                    placeholder="VD: 123456789"
-                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-                                />
-                            </div>
-                            <div>
-                                <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-slate-500 mb-2">Tên chủ tài khoản</label>
-                                <input
-                                    type="text"
-                                    value={profile.bankAccountName}
-                                    onChange={(e) => setProfile(prev => ({ ...prev, bankAccountName: e.target.value.toUpperCase() }))}
-                                    placeholder="VD: NGUYEN VAN A"
-                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all uppercase"
-                                />
-                            </div>
-                        </div>
-                    </div>
-
                     {/* Save Button */}
                     <button
                         onClick={handleSave}
@@ -256,9 +186,26 @@ const Profile = () => {
                     </p>
                 </div>
             </div>
+
+            {/* 📊 Biểu đồ doanh thu cá nhân */}
+            <div className="mt-6 border-t border-slate-100 dark:border-slate-800 pt-6">
+                <SalesChart ownerId={owner.ownerId || ''} userEmail={auth.currentUser?.email || ''} />
+            </div>
+
+            {/* Chân trang — đồng bộ với MainLayout */}
+            <footer className="py-12 px-6 text-center border-t border-slate-50 dark:border-slate-800/50 mt-auto transition-colors duration-300">
+                <div className="flex flex-col items-center gap-2 opacity-30 dark:opacity-20 hover:opacity-100 transition-opacity duration-500">
+                    <div className="size-8 bg-slate-400 dark:bg-slate-500 rounded-lg flex items-center justify-center mb-1">
+                        <span className="text-white text-lg">🏗️</span>
+                    </div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                        Dunvex<span className="text-slate-900 dark:text-white">Build</span> Management System
+                    </p>
+                    <p className="text-[8px] font-bold text-slate-400">© 2026 Developed by Antigravity AI Engine</p>
+                </div>
+            </footer>
         </div>
     );
 };
-
 
 export default Profile;

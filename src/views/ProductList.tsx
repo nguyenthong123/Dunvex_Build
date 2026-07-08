@@ -92,7 +92,8 @@ const ProductList = () => {
 		packaging: '',
 		density: '',
 		linkedProductId: '',
-		expiryDate: ''
+		expiryDate: '',
+		applyOverheadCost: false,
 	});
 
 
@@ -607,7 +608,8 @@ const ProductList = () => {
 			packaging: '',
 			density: '',
 			linkedProductId: '',
-			expiryDate: ''
+			expiryDate: '',
+			applyOverheadCost: false,
 		});
 		setSelectedProduct(null);
 	};
@@ -631,7 +633,8 @@ const ProductList = () => {
 			packaging: product.packaging || '',
 			density: product.density || '',
 			linkedProductId: product.linkedProductId || '',
-			expiryDate: product.expiryDate || ''
+			expiryDate: product.expiryDate || '',
+			applyOverheadCost: product.applyOverheadCost || false,
 		});
 		setShowEditForm(true);
 	};

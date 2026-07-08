@@ -61,6 +61,37 @@ const QuickOrder = () => {
 	const [lineItems, setLineItems] = useState<any[]>([
 		{ id: crypto.randomUUID(), category: '', productId: '', name: '', serialNumber: '', qty: '', price: 0, buyPrice: 0, unit: '', packaging: '', density: '', maxStock: 0 }
 	]);
+	const [overheadRate, setOverheadRate] = useState(8.5); // Mặc định 8.5%
+
+	// Đọc hệ số chi phí từ settings
+	useEffect(() => {
+		if (!owner.ownerId) return;
+		const unsub = onSnapshot(doc(db, 'settings', owner.ownerId), (snap) => {
+			if (snap.exists() && snap.data().overheadRate != null) {
+				setOverheadRate(Number(snap.data().overheadRate) || 8.5);
+			}
+		});
+		return () => unsub();
+	}, [owner.ownerId]);
+
+	// Hàm tính giá vốn hiệu quả (có áp hệ số chi phí nếu sản phẩm được tick)
+	const getEffectiveCost = (item: any) => {
+		const buyPrice = Number(item.buyPrice) || 0;
+		const product = products.find(p => p.id === item.productId);
+		const hasOverhead = product?.applyOverheadCost === true;
+		console.log('🔍 getEffectiveCost:', { productId: item.productId, productName: product?.name, applyOverheadCost: product?.applyOverheadCost, hasOverhead, overheadRate, buyPrice });
+		if (hasOverhead && overheadRate > 0) {
+			return buyPrice * (1 + overheadRate / 100);
+		}
+		return buyPrice;
+	};
+
+	// Check if any line item has overhead applied
+	const hasOverheadItems = lineItems.some(item => {
+		if (!item.productId) return false;
+		const prod = products.find(p => p.id === item.productId);
+		return prod?.applyOverheadCost === true && overheadRate > 0;
+	});
 
 	// Adjustments
 	const [shippingFee, setShippingFee] = useState(0);
@@ -570,7 +601,7 @@ const QuickOrder = () => {
 
 	const totalCostActual = lineItems.reduce((sum, item) => {
 		const qty = Number(item.qty) || 0;
-		const cost = Number(item.buyPrice) || 0;
+		const cost = getEffectiveCost(item);
 		return sum + (qty * cost);
 	}, 0);
 	// ✅ FIX: Profit = Revenue - Cost - Discount (shipping is not profit, it's pass-through)
@@ -702,7 +733,14 @@ const QuickOrder = () => {
 			}
 
 		// ✅ FIX: Calculate accurate cost & profit from FIFO-processed items
-		const totalCostFinal = processedItems.reduce((sum, it) => sum + (Number(it.buyPrice) || 0) * (Number(it.qty) || 0), 0);
+		const totalCostFinal = processedItems.reduce((sum, it) => {
+			const prod = products.find(p => p.id === it.id);
+			let effectiveCost = Number(it.buyPrice) || 0;
+			if (prod?.applyOverheadCost && overheadRate > 0) {
+				effectiveCost = effectiveCost * (1 + overheadRate / 100);
+			}
+			return sum + effectiveCost * (Number(it.qty) || 0);
+		}, 0);
 		// Profit = subTotal (gross revenue) - cost - discount (shipping is pass-through, not profit)
 		const totalProfitFinal = subTotal - totalCostFinal - Number(discountAmt);
 
@@ -1591,7 +1629,12 @@ const QuickOrder = () => {
 												<div className="flex flex-col gap-1 items-end">
 													<div className="flex items-center gap-4">
 														<span className="text-[10px] font-bold text-indigo-400 uppercase">Giá vốn ước tính:</span>
-														<span className="text-sm font-black text-slate-800 dark:text-slate-200">{totalCostActual.toLocaleString('vi-VN')} đ</span>
+														<span className="text-sm font-black text-slate-800 dark:text-slate-200">
+															{totalCostActual.toLocaleString('vi-VN')} đ
+															{hasOverheadItems && (
+																<span className="ml-1.5 px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded text-[9px] font-bold">+{overheadRate}% CP</span>
+															)}
+														</span>
 													</div>
 													<div className="flex items-center gap-4">
 														<span className="text-[10px] font-bold text-indigo-400 uppercase">Lợi nhuận ước tính:</span>

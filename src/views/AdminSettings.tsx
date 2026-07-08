@@ -4,7 +4,7 @@ import {
 	Settings, User, Bell, Shield, Database, Globe, Moon, Sun, Users, Activity,
 	FileText, Save, Plus, Trash2, Edit2, Edit3, CheckCircle, XCircle, Crown, Clock,
 	Rocket, Lock, RefreshCcw, ExternalLink, MapPin, Calendar, X, AlertTriangle,
-	ChevronLeft, ChevronRight, Download, PieChart, QrCode
+	ChevronLeft, ChevronRight, Download
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { auth, db, functions } from '../services/firebase';
@@ -55,7 +55,8 @@ const AdminSettings = () => {
 		workEnd: '17:30',
 		geofenceRadius: 100,
 		attendanceViewers: [] as string[],
-		autoSyncSchedule: 'none'
+		autoSyncSchedule: 'none',
+		overheadRate: 8.5,
 	});
 	const [syncing, setSyncing] = useState(false);
 	const [syncRange, setSyncRange] = useState({
@@ -750,10 +751,6 @@ const AdminSettings = () => {
 	// Filter user list based on hierarchy:
 	// - Staff Admin can only see Sales/Warehouse/etc. 
 	// - Owner (Super Admin) sees everyone.
-	const salaryUserList = useMemo(() => {
-		return userList;
-	}, [userList]);
-
 	const filteredUserList = useMemo(() => {
 		if (!owner.isEmployee) return userList; // Super Admin sees all
 
@@ -935,7 +932,51 @@ const AdminSettings = () => {
 								</div>
 							</div>
 
+							<div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800">
+								<div className="flex items-center gap-4 mb-6">
+									<div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-xl text-amber-600 dark:text-amber-400">
+										<Crown size={24} />
+									</div>
+									<div>
+										<h3 className="text-xl font-bold dark:text-white">Gói Dịch Vụ</h3>
+									</div>
+								</div>
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+									<div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl flex items-center gap-4">
+										<div className={`p-3 rounded-xl ${owner.isPro ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>{owner.isPro ? <CheckCircle /> : <XCircle />}</div>
+										<div>
+											<p className="text-xs font-black text-slate-400 uppercase tracking-widest">Gói đăng ký</p>
+											<p className="text-lg font-black text-slate-800 dark:text-white uppercase">
+												{owner.planId === 'premium_yearly' ? 'Premium (1 Năm)' : owner.planId === 'premium_monthly' ? 'Premium (1 Tháng)' : owner.isPro ? 'Premium Pro' : 'Dùng thử'}
+											</p>
+										</div>
+									</div>
+									<div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl flex items-center gap-4">
+										<div className="p-3 rounded-xl bg-blue-50 text-blue-600"><Clock /></div>
+										<div>
+											<p className="text-xs font-black text-slate-400 uppercase tracking-widest">Thời gian còn lại</p>
+											<p className="text-lg font-black text-slate-800 dark:text-white">
+												{(() => {
+													const expireAt = owner.subscriptionExpiresAt || owner.trialEndsAt;
+													if (expireAt) {
+														const expireDate = expireAt.toDate ? expireAt.toDate() : new Date(expireAt);
+														const days = Math.ceil((expireDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+														return days > 0 ? `${days} ngày` : 'Đã hết hạn';
+													}
+													return owner.subscriptionStatus === 'active' ? 'Vô thời hạn' : 'Hết hạn';
+												})()}
+											</p>
+										</div>
+									</div>
+								</div>
+							</div>
 
+							{/* Hệ số chi phí vận hành */}
+							<div className="md:col-span-2 border-t border-slate-100 dark:border-slate-800 pt-6">
+								<h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Hệ số chi phí vận hành</h4>
+								<p className="text-[10px] text-slate-400 mb-3">Áp dụng cho sản phẩm được tick "Áp hệ số chi phí". Lợi nhuận = Giá bán - (Giá nhập × (1 + Hệ số%))</p>
+								<InputSection label="Hệ số chi phí (%)" type="number" value={companyInfo.overheadRate ?? 8.5} onChange={(v: string) => setCompanyInfo({ ...companyInfo, overheadRate: Number(v) })} />
+							</div>
 						</div>
 					)}
 
@@ -956,7 +997,7 @@ const AdminSettings = () => {
 							handleUpdateUser={handleUpdateUser}
 						/>
 						<div className="mt-8">
-							<SalarySummary userList={salaryUserList} ownerId={owner.ownerId} />
+							<SalarySummary userList={filteredUserList} ownerId={owner.ownerId} />
 						</div>
 						</>
 					)}
@@ -1582,31 +1623,15 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 	const [salaryData, setSalaryData] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [month, setMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
-	const [standardDays, setStandardDays] = useState(() => {
-		const [year, mon] = new Date().toISOString().slice(0, 7).split('-').map(Number);
-		let days = 0;
-		const date = new Date(year, mon - 1, 1);
-		while (date.getMonth() === mon - 1) {
-			if (date.getDay() !== 0) days++;
-			date.setDate(date.getDate() + 1);
-		}
-		return days;
-	});
 	const [expandedUser, setExpandedUser] = useState<string | null>(null);
 	const [rawCheckins, setRawCheckins] = useState<any[]>([]);
 	const [rawAttendance, setRawAttendance] = useState<any[]>([]);
-	const [customQRAmounts, setCustomQRAmounts] = useState<Record<string, string>>({});
 
 	useEffect(() => {
-		if (!ownerId) return;
-		if (userList.length === 0) {
-			setSalaryData([]);
-			setLoading(false);
-			return;
-		}
+		if (!ownerId || userList.length === 0) return;
 		setExpandedUser(null);
 		loadSalaryData();
-	}, [ownerId, userList, month, standardDays]);
+	}, [ownerId, userList, month]);
 
 	const loadSalaryData = async () => {
 		setLoading(true);
@@ -1662,15 +1687,13 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 				});
 
 				const daysWorked = Object.keys(dailyDetails).length;
+				const WORKING_DAYS = 26; // Ngày công chuẩn / tháng
 				const monthlyWage = Number(user.monthlyWage) || 0;
 				const dailyWage = monthlyWage > 0 
-					? Math.round(monthlyWage / standardDays)
+					? Math.round(monthlyWage / WORKING_DAYS)
 					: (Number(user.dailyWage) || 0); // fallback lương ngày cũ
 				return {
 					userId: user.id,
-					bankCode: user.bankCode || "",
-					bankAccountNumber: user.bankAccountNumber || "",
-					bankAccountName: user.bankAccountName || "",
 					name: user.displayName || user.email?.split('@')[0] || 'N/A',
 					email: user.email,
 					role: user.role,
@@ -1695,140 +1718,22 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 		if (!user?.dailyDetails) return [];
 		return Object.entries(user.dailyDetails)
 			.sort(([a], [b]) => b.localeCompare(a))
-			.map(([day, detail]: [string, any]) => {
-				// Determine initial check-in time and note
-				let checkinTimeStr = null;
-				let checkinNote = '';
-
-				if (detail.checkin) {
+			.map(([day, detail]: [string, any]) => ({
+				day,
+				checkinTime: detail.checkin ? (() => {
 					const dt = detail.checkin.createdAt?.toDate?.() || new Date(detail.checkin.createdAt);
-					checkinTimeStr = dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-					checkinNote = detail.checkin.note || (typeof detail.checkin.location === 'object' ? 'Có toạ độ GPS' : detail.checkin.location) || '';
-				} else if (detail.attendances && detail.attendances.length > 0) {
-					// Fallback for office workers who only have attendance_logs
-					const firstLog = detail.attendances[0];
-					const dt = firstLog.checkInAt?.toDate?.() || firstLog.createdAt?.toDate?.() || new Date(firstLog.createdAt);
-					checkinTimeStr = dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-					checkinNote = firstLog.note || (typeof firstLog.location === 'object' ? 'Có toạ độ GPS' : firstLog.location) || '';
-				}
-
-				const mappedAttendances: any[] = [];
-				detail.attendances.forEach((a: any) => {
-					if (a.type) {
-						// For leave requests or manual check-ins
-						const dt = a.createdAt?.toDate?.() || new Date(a.createdAt);
-						mappedAttendances.push({
-							time: dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-							type: a.type,
-							note: a.note || ''
-						});
-					} else {
-						// For office attendance logs
-						const dtIn = a.checkInAt?.toDate?.() || a.createdAt?.toDate?.() || new Date(a.createdAt);
-						mappedAttendances.push({
-							time: dtIn.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-							type: a.status || 'check-in',
-							note: a.note || (typeof a.location === 'object' ? 'Tại văn phòng' : a.location) || ''
-						});
-
-						if (a.checkOutAt) {
-							const dtOut = a.checkOutAt?.toDate?.() || new Date(a.checkOutAt);
-							mappedAttendances.push({
-								time: dtOut.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-								type: 'checkout',
-								note: a.checkOutNote || (typeof a.checkOutLocation === 'object' ? 'Tại văn phòng' : a.checkOutLocation) || ''
-							});
-						}
-					}
-				});
-
-				return {
-					day,
-					checkinTime: checkinTimeStr,
-					checkinNote: checkinNote,
-					attendances: mappedAttendances
-				};
-			});
-	};
-
-	const handlePrintPdf = (userId: string, userName: string) => {
-		const details = getDetailForUser(userId);
-		const printWindow = window.open('', '', 'width=800,height=600');
-		if (!printWindow) return;
-
-		let html = `
-		<html>
-			<head>
-				<title>Chi tiết chấm công - ${userName} - Tháng ${month}</title>
-				<style>
-					body { font-family: Arial, sans-serif; padding: 20px; color: #333; line-height: 1.5; }
-					h2 { text-align: center; color: #1e3a8a; margin-bottom: 5px; }
-					.subtitle { text-align: center; color: #64748b; margin-top: 0; margin-bottom: 30px; font-size: 14px; }
-					table { border-collapse: collapse; width: 100%; margin-top: 20px; font-size: 14px; }
-					th, td { border: 1px solid #e2e8f0; padding: 10px; text-align: left; }
-					th { background-color: #f8fafc; color: #334155; font-weight: bold; text-transform: uppercase; font-size: 12px; }
-					.badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: bold; }
-					.badge-in { background: #dcfce7; color: #166534; }
-					.badge-out { background: #fee2e2; color: #991b1b; }
-					.badge-req { background: #fef9c3; color: #854d0e; }
-					.time { font-weight: bold; color: #0f172a; }
-					.note { color: #64748b; font-size: 12px; }
-				</style>
-			</head>
-			<body>
-				<h2>BẢNG CHI TIẾT CHẤM CÔNG</h2>
-				<p class="subtitle">Tháng ${month} - Nhân viên: <strong>${userName}</strong></p>
-				<table>
-					<thead>
-						<tr>
-							<th style="width: 15%">Ngày</th>
-							<th style="width: 25%">Giờ vào (Check-in)</th>
-							<th style="width: 60%">Chi tiết trong ngày</th>
-						</tr>
-					</thead>
-					<tbody>
-		`;
-
-		details.forEach((d: any) => {
-			html += `
-				<tr>
-					<td><strong>${d.day}</strong></td>
-					<td>
-						${d.checkinTime ? `<span class="time">${d.checkinTime}</span><br/><span class="note">${d.checkinNote}</span>` : '<span style="color:#94a3b8">Không có</span>'}
-					</td>
-					<td>
-						${d.attendances.length > 0 ? d.attendances.map((a: any) => {
-							let badge = 'badge-in';
-							let typeText = 'Check-in';
-							if (a.type === 'checkout') { badge = 'badge-out'; typeText = 'Check-out'; }
-							else if (a.type === 'request') { badge = 'badge-req'; typeText = 'Đơn từ'; }
-							
-							return `<div style="margin-bottom: 4px;"><span class="badge ${badge}">${typeText}</span> <span class="time">${a.time}</span> <span class="note">- ${a.note}</span></div>`;
-						}).join('') : '<span style="color:#94a3b8">Không có</span>'}
-					</td>
-				</tr>
-			`;
-		});
-
-		if (details.length === 0) {
-			html += `<tr><td colspan="3" style="text-align: center; color: #94a3b8; padding: 20px;">Không có dữ liệu chấm công trong tháng này.</td></tr>`;
-		}
-
-		html += `
-					</tbody>
-				</table>
-				<div style="margin-top: 30px; text-align: right; font-size: 14px; color: #475569;">
-					<p>Ngày xuất: ${new Date().toLocaleDateString('vi-VN')}</p>
-				</div>
-				<script>
-					window.onload = function() { window.print(); window.close(); }
-				</script>
-			</body>
-		</html>
-		`;
-
-		printWindow.document.write(html);
-		printWindow.document.close();
+					return dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+				})() : null,
+				checkinNote: detail.checkin?.note || detail.checkin?.location || '',
+				attendances: detail.attendances.map((a: any) => {
+					const dt = a.createdAt?.toDate?.() || new Date(a.createdAt);
+					return {
+						time: dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+						type: a.type || a.status || 'check',
+						note: a.note || a.location || ''
+					};
+				})
+			}));
 	};
 
 	const formatPrice = (n: number) => n.toLocaleString('vi-VN');
@@ -1836,53 +1741,28 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 
 	return (
 		<div className="space-y-4">
-			<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+			<div className="flex items-center justify-between">
 				<h3 className="text-lg font-black uppercase text-slate-800 dark:text-white">💰 Bảng lương nhân viên</h3>
-				<div className="flex items-center gap-4">
-					<div className="flex items-center gap-2">
-						<span className="text-xs font-bold text-slate-500 whitespace-nowrap">Ngày công chuẩn:</span>
-						<input
-							type="number"
-							value={standardDays}
-							onChange={e => setStandardDays(Number(e.target.value) || 1)}
-							className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-bold dark:text-white outline-none w-20 text-center"
-							min="1"
-							max="31"
-						/>
-					</div>
-					<input
-						type="month"
-						value={month}
-						onChange={e => {
-							setMonth(e.target.value);
-							if (e.target.value) {
-								const [year, mon] = e.target.value.split('-').map(Number);
-								let days = 0;
-								const date = new Date(year, mon - 1, 1);
-								while (date.getMonth() === mon - 1) {
-									if (date.getDay() !== 0) days++;
-									date.setDate(date.getDate() + 1);
-								}
-								setStandardDays(days);
-							}
-						}}
-						className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-sm font-bold dark:text-white outline-none"
-					/>
-				</div>
+				<input
+					type="month"
+					value={month}
+					onChange={e => setMonth(e.target.value)}
+					className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-sm font-bold dark:text-white outline-none"
+				/>
 			</div>
 			{loading ? (
 				<div className="text-center py-8 text-slate-400">Đang tính...</div>
 			) : (
-				<div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-visible">
+				<div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
 					<table className="w-full text-left">
 						<thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-400">
 							<tr>
-								<th className="px-4 py-3 rounded-tl-2xl">Nhân viên</th>
+								<th className="px-4 py-3">Nhân viên</th>
 								<th className="px-4 py-3 text-center">Ngày làm</th>
 								<th className="px-4 py-3 text-center">Lượt chấm</th>
 								<th className="px-4 py-3 text-right">Lương/tháng</th>
 								<th className="px-4 py-3 text-right">Lương/ngày</th>
-								<th className="px-4 py-3 text-right rounded-tr-2xl">Thực lãnh</th>
+								<th className="px-4 py-3 text-right">Thực lãnh</th>
 							</tr>
 						</thead>
 						<tbody className="divide-y divide-slate-50 dark:divide-slate-800">
@@ -1917,57 +1797,17 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 												{d.dailyWage > 0 ? formatPrice(d.dailyWage) + 'đ' : <span className="text-slate-300 italic">-</span>}
 											</td>
 											<td className="px-4 py-3 text-right">
-												<div className="flex items-center justify-end gap-3">
-													<span className={`font-black text-sm ${d.totalSalary > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-300'}`}>
-														{formatPrice(d.totalSalary)}đ
-													</span>
-													{d.bankCode && d.bankAccountNumber && (() => {
-														const rawStr = customQRAmounts[d.userId] !== undefined ? customQRAmounts[d.userId].replace(/\D/g, '') : '';
-														const amountToUse = customQRAmounts[d.userId] !== undefined ? Number(rawStr) : d.totalSalary;
-														if (amountToUse > 0) {
-															return (
-																<div className="relative group flex items-center">
-																	<button onClick={(e) => e.stopPropagation()} className="p-1.5 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition-colors">
-																		<QrCode className="w-4 h-4" />
-																	</button>
-																	<div className="absolute right-0 bottom-full mb-2 hidden group-hover:block z-50">
-																		<div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl p-3 border border-slate-100 dark:border-slate-700 w-48 text-center">
-																			<p className="text-[10px] font-black uppercase text-slate-400 mb-2">Quét để chuyển khoản</p>
-																			<img 
-																				src={`https://img.vietqr.io/image/${d.bankCode}-${d.bankAccountNumber}-compact2.png?amount=${amountToUse}&addInfo=${encodeURIComponent("Thanh toan luong " + month.replace("-", ""))}&accountName=${encodeURIComponent(d.bankAccountName || "")}`}
-																				className="w-full aspect-square object-contain rounded-lg" 
-																				alt="QR" 
-																			/>
-																			<p className="text-xs font-bold text-slate-700 dark:text-slate-200 mt-2">{d.bankAccountName}</p>
-																			<p className="text-[10px] text-slate-500">{d.bankCode}</p>
-																		</div>
-																	</div>
-																</div>
-															);
-														}
-														return null;
-													})()}
-												</div>
+												<span className={`font-black text-sm ${d.totalSalary > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-300'}`}>
+													{formatPrice(d.totalSalary)}đ
+												</span>
 											</td>
 										</tr>
-										{isExpanded && (
+										{isExpanded && details.length > 0 && (
 											<tr key={`detail-${i}`}>
 												<td colSpan={6} className="px-4 py-3 bg-slate-50/50 dark:bg-slate-800/30">
-													<div className="flex flex-col lg:flex-row gap-6">
-														<div className="flex-1 space-y-2">
-															<div className="flex items-center gap-3 mb-2">
-																<p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">📅 Chi tiết chấm công tháng {month}</p>
-																<button
-																	onClick={() => handlePrintPdf(d.userId, d.name)}
-																	className="px-2 py-1.5 hover:bg-white dark:hover:bg-slate-700 text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 rounded-lg transition-colors border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm flex items-center gap-1.5"
-																	title="Xuất PDF chi tiết chấm công"
-																>
-																	<Download size={12} />
-																	<span className="text-[10px] font-bold">Xuất PDF</span>
-																</button>
-															</div>
-															{details.length > 0 ? (
-																<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+													<div className="space-y-2">
+														<p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">📅 Chi tiết chấm công tháng {month}</p>
+														<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
 															{details.map((day: any, di: number) => (
 																<div key={di} className="bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-700 p-3">
 																	<div className="flex items-center justify-between mb-2">
@@ -1997,56 +1837,7 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 																	)}
 																</div>
 															))}
-																</div>
-															) : (
-																<p className="text-sm text-slate-400">Không có dữ liệu chấm công</p>
-															)}
 														</div>
-
-														{d.bankCode && d.bankAccountNumber && (
-															<div className="w-full lg:w-64 shrink-0 bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-100 dark:border-slate-700 text-center flex flex-col items-center justify-center">
-																<p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3">Mã QR Thanh Toán</p>
-																<div className="w-full mb-3">
-																	<input 
-																		type="text"
-																		value={customQRAmounts[d.userId] !== undefined 
-																			? customQRAmounts[d.userId] 
-																			: (d.totalSalary ? formatPrice(d.totalSalary) : '')}
-																		onChange={(e) => {
-																			const val = e.target.value.replace(/\D/g, '');
-																			if (val === '') {
-																				setCustomQRAmounts(prev => ({ ...prev, [d.userId]: '' }));
-																			} else {
-																				setCustomQRAmounts(prev => ({ ...prev, [d.userId]: formatPrice(Number(val)) }));
-																			}
-																		}}
-																		className="w-full text-center px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-bold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-																		placeholder="Số tiền cần chuyển"
-																	/>
-																</div>
-																{(() => {
-																	const rawStr = customQRAmounts[d.userId] !== undefined ? customQRAmounts[d.userId].replace(/\D/g, '') : '';
-																	const amountToUse = customQRAmounts[d.userId] !== undefined 
-																		? Number(rawStr) 
-																		: d.totalSalary;
-																	if (amountToUse > 0) {
-																		return (
-																			<>
-																				<img
-																					src={`https://img.vietqr.io/image/${d.bankCode}-${d.bankAccountNumber}-compact2.png?amount=${amountToUse}&addInfo=${encodeURIComponent("Thanh toan luong " + month.replace("-", ""))}&accountName=${encodeURIComponent(d.bankAccountName || "")}`}
-																					alt="VietQR"
-																					className="w-48 h-48 rounded-xl object-contain mb-3"
-																				/>
-																				<p className="text-xs font-bold text-slate-600 dark:text-slate-300">{d.bankAccountName || ""}</p>
-																				<p className="text-[10px] font-medium text-slate-500">{d.bankCode} - {d.bankAccountNumber}</p>
-																			</>
-																		);
-																	} else {
-																		return <p className="text-sm text-slate-400 mt-4">Vui lòng nhập số tiền {'>'} 0</p>;
-																	}
-																})()}
-															</div>
-														)}
 													</div>
 												</td>
 											</tr>
@@ -2057,8 +1848,8 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 						</tbody>
 						<tfoot className="bg-indigo-50 dark:bg-indigo-900/20">
 							<tr>
-								<td colSpan={5} className="px-4 py-3 text-xs font-black uppercase text-indigo-600 dark:text-indigo-400 text-right rounded-bl-2xl">TỔNG CỘNG</td>
-								<td className="px-4 py-3 text-right font-black text-lg text-indigo-600 dark:text-indigo-400 rounded-br-2xl">{formatPrice(totalAll)}đ</td>
+								<td colSpan={5} className="px-4 py-3 text-xs font-black uppercase text-indigo-600 dark:text-indigo-400 text-right">TỔNG CỘNG</td>
+								<td className="px-4 py-3 text-right font-black text-lg text-indigo-600 dark:text-indigo-400">{formatPrice(totalAll)}đ</td>
 							</tr>
 						</tfoot>
 					</table>

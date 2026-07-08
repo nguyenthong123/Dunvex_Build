@@ -120,7 +120,13 @@ service cloud.firestore {
       allow create: if allowCreateByOwner();
     }
     match /checkins/{docId} {
-      allow read, update, delete: if allowByOwner();
+      allow read: if isAuthed() && (
+        resource == null ||
+        resource.data.ownerId == request.auth.uid ||
+        userOwnerId() == resource.data.ownerId ||
+        resource.data.userEmail == request.auth.token.email
+      );
+      allow update, delete: if allowByOwner();
       allow create: if allowCreateByOwner();
     }
     match /price_lists/{docId} {
@@ -128,7 +134,13 @@ service cloud.firestore {
       allow create: if allowCreateByOwner();
     }
     match /attendance_logs/{docId} {
-      allow read, update, delete: if allowByOwner();
+      allow read: if isAuthed() && (
+        resource == null ||
+        resource.data.ownerId == request.auth.uid ||
+        userOwnerId() == resource.data.ownerId ||
+        resource.data.userEmail == request.auth.token.email
+      );
+      allow update, delete: if allowByOwner();
       allow create: if allowCreateByOwner();
     }
     match /field_config/{docId} {

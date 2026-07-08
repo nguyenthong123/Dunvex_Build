@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Store, Plus, Search, MapPin, Phone, Trash, X, FileText, ArrowLeft, PenSquare } from 'lucide-react';
+import { Store, Plus, Search, MapPin, Phone, Trash, X, FileText, ArrowLeft, PenSquare, QrCode, Building2, CreditCard, User } from 'lucide-react';
 import { useOwner } from '../hooks/useOwner';
 import { useSuppliers } from '../hooks/useSuppliers';
 import { useToast } from '../components/shared/Toast';
+import { BANK_LIST } from '../data/banks';
+import SupplierQRModal from '../components/supplier/SupplierQRModal';
 
 const SupplierList = () => {
 	const navigate = useNavigate();
@@ -29,7 +31,12 @@ const SupplierList = () => {
 		address: '',
 		category: 'Sắt Thép',
 		note: '',
+		bankName: '',
+		bankAccount: '',
+		bankHolder: '',
 	});
+
+	const [qrModalSupplier, setQrModalSupplier] = useState<any>(null);
 
 	const categories = ['Sắt Thép', 'Xi Măng', 'Sơn', 'Gạch Ốp Lát', 'Thiết Bị Vệ Sinh', 'Khác'];
 
@@ -45,7 +52,7 @@ const SupplierList = () => {
 	useEffect(() => {
 		const handleOpenAdd = () => {
 			setSelectedSupplier(null);
-			setFormData({ name: '', phone: '', address: '', category: 'Sắt Thép', note: '' });
+			setFormData({ name: '', phone: '', address: '', category: 'Sắt Thép', note: '', bankName: '', bankAccount: '', bankHolder: '' });
 			setShowAddForm(true);
 		};
 		window.addEventListener('open-mobile-add', handleOpenAdd);
@@ -109,6 +116,9 @@ const SupplierList = () => {
 			address: supplier.address || '',
 			category: supplier.category || 'Sắt Thép',
 			note: supplier.note || '',
+			bankName: supplier.bankName || '',
+			bankAccount: supplier.bankAccount || '',
+			bankHolder: supplier.bankHolder || '',
 		});
 		setShowAddForm(true);
 	};
@@ -135,7 +145,7 @@ const SupplierList = () => {
 							<button onClick={() => setShowMobileSearch(!showMobileSearch)} className="lg:hidden p-2 text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
 								<Search size={20} />
 							</button>
-							<button onClick={() => { setSelectedSupplier(null); setFormData({ name: '', phone: '', address: '', category: 'Sắt Thép', note: '' }); setShowAddForm(true); }} className="hidden lg:flex items-center gap-2 px-4 py-2.5 bg-[#FF6D00] text-white font-bold rounded-xl shadow-lg shadow-orange-500/30 hover:scale-105 active:scale-95 transition-all">
+							<button onClick={() => { setSelectedSupplier(null); setFormData({ name: '', phone: '', address: '', category: 'Sắt Thép', note: '', bankName: '', bankAccount: '', bankHolder: '' }); setShowAddForm(true); }} className="hidden lg:flex items-center gap-2 px-4 py-2.5 bg-[#FF6D00] text-white font-bold rounded-xl shadow-lg shadow-orange-500/30 hover:scale-105 active:scale-95 transition-all">
 								<Plus size={20} /> Thêm NCC
 							</button>
 						</div>
@@ -165,7 +175,7 @@ const SupplierList = () => {
 			{/* Supplier Grid */}
 			<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 pb-24 mt-4">
 				{filteredSuppliers.map((supplier) => (
-					<div key={supplier.id} className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/60 dark:border-slate-800/60 shadow-sm hover:shadow-md transition-shadow relative group">
+					<div key={supplier.id} onClick={() => setQrModalSupplier(supplier)} className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/60 dark:border-slate-800/60 shadow-sm hover:shadow-md hover:border-[#FF6D00]/30 transition-all cursor-pointer relative group">
 						<div className="flex justify-between items-start mb-3">
 							<div className="flex-1 min-w-0 pr-4">
 								<h3 className="font-bold text-slate-800 dark:text-white text-lg truncate flex items-center gap-2">
@@ -178,6 +188,11 @@ const SupplierList = () => {
 								</div>
 							</div>
 							<div className="flex gap-2">
+								{supplier.bankAccount && (
+									<button onClick={(e) => { e.stopPropagation(); setQrModalSupplier(supplier); }} className="p-2 text-slate-400 hover:text-[#FF6D00] hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors" title="QR Chuyển khoản">
+										<QrCode size={18} />
+									</button>
+								)}
 								<button onClick={() => openEdit(supplier)} className="p-2 text-slate-400 hover:text-[#FF6D00] hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors">
 									<PenSquare size={18} />
 								</button>
@@ -293,6 +308,42 @@ const SupplierList = () => {
 										className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-[#FF6D00] outline-none transition-all dark:text-white resize-none"
 									/>
 								</div>
+								
+								{/* --- Thông tin Ngân hàng --- */}
+								<div className="border-t border-slate-200 dark:border-slate-800 pt-4 mt-2">
+									<h3 className="text-sm font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+										<Building2 size={16} /> Thông tin ngân hàng (QR chuyển khoản)
+									</h3>
+									<div className="space-y-3">
+										<div>
+											<label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Ngân hàng</label>
+											<select
+												value={formData.bankName}
+												onChange={(e) => setFormData(prev => ({ ...prev, bankName: e.target.value }))}
+												className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-[#FF6D00] outline-none transition-all dark:text-white"
+											>
+												<option value="">-- Chọn ngân hàng --</option>
+												{BANK_LIST.map(bank => (
+													<option key={bank.code} value={bank.code}>{bank.shortName}</option>
+												))}
+											</select>
+										</div>
+										<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+											<div>
+												<label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+													<CreditCard size={14} className="inline mr-1" />Số tài khoản
+												</label>
+												<input type="text" value={formData.bankAccount} onChange={(e) => setFormData(prev => ({ ...prev, bankAccount: e.target.value }))} placeholder="VD: 1234567890" className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-[#FF6D00] outline-none transition-all dark:text-white" />
+											</div>
+											<div>
+												<label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+													<User size={14} className="inline mr-1" />Chủ tài khoản
+												</label>
+												<input type="text" value={formData.bankHolder} onChange={(e) => setFormData(prev => ({ ...prev, bankHolder: e.target.value }))} placeholder="VD: CÔNG TY TNHH..." className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-[#FF6D00] outline-none transition-all dark:text-white" />
+											</div>
+										</div>
+									</div>
+								</div>
 							</form>
 						</div>
 
@@ -329,6 +380,14 @@ const SupplierList = () => {
 						</div>
 					</div>
 				</div>
+			)}
+
+			{/* QR Modal */}
+			{qrModalSupplier && (
+				<SupplierQRModal
+					supplier={qrModalSupplier}
+					onClose={() => setQrModalSupplier(null)}
+				/>
 			)}
 		</div>
 	);

@@ -17,6 +17,7 @@ import QRScanner from '../components/shared/QRScanner';
 import { QrCode } from 'lucide-react';
 import { useToast } from '../components/shared/Toast';
 import { maskSensitiveData } from '../utils/validation';
+import TopSellers from '../components/profile/TopSellers';
 
 const Home = () => {
 	const navigate = useNavigate();
@@ -191,15 +192,6 @@ const Home = () => {
 	const chartData = getDailyChartData(orders);
 	const maxRevenue = Math.max(...chartData.map(d => d.value), 1000000);
 
-	// 1.3 Personal Performance (for the current login user)
-	const personalOrders = orders.filter(o => o.createdByEmail === auth.currentUser?.email && o.status === 'Đơn chốt');
-	const personalChartData = getDailyChartData(personalOrders);
-	// FIX: Dùng allTimeStats (fetch toàn bộ, không limit) khi đã load xong; fallback listener 500 đơn
-	const personalTotalRevenue = allTimeStats.loading
-		? personalOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0)
-		: allTimeStats.revenue;
-	const personalOrderCount = allTimeStats.loading ? personalOrders.length : allTimeStats.count;
-
 	// Calculate Today's Growth (comparison with yesterday)
 	const yesterday = new Date();
 	yesterday.setDate(yesterday.getDate() - 1);
@@ -352,52 +344,9 @@ const Home = () => {
 					</div>
 				</div>
 
-				{/* PERSONAL PERFORMANCE BANNER (Replacing static promo) */}
-				<div
-					onClick={() => navigate('/coupons')}
-					className="mb-8 relative overflow-hidden bg-gradient-to-br from-[#1A237E] via-[#283593] to-[#4527A0] rounded-[2.5rem] p-6 md:p-10 shadow-xl shadow-indigo-500/20 cursor-pointer group active:scale-[0.99] transition-all flex flex-col lg:flex-row items-center justify-between gap-8"
-				>
-					<div className="absolute top-0 right-0 bottom-0 w-1/2 bg-white/5 skew-x-12 translate-x-20 group-hover:translate-x-10 transition-transform duration-1000"></div>
-					<div className="relative z-10 flex flex-col md:flex-row items-center gap-6">
-						<div className="size-16 md:size-24 bg-white/10 backdrop-blur-xl rounded-[2rem] flex items-center justify-center text-[#ffcc00] shadow-2xl border border-white/10">
-							<TrendingUp size={40} strokeWidth={2.5} className="group-hover:scale-110 transition-transform" />
-						</div>
-						<div className="text-center md:text-left">
-							<h2 className="text-xl md:text-3xl font-black text-white uppercase tracking-tight leading-none mb-3">Hiệu suất cá nhân của bạn</h2>
-							<div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
-								<div className="bg-black/20 px-3 py-1 rounded-lg border border-white/5">
-									<p className="text-[10px] text-white/50 font-bold uppercase">Tổng doanh số</p>
-									<p className="text-lg font-black text-[#ffcc00]">{formatCompactPrice(personalTotalRevenue)}</p>
-								</div>
-								<div className="bg-black/20 px-3 py-1 rounded-lg border border-white/5">
-									<p className="text-[10px] text-white/50 font-bold uppercase">Đơn đã chốt</p>
-									<p className="text-lg font-black text-white">{personalOrderCount} Đơn</p>
-								</div>
-							</div>
-						</div>
-					</div>
-
-					<div className="relative z-10 hidden sm:flex items-end gap-1.5 h-20 md:h-24 px-4 bg-white/5 rounded-3xl backdrop-blur-sm border border-white/5">
-						{personalChartData.map((d, idx) => {
-							const h = Math.max((d.value / (Math.max(...personalChartData.map(p => p.value), 1000000))) * 100, 10);
-							return (
-								<div key={idx} className="flex flex-col items-center gap-1">
-									<div 
-										className={`w-3 md:w-5 rounded-t-lg transition-all duration-700 ${d.isToday ? 'bg-[#ffcc00] shadow-[0_-4px_10px_rgba(255,204,0,0.3)]' : 'bg-white/30'}`} 
-										style={{ height: `${h}%` }}
-									></div>
-									<span className="text-[7px] text-white/40 font-bold uppercase">{d.label}</span>
-								</div>
-							);
-						})}
-						<div className="ml-4 flex flex-col justify-center gap-1">
-							<p className="text-[8px] text-white/40 font-bold uppercase tracking-widest whitespace-nowrap">Theo thời gian</p>
-							<p className="text-[10px] text-green-400 font-black flex items-center gap-1">
-								LIVE <span className="size-1.5 bg-green-400 rounded-full animate-pulse"></span>
-							</p>
-						</div>
-					</div>
-
+				{/* 🏆 TOP 10 NHÂN VIÊN BÁN HÀNG THÁNG */}
+				<div className="mb-8 bg-white dark:bg-slate-900 rounded-[2.5rem] p-6 md:p-8 shadow-sm border border-slate-100 dark:border-slate-800">
+					<TopSellers ownerId={owner.ownerId || ''} />
 				</div>
 
 				{/* 🏆 BẢNG DOANH SỐ NHÂN VIÊN HÔM NAY */}

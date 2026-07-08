@@ -185,6 +185,15 @@ const InventoryFormModal: React.FC<InventoryFormModalProps> = ({
 										value={formData.priceImport === 0 ? '' : formData.priceImport}
 										onChange={(e) => setFormData({ ...formData, priceImport: e.target.value === '' ? 0 : Number(e.target.value) })}
 									/>
+									<label className="flex items-center gap-2 mt-2 cursor-pointer">
+										<input
+											type="checkbox"
+											checked={formData.applyOverheadCost || false}
+											onChange={(e) => setFormData({ ...formData, applyOverheadCost: e.target.checked })}
+											className="w-4 h-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
+										/>
+										<span className="text-[11px] font-medium text-slate-600 dark:text-slate-400">Áp hệ số chi phí (MB, lương, vận chuyển...)</span>
+									</label>
 								</div>
 							)}
 							<div>

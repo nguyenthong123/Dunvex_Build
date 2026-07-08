@@ -48,9 +48,10 @@ const PriceList = () => {
 	const [zoomScale, setZoomScale] = useState(1);
 	const [autoScale, setAutoScale] = useState(1);
 	const [isDesktopLayout, setIsDesktopLayout] = useState(true);
-	const [uploadingImageIdx, setUploadingImageIdx] = useState<number | null>(null);
-	const imageInputRef = useRef<HTMLInputElement>(null);
+	const [uploadingRow, setUploadingRow] = useState<any | null>(null); // Row đang upload
 	const { products } = useProducts({ ownerId: owner.ownerId || '', enabled: !owner.loading && !!owner.ownerId });
+	const imageInputRef = useRef<HTMLInputElement>(null); // Cho upload ảnh SP
+	const pendingRowRef = useRef<any>(null); // Row chờ nhận file
 	const [currentPage, setCurrentPage] = useState(1);
 	const ITEMS_PER_PAGE = 10;
 
@@ -172,9 +173,15 @@ const PriceList = () => {
 	};
 
 	// 📸 Upload ảnh sản phẩm lên Cloudinary
-	const handleImageUpload = async (targetRow: any, file: File) => {
-		// Dùng tham chiếu đối tượng để tìm đúng hàng (không phụ thuộc index)
-		setUploadingImageIdx(priceData.indexOf(targetRow));
+	const handleFilePicked = async (e: React.ChangeEvent<HTMLInputElement>) => {
+		const file = e.target.files?.[0];
+		e.target.value = '';
+		if (!file || !pendingRowRef.current) return;
+		
+		const targetRow = pendingRowRef.current;
+		pendingRowRef.current = null;
+		setUploadingRow(targetRow);
+		
 		try {
 			const fData = new FormData();
 			fData.append('file', file);
@@ -183,7 +190,6 @@ const PriceList = () => {
 			const res = await fetch('https://api.cloudinary.com/v1_1/dtx0uvb4e/image/upload', { method: 'POST', body: fData });
 			const data = await res.json();
 			if (data.secure_url) {
-				// 🔧 Dùng functional update + tham chiếu — không lệ thuộc vào index
 				setPriceData(prev => prev.map(item =>
 					item === targetRow ? { ...item, imageUrl: data.secure_url } : item
 				));
@@ -194,12 +200,16 @@ const PriceList = () => {
 		} catch {
 			showToast('❌ Lỗi kết nối', 'error');
 		} finally {
-			setUploadingImageIdx(null);
+			setUploadingRow(null);
 		}
 	};
 
+	const triggerImageUpload = (targetRow: any) => {
+		pendingRowRef.current = targetRow;
+		imageInputRef.current?.click();
+	};
+
 	const handleImageRemove = (targetRow: any) => {
-		// 🔧 Dùng functional update + tham chiếu — không lệ thuộc vào index
 		setPriceData(prev => prev.map(item =>
 			item === targetRow ? { ...item, imageUrl: '' } : item
 		));
@@ -1081,11 +1091,11 @@ const PriceList = () => {
 																		<Trash2 size={10} />
 																	</button>
 																</div>
-															) : uploadingImageIdx === priceData.indexOf(row) ? (
+															) : uploadingRow === row ? (
 																<Loader2 className="w-5 h-5 animate-spin text-orange-500 mx-auto" />
 															) : (
 																<button
-																	onClick={() => imageInputRef.current?.click()}
+																	onClick={() => triggerImageUpload(row)}
 																	className="w-16 h-16 border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center gap-0.5 text-slate-400 hover:border-orange-400 hover:text-orange-500 transition-colors"
 																	title="Tải ảnh lên"
 																>
@@ -1093,17 +1103,6 @@ const PriceList = () => {
 																	<span className="text-[8px] font-bold">Thêm</span>
 																</button>
 															)}
-															<input
-																ref={imageInputRef}
-																type="file"
-																accept="image/*"
-																className="hidden"
-																onChange={(e) => {
-																	const file = e.target.files?.[0];
-																	if (file) handleImageUpload(row, file);
-																	e.target.value = '';
-																}}
-															/>
 														</td>
 														{displayHeaders.map((header, colIdx) => {
 															const value = row[header];
@@ -1261,6 +1260,15 @@ const PriceList = () => {
 					</div>
 				</div>
 			)}
+
+			{/* Hidden file input cho upload ảnh báo giá — chỉ 1 cái, dùng chung */}
+			<input
+				ref={imageInputRef}
+				type="file"
+				accept="image/*"
+				className="hidden"
+				onChange={handleFilePicked}
+			/>
 		</div>
 	);
 };

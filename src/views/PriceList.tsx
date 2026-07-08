@@ -8,10 +8,11 @@ import {
 	Printer, Search, Trash2, Globe, ArrowLeft, Building2,
 	Phone, Mail, MapPin, Hash, Info, RefreshCw, QrCode,
 	Calendar, User, ChevronRight, Maximize2, Check, Save,
-	Lock, Crown
+	Lock, Crown, Image, Camera, Loader2
 } from 'lucide-react';
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
+import { useProducts } from '../hooks/useProducts';
 
 const PriceList = () => {
 	const navigate = useNavigate();
@@ -47,6 +48,9 @@ const PriceList = () => {
 	const [zoomScale, setZoomScale] = useState(1);
 	const [autoScale, setAutoScale] = useState(1);
 	const [isDesktopLayout, setIsDesktopLayout] = useState(true);
+	const [uploadingImageIdx, setUploadingImageIdx] = useState<number | null>(null);
+	const imageInputRef = useRef<HTMLInputElement>(null);
+	const { products } = useProducts({ ownerId: owner.ownerId || '', enabled: !owner.loading && !!owner.ownerId });
 	const [currentPage, setCurrentPage] = useState(1);
 	const ITEMS_PER_PAGE = 10;
 
@@ -166,6 +170,40 @@ const PriceList = () => {
 
 		setShowImportModal(false);
 	};
+
+	// 📸 Upload ảnh sản phẩm lên Cloudinary
+	const handleImageUpload = async (rowIdx: number, file: File) => {
+		setUploadingImageIdx(rowIdx);
+		try {
+			const fData = new FormData();
+			fData.append('file', file);
+			fData.append('upload_preset', 'dunvexbuil');
+			fData.append('folder', 'dunvex_pricelist');
+			const res = await fetch('https://api.cloudinary.com/v1_1/dtx0uvb4e/image/upload', { method: 'POST', body: fData });
+			const data = await res.json();
+			if (data.secure_url) {
+				const updated = [...priceData];
+				updated[rowIdx] = { ...updated[rowIdx], imageUrl: data.secure_url };
+				setPriceData(updated);
+				showToast('✅ Đã tải ảnh lên!', 'success');
+			} else {
+				showToast('❌ Lỗi tải ảnh', 'error');
+			}
+		} catch {
+			showToast('❌ Lỗi kết nối', 'error');
+		} finally {
+			setUploadingImageIdx(null);
+		}
+	};
+
+	const handleImageRemove = (rowIdx: number) => {
+		const updated = [...priceData];
+		updated[rowIdx] = { ...updated[rowIdx], imageUrl: '' };
+		setPriceData(updated);
+	};
+
+	// Kiểm tra có item nào có ảnh không
+	const hasImages = priceData.some(item => item.imageUrl);
 
 	const savePriceList = async (items: any[], headers: string[]) => {
 		if (!owner.ownerId) return;
@@ -1006,6 +1044,7 @@ const PriceList = () => {
 											<thead>
 												<tr className="bg-orange-50/50">
 													<th className="py-5 px-4 text-[11px] font-black text-[#E65100] uppercase tracking-[0.1em] border border-slate-200 text-center w-12">STT</th>
+													<th className="py-5 px-2 text-[10px] font-black text-[#E65100] uppercase tracking-[0.1em] border border-slate-200 text-center w-[85px]">Hình ảnh</th>
 													{displayHeaders.map((header, idx) => {
 														const isPriceHeader = header.toLowerCase().includes('giá') || header.toLowerCase().includes('tiền');
 														return (
@@ -1022,6 +1061,47 @@ const PriceList = () => {
 												{filteredData.map((row, rowIdx) => (
 													<tr key={rowIdx} className="hover:bg-orange-50/30 transition-colors">
 														<td className="py-4 px-4 text-[12px] font-black text-slate-500 text-center border border-slate-200 bg-slate-50/30">{rowIdx + 1}</td>
+														{/* 📸 Ảnh SP */}
+														<td className="py-2 px-1 text-center border border-slate-200 align-middle">
+															{row.imageUrl ? (
+																<div className="relative inline-block group">
+																	<img
+																		src={row.imageUrl}
+																		alt={row['Tên sản phẩm'] || row['Tên SP'] || row['Sản phẩm'] || ''}
+																		className="w-16 h-16 object-cover rounded-lg border border-slate-200 shadow-sm group-hover:scale-[2.5] group-hover:z-50 group-hover:shadow-xl transition-transform duration-200 origin-center"
+																	/>
+																	<button
+																		onClick={() => handleImageRemove(rowIdx)}
+																		className="absolute -top-2 -right-2 size-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+																		title="Xoá ảnh"
+																	>
+																		<Trash2 size={10} />
+																	</button>
+																</div>
+															) : uploadingImageIdx === rowIdx ? (
+																<Loader2 className="w-5 h-5 animate-spin text-orange-500 mx-auto" />
+															) : (
+																<button
+																	onClick={() => imageInputRef.current?.click()}
+																	className="w-16 h-16 border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center gap-0.5 text-slate-400 hover:border-orange-400 hover:text-orange-500 transition-colors"
+																	title="Tải ảnh lên"
+																>
+																	<Camera size={14} />
+																	<span className="text-[8px] font-bold">Thêm</span>
+																</button>
+															)}
+															<input
+																ref={imageInputRef}
+																type="file"
+																accept="image/*"
+																className="hidden"
+																onChange={(e) => {
+																	const file = e.target.files?.[0];
+																	if (file) handleImageUpload(rowIdx, file);
+																	e.target.value = '';
+																}}
+															/>
+														</td>
 														{displayHeaders.map((header, colIdx) => {
 															const value = row[header];
 															const h = header.toLowerCase();

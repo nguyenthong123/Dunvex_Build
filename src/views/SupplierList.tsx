@@ -175,7 +175,7 @@ const SupplierList = () => {
 			{/* Supplier Grid */}
 			<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 pb-24 mt-4">
 				{filteredSuppliers.map((supplier) => (
-					<div key={supplier.id} onClick={() => setQrModalSupplier(supplier)} className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/60 dark:border-slate-800/60 shadow-sm hover:shadow-md hover:border-[#FF6D00]/30 transition-all cursor-pointer relative group">
+					<div key={supplier.id} onClick={() => openEdit(supplier)} className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/60 dark:border-slate-800/60 shadow-sm hover:shadow-md hover:border-[#FF6D00]/30 transition-all cursor-pointer relative group">
 						<div className="flex justify-between items-start mb-3">
 							<div className="flex-1 min-w-0 pr-4">
 								<h3 className="font-bold text-slate-800 dark:text-white text-lg truncate flex items-center gap-2">
@@ -185,18 +185,23 @@ const SupplierList = () => {
 									<span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300">
 										{supplier.category || 'Chưa phân loại'}
 									</span>
+									{supplier.bankAccount && (
+										<span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+											<QrCode size={10} /> QR
+										</span>
+									)}
 								</div>
 							</div>
 							<div className="flex gap-2">
 								{supplier.bankAccount && (
-									<button onClick={(e) => { e.stopPropagation(); setQrModalSupplier(supplier); }} className="p-2 text-slate-400 hover:text-[#FF6D00] hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors" title="QR Chuyển khoản">
+									<button onClick={(e) => { e.stopPropagation(); setQrModalSupplier(supplier); }} className="p-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-lg transition-colors" title="QR Chuyển khoản">
 										<QrCode size={18} />
 									</button>
 								)}
-								<button onClick={() => openEdit(supplier)} className="p-2 text-slate-400 hover:text-[#FF6D00] hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors">
+								<button onClick={(e) => { e.stopPropagation(); openEdit(supplier); }} className="p-2 text-slate-400 hover:text-[#FF6D00] hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors" title="Chỉnh sửa">
 									<PenSquare size={18} />
 								</button>
-								<button onClick={() => setDeleteConfirmId(supplier.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
+								<button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(supplier.id); }} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" title="Xoá">
 									<Trash size={18} />
 								</button>
 							</div>
@@ -223,6 +228,11 @@ const SupplierList = () => {
 								{(supplier.totalDebt || 0).toLocaleString('vi-VN')} đ
 							</div>
 						</div>
+						{!supplier.bankAccount && (
+							<div className="mt-2 text-[10px] text-slate-400 text-center font-medium">
+								✏️ Nhấn để thêm thông tin ngân hàng & QR
+							</div>
+						)}
 					</div>
 				))}
 

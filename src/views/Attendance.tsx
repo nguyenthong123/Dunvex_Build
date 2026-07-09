@@ -109,7 +109,7 @@ const Attendance = () => {
 
 	const handleCheckIn = async () => {
 		if (!location || !distance || !owner.ownerId || !auth.currentUser) return;
-		if (distance > (companySettings.geofenceRadius || 200)) {
+		if (distance > (companySettings.geofenceRadius || 500)) {
 			showToast(`Bạn ở quá xa văn phòng (${Math.round(distance)}m).`, "warning");
 			return;
 		}
@@ -240,8 +240,8 @@ const Attendance = () => {
 
 	if (loading) return <div className="p-10 text-center font-bold">ĐANG TẢI...</div>;
 
-	const isWithinRange = distance !== null && distance <= (companySettings?.geofenceRadius || 200);
-	const isWithinCheckOutRange = distance !== null && distance <= ((companySettings?.geofenceRadius || 200) * 1.5);
+	const isWithinRange = distance !== null && distance <= (companySettings?.geofenceRadius || 500);
+	const isWithinCheckOutRange = distance !== null && distance <= ((companySettings?.geofenceRadius || 500) * 1.5);
 
 	return (
 		<div className="flex flex-col h-full bg-[#f8f9fb] dark:bg-slate-950 transition-colors duration-300">

@@ -53,7 +53,7 @@ const AdminSettings = () => {
 		lng: 0,
 		workStart: '08:00',
 		workEnd: '17:30',
-		geofenceRadius: 200,
+		geofenceRadius: 500,
 		attendanceViewers: [] as string[],
 		autoSyncSchedule: 'none',
 		overheadRate: 8.5,

@@ -79,7 +79,8 @@ export default async function handler(req: any, res: any) {
       const kf = keyDoc.fields || {};
       const ownerId = keyDoc.id;
       const botToken = kf.telegramBotToken?.stringValue;
-      const chatId = kf.telegramChatId?.stringValue;
+      // Ưu tiên gửi báo cáo vào nhóm, nếu không có mới gửi cá nhân
+      const chatId = kf.telegramGroupChatId?.stringValue || kf.telegramChatId?.stringValue;
       const enabled = kf.enabled?.booleanValue !== false;
 
       if (!botToken || !chatId || !enabled) continue;
@@ -107,7 +108,7 @@ export default async function handler(req: any, res: any) {
       let totalRevenue = 0;
 
       todaysOrders.forEach((o: any) => {
-        const amount = Number(o.fields?.totalAmount?.integerValue || o.fields?.totalAmount?.doubleValue || 0);
+        const amount = Number(o.fields?.totalAmount?.integerValue ?? o.fields?.totalAmount?.doubleValue ?? 0);
         const staff = o.fields?.staffName?.stringValue || o.fields?.createdBy?.stringValue || 'Admin';
         const customer = o.fields?.customerName?.stringValue || 'Khách vãng lai';
 
@@ -121,7 +122,7 @@ export default async function handler(req: any, res: any) {
         { fieldFilter: { field: { fieldPath: 'ownerId' }, op: 'EQUAL', value: { stringValue: ownerId } } }
       ]);
       const debtorsRaw = customers.filter((c: any) => {
-        const debt = Number(c.fields?.debt?.integerValue || c.fields?.debt?.doubleValue || 0);
+        const debt = Number(c.fields?.debt?.integerValue ?? c.fields?.debt?.doubleValue ?? 0);
         return debt > 0;
       });
       
@@ -156,54 +157,143 @@ export default async function handler(req: any, res: any) {
         }
         debtors.push({
           name: c.fields?.name?.stringValue || '',
-          debt: Number(c.fields?.debt?.integerValue || c.fields?.debt?.doubleValue || 0),
+          debt: Number(c.fields?.debt?.integerValue ?? c.fields?.debt?.doubleValue ?? 0),
           days: days
         });
       }
       debtors.sort((a, b) => b.debt - a.debt); // Sắp xếp nợ nhiều nhất lên đầu
 
-      // 4. Tạo prompt cho Gemini
+      // 3b. Lấy Công nợ Nhà cung cấp (suppliers + supplier_debts)
+      const suppliers = await runStructuredQuery(token, 'suppliers', [
+        { fieldFilter: { field: { fieldPath: 'ownerId' }, op: 'EQUAL', value: { stringValue: ownerId } } }
+      ]);
+      const supplierDebts = await runStructuredQuery(token, 'supplier_debts', [
+        { fieldFilter: { field: { fieldPath: 'ownerId' }, op: 'EQUAL', value: { stringValue: ownerId } } }
+      ]);
+
+      // Tính công nợ thực tế cho từng NCC: SUM(debt_increase) - SUM(payment)
+      const supplierDebtors: { name: string; debt: number }[] = [];
+      for (const s of suppliers) {
+        const sDebts = supplierDebts.filter((d: any) => {
+          const supplierId = d.fields?.supplierId?.stringValue;
+          return supplierId === s.id;
+        });
+        const netDebt = sDebts.reduce((sum: number, d: any) => {
+          const amount = Number(d.fields?.amount?.integerValue ?? d.fields?.amount?.doubleValue ?? 0);
+          const type = d.fields?.type?.stringValue;
+          if (type === 'debt_increase') return sum + amount;
+          if (type === 'payment') return sum - amount;
+          return sum;
+        }, 0);
+        if (netDebt > 0) {
+          supplierDebtors.push({
+            name: s.fields?.name?.stringValue || '',
+            debt: netDebt
+          });
+        }
+      }
+      supplierDebtors.sort((a, b) => b.debt - a.debt);
+
+      // 4. Format cứng phần số liệu (không cho Gemini viết lại số)
+      const fmtVND = (n: number) => n.toLocaleString('vi-VN') + 'đ';
+      
+      let dataSection = `\n📊 <b>TỔNG KẾT DOANH THU HÔM NAY</b>\n`;
+      dataSection += `💰 Tổng doanh thu: <b>${fmtVND(totalRevenue)}</b>\n`;
+      if (Object.keys(revenueByStaff).length > 0) {
+        dataSection += `\n👥 <i>Theo nhân viên:</i>\n`;
+        for (const [staff, amount] of Object.entries(revenueByStaff)) {
+          dataSection += `  - ${staff}: ${fmtVND(amount)}\n`;
+        }
+      }
+      if (Object.keys(revenueByCustomer).length > 0) {
+        dataSection += `\n🛒 <i>Theo khách hàng:</i>\n`;
+        for (const [cust, amount] of Object.entries(revenueByCustomer)) {
+          dataSection += `  - ${cust}: ${fmtVND(amount)}\n`;
+        }
+      }
+      if (totalRevenue === 0) {
+        dataSection += `  Hôm nay chưa có đơn hàng nào.\n`;
+      }
+
+      dataSection += `\n📋 <b>CÔNG NỢ KHÁCH HÀNG</b>\n`;
+      if (debtors.length === 0) {
+        dataSection += `  ✅ Tuyệt vời, không có khách nào nợ!\n`;
+      } else {
+        const top5 = debtors.slice(0, 5);
+        top5.forEach((d, i) => {
+          dataSection += `  ${i + 1}. ${d.name}: <b>${fmtVND(d.debt)}</b> (${d.days} ngày)\n`;
+        });
+        if (debtors.length > 5) {
+          dataSection += `  <i>... và ${debtors.length - 5} khách nợ khác</i>\n`;
+        }
+      }
+
+      dataSection += `\n🏭 <b>CÔNG NỢ NHÀ CUNG CẤP (Mình nợ NCC)</b>\n`;
+      if (supplierDebtors.length === 0) {
+        dataSection += `  ✅ Không có khoản nợ NCC nào!\n`;
+      } else {
+        supplierDebtors.forEach((s, i) => {
+          dataSection += `  ${i + 1}. ${s.name}: <b>${fmtVND(s.debt)}</b>\n`;
+        });
+      }
+
+      // 5. Gọi Gemini — CHỈ viết lời chào + nhận xét ngắn (KHÔNG cho số liệu)
       const prompt = `Bạn là trợ lý AI (Telegram Bot) của phần mềm Dunvex Build, phục vụ sếp: ${adminName}.
-Nhiệm vụ: Dựa vào số liệu dưới đây, hãy viết 1 tin nhắn BÁO CÁO CUỐI NGÀY gửi cho sếp.
+Nhiệm vụ: Viết 1 LỜI CHÀO mở đầu và 1 LỜI KẾT cho báo cáo cuối ngày.
+
+Thông tin tham khảo (KHÔNG viết lại số liệu, phần số liệu sẽ được chèn tự động):
+- Doanh thu hôm nay: ${totalRevenue.toLocaleString('vi-VN')} đ
+- Số đơn hàng: ${todaysOrders.length}
+- Số khách đang nợ: ${debtors.length}
+
 YÊU CẦU:
 1. Dùng emoji phù hợp, lời văn kính trọng, thân thiện và động viên tinh thần.
-2. Format tiền tệ VNĐ (ví dụ: 10.000.000đ).
-3. BẮT BUỘC SỬ DỤNG HTML TAGS để làm nổi bật (Ví dụ: <b>chữ đậm</b>, <i>chữ nghiêng</i>).
-4. TUYỆT ĐỐI KHÔNG DÙNG MARKDOWN (không dùng dấu * hay ** hay #). Các mục danh sách hãy dùng gạch đầu dòng (-) hoặc emoji (👉, 📦).
-5. Nội dung báo cáo cần ngắn gọn, chia làm 2 phần chính: TỔNG KẾT DOANH THU HÔM NAY và DANH SÁCH NHẮC NỢ (chỉ liệt kê 5 khách nợ nhiều nhất nếu danh sách quá dài).
+2. BẮT BUỘC dùng HTML TAGS (Ví dụ: <b>chữ đậm</b>, <i>chữ nghiêng</i>).
+3. TUYỆT ĐỐI KHÔNG DÙNG MARKDOWN (không dùng dấu * hay ** hay #).
+4. TUYỆT ĐỐI KHÔNG liệt kê lại số liệu hay số tiền cụ thể.
+5. Trả về ĐÚNG 2 dòng, phân cách bằng |||:
+   Dòng 1: Lời chào mở đầu (1-2 câu)
+   Dòng 2: Lời kết động viên (1-2 câu)
+Ví dụ: 🌙 Chào sếp ${adminName}! Dưới đây là báo cáo cuối ngày ạ!|||💪 Chúc sếp nghỉ ngơi thật tốt, ngày mai tiếp tục chinh phục nhé! 🚀`;
 
-=== DỮ LIỆU ===
-DOANH THU HÔM NAY: ${totalRevenue.toLocaleString('vi-VN')} đ
-- Theo nhân viên:
-${Object.entries(revenueByStaff).map(([k, v]) => `  + ${k}: ${v.toLocaleString('vi-VN')} đ`).join('\n') || 'Không có đơn nào'}
-- Theo khách hàng:
-${Object.entries(revenueByCustomer).map(([k, v]) => `  + ${k}: ${v.toLocaleString('vi-VN')} đ`).join('\n') || 'Không có đơn nào'}
+      let greeting = `🌙 Chào sếp ${adminName}! Dưới đây là báo cáo cuối ngày ạ!`;
+      let closing = `💪 Chúc sếp nghỉ ngơi thật tốt! 🚀`;
 
-DANH SÁCH CÔNG NỢ HIỆN TẠI (Tất cả):
-${debtors.length > 0 ? debtors.map(d => `- ${d.name}: ${d.debt.toLocaleString('vi-VN')} đ (Số ngày nợ: ${d.days})`).join('\n') : 'Tuyệt vời, không có khách nào nợ!'}
-================
-Hãy viết báo cáo gửi sếp đi:`;
-
-      // 5. Gọi Gemini
-      let reportText = "Báo cáo cuối ngày không khả dụng do lỗi tạo văn bản.";
       try {
         const geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
           }
         );
-        const data = await geminiRes.json();
-        if (data.candidates && data.candidates[0].content.parts[0].text) {
-          reportText = data.candidates[0].content.parts[0].text;
+        if (!geminiRes.ok) {
+          console.error('Gemini API error:', geminiRes.status, await geminiRes.text());
+        } else {
+          const data = await geminiRes.json();
+          if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+            const aiText = data.candidates[0].content.parts[0].text.trim();
+            const parts = aiText.split('|||');
+            if (parts.length >= 2) {
+              greeting = parts[0].trim();
+              closing = parts[1].trim();
+            } else {
+              // Nếu AI không trả đúng format, dùng toàn bộ làm greeting
+              greeting = aiText;
+            }
+          } else {
+            console.error('Gemini: no candidates in response', JSON.stringify(data).substring(0, 500));
+          }
         }
       } catch (e) {
         console.error('Gemini error:', e);
       }
 
-      // 6. Gửi báo cáo qua Telegram
+      // 6. Ghép báo cáo hoàn chỉnh: Lời chào + Số liệu + Lời kết
+      const reportText = `${greeting}\n${dataSection}\n${closing}`;
+
+      // 7. Gửi báo cáo qua Telegram
       const teleRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

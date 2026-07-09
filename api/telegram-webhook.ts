@@ -1,3 +1,4 @@
+import { GoogleGenerativeAI, FunctionDeclaration, SchemaType } from '@google/generative-ai';
 import crypto from 'crypto';
 
 /**
@@ -95,6 +96,31 @@ async function runStructuredQuery(token: string, collectionId: string, fieldFilt
     .map((item: any) => item.document);
 }
 
+
+async function restCreate(token: string, collection: string, fields: any) {
+  const url = `${FIRESTORE_BASE}/${collection}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields })
+  });
+  if (!res.ok) throw new Error(`Firestore POST ${collection} failed: ${res.status}`);
+  return res.json();
+}
+
+async function restPatch(token: string, path: string, fields: any) {
+  const keys = Object.keys(fields);
+  const mask = keys.map(k => `updateMask.fieldPaths=${k}`).join('&');
+  const url = `${FIRESTORE_BASE}/${path}?${mask}`;
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields })
+  });
+  if (!res.ok) throw new Error(`Firestore PATCH ${path} failed: ${res.status}`);
+  return res.json();
+}
+
 export default async function handler(req: any, res: any) {
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -157,26 +183,30 @@ export default async function handler(req: any, res: any) {
       return res.status(403).json({ error: 'Invalid or disabled bot token' });
     }
 
-    // Save telegramChatId to Firestore if it's missing or different (for active notifications later)
-    if (!kf.telegramChatId?.stringValue || kf.telegramChatId.stringValue !== String(chatId)) {
-      await fetch(`${FIRESTORE_BASE}/api_keys/${ownerId}?updateMask.fieldPaths=telegramChatId`, {
+    // Save chatId to Firestore — tách riêng nhóm và cá nhân
+    const isGroupChat = chatType === 'group' || chatType === 'supergroup';
+    const chatIdField = isGroupChat ? 'telegramGroupChatId' : 'telegramChatId';
+    const currentValue = kf[chatIdField]?.stringValue;
+    if (!currentValue || currentValue !== String(chatId)) {
+      await fetch(`${FIRESTORE_BASE}/api_keys/${ownerId}?updateMask.fieldPaths=${chatIdField}`, {
         method: 'PATCH',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: `projects/${PROJECT_ID}/databases/(default)/documents/api_keys/${ownerId}`,
           fields: {
-            telegramChatId: { stringValue: String(chatId) }
+            [chatIdField]: { stringValue: String(chatId) }
           }
         })
       });
     }
 
     // Thực hiện các truy vấn độc lập song song (giảm 80% thời gian chờ Firestore)
-    const [userDoc, customersData, suppliersData, recentOrders] = await Promise.all([
+    const [userDoc, customersData, suppliersData, recentOrders, supplierDebtsData] = await Promise.all([
       restGet(token, `users/${ownerId}`),
       runStructuredQuery(token, 'customers', [{ fieldFilter: { field: { fieldPath: 'ownerId' }, op: 'EQUAL', value: { stringValue: ownerId } } }]),
       runStructuredQuery(token, 'suppliers', [{ fieldFilter: { field: { fieldPath: 'ownerId' }, op: 'EQUAL', value: { stringValue: ownerId } } }]),
-      runStructuredQuery(token, 'orders', [{ fieldFilter: { field: { fieldPath: 'ownerId' }, op: 'EQUAL', value: { stringValue: ownerId } } }], 50, { field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' })
+      runStructuredQuery(token, 'orders', [{ fieldFilter: { field: { fieldPath: 'ownerId' }, op: 'EQUAL', value: { stringValue: ownerId } } }], 50, { field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }),
+      runStructuredQuery(token, 'supplier_debts', [{ fieldFilter: { field: { fieldPath: 'ownerId' }, op: 'EQUAL', value: { stringValue: ownerId } } }])
     ]);
 
     const adminName = userDoc?.fields?.displayName?.stringValue || userDoc?.fields?.email?.stringValue || 'Admin';
@@ -193,16 +223,27 @@ export default async function handler(req: any, res: any) {
       };
     });
 
-    // 1.5 Fetch Suppliers with debt
-    const suppliersWithDebt = suppliersData.filter((s: any) => {
-      const debt = Number(s.fields?.totalDebt?.integerValue || s.fields?.totalDebt?.doubleValue || 0);
-      return debt > 0;
-    }).map((s: any) => {
-      return {
-        name: s.fields?.name?.stringValue || '',
-        debt: Number(s.fields?.totalDebt?.integerValue || s.fields?.totalDebt?.doubleValue || 0)
-      };
-    });
+    // 1.5 Fetch Suppliers with debt (Tính công nợ thực tế: SUM(debt_increase) - SUM(payment))
+    const suppliersWithDebt: { name: string; debt: number }[] = [];
+    for (const s of suppliersData) {
+      const sDebts = supplierDebtsData.filter((d: any) => {
+        const supplierId = d.fields?.supplierId?.stringValue;
+        return supplierId === s.id;
+      });
+      const netDebt = sDebts.reduce((sum: number, d: any) => {
+        const amount = Number(d.fields?.amount?.integerValue ?? d.fields?.amount?.doubleValue ?? 0);
+        const type = d.fields?.type?.stringValue;
+        if (type === 'debt_increase') return sum + amount;
+        if (type === 'payment') return sum - amount;
+        return sum;
+      }, 0);
+      if (netDebt > 0) {
+        suppliersWithDebt.push({
+          name: s.fields?.name?.stringValue || '',
+          debt: netDebt
+        });
+      }
+    }
 
     // 2. Fetch data for context (Recent orders for revenue info)
     
@@ -224,10 +265,9 @@ Nhiệm vụ của bạn: Trả lời tự nhiên, thân thiện và cung cấp 
 QUY TẮC QUAN TRỌNG: 
 1. BẮT BUỘC SỬ DỤNG HTML ĐỂ ĐỊNH DẠNG (ví dụ: <b>chữ đậm</b>, <i>chữ nghiêng</i>). 
 2. TUYỆT ĐỐI KHÔNG DÙNG MARKDOWN (không dùng dấu * hay ** hay #). Các danh sách hãy dùng gạch đầu dòng (-) hoặc các emoji (👉, 📦, 💰, 👤).
-3. Hiện tại bạn CHỈ ĐƯỢC PHÉP TRẢ LỜI CÂU HỎI THÔNG TIN (đơn hàng, doanh thu, công nợ).
-4. NẾU NGƯỜI DÙNG YÊU CẦU TẠO, SỬA, HAY XÓA ĐƠN HÀNG/KHÁCH HÀNG: Bạn PHẢI TỪ CHỐI và yêu cầu người dùng truy cập vào Web App.
-5. Báo cáo doanh thu hoặc công nợ một cách dễ hiểu, format tiền tệ VNĐ (ví dụ: 10.000.000đ).
-6. Nhắc đến tên admin là ${adminName} nếu người dùng hỏi bạn đang phục vụ ai.
+3. HIỆN TẠI BẠN ĐÃ CÓ KHẢ NĂNG SỬ DỤNG CÔNG CỤ (TOOLS). Khi người dùng yêu cầu tạo đơn hàng, sửa đơn hàng, hay chỉnh sửa công nợ, HÃY GỌI HÀM TƯƠNG ỨNG.
+4. Báo cáo doanh thu hoặc công nợ một cách dễ hiểu, format tiền tệ VNĐ (ví dụ: 10.000.000đ).
+5. Nhắc đến tên admin là ${adminName} nếu người dùng hỏi bạn đang phục vụ ai.
 
 --- DỮ LIỆU HIỆN TẠI TỪ HỆ THỐNG CỦA ADMIN: ${adminName} ---
 Khách hàng đang có công nợ (Khách hàng nợ mình):
@@ -238,31 +278,103 @@ ${suppliersWithDebt.map((s: any) => `- ${s.name}: Đang nợ ${s.debt.toLocaleSt
 
 50 Đơn hàng gần nhất (Khách hàng / Doanh thu / Nhân viên / Ngày):
 ${ordersData.map((o: any) => `- ${o.customerName}: ${o.totalAmount.toLocaleString('vi-VN')}đ (Nhân viên: ${o.staffName}, Ngày: ${new Date(o.date).toLocaleDateString('vi-VN')})`).join('\n') || 'Chưa có đơn hàng.'}
-------------------------------------------------
+------------------------------------------------`;
 
-Câu hỏi của người dùng: "${userMessage}"
-Dựa vào dữ liệu trên, hãy trả lời câu hỏi:`;
+    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash-lite',
+      systemInstruction: systemPrompt,
+      tools: [{
+        functionDeclarations: [
+          {
+            name: "create_order",
+            description: "Tạo đơn hàng mới cho khách hàng.",
+            parameters: {
+              type: SchemaType.OBJECT,
+              properties: {
+                customerName: { type: SchemaType.STRING, description: "Tên khách hàng" },
+                totalAmount: { type: SchemaType.NUMBER, description: "Tổng tiền đơn hàng (VNĐ)" }
+              },
+              required: ["customerName", "totalAmount"]
+            }
+          },
+          {
+            name: "update_customer_debt",
+            description: "Thêm hoặc trừ công nợ của khách hàng (VD: khách trả nợ thì trừ nợ, khách mua nợ thì thêm nợ).",
+            parameters: {
+              type: SchemaType.OBJECT,
+              properties: {
+                customerName: { type: SchemaType.STRING, description: "Tên khách hàng" },
+                adjustmentAmount: { type: SchemaType.NUMBER, description: "Số tiền thay đổi (số ÂM nếu khách trả nợ / giảm nợ, số DƯƠNG nếu khách nợ thêm)" }
+              },
+              required: ["customerName", "adjustmentAmount"]
+            }
+          }
+        ]
+      }]
+    });
 
-    // 4. Call Gemini
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: systemPrompt }] }],
-          generationConfig: { temperature: 0.2 }, // We want raw string output, not strict JSON.
-        }),
-      }
-    );
-
-    const data = await response.json();
-    if (!response.ok) {
-      console.error('Gemini error:', data);
-      return res.status(500).json({ error: 'Lỗi khi gọi AI', details: data });
+    const chat = model.startChat();
+    let result;
+    try {
+      result = await chat.sendMessage(userMessage);
+    } catch (e: any) {
+      console.error('Gemini error:', e);
+      return res.status(500).json({ error: 'Lỗi khi gọi AI', details: e.message });
     }
 
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Xin lỗi, tôi không thể xử lý câu hỏi này lúc này.';
+    const call = result.response.functionCalls()?.[0];
+    if (call) {
+      let funcResult = "";
+      try {
+        if (call.name === "create_order") {
+          const { customerName, totalAmount } = call.args;
+          await restCreate(token, 'orders', {
+            ownerId: { stringValue: ownerId },
+            customerName: { stringValue: customerName },
+            totalAmount: { integerValue: String(totalAmount) },
+            status: { stringValue: 'Đơn chốt' },
+            createdAt: { timestampValue: new Date().toISOString() },
+            createdBy: { stringValue: 'Telegram Bot' }
+          });
+          funcResult = `Tạo đơn hàng thành công cho ${customerName} với số tiền ${totalAmount}đ`;
+        } else if (call.name === "update_customer_debt") {
+          const { customerName, adjustmentAmount } = call.args;
+          const customers = await runStructuredQuery(token, 'customers', [
+            { fieldFilter: { field: { fieldPath: 'ownerId' }, op: 'EQUAL', value: { stringValue: ownerId } } },
+            { fieldFilter: { field: { fieldPath: 'name' }, op: 'EQUAL', value: { stringValue: customerName } } }
+          ], 1);
+          if (customers.length > 0) {
+            const c = customers[0];
+            const currentDebt = Number(c.fields?.debt?.integerValue || c.fields?.debt?.doubleValue || 0);
+            const newDebt = currentDebt + Number(adjustmentAmount);
+            const customerId = c.name.split('/').pop();
+            await restPatch(token, `customers/${customerId}`, {
+              debt: { integerValue: String(newDebt) }
+            });
+            funcResult = `Đã cập nhật công nợ cho ${customerName}. Nợ cũ: ${currentDebt}đ, Nợ mới: ${newDebt}đ`;
+          } else {
+            funcResult = `Không tìm thấy khách hàng nào tên ${customerName}. Yêu cầu quản trị viên kiểm tra lại tên.`;
+          }
+        }
+      } catch (e: any) {
+        funcResult = `Lỗi hệ thống khi thực hiện: ${e.message}`;
+      }
+
+      // Gửi kết quả lại cho Gemini
+      try {
+        result = await chat.sendMessage([{
+          functionResponse: {
+            name: call.name,
+            response: { result: funcResult }
+          }
+        }]);
+      } catch (e: any) {
+        console.error('Gemini function response error:', e);
+      }
+    }
+
+    const text = result.response.text() || 'Xin lỗi, tôi không thể xử lý câu hỏi này lúc này.';
     
     // Gửi tin nhắn lại Telegram
     await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {

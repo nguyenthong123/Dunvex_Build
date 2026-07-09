@@ -70,7 +70,7 @@ async function handler(req, res) {
       const kf = keyDoc.fields || {};
       const ownerId = keyDoc.id;
       const botToken = kf.telegramBotToken?.stringValue;
-      const chatId = kf.telegramChatId?.stringValue;
+      const chatId = kf.telegramGroupChatId?.stringValue || kf.telegramChatId?.stringValue;
       const enabled = kf.enabled?.booleanValue !== false;
       if (!botToken || !chatId || !enabled) continue;
       const userDoc = await restGet(token, `users/${ownerId}`);
@@ -89,7 +89,7 @@ async function handler(req, res) {
       const revenueByCustomer = {};
       let totalRevenue = 0;
       todaysOrders.forEach((o) => {
-        const amount = Number(o.fields?.totalAmount?.integerValue || o.fields?.totalAmount?.doubleValue || 0);
+        const amount = Number(o.fields?.totalAmount?.integerValue ?? o.fields?.totalAmount?.doubleValue ?? 0);
         const staff = o.fields?.staffName?.stringValue || o.fields?.createdBy?.stringValue || "Admin";
         const customer = o.fields?.customerName?.stringValue || "Kh\xE1ch v\xE3ng lai";
         revenueByStaff[staff] = (revenueByStaff[staff] || 0) + amount;
@@ -100,7 +100,7 @@ async function handler(req, res) {
         { fieldFilter: { field: { fieldPath: "ownerId" }, op: "EQUAL", value: { stringValue: ownerId } } }
       ]);
       const debtorsRaw = customers.filter((c) => {
-        const debt = Number(c.fields?.debt?.integerValue || c.fields?.debt?.doubleValue || 0);
+        const debt = Number(c.fields?.debt?.integerValue ?? c.fields?.debt?.doubleValue ?? 0);
         return debt > 0;
       });
       const debtors = [];
@@ -131,48 +131,146 @@ async function handler(req, res) {
         }
         debtors.push({
           name: c.fields?.name?.stringValue || "",
-          debt: Number(c.fields?.debt?.integerValue || c.fields?.debt?.doubleValue || 0),
+          debt: Number(c.fields?.debt?.integerValue ?? c.fields?.debt?.doubleValue ?? 0),
           days
         });
       }
       debtors.sort((a, b) => b.debt - a.debt);
+      const suppliers = await runStructuredQuery(token, "suppliers", [
+        { fieldFilter: { field: { fieldPath: "ownerId" }, op: "EQUAL", value: { stringValue: ownerId } } }
+      ]);
+      const supplierDebts = await runStructuredQuery(token, "supplier_debts", [
+        { fieldFilter: { field: { fieldPath: "ownerId" }, op: "EQUAL", value: { stringValue: ownerId } } }
+      ]);
+      const supplierDebtors = [];
+      for (const s of suppliers) {
+        const sDebts = supplierDebts.filter((d) => {
+          const supplierId = d.fields?.supplierId?.stringValue;
+          return supplierId === s.id;
+        });
+        const netDebt = sDebts.reduce((sum, d) => {
+          const amount = Number(d.fields?.amount?.integerValue ?? d.fields?.amount?.doubleValue ?? 0);
+          const type = d.fields?.type?.stringValue;
+          if (type === "debt_increase") return sum + amount;
+          if (type === "payment") return sum - amount;
+          return sum;
+        }, 0);
+        if (netDebt > 0) {
+          supplierDebtors.push({
+            name: s.fields?.name?.stringValue || "",
+            debt: netDebt
+          });
+        }
+      }
+      supplierDebtors.sort((a, b) => b.debt - a.debt);
+      const fmtVND = (n) => n.toLocaleString("vi-VN") + "\u0111";
+      let dataSection = `
+\u{1F4CA} <b>T\u1ED4NG K\u1EBET DOANH THU H\xD4M NAY</b>
+`;
+      dataSection += `\u{1F4B0} T\u1ED5ng doanh thu: <b>${fmtVND(totalRevenue)}</b>
+`;
+      if (Object.keys(revenueByStaff).length > 0) {
+        dataSection += `
+\u{1F465} <i>Theo nh\xE2n vi\xEAn:</i>
+`;
+        for (const [staff, amount] of Object.entries(revenueByStaff)) {
+          dataSection += `  - ${staff}: ${fmtVND(amount)}
+`;
+        }
+      }
+      if (Object.keys(revenueByCustomer).length > 0) {
+        dataSection += `
+\u{1F6D2} <i>Theo kh\xE1ch h\xE0ng:</i>
+`;
+        for (const [cust, amount] of Object.entries(revenueByCustomer)) {
+          dataSection += `  - ${cust}: ${fmtVND(amount)}
+`;
+        }
+      }
+      if (totalRevenue === 0) {
+        dataSection += `  H\xF4m nay ch\u01B0a c\xF3 \u0111\u01A1n h\xE0ng n\xE0o.
+`;
+      }
+      dataSection += `
+\u{1F4CB} <b>C\xD4NG N\u1EE2 KH\xC1CH H\xC0NG</b>
+`;
+      if (debtors.length === 0) {
+        dataSection += `  \u2705 Tuy\u1EC7t v\u1EDDi, kh\xF4ng c\xF3 kh\xE1ch n\xE0o n\u1EE3!
+`;
+      } else {
+        const top5 = debtors.slice(0, 5);
+        top5.forEach((d, i) => {
+          dataSection += `  ${i + 1}. ${d.name}: <b>${fmtVND(d.debt)}</b> (${d.days} ng\xE0y)
+`;
+        });
+        if (debtors.length > 5) {
+          dataSection += `  <i>... v\xE0 ${debtors.length - 5} kh\xE1ch n\u1EE3 kh\xE1c</i>
+`;
+        }
+      }
+      dataSection += `
+\u{1F3ED} <b>C\xD4NG N\u1EE2 NH\xC0 CUNG C\u1EA4P (M\xECnh n\u1EE3 NCC)</b>
+`;
+      if (supplierDebtors.length === 0) {
+        dataSection += `  \u2705 Kh\xF4ng c\xF3 kho\u1EA3n n\u1EE3 NCC n\xE0o!
+`;
+      } else {
+        supplierDebtors.forEach((s, i) => {
+          dataSection += `  ${i + 1}. ${s.name}: <b>${fmtVND(s.debt)}</b>
+`;
+        });
+      }
       const prompt = `B\u1EA1n l\xE0 tr\u1EE3 l\xFD AI (Telegram Bot) c\u1EE7a ph\u1EA7n m\u1EC1m Dunvex Build, ph\u1EE5c v\u1EE5 s\u1EBFp: ${adminName}.
-Nhi\u1EC7m v\u1EE5: D\u1EF1a v\xE0o s\u1ED1 li\u1EC7u d\u01B0\u1EDBi \u0111\xE2y, h\xE3y vi\u1EBFt 1 tin nh\u1EAFn B\xC1O C\xC1O CU\u1ED0I NG\xC0Y g\u1EEDi cho s\u1EBFp.
+Nhi\u1EC7m v\u1EE5: Vi\u1EBFt 1 L\u1EDCI CH\xC0O m\u1EDF \u0111\u1EA7u v\xE0 1 L\u1EDCI K\u1EBET cho b\xE1o c\xE1o cu\u1ED1i ng\xE0y.
+
+Th\xF4ng tin tham kh\u1EA3o (KH\xD4NG vi\u1EBFt l\u1EA1i s\u1ED1 li\u1EC7u, ph\u1EA7n s\u1ED1 li\u1EC7u s\u1EBD \u0111\u01B0\u1EE3c ch\xE8n t\u1EF1 \u0111\u1ED9ng):
+- Doanh thu h\xF4m nay: ${totalRevenue.toLocaleString("vi-VN")} \u0111
+- S\u1ED1 \u0111\u01A1n h\xE0ng: ${todaysOrders.length}
+- S\u1ED1 kh\xE1ch \u0111ang n\u1EE3: ${debtors.length}
+
 Y\xCAU C\u1EA6U:
 1. D\xF9ng emoji ph\xF9 h\u1EE3p, l\u1EDDi v\u0103n k\xEDnh tr\u1ECDng, th\xE2n thi\u1EC7n v\xE0 \u0111\u1ED9ng vi\xEAn tinh th\u1EA7n.
-2. Format ti\u1EC1n t\u1EC7 VN\u0110 (v\xED d\u1EE5: 10.000.000\u0111).
-3. B\u1EAET BU\u1ED8C S\u1EEC D\u1EE4NG HTML TAGS \u0111\u1EC3 l\xE0m n\u1ED5i b\u1EADt (V\xED d\u1EE5: <b>ch\u1EEF \u0111\u1EADm</b>, <i>ch\u1EEF nghi\xEAng</i>).
-4. TUY\u1EC6T \u0110\u1ED0I KH\xD4NG D\xD9NG MARKDOWN (kh\xF4ng d\xF9ng d\u1EA5u * hay ** hay #). C\xE1c m\u1EE5c danh s\xE1ch h\xE3y d\xF9ng g\u1EA1ch \u0111\u1EA7u d\xF2ng (-) ho\u1EB7c emoji (\u{1F449}, \u{1F4E6}).
-5. N\u1ED9i dung b\xE1o c\xE1o c\u1EA7n ng\u1EAFn g\u1ECDn, chia l\xE0m 2 ph\u1EA7n ch\xEDnh: T\u1ED4NG K\u1EBET DOANH THU H\xD4M NAY v\xE0 DANH S\xC1CH NH\u1EAEC N\u1EE2 (ch\u1EC9 li\u1EC7t k\xEA 5 kh\xE1ch n\u1EE3 nhi\u1EC1u nh\u1EA5t n\u1EBFu danh s\xE1ch qu\xE1 d\xE0i).
-
-=== D\u1EEE LI\u1EC6U ===
-DOANH THU H\xD4M NAY: ${totalRevenue.toLocaleString("vi-VN")} \u0111
-- Theo nh\xE2n vi\xEAn:
-${Object.entries(revenueByStaff).map(([k, v]) => `  + ${k}: ${v.toLocaleString("vi-VN")} \u0111`).join("\n") || "Kh\xF4ng c\xF3 \u0111\u01A1n n\xE0o"}
-- Theo kh\xE1ch h\xE0ng:
-${Object.entries(revenueByCustomer).map(([k, v]) => `  + ${k}: ${v.toLocaleString("vi-VN")} \u0111`).join("\n") || "Kh\xF4ng c\xF3 \u0111\u01A1n n\xE0o"}
-
-DANH S\xC1CH C\xD4NG N\u1EE2 HI\u1EC6N T\u1EA0I (T\u1EA5t c\u1EA3):
-${debtors.length > 0 ? debtors.map((d) => `- ${d.name}: ${d.debt.toLocaleString("vi-VN")} \u0111 (S\u1ED1 ng\xE0y n\u1EE3: ${d.days})`).join("\n") : "Tuy\u1EC7t v\u1EDDi, kh\xF4ng c\xF3 kh\xE1ch n\xE0o n\u1EE3!"}
-================
-H\xE3y vi\u1EBFt b\xE1o c\xE1o g\u1EEDi s\u1EBFp \u0111i:`;
-      let reportText = "B\xE1o c\xE1o cu\u1ED1i ng\xE0y kh\xF4ng kh\u1EA3 d\u1EE5ng do l\u1ED7i t\u1EA1o v\u0103n b\u1EA3n.";
+2. B\u1EAET BU\u1ED8C d\xF9ng HTML TAGS (V\xED d\u1EE5: <b>ch\u1EEF \u0111\u1EADm</b>, <i>ch\u1EEF nghi\xEAng</i>).
+3. TUY\u1EC6T \u0110\u1ED0I KH\xD4NG D\xD9NG MARKDOWN (kh\xF4ng d\xF9ng d\u1EA5u * hay ** hay #).
+4. TUY\u1EC6T \u0110\u1ED0I KH\xD4NG li\u1EC7t k\xEA l\u1EA1i s\u1ED1 li\u1EC7u hay s\u1ED1 ti\u1EC1n c\u1EE5 th\u1EC3.
+5. Tr\u1EA3 v\u1EC1 \u0110\xDANG 2 d\xF2ng, ph\xE2n c\xE1ch b\u1EB1ng |||:
+   D\xF2ng 1: L\u1EDDi ch\xE0o m\u1EDF \u0111\u1EA7u (1-2 c\xE2u)
+   D\xF2ng 2: L\u1EDDi k\u1EBFt \u0111\u1ED9ng vi\xEAn (1-2 c\xE2u)
+V\xED d\u1EE5: \u{1F319} Ch\xE0o s\u1EBFp ${adminName}! D\u01B0\u1EDBi \u0111\xE2y l\xE0 b\xE1o c\xE1o cu\u1ED1i ng\xE0y \u1EA1!|||\u{1F4AA} Ch\xFAc s\u1EBFp ngh\u1EC9 ng\u01A1i th\u1EADt t\u1ED1t, ng\xE0y mai ti\u1EBFp t\u1EE5c chinh ph\u1EE5c nh\xE9! \u{1F680}`;
+      let greeting = `\u{1F319} Ch\xE0o s\u1EBFp ${adminName}! D\u01B0\u1EDBi \u0111\xE2y l\xE0 b\xE1o c\xE1o cu\u1ED1i ng\xE0y \u1EA1!`;
+      let closing = `\u{1F4AA} Ch\xFAc s\u1EBFp ngh\u1EC9 ng\u01A1i th\u1EADt t\u1ED1t! \u{1F680}`;
       try {
         const geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
           }
         );
-        const data = await geminiRes.json();
-        if (data.candidates && data.candidates[0].content.parts[0].text) {
-          reportText = data.candidates[0].content.parts[0].text;
+        if (!geminiRes.ok) {
+          console.error("Gemini API error:", geminiRes.status, await geminiRes.text());
+        } else {
+          const data = await geminiRes.json();
+          if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+            const aiText = data.candidates[0].content.parts[0].text.trim();
+            const parts = aiText.split("|||");
+            if (parts.length >= 2) {
+              greeting = parts[0].trim();
+              closing = parts[1].trim();
+            } else {
+              greeting = aiText;
+            }
+          } else {
+            console.error("Gemini: no candidates in response", JSON.stringify(data).substring(0, 500));
+          }
         }
       } catch (e) {
         console.error("Gemini error:", e);
       }
+      const reportText = `${greeting}
+${dataSection}
+${closing}`;
       const teleRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

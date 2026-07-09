@@ -355,7 +355,7 @@ export default async function handler(req: any, res: any) {
       if (keyDoc && keyDoc.fields) {
         const kf = keyDoc.fields;
         const botToken = kf.telegramBotToken?.stringValue;
-        const chatId = kf.telegramChatId?.stringValue;
+        const chatId = kf.telegramGroupChatId?.stringValue || kf.telegramChatId?.stringValue;
         if (botToken && chatId && kf.enabled?.booleanValue === true) {
           const message = `📦 <b>ĐƠN HÀNG MỚI (CHỐT)</b>\n- Khách hàng: <b>${customerName || 'Khách vãng lai'}</b>\n- Tổng tiền: <b>${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(totalAmount)}</b>\n- Người thao tác: Bot Trợ Lý (Webhook)`;
           

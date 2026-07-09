@@ -70,7 +70,7 @@ export default async function handler(req: any, res: any) {
     }
     const kf = keyDoc.fields || {};
     const botToken = kf.telegramBotToken?.stringValue;
-    const chatId = kf.telegramChatId?.stringValue;
+    const chatId = kf.telegramGroupChatId?.stringValue || kf.telegramChatId?.stringValue;
     
     if (!botToken || kf.enabled?.booleanValue !== true) {
       return res.status(403).json({ error: 'Invalid or disabled bot token' });

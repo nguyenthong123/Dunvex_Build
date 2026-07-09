@@ -109,7 +109,7 @@ const Attendance = () => {
 
 	const handleCheckIn = async () => {
 		if (!location || !distance || !owner.ownerId || !auth.currentUser) return;
-		if (distance > (companySettings.geofenceRadius || 100)) {
+		if (distance > (companySettings.geofenceRadius || 200)) {
 			showToast(`Bạn ở quá xa văn phòng (${Math.round(distance)}m).`, "warning");
 			return;
 		}
@@ -240,7 +240,8 @@ const Attendance = () => {
 
 	if (loading) return <div className="p-10 text-center font-bold">ĐANG TẢI...</div>;
 
-	const isWithinRange = distance !== null && distance <= (companySettings?.geofenceRadius || 100);
+	const isWithinRange = distance !== null && distance <= (companySettings?.geofenceRadius || 200);
+	const isWithinCheckOutRange = distance !== null && distance <= ((companySettings?.geofenceRadius || 200) * 1.5);
 
 	return (
 		<div className="flex flex-col h-full bg-[#f8f9fb] dark:bg-slate-950 transition-colors duration-300">
@@ -313,7 +314,7 @@ const Attendance = () => {
 						) : !todayLog.checkOutAt ? (
 							<button
 								onClick={handleCheckOut}
-								disabled={!isWithinRange || checking}
+								disabled={!isWithinCheckOutRange || checking}
 								className="w-full h-16 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl font-black uppercase tracking-[2px] shadow-xl shadow-orange-500/20 transition-all disabled:opacity-50 disabled:grayscale flex items-center justify-center gap-3"
 							>
 								{checking ? 'Đang xử lý...' : <><LogOut size={24} /> CHẤM CÔNG RA</>}

@@ -410,18 +410,35 @@ const SaleBot = () => {
 
         try {
             // 📊 Pre-check: nếu có link Google Sheet
-            const sheetMatch = userMsg.match(/https?:\/\/docs\.google\.com\/spreadsheets\/[^\s]+/);
-            if (sheetMatch) {
-                // Chuẩn hóa text để detect intent (bỏ dấu xuống dòng, gộp khoảng trắng)
-                const flatMsg = userMsg.replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ').toLowerCase();
-                const isOrder = /(lên|tạo|chốt|đặt|order|tao)\s*.?(đơn|don|order|hàng|hang)/.test(flatMsg) ||
-                    /đơn\s*hàng|order\s*from|từ\s*sheet.*đơn/.test(flatMsg);
-                const isInventory = /(nhập|import|cập\s*nhật|update|nạp|thêm)\s*.?(kho|tồn|ton|inventory|stock)/.test(flatMsg) ||
-                    /tồn\s*kho|nhập\s*hàng|import\s*stock/.test(flatMsg);
-                const isSupplier = /nhà\s*cung\s*cấp|ncc|nhập\s*hàng|mua\s*hàng|đơn\s*mua|purchase|supplier/.test(flatMsg);
-                const isCreateProducts = /tạo\s*.?(danh\s*sách)?\s*.?(sản\s*phẩm|sp)|create\s*.?(product|sp)/.test(flatMsg) ||
-                    /sản\s*phẩm\s*mới|danh\s*sách\s*(sản\s*phẩm|sp)|thêm\s*(sản\s*phẩm|sp)/.test(flatMsg);
+            let sheetMatch = userMsg.match(/https?:\/\/docs\.google\.com\/spreadsheets\/[^\s]+/);
+            let isFromHistory = false;
 
+            // Chuẩn hóa text để detect intent (bỏ dấu xuống dòng, gộp khoảng trắng)
+            const flatMsg = userMsg.replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ').toLowerCase();
+            const isOrder = /(lên|tạo|chốt|đặt|order|tao)\s*.?(đơn|don|order|hàng|hang)/.test(flatMsg) ||
+                /đơn\s*hàng|order\s*from|từ\s*sheet.*đơn/.test(flatMsg);
+            const isInventory = /(nhập|import|cập\s*nhật|update|nạp|thêm)\s*.?(kho|tồn|ton|inventory|stock)/.test(flatMsg) ||
+                /tồn\s*kho|nhập\s*hàng|import\s*stock/.test(flatMsg);
+            const isSupplier = /nhà\s*cung\s*cấp|ncc|nhập\s*hàng|mua\s*hàng|đơn\s*mua|purchase|supplier/.test(flatMsg);
+            const isCreateProducts = /tạo\s*.?(danh\s*sách)?\s*.?(sản\s*phẩm|sp)|create\s*.?(product|sp)/.test(flatMsg) ||
+                /sản\s*phẩm\s*mới|danh\s*sách\s*(sản\s*phẩm|sp)|thêm\s*(sản\s*phẩm|sp)/.test(flatMsg);
+
+            if (!sheetMatch && (isOrder || isInventory || isSupplier || isCreateProducts)) {
+                // Tìm link sheet trong 5 tin nhắn gần nhất nếu người dùng có nói từ khoá
+                const recentMsgs = [...formattedHistory].reverse().slice(0, 5);
+                for (const msg of recentMsgs) {
+                    if (msg.role === 'user') {
+                        const match = msg.content.match(/https?:\/\/docs\.google\.com\/spreadsheets\/[^\s]+/);
+                        if (match) {
+                            sheetMatch = match;
+                            isFromHistory = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (sheetMatch) {
                 if (isCreateProducts && !isOrder && !isInventory && !isSupplier) {
                     // 📦 Tạo danh sách sản phẩm mới từ sheet
                     const data = {
@@ -474,13 +491,15 @@ const SaleBot = () => {
                     return;
                 }
 
-                // Không rõ ý định → hỏi lại
-                setMessages(prev => [...prev, {
-                    id: crypto.randomUUID(), role: 'bot',
-                    content: '📊 Em thấy anh/chị gửi link Google Sheet. Anh/chị muốn:\n\n1️⃣ **Nhập tồn kho** — cập nhật số lượng tồn\n2️⃣ **Lên đơn hàng** — tạo đơn từ danh sách\n3️⃣ **Tạo sản phẩm mới** — tạo danh sách SP từ sheet\n4️⃣ **Tạo đơn mua hàng** — nhập hàng từ NCC\n\nVui lòng nhập "nhập kho", "lên đơn", "tạo sản phẩm", hoặc "mua hàng" để em xử lý ạ!'
-                }]);
-                setIsLoading(false);
-                return;
+                // Không rõ ý định → hỏi lại (chỉ hỏi khi link được gửi TRỰC TIẾP trong tin nhắn này)
+                if (!isFromHistory) {
+                    setMessages(prev => [...prev, {
+                        id: crypto.randomUUID(), role: 'bot',
+                        content: '📊 Em thấy anh/chị gửi link Google Sheet. Anh/chị muốn:\n\n1️⃣ **Nhập tồn kho** — cập nhật số lượng tồn\n2️⃣ **Lên đơn hàng** — tạo đơn từ danh sách\n3️⃣ **Tạo sản phẩm mới** — tạo danh sách SP từ sheet\n4️⃣ **Tạo đơn mua hàng** — nhập hàng từ NCC\n\nVui lòng nhập "nhập kho", "lên đơn", "tạo sản phẩm", hoặc "mua hàng" để em xử lý ạ!'
+                    }]);
+                    setIsLoading(false);
+                    return;
+                }
             }
 
             const data = await parseSaleMessage(userMsg, productsStr, formattedHistory);

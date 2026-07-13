@@ -419,6 +419,21 @@ const SaleBot = () => {
                 const isInventory = /(nhập|import|cập\s*nhật|update|nạp|thêm)\s*.?(kho|tồn|ton|inventory|stock)/.test(flatMsg) ||
                     /tồn\s*kho|nhập\s*hàng|import\s*stock/.test(flatMsg);
                 const isSupplier = /nhà\s*cung\s*cấp|ncc|nhập\s*hàng|mua\s*hàng|đơn\s*mua|purchase|supplier/.test(flatMsg);
+                const isCreateProducts = /tạo\s*.?(danh\s*sách)?\s*.?(sản\s*phẩm|sp)|create\s*.?(product|sp)/.test(flatMsg) ||
+                    /sản\s*phẩm\s*mới|danh\s*sách\s*(sản\s*phẩm|sp)|thêm\s*(sản\s*phẩm|sp)/.test(flatMsg);
+
+                if (isCreateProducts && !isOrder && !isInventory && !isSupplier) {
+                    // 📦 Tạo danh sách sản phẩm mới từ sheet
+                    const data = {
+                        intent: 'IMPORT_CREATE_PRODUCTS',
+                        import_url: sheetMatch[0],
+                        message: '📦 Dạ, em sẽ đọc Google Sheet và tạo danh sách sản phẩm mới. Đang xử lý...'
+                    };
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot', content: data.message, parsedData: data }]);
+                    setIsLoading(false);
+                    await executeAction(data);
+                    return;
+                }
 
                 if (isOrder && isSupplier && !isInventory) {
                     // 📦 Tạo đơn MUA hàng (purchase order) từ sheet
@@ -462,7 +477,7 @@ const SaleBot = () => {
                 // Không rõ ý định → hỏi lại
                 setMessages(prev => [...prev, {
                     id: crypto.randomUUID(), role: 'bot',
-                    content: '📊 Em thấy anh/chị gửi link Google Sheet. Anh/chị muốn:\n\n1️⃣ **Nhập tồn kho** — cập nhật số lượng tồn\n2️⃣ **Lên đơn hàng** — tạo đơn từ danh sách\n\nVui lòng nhập "nhập kho" hoặc "lên đơn" để em xử lý ạ!'
+                    content: '📊 Em thấy anh/chị gửi link Google Sheet. Anh/chị muốn:\n\n1️⃣ **Nhập tồn kho** — cập nhật số lượng tồn\n2️⃣ **Lên đơn hàng** — tạo đơn từ danh sách\n3️⃣ **Tạo sản phẩm mới** — tạo danh sách SP từ sheet\n4️⃣ **Tạo đơn mua hàng** — nhập hàng từ NCC\n\nVui lòng nhập "nhập kho", "lên đơn", "tạo sản phẩm", hoặc "mua hàng" để em xử lý ạ!'
                 }]);
                 setIsLoading(false);
                 return;
@@ -1346,6 +1361,254 @@ const SaleBot = () => {
             } finally {
                 setIsLoading(false);
             }
+        } else if (data.intent === 'IMPORT_CREATE_PRODUCTS') {
+            // 📦 Tạo danh sách sản phẩm mới từ Google Sheet
+            try {
+                if (!data.import_url) {
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
+                        content: '❌ Không tìm thấy link Google Sheet. Anh/chị vui lòng gửi lại link đầy đủ.' }]);
+                    return;
+                }
+                setIsLoading(true);
+                setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
+                    content: '⏳ Đang đọc dữ liệu từ Google Sheet...' }]);
+
+                // Chuyển Google Sheet URL → CSV export
+                let csvUrl = data.import_url;
+                const match = csvUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                if (!match) {
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
+                        content: '❌ Link Google Sheet không đúng định dạng. Cần link dạng: https://docs.google.com/spreadsheets/d/...' }]);
+                    setIsLoading(false);
+                    return;
+                }
+                const sheetId = match[1];
+                const gidMatch = csvUrl.match(/gid=(\d+)/);
+                const gid = gidMatch ? gidMatch[1] : '0';
+                csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
+
+                const res = await fetch(csvUrl);
+                if (!res.ok) {
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
+                        content: '❌ Không đọc được Google Sheet. Sheet cần được chia sẻ công khai (Anyone with link).' }]);
+                    setIsLoading(false);
+                    return;
+                }
+
+                const csvText = await res.text();
+                const lines = csvText.split('\n').filter(l => l.trim());
+                if (lines.length < 2) {
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
+                        content: '❌ Sheet trống hoặc không có dữ liệu.' }]);
+                    setIsLoading(false);
+                    return;
+                }
+
+                // Parse header để tìm cột (KHÔNG có cột tồn kho)
+                const parseCSVLine = (line: string): string[] => {
+                    const result: string[] = [];
+                    let current = '';
+                    let inQuotes = false;
+                    for (const ch of line) {
+                        if (ch === '"') { inQuotes = !inQuotes; continue; }
+                        if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ''; continue; }
+                        current += ch;
+                    }
+                    result.push(current.trim());
+                    return result;
+                };
+
+                const headers = parseCSVLine(lines[0]).map(h => normalizeVN(h));
+                const nameColIdx = headers.findIndex((h: string) => 
+                    h.includes('ten') || h.includes('sanpham') || h.includes('product') || h.includes('name') || h.includes('hanghoa'));
+                const specColIdx = headers.findIndex((h: string) =>
+                    h.includes('quycach') || h.includes('spec') || h.includes('kichthuoc') || h.includes('size') || h.includes('dacdiem'));
+                const weightColIdx = headers.findIndex((h: string) =>
+                    h.includes('trongluong') || h.includes('weight') || h.includes('density') || h.includes('matdo') || h.includes('khoiluong') || h.includes('kg'));
+                const priceSellColIdx = headers.findIndex((h: string) =>
+                    h.includes('giaban') || h.includes('ban') || h.includes('retail') || h.includes('le') || h.includes('gia'));
+                const catColIdx = headers.findIndex((h: string) =>
+                    h.includes('danhmuc') || h.includes('loai') || h.includes('category') || h.includes('nhom'));
+                const unitColIdx = headers.findIndex((h: string) =>
+                    h.includes('donvi') || h.includes('unit') || h.includes('dvt') || h.includes('tinh'));
+                const priceImportColIdx = headers.findIndex((h: string) =>
+                    h.includes('gianhap') || h.includes('giavon') || h.includes('cost') || h.includes('nhap'));
+
+                if (nameColIdx < 0) {
+                    const cols = headers.join(', ');
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
+                        content: `❌ Không tìm thấy cột "Tên sản phẩm". Các cột hiện có: ${cols}. Vui lòng đặt tên cột có chữ "tên" hoặc "sản phẩm".` }]);
+                    setIsLoading(false);
+                    return;
+                }
+
+                // Parse từng dòng — tất cả đều là sản phẩm mới
+                const newProducts: { name: string; spec: string; weight: string; priceSell: number; priceImport: number; category: string; unit: string }[] = [];
+                for (let i = 1; i < lines.length; i++) {
+                    const cols = parseCSVLine(lines[i]);
+                    const rowName = (cols[nameColIdx] || '').trim();
+                    if (!rowName) continue;
+
+                    const rowSpec = specColIdx >= 0 ? (cols[specColIdx] || '').trim() : '';
+                    const rowWeight = weightColIdx >= 0 ? (cols[weightColIdx] || '').trim() : '';
+                    const parsePrice = (s: string) => Number((s || '').replace(/[^\d.-]/g, '')) || 0;
+                    const rowPriceSell = priceSellColIdx >= 0 ? parsePrice(cols[priceSellColIdx]) : 0;
+                    const rowPriceImport = priceImportColIdx >= 0 ? parsePrice(cols[priceImportColIdx]) : 0;
+                    const rowCat = catColIdx >= 0 ? (cols[catColIdx] || '').trim() : '';
+                    const rowUnit = unitColIdx >= 0 ? (cols[unitColIdx] || '').trim() : '';
+
+                    newProducts.push({
+                        name: rowName,
+                        spec: rowSpec,
+                        weight: rowWeight,
+                        priceSell: rowPriceSell,
+                        priceImport: rowPriceImport,
+                        category: rowCat,
+                        unit: rowUnit
+                    });
+                }
+
+                if (newProducts.length === 0) {
+                    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
+                        content: '❌ Không tìm thấy sản phẩm nào trong sheet.' }]);
+                    setIsLoading(false);
+                    return;
+                }
+
+                // Check trùng tên với sản phẩm hiện có
+                const qProd = query(collection(db, 'products'), where('ownerId', '==', owner.ownerId));
+                const snap = await getDocs(qProd);
+                const allProducts = snap.docs.map(d => ({ id: d.id, ...d.data() as any }));
+
+                const duplicateNames: string[] = [];
+                const missingPriceProducts: string[] = [];
+                for (const np of newProducts) {
+                    const found = findMatchingProduct(np.name, allProducts);
+                    if (found) duplicateNames.push(np.name);
+                    if (np.priceSell <= 0) missingPriceProducts.push(np.name);
+                }
+
+                const confirmMsg = `📦 **${newProducts.length}** sản phẩm mới sẽ được tạo:\n\n` + 
+                    newProducts.slice(0, 20).map(p => 
+                        `• ${p.name}${p.spec ? ` — ${p.spec}` : ''}${p.weight ? ` — ${p.weight}` : ''}${p.priceSell > 0 ? ` — ${p.priceSell.toLocaleString('vi-VN')}đ` : ' ⚠️ Chưa có giá bán'}${p.category ? ` [${p.category}]` : ''}${p.unit ? ` /${p.unit}` : ''}`
+                    ).join('\n') +
+                    (newProducts.length > 20 ? `\n...và ${newProducts.length - 20} sản phẩm khác` : '') +
+                    (duplicateNames.length > 0 ? `\n\n⚠️ **${duplicateNames.length}** sản phẩm trùng tên với sản phẩm hiện có: ${duplicateNames.join(', ')}. Các sản phẩm này sẽ được tạo với SKU mới.` : '') +
+                    (missingPriceProducts.length > 0 ? `\n\n⚠️ **${missingPriceProducts.length}** sản phẩm chưa có giá bán: ${missingPriceProducts.join(', ')}.` : '') +
+                    '\n\nXác nhận tạo danh sách sản phẩm?';
+
+                setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot', content: confirmMsg,
+                    parsedData: {
+                        intent: 'CONFIRM_CREATE_PRODUCTS',
+                        new_products: newProducts.map(np => ({
+                            name: np.name,
+                            spec: np.spec,
+                            weight: np.weight,
+                            priceSell: np.priceSell,
+                            priceImport: np.priceImport,
+                            category: np.category,
+                            unit: np.unit
+                        }))
+                    } }]);
+            } catch (err: any) {
+                console.error('IMPORT_CREATE_PRODUCTS error:', err);
+                setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
+                    content: `❌ Lỗi khi đọc Google Sheet: ${err.message || 'Sheet có thể chưa được chia sẻ công khai.'}` }]);
+            } finally {
+                setIsLoading(false);
+            }
+        } else if (data.intent === 'CONFIRM_CREATE_PRODUCTS') {
+            // 📦 Xác nhận tạo danh sách sản phẩm mới từ Google Sheet
+            try {
+                if (!data.new_products?.length) return;
+                setIsLoading(true);
+
+                // Lấy tất cả SKU hiện có để sinh SKU không trùng
+                const qProd = query(collection(db, 'products'), where('ownerId', '==', owner.ownerId));
+                const snap = await getDocs(qProd);
+                const existingProducts = snap.docs.map(d => ({ id: d.id, ...d.data() as any }));
+                const existingSkus = new Set(existingProducts.map((p: any) => (p.sku || '').toUpperCase()));
+                
+                // 🏷️ Sinh SKU không trùng
+                function generateUniqueSku(): string {
+                    let sku: string;
+                    let attempts = 0;
+                    do {
+                        const num = Math.floor(100000 + Math.random() * 900000);
+                        sku = `DV-${num}`;
+                        attempts++;
+                    } while (existingSkus.has(sku) && attempts < 100);
+                    if (existingSkus.has(sku)) {
+                        // fallback với timestamp nếu random 100 lần vẫn trùng
+                        const ts = Date.now().toString(36).toUpperCase().slice(-4);
+                        sku = `DV-${ts}${Math.floor(1000 + Math.random() * 9000)}`;
+                    }
+                    existingSkus.add(sku);
+                    return sku;
+                }
+
+                let createdCount = 0;
+                const skippedNames: string[] = [];
+
+                for (const np of data.new_products) {
+                    const priceImport = Number(np.priceImport) || 0;
+                    const priceSell = Number(np.priceSell) || 0;
+                    const sku = generateUniqueSku();
+
+                    try {
+                        const newProdRef = await addDoc(collection(db, 'products'), {
+                            name: np.name,
+                            sku: sku,
+                            stock: 0,
+                            priceImport: priceImport,
+                            priceSell: priceSell,
+                            category: np.category || 'Vật liệu khác',
+                            unit: np.unit || 'cái',
+                            density: np.weight || '',
+                            specification: np.spec || '',
+                            status: 'Kinh doanh',
+                            createdAt: serverTimestamp(),
+                            ownerId: owner.ownerId,
+                            ownerEmail: owner.ownerEmail,
+                            createdBy: auth.currentUser?.uid,
+                            createdByEmail: auth.currentUser?.email
+                        });
+
+                        // Ghi inventory_logs cho sản phẩm mới được tạo
+                        await addDoc(collection(db, 'inventory_logs'), {
+                            productId: newProdRef.id,
+                            productName: np.name,
+                            sku: sku,
+                            qty: 0,
+                            type: 'import',
+                            action: 'Tạo sản phẩm mới từ Sheet',
+                            previousStock: 0,
+                            newStock: 0,
+                            note: `Tạo mới từ Google Sheet qua SaleBot — Giá bán: ${priceSell.toLocaleString('vi-VN')}đ`,
+                            createdAt: serverTimestamp(),
+                            ownerId: owner.ownerId,
+                            user: auth.currentUser?.displayName || 'Unknown'
+                        });
+                        createdCount++;
+                    } catch (e: any) {
+                        console.error('Create product error:', e);
+                        skippedNames.push(np.name);
+                    }
+                }
+
+                const parts: string[] = [];
+                if (createdCount > 0) parts.push(`🆕 Đã tạo: **${createdCount}** sản phẩm`);
+                if (skippedNames.length > 0) parts.push(`⚠️ Lỗi: ${skippedNames.join(', ')}`);
+
+                setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
+                    content: `✅ Hoàn tất! ${parts.join(' | ')}\n\n💡 Mẹo: Dùng "nhập kho" + link Sheet để cập nhật số lượng tồn sau khi tạo sản phẩm.` }]);
+            } catch (err: any) {
+                console.error('CONFIRM_CREATE_PRODUCTS error:', err);
+                setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bot',
+                    content: `❌ Lỗi: ${err.message || 'Không xác định'}` }]);
+            } finally {
+                setIsLoading(false);
+            }
         } else if (data.intent === 'IMPORT_ORDER_FROM_SHEET') {
             // 📋 Tạo đơn hàng từ Google Sheet
             try {
@@ -2135,6 +2398,8 @@ const SaleBot = () => {
                                                  msg.parsedData.intent === 'CREATE_PRODUCT' ? 'Thông tin Sản Phẩm' : 
                                                  msg.parsedData.intent === 'CREATE_PAYMENT' ? 'Thông tin Thu Công Nợ' :
                                                  msg.parsedData.intent === 'INVENTORY_ACTION' ? 'Thông tin Phiếu Kho' :
+                                                 msg.parsedData.intent === 'IMPORT_CREATE_PRODUCTS' ? '📦 Tạo Sản Phẩm từ Sheet' :
+                                                 msg.parsedData.intent === 'CONFIRM_CREATE_PRODUCTS' ? '📦 Xác Nhận Tạo Sản Phẩm' :
                                                  msg.parsedData.intent === 'CONFIRM_IMPORT' ? '📊 Import Tồn Kho' :
                                                  msg.parsedData.intent === 'IMPORT_PURCHASE_ORDER_FROM_SHEET' ? '📦 Đơn Mua Hàng' :
                                                  msg.parsedData.intent === 'CONFIRM_PURCHASE_ORDER_FROM_SHEET' ? '📦 Xác Nhận Đơn Mua' :
@@ -2284,6 +2549,29 @@ const SaleBot = () => {
                                             </div>
                                         )}
 
+                                        {msg.parsedData.intent === 'CONFIRM_CREATE_PRODUCTS' && msg.parsedData.new_products && (
+                                            <div className="mb-3 bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-xl border border-indigo-100 dark:border-indigo-800/50">
+                                                <p className="text-[10px] text-indigo-600 dark:text-indigo-400 uppercase font-bold mb-2">
+                                                    📦 Danh sách sản phẩm mới ({msg.parsedData.new_products.length} SP)
+                                                </p>
+                                                <div className="max-h-40 overflow-y-auto space-y-1">
+                                                    {msg.parsedData.new_products.slice(0, 10).map((np: any, idx: number) => (
+                                                        <div key={idx} className="text-xs text-slate-600 dark:text-slate-400">
+                                                            <span className="font-medium">{np.name}</span>
+                                                            {np.spec && <span className="ml-1 text-slate-400">— {np.spec}</span>}
+                                                            {np.weight && <span className="ml-1 text-slate-400">— {np.weight}</span>}
+                                                            {np.priceSell > 0 && <span className="ml-1 text-green-600 font-bold">{np.priceSell.toLocaleString('vi-VN')}đ</span>}
+                                                            {!np.priceSell && <span className="ml-1 text-red-400">⚠️ Chưa có giá</span>}
+                                                            {np.category && <span className="ml-1 text-indigo-500">[{np.category}]</span>}
+                                                        </div>
+                                                    ))}
+                                                    {msg.parsedData.new_products.length > 10 && (
+                                                        <p className="text-xs text-slate-400">...và {msg.parsedData.new_products.length - 10} sản phẩm khác</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+
                                         {msg.parsedData.intent === 'INVENTORY_ACTION' && msg.parsedData.products && msg.parsedData.products.length > 0 && (
                                             <div className="mb-3">
                                                 <p className="text-[10px] text-slate-500 uppercase font-bold mb-2">
@@ -2302,7 +2590,7 @@ const SaleBot = () => {
                                             </div>
                                         )}
 
-                                        {['CREATE_ORDER', 'UPDATE_ORDER', 'REVIEW_ORDER', 'FIX_ORDER', 'CREATE_CUSTOMER', 'UPDATE_CUSTOMER', 'CREATE_PRODUCT', 'CREATE_PAYMENT', 'CONFIRM_IMPORT', 'IMPORT_ORDER_FROM_SHEET', 'CONFIRM_ORDER_FROM_SHEET'].includes(msg.parsedData.intent) && 
+                                        {['CREATE_ORDER', 'UPDATE_ORDER', 'REVIEW_ORDER', 'FIX_ORDER', 'CREATE_CUSTOMER', 'UPDATE_CUSTOMER', 'CREATE_PRODUCT', 'CREATE_PAYMENT', 'CONFIRM_IMPORT', 'CONFIRM_CREATE_PRODUCTS', 'IMPORT_ORDER_FROM_SHEET', 'CONFIRM_ORDER_FROM_SHEET'].includes(msg.parsedData.intent) && 
                                         (!msg.parsedData.missing_info || msg.parsedData.missing_info.length === 0) && (
                                             <button 
                                                 onClick={() => handleAction(msg.parsedData)}
@@ -2317,6 +2605,7 @@ const SaleBot = () => {
                                                  msg.parsedData.intent === 'CREATE_PAYMENT' ? 'Đi tới Form Phiếu Thu' :
                                                  msg.parsedData.intent === 'INVENTORY_ACTION' ? 'Xác Nhận & Tạo Phiếu Kho' :
                                                  msg.parsedData.intent === 'CONFIRM_IMPORT' ? '✅ Xác Nhận Cập Nhật Tồn Kho' :
+                                                 msg.parsedData.intent === 'CONFIRM_CREATE_PRODUCTS' ? '✅ Xác Nhận Tạo Sản Phẩm' :
                                                  msg.parsedData.intent === 'IMPORT_ORDER_FROM_SHEET' ? '📋 Tạo Đơn Hàng' :
                                                  msg.parsedData.intent === 'CONFIRM_ORDER_FROM_SHEET' ? '📋 Xác Nhận Đơn Hàng' :
                                                  'Tiếp Tục Lên Đơn'}
@@ -2461,6 +2750,7 @@ const SaleBot = () => {
                                      confirmAction.intent === 'CREATE_PAYMENT' ? '💰 Thu công nợ' :
                                      confirmAction.intent === 'INVENTORY_ACTION' ? '📊 Phiếu kho' :
                                      confirmAction.intent === 'CONFIRM_IMPORT' ? '📊 Import Tồn kho' :
+                                     confirmAction.intent === 'CONFIRM_CREATE_PRODUCTS' ? '📦 Tạo danh sách sản phẩm' :
                                      confirmAction.intent === 'IMPORT_ORDER_FROM_SHEET' ? '📋 Tạo đơn từ Sheet' :
                                      confirmAction.intent === 'CONFIRM_ORDER_FROM_SHEET' ? '📋 Xác nhận đơn từ Sheet' :
                                      'Thao tác'}
@@ -2503,7 +2793,7 @@ const SaleBot = () => {
                                         <span className="font-bold">🆕 Tạo sản phẩm mới ({confirmAction.new_products.length} SP):</span>
                                         {confirmAction.new_products.slice(0, 10).map((np: any, i: number) => (
                                             <div key={i} className="ml-2 text-xs text-slate-600 dark:text-slate-400">
-                                                • {np.name}: tồn <strong className="text-green-600">{np.stock}</strong>{np.priceImport > 0 ? ` — nhập ${np.priceImport.toLocaleString('vi-VN')}đ` : ''}{np.priceSell > 0 && np.priceSell !== np.priceImport ? ` / bán ${np.priceSell.toLocaleString('vi-VN')}đ` : ''}{np.category ? ` [${np.category}]` : ''}{np.unit ? ` /${np.unit}` : ''}{np.weight ? ` — ${np.weight}` : ''}{np.spec ? ` — ${np.spec}` : ''}
+                                                • {np.name}{np.stock !== undefined ? `: tồn ` : ''}{np.stock !== undefined && <strong className="text-green-600">{np.stock}</strong>}{np.priceImport > 0 ? ` — nhập ${np.priceImport.toLocaleString('vi-VN')}đ` : ''}{np.priceSell > 0 && np.priceSell !== np.priceImport ? ` / bán ${np.priceSell.toLocaleString('vi-VN')}đ` : ''}{np.priceSell > 0 && !np.priceImport ? ` — bán ${np.priceSell.toLocaleString('vi-VN')}đ` : ''}{np.category ? ` [${np.category}]` : ''}{np.unit ? ` /${np.unit}` : ''}{np.weight ? ` — ${np.weight}` : ''}{np.spec ? ` — ${np.spec}` : ''}
                                             </div>
                                         ))}
                                         {confirmAction.new_products.length > 10 && (

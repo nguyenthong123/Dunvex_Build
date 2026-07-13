@@ -1697,7 +1697,7 @@ const Debts: React.FC = () => {
 											];
 
 											// Calculate Opening Balance (all tx before 'startVal')
-											const openingBalance = allPossibleTx.reduce((sum, tx) => {
+											const computedOpening = allPossibleTx.reduce((sum, tx) => {
 												const txDate = getNormDate(tx);
 												if (txDate !== '' && txDate < startVal) {
 													return sum + Number(tx.totalAmount || 0) - Number(tx.amount || 0);
@@ -1720,7 +1720,15 @@ const Debts: React.FC = () => {
 
 											const debitIncrease = cycleTx.filter(t => t.txType === 'order').reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
 											const creditDecrease = cycleTx.filter(t => t.txType === 'payment').reduce((sum, p) => sum + Number(p.amount || 0), 0);
-											const closingBalance = openingBalance + debitIncrease - creditDecrease;
+											// 🔧 Dùng debt field từ Firestore cho KH đã đăng ký (tránh lệch do limit 500 đơn)
+											// Với khách vãng lai thì tính từ giao dịch thực tế
+											const closingBalance = selectedCustomer.isGuest
+												? (computedOpening + debitIncrease - creditDecrease)
+												: (Number(selectedCustomer.debt) || 0);
+											// Điều chỉnh openingBalance để khớp với closingBalance (stored debt)
+											const openingBalance = selectedCustomer.isGuest
+												? computedOpening
+												: (closingBalance - debitIncrease + creditDecrease);
 
 											return (
 												<>

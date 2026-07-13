@@ -3,15 +3,15 @@ import { useOwner } from '../hooks/useOwner';
 import { useSuppliers } from '../hooks/useSuppliers';
 import { useSupplierDebts } from '../hooks/useSupplierDebts';
 import { useToast } from '../components/shared/Toast';
-import { Search, FileText, CheckCircle2, History, X, Plus, Trash2, ChevronLeft, Maximize2, Minimize2, Wrench } from 'lucide-react';
-import { serverTimestamp, collection, getDocs, query, where, writeBatch } from 'firebase/firestore';
+import { Search, FileText, CheckCircle2, History, X, Plus, Trash2, ChevronLeft, Maximize2, Minimize2, Wrench, Image as ImageIcon, Edit2 } from 'lucide-react';
+import { serverTimestamp, Timestamp, collection, getDocs, query, where, writeBatch } from 'firebase/firestore';
 import { db } from '../services/firebase';
 
 const SupplierDebts = () => {
 	const owner = useOwner();
 	const { showToast } = useToast();
 	const { suppliers, updateSupplier } = useSuppliers();
-	const { debts, addDebt, removeDebt } = useSupplierDebts();
+	const { debts, addDebt, removeDebt, updateDebt } = useSupplierDebts();
 
 	const [activeTab, setActiveTab] = useState<'debts' | 'history'>('debts');
 	const [searchTerm, setSearchTerm] = useState('');
@@ -36,6 +36,16 @@ const SupplierDebts = () => {
 	const [paymentAmount, setPaymentAmount] = useState('');
 	const [paymentMethod, setPaymentMethod] = useState('Chuyển khoản');
 	const [paymentNote, setPaymentNote] = useState('');
+	const [paymentDate, setPaymentDate] = useState('');
+	const [paymentImage, setPaymentImage] = useState<File | null>(null);
+	const [isUploading, setIsUploading] = useState(false);
+
+
+	// Edit Debt State
+	const [showEditDebtForm, setShowEditDebtForm] = useState(false);
+	const [editingDebt, setEditingDebt] = useState<any>(null);
+	const [editAmountInput, setEditAmountInput] = useState('');
+	const [editNote, setEditNote] = useState('');
 
 	// Add Debt State
 	const [showAddDebtForm, setShowAddDebtForm] = useState(false);
@@ -44,6 +54,7 @@ const SupplierDebts = () => {
 	const [debtSupplierSearchQuery, setDebtSupplierSearchQuery] = useState('');
 	const [debtAmountInput, setDebtAmountInput] = useState('');
 	const [debtNote, setDebtNote] = useState('');
+	const [debtType, setDebtType] = useState('payment');
 
 	const debtSupplierSearchRef = useRef<HTMLDivElement>(null);
 
@@ -74,6 +85,29 @@ const SupplierDebts = () => {
 		}
 
 		try {
+			setIsUploading(true);
+			let imageUrl = '';
+			if (paymentImage) {
+				const fData = new FormData();
+				fData.append('file', paymentImage);
+				fData.append('upload_preset', 'ml_default');
+				
+				const res = await fetch('https://api.cloudinary.com/v1_1/dtx0uvb4e/image/upload', { method: 'POST', body: fData });
+				const data = await res.json();
+				if (data.secure_url) {
+					imageUrl = data.secure_url;
+				} else {
+					showToast("Lỗi upload ảnh", "error");
+					setIsUploading(false);
+					return;
+				}
+			}
+
+			let finalCreatedAt = serverTimestamp();
+			if (paymentDate) {
+				finalCreatedAt = Timestamp.fromDate(new Date(paymentDate));
+			}
+
 			// Create payment transaction
 			await addDebt({
 				supplierId: selectedSupplier.id,
@@ -82,8 +116,9 @@ const SupplierDebts = () => {
 				amount: amountNum,
 				method: paymentMethod,
 				note: paymentNote,
+				imageUrl: imageUrl,
 				createdBy: owner.ownerId,
-				createdAt: serverTimestamp()
+				createdAt: finalCreatedAt
 			});
 
 			// P0 #2: totalDebt tự động tính từ debts listener, không cần update thủ công
@@ -92,9 +127,13 @@ const SupplierDebts = () => {
 			setShowPaymentForm(false);
 			setPaymentAmount('');
 			setPaymentNote('');
+			setPaymentDate('');
+			setPaymentImage(null);
 		} catch (error) {
 			console.error(error);
 			showToast("Lỗi thanh toán", "error");
+		} finally {
+			setIsUploading(false);
 		}
 	};
 
@@ -113,10 +152,10 @@ const SupplierDebts = () => {
 			await addDebt({
 				supplierId: debtSupplier.id,
 				supplierName: debtSupplier.name,
-				type: 'payment',
+				type: debtType,
 				amount: amountNum,
 				method: 'Chuyển khoản',
-				note: debtNote || 'Ghi nhận trả nợ',
+				note: debtNote || (debtType === 'payment' ? 'Ghi nhận trả nợ' : 'Ghi nợ mới'),
 				createdBy: owner.ownerId,
 				createdAt: serverTimestamp()
 			});
@@ -129,6 +168,29 @@ const SupplierDebts = () => {
 		} catch (error) {
 			console.error(error);
 			showToast("Có lỗi xảy ra", "error");
+		}
+	};
+
+
+	const handleSaveEditDebt = async (e: React.FormEvent) => {
+		e.preventDefault();
+		if (!editingDebt || !editAmountInput) return;
+		const amountNum = parseFloat(editAmountInput.replace(/\D/g, ''));
+		if (isNaN(amountNum) || amountNum <= 0) {
+			showToast("Số tiền không hợp lệ", "error");
+			return;
+		}
+		try {
+			await updateDebt(editingDebt.id, {
+				amount: amountNum,
+				note: editNote || ''
+			});
+			showToast("Cập nhật thành công", "success");
+			setShowEditDebtForm(false);
+			setEditingDebt(null);
+		} catch (error) {
+			console.error(error);
+			showToast("Lỗi cập nhật", "error");
 		}
 	};
 
@@ -315,15 +377,36 @@ const SupplierDebts = () => {
 											{payment.method && <><span className="mx-2">•</span>{payment.method}</>}
 										</div>
 										{payment.note && <div className="text-sm mt-1 text-slate-600 dark:text-slate-300 truncate">{payment.note}</div>}
+										{payment.imageUrl && (
+											<div className="mt-2">
+												<a href={payment.imageUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2.5 py-1.5 rounded-lg hover:bg-blue-100 transition-colors" onClick={(e) => e.stopPropagation()}>
+													<ImageIcon size={14} />
+													Xem hình ảnh UNC
+												</a>
+											</div>
+										)}
 									</div>
 								</div>
-								<div className="flex items-center gap-3">
-									<div className="text-right">
+								<div className="flex items-center gap-2 sm:gap-3">
+									<div className="text-right mr-1 sm:mr-2">
 										<div className={`font-black text-lg ${colorClass}`}>{sign}{formatCurrency(payment.amount)} đ</div>
 									</div>
 									<button
+										onClick={(e) => {
+											e.stopPropagation();
+											setEditingDebt(payment);
+											setEditAmountInput(payment.amount.toString());
+											setEditNote(payment.note || '');
+											setShowEditDebtForm(true);
+										}}
+										className="p-2 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-all"
+										title="Chỉnh sửa giao dịch"
+									>
+										<Edit2 size={16} />
+									</button>
+									<button
 										onClick={(e) => { e.stopPropagation(); handleDeleteDebt(payment); }}
-										className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+										className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
 										title="Xoá giao dịch"
 									>
 										<Trash2 size={16} />
@@ -394,14 +477,49 @@ const SupplierDebts = () => {
 										placeholder="Nhập ghi chú thanh toán..."
 									/>
 								</div>
+								<div>
+									<label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Ngày thanh toán (Mặc định là hiện tại)</label>
+									<input
+										type="datetime-local"
+										value={paymentDate}
+										onChange={(e) => setPaymentDate(e.target.value)}
+										className="w-full h-12 px-4 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none dark:text-white transition-all"
+									/>
+								</div>
+								<div>
+									<label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Hình ảnh UNC (Tùy chọn)</label>
+									<div className="flex items-center gap-3">
+										<label className="flex-1 h-12 flex items-center justify-center gap-2 border border-dashed border-emerald-500/50 bg-emerald-50 dark:bg-emerald-900/10 text-emerald-600 rounded-xl cursor-pointer hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors">
+											<ImageIcon size={18} />
+											<span className="font-semibold text-sm">{paymentImage ? "Đã chọn 1 ảnh" : "Chọn ảnh tải lên"}</span>
+											<input 
+												type="file" 
+												accept="image/*" 
+												className="hidden" 
+												onChange={(e) => {
+													if (e.target.files?.[0]) setPaymentImage(e.target.files[0]);
+												}} 
+											/>
+										</label>
+										{paymentImage && (
+											<button 
+												type="button" 
+												onClick={() => setPaymentImage(null)}
+												className="size-12 flex items-center justify-center rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
+											>
+												<X size={18} />
+											</button>
+										)}
+									</div>
+								</div>
 							</form>
 						</div>
 						<div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex gap-3">
 							<button onClick={() => setShowPaymentForm(false)} className="flex-1 px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-50 transition-colors">
 								Huỷ
 							</button>
-							<button type="submit" form="payDebtForm" className="flex-1 px-4 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/30 transition-all flex justify-center items-center gap-2">
-								<CheckCircle2 size={20} /> Xác Nhận Trả
+							<button disabled={isUploading} type="submit" form="payDebtForm" className="flex-1 px-4 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/30 transition-all flex justify-center items-center gap-2 disabled:opacity-50">
+								<CheckCircle2 size={20} /> {isUploading ? 'Đang tải lên...' : 'Xác Nhận Trả'}
 							</button>
 						</div>
 					</div>
@@ -413,7 +531,7 @@ const SupplierDebts = () => {
 				<div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
 					<div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col">
 						<div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800">
-							<h3 className="font-black text-lg text-slate-800 dark:text-white uppercase tracking-tight">Ghi Nhận Trả Nợ NCC</h3>
+							<h3 className="font-black text-lg text-slate-800 dark:text-white uppercase tracking-tight">Điều Chỉnh Nợ NCC</h3>
 							<button onClick={() => setShowAddDebtForm(false)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-full transition-colors">
 								<X size={20} />
 							</button>
@@ -467,6 +585,17 @@ const SupplierDebts = () => {
 								</div>
 
 								<div>
+									<label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Loại Điều Chỉnh</label>
+									<select
+										value={debtType}
+										onChange={(e) => setDebtType(e.target.value)}
+										className="w-full h-12 px-4 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-[#FF6D00] outline-none font-medium dark:text-white transition-all mb-4"
+									>
+										<option value="payment">Giảm Nợ (Trả nợ / Chiết khấu)</option>
+										<option value="debt_increase">Tăng Nợ (Phí / Nợ ngoài)</option>
+									</select>
+								</div>
+								<div>
 									<label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Số Tiền <span className="text-red-500">*</span></label>
 									<input
 										type="text"
@@ -498,6 +627,57 @@ const SupplierDebts = () => {
 							</button>
 							<button type="submit" form="addDebtForm" className="flex-1 px-4 py-3 text-white font-bold rounded-xl shadow-lg transition-all flex justify-center items-center gap-2 bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30">
 								<CheckCircle2 size={20} /> Xác Nhận Trả Nợ
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			
+			{/* Edit Debt Form Modal */}
+			{showEditDebtForm && (
+				<div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+					<div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col">
+						<div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800">
+							<h3 className="font-black text-lg text-slate-800 dark:text-white uppercase tracking-tight">Chỉnh Sửa Giao Dịch</h3>
+							<button onClick={() => setShowEditDebtForm(false)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-full transition-colors">
+								<X size={20} />
+							</button>
+						</div>
+						<div className="p-5 flex-1 overflow-y-auto">
+							<form id="editDebtForm" onSubmit={handleSaveEditDebt} className="space-y-4">
+								<div>
+									<label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Số Tiền <span className="text-red-500">*</span></label>
+									<input
+										type="text"
+										required
+										value={editAmountInput}
+										onChange={(e) => {
+											const val = e.target.value.replace(/\D/g, '');
+											setEditAmountInput(val ? Number(val).toLocaleString('vi-VN') : '');
+										}}
+										className="w-full h-12 px-4 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-lg dark:text-white transition-all text-right"
+										placeholder="0"
+									/>
+								</div>
+								<div>
+									<label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Ghi chú (Tuỳ chọn)</label>
+									<textarea
+										rows={2}
+										value={editNote}
+										onChange={(e) => setEditNote(e.target.value)}
+										className="w-full p-4 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none dark:text-white resize-none"
+										placeholder="Nhập ghi chú..."
+									/>
+								</div>
+							</form>
+						</div>
+						<div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex gap-3">
+							<button type="button" onClick={() => setShowEditDebtForm(false)} className="flex-1 px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-50 transition-colors">
+								Huỷ
+							</button>
+							<button type="submit" form="editDebtForm" className="flex-1 px-4 py-3 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all flex justify-center items-center gap-2">
+								<CheckCircle2 size={20} /> Lưu Thay Đổi
 							</button>
 						</div>
 					</div>

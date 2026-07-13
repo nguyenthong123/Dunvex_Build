@@ -39,5 +39,9 @@ export function useSupplierDebts() {
     return await supplierDebtService.remove(id);
   };
 
-  return { debts, loading, addDebt, removeDebt };
+  const updateDebt = async (id: string, data: Record<string, any>) => {
+    return await supplierDebtService.update(id, data);
+  };
+
+  return { debts, loading, addDebt, removeDebt, updateDebt };
 }

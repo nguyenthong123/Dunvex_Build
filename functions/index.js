@@ -251,7 +251,7 @@ exports.nexusAutonomousBot = onSchedule("every 1 hours", async (event) => {
 					// Initialize Gemini
 					const { GoogleGenerativeAI } = require("@google/generative-ai");
 					const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-					const model = genAI.getGenerativeModel({ model: "gemini-flash-lite-latest" });
+					const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash" });
 					
 					const prompt = `You are an AI Accountant. 
 Match the following pending Payment Requests with the Incoming Bank Transactions.

@@ -17,7 +17,7 @@ function getSDKModel() {
     if (!_genAI && apiKey) {
         _genAI = new GoogleGenerativeAI(apiKey);
         _model = _genAI.getGenerativeModel({
-            model: "gemini-2.5-flash",
+            model: 'gemini-3.5-flash',
             generationConfig: {
                 responseMimeType: "application/json",
                 responseSchema: botResponseSchema,
@@ -305,7 +305,7 @@ async function callVisionViaSDK(prompt: string, images: { base64: string; mimeTy
         }
         if (!_genAI) throw new Error("Gemini SDK not available");
 
-        const model = _genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        const model = _genAI.getGenerativeModel({ model: 'gemini-3.5-flash' });
         const parts: any[] = [{ text: prompt }];
         for (const img of images) {
             parts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } });

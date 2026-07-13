@@ -115,6 +115,7 @@ const PurchaseOrders = () => {
 	}, [chatMessages, supplyChatDocId, owner.ownerId]);
 	const [pendingSheetOrder, setPendingSheetOrder] = useState<{ items: any[]; total: number; notFound: string[] } | null>(null);
 	const [detailPO, setDetailPO] = useState<any | null>(null);
+	const [poZoom, setPoZoom] = useState(1);
 	const [deletingPO, setDeletingPO] = useState<string | null>(null); // PO đang chờ xác nhận xoá
 	const [cancellingPO, setCancellingPO] = useState<string | null>(null); // PO đang được xoá (loading)
 	const [editingPO, setEditingPO] = useState<any>(null); // PO đang được chỉnh sửa
@@ -1368,69 +1369,86 @@ const PurchaseOrders = () => {
 
 		{/* 🧾 PHIẾU CHI TIẾT ĐƠN NHẬP HÀNG */}
 		{detailPO && (
-			<div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setDetailPO(null)}>
-				<div className="bg-white dark:bg-slate-900 w-full max-w-2xl max-h-[85vh] rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col border border-white/20 dark:border-slate-800" onClick={e => e.stopPropagation()}>
-					{/* Header */}
-					<div className="px-6 py-5 bg-gradient-to-r from-[#FF6D00] to-[#E65100] text-white flex items-center justify-between shrink-0">
-						<div>
-							<h2 className="text-lg font-black uppercase tracking-tight">Phiếu Nhập Hàng</h2>
-							<p className="text-white/70 text-xs mt-0.5">#{detailPO.id?.slice(0, 12).toUpperCase()}</p>
-						</div>
-						<button onClick={() => setDetailPO(null)} className="size-10 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors">
-							<X size={20} />
-						</button>
-					</div>
-
-					{/* Info */}
-					<div className="px-6 py-4 bg-orange-50/50 dark:bg-orange-900/10 border-b border-orange-100 dark:border-orange-900/20 shrink-0">
-						<div className="grid grid-cols-2 gap-3 text-sm">
+			<div className="fixed inset-0 z-[150] flex flex-col items-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto custom-scrollbar" onClick={() => { setDetailPO(null); setPoZoom(1); }}>
+				<div className="my-auto w-full max-w-2xl flex flex-col" style={{ zoom: poZoom, transformOrigin: 'top center' }}>
+					<div className="bg-white dark:bg-slate-900 w-full rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col border border-white/20 dark:border-slate-800 transition-colors duration-300" onClick={e => e.stopPropagation()}>
+						{/* Header */}
+						<div className="px-6 py-5 bg-gradient-to-r from-[#FF6D00] to-[#E65100] text-white flex items-center justify-between shrink-0">
 							<div>
-								<span className="text-[10px] font-bold text-slate-400 uppercase">Nhà cung cấp</span>
-								<p className="font-black text-slate-800 dark:text-white mt-0.5">{detailPO.supplierName}</p>
+								<h2 className="text-lg font-black uppercase tracking-tight">Phiếu Nhập Hàng</h2>
+								<p className="text-white/70 text-xs mt-0.5">#{detailPO.id?.slice(0, 12).toUpperCase()}</p>
 							</div>
-							<div>
-								<span className="text-[10px] font-bold text-slate-400 uppercase">Ngày nhập</span>
-								<p className="font-black text-slate-800 dark:text-white mt-0.5">{new Date(detailPO.orderDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
-							</div>
+							<button onClick={() => { setDetailPO(null); setPoZoom(1); }} className="size-10 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors">
+								<X size={20} />
+							</button>
 						</div>
-						{detailPO.note && (
-							<div className="mt-2 pt-2 border-t border-orange-200 dark:border-orange-900/30">
-								<span className="text-[10px] font-bold text-slate-400 uppercase">Ghi chú</span>
-								<p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5 italic">{detailPO.note}</p>
-							</div>
-						)}
-					</div>
 
-					{/* Table */}
-					<div className="flex-1 overflow-y-auto px-6 py-4">
-						<table className="w-full text-left border-collapse">
-							<thead>
-								<tr className="border-b-2 border-slate-200 dark:border-slate-700">
-									<th className="py-3 px-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center w-10">STT</th>
-									<th className="py-3 px-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Tên sản phẩm</th>
-									<th className="py-3 px-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right w-28">Giá</th>
-									<th className="py-3 px-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center w-16">SL</th>
-									<th className="py-3 px-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right w-32">Thành tiền</th>
-								</tr>
-							</thead>
-							<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-								{(detailPO.items || []).map((item: any, idx: number) => (
-									<tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-										<td className="py-3 px-2 text-xs font-bold text-slate-500 text-center">{idx + 1}</td>
-										<td className="py-3 px-2 text-sm font-semibold text-slate-800 dark:text-white">{item.name}</td>
-										<td className="py-3 px-2 text-xs text-slate-600 dark:text-slate-400 text-right font-medium">{formatCurrency(item.priceImport)} đ</td>
-										<td className="py-3 px-2 text-xs font-bold text-slate-700 dark:text-slate-300 text-center">{item.qty}</td>
-										<td className="py-3 px-2 text-sm font-black text-slate-800 dark:text-white text-right">{formatCurrency((item.qty || 0) * (item.priceImport || 0))} đ</td>
+						{/* Info */}
+						<div className="px-6 py-4 bg-orange-50/50 dark:bg-orange-900/10 border-b border-orange-100 dark:border-orange-900/20 shrink-0">
+							<div className="grid grid-cols-2 gap-3 text-sm">
+								<div>
+									<span className="text-[10px] font-bold text-slate-400 uppercase">Nhà cung cấp</span>
+									<p className="font-black text-slate-800 dark:text-white mt-0.5">{detailPO.supplierName}</p>
+								</div>
+								<div>
+									<span className="text-[10px] font-bold text-slate-400 uppercase">Ngày nhập</span>
+									<p className="font-black text-slate-800 dark:text-white mt-0.5">{new Date(detailPO.orderDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+								</div>
+							</div>
+							{detailPO.note && (
+								<div className="mt-2 pt-2 border-t border-orange-200 dark:border-orange-900/30">
+									<span className="text-[10px] font-bold text-slate-400 uppercase">Ghi chú</span>
+									<p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5 italic">{detailPO.note}</p>
+								</div>
+							)}
+						</div>
+
+						{/* Table */}
+						<div className="flex-1 px-6 py-4">
+							<table className="w-full text-left border-collapse">
+								<thead>
+									<tr className="border-b-2 border-slate-200 dark:border-slate-700">
+										<th className="py-3 px-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center w-10">STT</th>
+										<th className="py-3 px-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Tên sản phẩm</th>
+										<th className="py-3 px-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right w-28">Giá</th>
+										<th className="py-3 px-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center w-16">SL</th>
+										<th className="py-3 px-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right w-32">Thành tiền</th>
 									</tr>
-								))}
-							</tbody>
-						</table>
-					</div>
+								</thead>
+								<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+									{(detailPO.items || []).map((item: any, idx: number) => (
+										<tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+											<td className="py-3 px-2 text-xs font-bold text-slate-500 text-center">{idx + 1}</td>
+											<td className="py-3 px-2 text-sm font-semibold text-slate-800 dark:text-white">{item.name}</td>
+											<td className="py-3 px-2 text-xs text-slate-600 dark:text-slate-400 text-right font-medium">{formatCurrency(item.priceImport)} đ</td>
+											<td className="py-3 px-2 text-xs font-bold text-slate-700 dark:text-slate-300 text-center">{item.qty}</td>
+											<td className="py-3 px-2 text-sm font-black text-slate-800 dark:text-white text-right">{formatCurrency((item.qty || 0) * (item.priceImport || 0))} đ</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
 
-					{/* Footer - Tổng tiền */}
-					<div className="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t-2 border-slate-200 dark:border-slate-700 flex items-center justify-between shrink-0">
-						<span className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase">Tổng tiền</span>
-						<span className="text-2xl font-black text-[#E65100]">{formatCurrency(detailPO.totalAmount)} đ</span>
+						{/* Footer - Tổng tiền */}
+						<div className="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t-2 border-slate-200 dark:border-slate-700 flex items-center justify-between shrink-0">
+							<span className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase">Tổng tiền</span>
+							<span className="text-2xl font-black text-[#E65100]">{formatCurrency(detailPO.totalAmount)} đ</span>
+						</div>
+					</div>
+					
+					{/* Zoom Controls */}
+					<div className="mt-4 flex justify-center w-full" onClick={e => e.stopPropagation()}>
+						<div className="flex items-center gap-1 bg-white/10 backdrop-blur-md px-2 py-1.5 rounded-xl border border-white/20">
+							<button onClick={() => setPoZoom(prev => Math.max(0.5, prev - 0.05))} className="size-8 sm:size-10 rounded-lg hover:bg-white/20 text-white transition-all flex items-center justify-center" title="Thu nhỏ">
+								<span className="material-symbols-outlined text-lg sm:text-xl">zoom_out</span>
+							</button>
+							<span className="text-xs sm:text-sm font-black w-12 sm:w-14 text-center text-white tabular-nums">{Math.round(poZoom * 100)}%</span>
+							<button onClick={() => setPoZoom(prev => Math.min(2, prev + 0.05))} className="size-8 sm:size-10 rounded-lg hover:bg-white/20 text-white transition-all flex items-center justify-center" title="Phóng to">
+								<span className="material-symbols-outlined text-lg sm:text-xl">zoom_in</span>
+							</button>
+							<div className="w-px h-6 bg-white/20 mx-1"></div>
+							<button onClick={() => setPoZoom(1)} className="px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg hover:bg-white/20 text-white text-[10px] sm:text-xs font-black uppercase transition-all">100%</button>
+						</div>
 					</div>
 				</div>
 			</div>

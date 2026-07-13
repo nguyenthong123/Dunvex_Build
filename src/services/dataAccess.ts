@@ -509,6 +509,10 @@ export const supplierDebtService = {
   async remove(id: string): Promise<void> {
     await deleteDoc(doc(COLLECTIONS.supplierDebts(), id));
   },
+
+  async update(id: string, data: Partial<DocumentData>): Promise<void> {
+    await updateDoc(doc(COLLECTIONS.supplierDebts(), id), data);
+  },
 };
 
 // ─── Utility: Batch Write ───────────────────────────────────

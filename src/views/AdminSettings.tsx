@@ -557,100 +557,55 @@ const AdminSettings = () => {
 
 		setExportLoading(true);
 		try {
-			// 1. Prepare data containers
-			const collections = ['products', 'customers', 'orders', 'debts', 'checkins'];
+			// 1. Fetch data from Vercel API (server-side Firestore fetch + date filter)
+			const apiRes = await fetch('/api/export-data', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					ownerId: owner.ownerId,
+					startDate: syncRange.start || undefined,
+					endDate: syncRange.end || undefined,
+				}),
+			});
+
+			if (!apiRes.ok) {
+				const errData = await apiRes.json().catch(() => ({}));
+				throw new Error(errData.error || `Server error: ${apiRes.status}`);
+			}
+
+			const { data: serverData } = await apiRes.json();
+
+			// 2. Create Excel workbook from server data
 			const XLSX = await import('xlsx');
 			const workbook = XLSX.utils.book_new();
 
-			// 2. Prepare Time Range
-			const startTS = syncRange.start ? new Date(syncRange.start + 'T00:00:00') : null;
-			const endTS = syncRange.end ? new Date(syncRange.end + 'T23:59:59') : null;
+			const sheetConfig: [string, string][] = [
+				['products', 'san_pham'],
+				['customers', 'khach_hang'],
+				['orders', 'don_hang'],
+				['debts', 'cong_no'],
+				['checkins', 'checkin'],
+				['payments', 'lich_su_thanh_toan'],
+			];
 
-			// 3. Fetch and Process each collection
-			const orderDetails: any[] = [];
-
-			for (const colName of collections) {
-				const q = query(collection(db, colName), where('ownerId', '==', owner.ownerId));
-				const snap = await getDocs(q);
-
-				let data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-				// Apply date filtering client-side for transactional data
-				if (['orders', 'debts', 'checkins'].includes(colName) && startTS && endTS) {
-					data = data.filter((item: any) => {
-						if (!item.createdAt) return false;
-						const itemDate = item.createdAt.seconds ? new Date(item.createdAt.seconds * 1000) : new Date(item.createdAt);
-						return itemDate >= startTS && itemDate <= endTS;
-					});
-				}
-
-				if (data.length > 0) {
-					// Special handling for orders: extract details
-					if (colName === 'orders') {
-						data.forEach((order: any) => {
-							if (order.items && Array.isArray(order.items)) {
-								order.items.forEach((item: any) => {
-									orderDetails.push({
-										orderId: order.id,
-										orderDate: order.orderDate || (order.createdAt?.seconds ? new Date(order.createdAt.seconds * 1000).toLocaleDateString('vi-VN') : ''),
-										customerName: order.customerName || '',
-										customerBusiness: order.customerBusinessName || '',
-										...item
-									});
-								});
-							}
-						});
-					}
-
-					// Format specific fields for readability in Excel and remove technical fields
-					const TECHNICAL_FIELDS = ['ownerId', 'ownerEmail', 'createdBy', 'createdByEmail', 'updatedBy', 'updatedAt'];
-					const formattedData = data.map((item: any) => {
-						const newItem: any = {};
-						Object.keys(item).forEach(key => {
-							if (TECHNICAL_FIELDS.includes(key)) return;
-
-							const val = item[key];
-							if (val && typeof val === 'object') {
-								if (val.seconds) {
-									// Firestore Timestamp
-									newItem[key] = new Date(val.seconds * 1000).toLocaleString('vi-VN');
-								} else {
-									// Other objects/arrays - stringify to avoid [object Object]
-									newItem[key] = JSON.stringify(val);
-								}
-							} else {
-								newItem[key] = val;
-							}
-						});
-						return newItem;
-					});
-
-					const worksheet = XLSX.utils.json_to_sheet(formattedData);
-
-					// Đổi tên sheet sang tiếng Việt cho thân thiện
-					let sheetName = colName;
-					switch (colName) {
-						case 'products': sheetName = 'san_pham'; break;
-						case 'customers': sheetName = 'khach_hang'; break;
-						case 'orders': sheetName = 'don_hang'; break;
-						case 'debts': sheetName = 'cong_no'; break;
-						case 'checkins': sheetName = 'checkin'; break;
-					}
-
+			for (const [key, sheetName] of sheetConfig) {
+				const items = serverData[key];
+				if (items && items.length > 0) {
+					const worksheet = XLSX.utils.json_to_sheet(items);
 					XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
 				}
 			}
 
-			// Add the specific details sheet if we have order items
-			if (orderDetails.length > 0) {
-				const detailsSheet = XLSX.utils.json_to_sheet(orderDetails);
+			// Add order details sheet
+			if (serverData.orderDetails && serverData.orderDetails.length > 0) {
+				const detailsSheet = XLSX.utils.json_to_sheet(serverData.orderDetails);
 				XLSX.utils.book_append_sheet(workbook, detailsSheet, 'chi_tiet_don_hang');
 			}
 
-			// 4. Download File
+			// 3. Download file
 			XLSX.writeFile(workbook, `Dunvex_Export_${owner.ownerId}_${new Date().toISOString().slice(0, 10)}.xlsx`);
 
-			// 5. Update Usage Count in Firestore
+			// 4. Update Usage Count in Firestore
 			const currentMonth = new Date().toISOString().slice(0, 7);
 			const usageRef = doc(db, 'usage_limits', `${owner.ownerId}_${currentMonth}`);
 			await setDoc(usageRef, {
@@ -660,9 +615,9 @@ const AdminSettings = () => {
 				lastExportBy: auth.currentUser?.email || 'Admin'
 			}, { merge: true });
 
-			// 6. Audit Log
+			// 5. Audit Log
 			await addDoc(collection(db, 'audit_logs'), {
-				action: 'Bộ lưu dữ liệu (Export - Client)',
+				action: 'Bộ lưu dữ liệu (Export - API)',
 				user: auth.currentUser?.email || 'Admin',
 				userId: auth.currentUser?.uid || "",
 				ownerId: owner.ownerId,

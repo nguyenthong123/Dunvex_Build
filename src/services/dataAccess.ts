@@ -306,21 +306,16 @@ export const paymentService = {
 const INVENTORY_LOG_MAX_DAYS = 90;
 
 export const inventoryService = {
-  /** Lắng nghe inventory_logs của owner (giới hạn thời gian + số lượng) */
+  /** Lắng nghe inventory_logs của owner (có limit an toàn) */
   listenByOwner(
     ownerId: string,
     onData: (logs: WithId<DocumentData>[]) => void,
     onError?: (err: Error) => void,
     maxResults = 500,
   ): Unsubscribe {
-    // 🔒 TIME FILTER: Chỉ lấy logs trong INVENTORY_LOG_MAX_DAYS ngày gần nhất
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - INVENTORY_LOG_MAX_DAYS);
-    
     const q = query(
       COLLECTIONS.inventoryLogs(),
       where('ownerId', '==', ownerId),
-      where('createdAt', '>=', cutoffDate),
       orderBy('createdAt', 'desc'),
       limit(maxResults),
     );

@@ -1308,6 +1308,17 @@ const PurchaseOrders = () => {
 			)}
 		</div>
 
+		{/* ─── Mobile Tạo Đơn Nhập FAB ─── */}
+		{!showCreateForm && (
+			<button
+				onClick={() => { resetEditForm(); setShowCreateForm(true); }}
+				className="md:hidden fixed bottom-6 right-6 z-50 bg-[#FF6D00] text-white w-14 h-14 rounded-full shadow-xl shadow-orange-500/40 flex items-center justify-center hover:scale-110 active:scale-95 transition-all"
+				title="Tạo Đơn Nhập"
+			>
+				<Plus size={24} />
+			</button>
+		)}
+
 		{/* ─── Supply Bot FAB + Chat Panel ─── */}
 		{!chatOpen && (
 			<button

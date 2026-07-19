@@ -136,6 +136,45 @@ const PurchaseOrders = () => {
 	const [items, setItems] = useState<any[]>([{ id: crypto.randomUUID(), category: 'Tất cả', productId: '', name: '', qty: '', priceImport: 0 }]);
 	const [paidAmount, setPaidAmount] = useState('');
 
+	// 💾 Persist form state to sessionStorage (chống mất form khi chuyển tab)
+	// Khôi phục form khi mount nếu trước đó đang nhập dở
+	useEffect(() => {
+		try {
+			const key = `po_form_${owner.ownerId || window.location.pathname}`;
+			const saved = sessionStorage.getItem(key);
+			if (saved) {
+				const data = JSON.parse(saved);
+				if (data.showCreateForm) {
+					if (data.editingPO) setEditingPO(data.editingPO);
+					if (data.selectedSupplier) setSelectedSupplier(data.selectedSupplier);
+					if (data.orderNote) setOrderNote(data.orderNote);
+					if (data.items?.length) setItems(data.items);
+					if (data.paidAmount) setPaidAmount(data.paidAmount);
+					setShowCreateForm(true);
+				}
+			}
+		} catch {}
+	}, []);
+
+	// Tự động lưu form state mỗi khi có thay đổi
+	useEffect(() => {
+		try {
+			const key = `po_form_${owner.ownerId || 'default'}`;
+			if (showCreateForm) {
+				sessionStorage.setItem(key, JSON.stringify({
+					showCreateForm,
+					editingPO,
+					selectedSupplier,
+					orderNote,
+					items,
+					paidAmount,
+				}));
+			} else {
+				sessionStorage.removeItem(key);
+			}
+		} catch {}
+	}, [showCreateForm, editingPO, selectedSupplier, orderNote, items, paidAmount, owner.ownerId]);
+
 	// UI State for dropdowns
 	const [activeRow, setActiveRow] = useState<number | null>(null);
 	const [productSearchQuery, setProductSearchQuery] = useState('');

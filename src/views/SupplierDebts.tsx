@@ -90,14 +90,15 @@ const SupplierDebts = () => {
 			if (paymentImage) {
 				const fData = new FormData();
 				fData.append('file', paymentImage);
-				fData.append('upload_preset', 'ml_default');
+				fData.append('upload_preset', 'dunvexbuil');
+				fData.append('folder', 'dunvex_payments');
 				
 				const res = await fetch('https://api.cloudinary.com/v1_1/dtx0uvb4e/image/upload', { method: 'POST', body: fData });
 				const data = await res.json();
 				if (data.secure_url) {
 					imageUrl = data.secure_url;
 				} else {
-					showToast("Lỗi upload ảnh", "error");
+					showToast("Lỗi upload ảnh: " + (data.error?.message || "Không xác định"), "error");
 					setIsUploading(false);
 					return;
 				}

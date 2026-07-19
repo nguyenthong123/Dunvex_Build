@@ -1101,6 +1101,14 @@ const QuickOrder = () => {
 		);
 	}
 
+
+	// 🚀 Auto-navigate về danh sách đơn sau 1.2s, không cần nhấn nút
+	useEffect(() => {
+		if (showSuccessModal) {
+			const timer = setTimeout(() => navigate('/orders'), 1200);
+			return () => clearTimeout(timer);
+		}
+	}, [showSuccessModal, navigate]);
 	return (
 		<div className="min-h-screen bg-[#f8f9fb] dark:bg-slate-950 p-4 md:p-8 font-sans pb-32 md:pb-8 transition-colors duration-300">
 			{/* TOP HEADER */}

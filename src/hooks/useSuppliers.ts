@@ -57,7 +57,10 @@ export function useSuppliers() {
       if (d.type === 'payment') return sum - (Number(d.amount) || 0);
       return sum;
     }, 0);
-    return { ...s, totalDebt: Math.max(0, calculatedDebt), calculatedDebt: Math.max(0, calculatedDebt) };
+    const hasDebtRecords = supplierDebts.length > 0;
+    const fallbackDebt = Number(s.totalDebt) || 0;
+    const finalDebt = hasDebtRecords ? Math.max(0, calculatedDebt) : fallbackDebt;
+    return { ...s, totalDebt: finalDebt, calculatedDebt: Math.max(0, calculatedDebt) };
   });
 
   const addSupplier = async (data: Record<string, any>) => {

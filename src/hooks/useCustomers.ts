@@ -53,7 +53,8 @@ export function useCustomers({ ownerId, enabled = true }: UseCustomersOptions) {
     const unsubscribe = customerDebtService.listenByOwner(
       ownerId,
       (data) => setDebts(data),
-      (err) => console.error("Lỗi tải công nợ KH:", err)
+      (err) => console.error("Lỗi tải công nợ KH:", err),
+      5000
     );
     return () => unsubscribe();
   }, [ownerId]);
@@ -66,9 +67,14 @@ export function useCustomers({ ownerId, enabled = true }: UseCustomersOptions) {
       if (d.type === 'payment') return sum - (Number(d.amount) || 0);
       return sum;
     }, 0);
+    // 🔧 Nếu debts collection chưa có records cho KH này (KH cũ chưa migrate),
+    // fallback về customer.debt field để không mất dữ liệu công nợ
+    const hasDebtRecords = customerDebts.length > 0;
+    const fallbackDebt = Number(c.debt) || 0;
+    const finalDebt = hasDebtRecords ? Math.max(0, calculatedDebt) : fallbackDebt;
     return {
       ...c,
-      debt: Math.max(0, calculatedDebt),
+      debt: finalDebt,
       calculatedDebt: Math.max(0, calculatedDebt),
     };
   });

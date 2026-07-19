@@ -136,12 +136,14 @@ const PurchaseOrders = () => {
 	const [items, setItems] = useState<any[]>([{ id: crypto.randomUUID(), category: 'Tất cả', productId: '', name: '', qty: '', priceImport: 0 }]);
 	const [paidAmount, setPaidAmount] = useState('');
 
-	// 💾 Persist form state to sessionStorage (chống mất form khi chuyển tab)
-	// Khôi phục form khi mount nếu trước đó đang nhập dở
+	// 💾 Persist form state to sessionStorage (chống mất form khi tab bị reload/logout)
+	const PO_DRAFT_KEY = 'po_form_draft';
+	const formRestored = useRef(false);
+
+	// Khôi phục form khi mount/reload
 	useEffect(() => {
 		try {
-			const key = `po_form_${owner.ownerId || window.location.pathname}`;
-			const saved = sessionStorage.getItem(key);
+			const saved = sessionStorage.getItem(PO_DRAFT_KEY);
 			if (saved) {
 				const data = JSON.parse(saved);
 				if (data.showCreateForm) {
@@ -151,17 +153,18 @@ const PurchaseOrders = () => {
 					if (data.items?.length) setItems(data.items);
 					if (data.paidAmount) setPaidAmount(data.paidAmount);
 					setShowCreateForm(true);
+					formRestored.current = true;
 				}
 			}
 		} catch {}
 	}, []);
 
-	// Tự động lưu form state mỗi khi có thay đổi
+	// Tự động lưu form state mỗi khi có thay đổi (bỏ qua lần đầu nếu vừa restore)
 	useEffect(() => {
+		if (formRestored.current) { formRestored.current = false; return; }
 		try {
-			const key = `po_form_${owner.ownerId || 'default'}`;
 			if (showCreateForm) {
-				sessionStorage.setItem(key, JSON.stringify({
+				sessionStorage.setItem(PO_DRAFT_KEY, JSON.stringify({
 					showCreateForm,
 					editingPO,
 					selectedSupplier,
@@ -170,10 +173,10 @@ const PurchaseOrders = () => {
 					paidAmount,
 				}));
 			} else {
-				sessionStorage.removeItem(key);
+				sessionStorage.removeItem(PO_DRAFT_KEY);
 			}
 		} catch {}
-	}, [showCreateForm, editingPO, selectedSupplier, orderNote, items, paidAmount, owner.ownerId]);
+	}, [showCreateForm, editingPO, selectedSupplier, orderNote, items, paidAmount]);
 
 	// UI State for dropdowns
 	const [activeRow, setActiveRow] = useState<number | null>(null);

@@ -374,8 +374,8 @@ const PurchaseOrders = () => {
 					}).catch(e => console.warn('Inventory log failed:', e));
 				}));
 
-				showToast("Đã cập nhật phiếu nhập kho", "success");
 				resetEditForm();
+				showToast("Đã cập nhật phiếu nhập kho", "success");
 				return;
 			}
 
@@ -459,8 +459,8 @@ const PurchaseOrders = () => {
 
 			// If paidAmount > 0, we should record a payment transaction too, but to keep it simple, it's just "tiền trả ngay".
 
-			showToast("Đã hoàn thành phiếu nhập kho", "success");
 			resetEditForm();
+			showToast("Đã hoàn thành phiếu nhập kho", "success");
 		} catch (error: any) {
 			console.error('Submit PO error:', error);
 			showToast(`Có lỗi xảy ra: ${error?.message || 'Không xác định'}`, "error");
@@ -1322,7 +1322,7 @@ const PurchaseOrders = () => {
 								</div>
 							</div>
 
-							<button
+							<button type="button"
 								onClick={handleSubmit}
 								className="w-full mt-6 py-4 bg-[#FF6D00] text-white font-black rounded-xl shadow-lg shadow-orange-500/30 hover:bg-[#E66000] active:scale-[0.98] transition-all flex justify-center items-center gap-2 uppercase tracking-wide text-lg"
 							>

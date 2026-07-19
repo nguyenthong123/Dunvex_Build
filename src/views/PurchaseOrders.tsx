@@ -1000,7 +1000,8 @@ const PurchaseOrders = () => {
 				</div>
 			</div>
 
-			<div className="mt-4">
+			{!showCreateForm ? (
+				<div className="mt-4">
 					<div className="mb-4">
 						<div className="relative">
 							<Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
@@ -1076,7 +1077,7 @@ const PurchaseOrders = () => {
 						)}
 					</div>
 				</div>
-			{showCreateForm && (
+			) : (
 				<div className="mt-4 space-y-6">
 					{/* Banner khi đang sửa đơn */}
 					{editingPO && (

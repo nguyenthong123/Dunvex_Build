@@ -1520,7 +1520,7 @@ const Debts: React.FC = () => {
 									{showPaymentCustomerResults && (
 										<div className="absolute z-[200] top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden max-h-64 overflow-y-auto custom-scrollbar">
 											{aggregatedData
-												.filter(c => (c.totalOrdersAmount > 0 || c.totalPaymentsAmount > 0) && isMatch(c.name || '', paymentCustomerSearchQuery))
+												.filter(c => isMatch(c.name || '', paymentCustomerSearchQuery))
 												.slice(0, 50)
 												.map(c => (
 													<div

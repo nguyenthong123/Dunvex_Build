@@ -46,6 +46,26 @@ cron.schedule(`${randomMinute} 17 * * *`, async () => {
   timezone: "Asia/Ho_Chi_Minh"
 });
 
+// Setup hourly cron to synchronize customer debts
+cron.schedule('0 * * * *', async () => {
+  console.log('Running Hourly Debt Sync Cron Job...');
+  try {
+    const res = await fetch(`http://localhost:${PORT}/api/cron-debt-sync`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${process.env.CRON_SECRET || ''}`
+      }
+    });
+    const data = await res.json();
+    console.log('Hourly Debt Sync Result:', data);
+  } catch (err) {
+    console.error('Hourly Debt Sync Failed:', err);
+  }
+}, {
+  scheduled: true,
+  timezone: "Asia/Ho_Chi_Minh"
+});
+
 // Serve static frontend from 'dist' directory
 app.use(express.static(path.join(__dirname, 'dist')));
 

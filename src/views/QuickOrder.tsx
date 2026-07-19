@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { shouldExcludeFromProfit } from '../utils/profitUtils';
 import { ArrowLeft, Search, Plus, Minus, Trash2, ShoppingCart, User, Package, MapPin, Truck, FileText, ChevronDown, X, Layers, CheckCircle, Mail, RotateCcw, QrCode, Ticket, Tag, Lock, Crown, Eye, EyeOff } from 'lucide-react';
 import QRScanner from '../components/shared/QRScanner';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
@@ -618,7 +619,7 @@ const QuickOrder = () => {
 	// 🔧 Profit items: lọc bỏ sản phẩm đặc thù (thợ ứng tiền, ...) không tính lợi nhuận
 	const profitItems = lineItems.filter(item => {
 		const prod = products.find(p => p.id === item.productId);
-		return !prod?.excludeProfit;
+		return !shouldExcludeFromProfit(prod?.name || '', prod?.excludeProfit);
 	});
 	const profitSubTotal = profitItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 0), 0);
 	const profitCostTotal = profitItems.reduce((sum, item) => {
@@ -758,7 +759,7 @@ const QuickOrder = () => {
 		// 🔧 Lọc bỏ sản phẩm excludeProfit (thợ ứng tiền, ...) khi tính lợi nhuận
 		const profitProcessedItems = processedItems.filter(it => {
 			const prod = products.find(p => p.id === it.id);
-			return !prod?.excludeProfit;
+			return !shouldExcludeFromProfit(prod?.name || '', prod?.excludeProfit);
 		});
 		const totalCostFinal = processedItems.reduce((sum, it) => {
 			const prod = products.find(p => p.id === it.id);

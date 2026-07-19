@@ -160,10 +160,17 @@ const PurchaseOrders = () => {
 	}, []);
 
 	// Tự động lưu form state mỗi khi có thay đổi (bỏ qua lần đầu nếu vừa restore)
+		const saveTimer = useRef<number>(0);
 	useEffect(() => {
 		if (formRestored.current) { formRestored.current = false; return; }
-		try {
-			if (showCreateForm) {
+		clearTimeout(saveTimer.current);
+		if (!showCreateForm) {
+			sessionStorage.removeItem(PO_DRAFT_KEY);
+			return;
+		}
+		// Debounce 500ms để tránh ghi sessionStorage liên tục khi đang gõ
+		saveTimer.current = window.setTimeout(() => {
+			try {
 				sessionStorage.setItem(PO_DRAFT_KEY, JSON.stringify({
 					showCreateForm,
 					editingPO,
@@ -172,10 +179,9 @@ const PurchaseOrders = () => {
 					items,
 					paidAmount,
 				}));
-			} else {
-				sessionStorage.removeItem(PO_DRAFT_KEY);
-			}
-		} catch {}
+			} catch {}
+		}, 500);
+		return () => clearTimeout(saveTimer.current);
 	}, [showCreateForm, editingPO, selectedSupplier, orderNote, items, paidAmount]);
 
 	// UI State for dropdowns

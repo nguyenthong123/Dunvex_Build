@@ -1108,7 +1108,8 @@ const QuickOrder = () => {
 			const timer = setTimeout(() => navigate('/orders'), 1200);
 			return () => clearTimeout(timer);
 		}
-	}, [showSuccessModal, navigate]);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [showSuccessModal]);
 	return (
 		<div className="min-h-screen bg-[#f8f9fb] dark:bg-slate-950 p-4 md:p-8 font-sans pb-32 md:pb-8 transition-colors duration-300">
 			{/* TOP HEADER */}

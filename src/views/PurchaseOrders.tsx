@@ -66,7 +66,7 @@ const PurchaseOrders = () => {
 	const { purchaseOrders, loading, addPurchaseOrder, deletePurchaseOrder, updatePurchaseOrder } = usePurchaseOrders();
 	const { addDebt } = useSupplierDebts();
 
-	const [activeTab, setActiveTab] = useState<'list' | 'create'>('list');
+	const [showCreateForm, setShowCreateForm] = useState(false);
 	const [searchTerm, setSearchTerm] = useState('');
 
 	const searchInputRef = useRef<HTMLInputElement>(null);
@@ -123,17 +123,17 @@ const PurchaseOrders = () => {
 
 	useEffect(() => {
 		const handleOpenSearch = () => {
-			if (activeTab !== 'list') setActiveTab('list');
+			if (showCreateForm) setShowCreateForm(false);
 			setTimeout(() => searchInputRef.current?.focus(), 200);
 		};
 		window.addEventListener('open-mobile-search', handleOpenSearch);
 		return () => window.removeEventListener('open-mobile-search', handleOpenSearch);
-	}, [activeTab]);
+	}, [showCreateForm]);
 
 	// Create PO Form State
 	const [selectedSupplier, setSelectedSupplier] = useState<any>(null);
 	const [orderNote, setOrderNote] = useState('');
-	const [items, setItems] = useState<any[]>([{ id: crypto.randomUUID(), productId: '', name: '', qty: '', priceImport: 0 }]);
+	const [items, setItems] = useState<any[]>([{ id: crypto.randomUUID(), category: 'Tất cả', productId: '', name: '', qty: '', priceImport: 0 }]);
 	const [paidAmount, setPaidAmount] = useState('');
 
 	// UI State for dropdowns
@@ -169,7 +169,22 @@ const PurchaseOrders = () => {
 
 	const filteredPOs = purchaseOrders.filter(po => isMatch(po.supplierName, searchTerm) || isMatch(po.id, searchTerm));
 	const filteredSuppliers = suppliers.filter(s => isMatch(s.name, supplierSearchQuery) || isMatch(s.phone, supplierSearchQuery));
-	const filteredProducts = products.filter(p => isMatch(p.name, productSearchQuery) || isMatch(p.sku, productSearchQuery)).slice(0, 20);
+	
+	const categories = Array.from(new Set([
+		'Tất cả',
+		...products.map(p => (p as any).category).filter(Boolean)
+	])).sort((a: any, b: any) => {
+		if (a === 'Tất cả') return -1;
+		if (b === 'Tất cả') return 1;
+		return String(a).localeCompare(String(b));
+	});
+
+	const activeCategory = activeRow !== null ? items[activeRow]?.category : null;
+	const filteredProducts = products.filter(p => {
+		const matchSearch = isMatch(p.name, productSearchQuery) || isMatch(p.sku, productSearchQuery);
+		const matchCategory = !activeCategory || activeCategory === 'Tất cả' || (p as any).category === activeCategory;
+		return matchSearch && matchCategory;
+	}).slice(0, 20);
 
 	const calculateTotal = () => {
 		return items.reduce((sum, item) => sum + (Number(item.qty) || 0) * (Number(item.priceImport) || 0), 0);
@@ -186,7 +201,7 @@ const PurchaseOrders = () => {
 		if (items.length > 1) {
 			setItems(items.filter(item => item.id !== id));
 		} else {
-			setItems([{ id: crypto.randomUUID(), productId: '', name: '', qty: '', priceImport: 0 }]);
+			setItems([{ id: crypto.randomUUID(), category: 'Tất cả', productId: '', name: '', qty: '', priceImport: 0 }]);
 		}
 	};
 
@@ -457,28 +472,30 @@ const PurchaseOrders = () => {
 		setEditingPO(null);
 		setSelectedSupplier(null);
 		setOrderNote('');
-		setItems([{ id: crypto.randomUUID(), productId: '', name: '', qty: '', priceImport: 0 }]);
+		setItems([{ id: crypto.randomUUID(), category: 'Tất cả', productId: '', name: '', qty: '', priceImport: 0 }]);
 		setPaidAmount('');
-		setActiveTab('list');
+		setShowCreateForm(false);
 	};
 
 	// P1 #4.5: Chỉnh sửa đơn nhập hàng → chuyển sang tab Tạo đơn với dữ liệu cũ
 	const handleEditPO = (po: any) => {
 		setEditingPO(po);
-		setSelectedSupplier({ id: po.supplierId, name: po.supplierName });
+		setSelectedSupplier({ id: po.supplierId, name: po.supplierName, phone: po.supplierPhone });
 		setOrderNote(po.note || '');
-		setPaidAmount(String(po.paidAmount || 0));
-		setItems((po.items || []).map((item: any) => ({
+		setPaidAmount(po.paidAmount ? po.paidAmount.toLocaleString('vi-VN') : '0');
+		const mappedItems = (po.items || []).map((item: any) => ({
 			id: crypto.randomUUID(),
+			category: 'Tất cả',
 			productId: item.productId || '',
 			name: item.name || '',
 			qty: String(item.qty || ''),
 			priceImport: Number(item.priceImport || 0)
-		})));
+		}));
+		setItems(mappedItems);
 		if ((po.items || []).length === 0) {
-			setItems([{ id: crypto.randomUUID(), productId: '', name: '', qty: '', priceImport: 0 }]);
+			setItems([{ id: crypto.randomUUID(), category: 'Tất cả', productId: '', name: '', qty: '', priceImport: 0 }]);
 		}
-		setActiveTab('create');
+		setShowCreateForm(true);
 	};
 
 	// P1 #4: Huỷ đơn nhập hàng + rollback stock + xoá hẳn công nợ (không offset)
@@ -976,27 +993,14 @@ const PurchaseOrders = () => {
 							<span className="material-symbols-outlined text-[#1A237E] dark:text-[#FF6D00] text-3xl">local_shipping</span>
 							Nhập Kho
 						</h1>
-					</div>
-
-					<div className="flex border-b border-slate-200 dark:border-slate-800">
-						<button
-							onClick={() => setActiveTab('list')}
-							className={`flex-1 py-3 text-sm font-bold uppercase tracking-wider border-b-2 transition-colors ${activeTab === 'list' ? 'border-[#FF6D00] text-[#FF6D00]' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-						>
-							Lịch Sử Nhập
-						</button>
-						<button
-							onClick={() => setActiveTab('create')}
-							className={`flex-1 py-3 text-sm font-bold uppercase tracking-wider border-b-2 transition-colors ${activeTab === 'create' ? 'border-[#FF6D00] text-[#FF6D00]' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-						>
-							{editingPO ? 'Chỉnh Sửa Đơn' : 'Tạo Đơn Mới'}
-						</button>
+					<button onClick={() => { resetEditForm(); setShowCreateForm(true); }} className="hidden md:flex items-center gap-2 px-5 py-2.5 bg-[#FF6D00] text-white font-bold rounded-xl shadow-lg shadow-orange-500/30 hover:bg-[#E66000] active:scale-95 transition-all">
+						<Plus size={20} /> Tạo Đơn Nhập
+					</button>
 					</div>
 				</div>
 			</div>
 
-			{activeTab === 'list' ? (
-				<div className="mt-4">
+			<div className="mt-4">
 					<div className="mb-4">
 						<div className="relative">
 							<Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />

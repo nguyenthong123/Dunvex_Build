@@ -194,6 +194,15 @@ const InventoryFormModal: React.FC<InventoryFormModalProps> = ({
 										/>
 										<span className="text-[11px] font-medium text-slate-600 dark:text-slate-400">Áp hệ số chi phí (MB, lương, vận chuyển...)</span>
 									</label>
+									<label className="flex items-center gap-2 mt-2 cursor-pointer">
+										<input
+											type="checkbox"
+											checked={formData.excludeProfit || false}
+											onChange={(e) => setFormData({ ...formData, excludeProfit: e.target.checked })}
+											className="w-4 h-4 rounded border-slate-300 text-red-500 focus:ring-red-500"
+										/>
+										<span className="text-[11px] font-medium text-red-600 dark:text-red-400">🚫 Không tính lợi nhuận (thợ ứng tiền, công nợ...)</span>
+									</label>
 								</div>
 							)}
 							<div>

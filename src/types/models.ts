@@ -19,6 +19,7 @@ export interface Product extends BaseRecord {
   stock: number;
   unit: string;
   imageUrl?: string;
+  excludeProfit?: boolean; // Không tính lợi nhuận (VD: thợ ứng tiền)
 }
 
 export interface Supplier extends BaseRecord {

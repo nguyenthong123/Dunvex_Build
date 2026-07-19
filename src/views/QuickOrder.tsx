@@ -614,9 +614,21 @@ const QuickOrder = () => {
 		const cost = getEffectiveCost(item);
 		return sum + (qty * cost);
 	}, 0);
+
+	// 🔧 Profit items: lọc bỏ sản phẩm đặc thù (thợ ứng tiền, ...) không tính lợi nhuận
+	const profitItems = lineItems.filter(item => {
+		const prod = products.find(p => p.id === item.productId);
+		return !prod?.excludeProfit;
+	});
+	const profitSubTotal = profitItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 0), 0);
+	const profitCostTotal = profitItems.reduce((sum, item) => {
+		const qty = Number(item.qty) || 0;
+		const cost = getEffectiveCost(item);
+		return sum + (qty * cost);
+	}, 0);
 	// ✅ FIX: Profit = Revenue - Cost - Discount (shipping is not profit, it's pass-through)
 	// subTotal (giá bán thuần) - giá vốn - chiết khấu = lợi nhuận thực
-	const totalProfitActual = subTotal - totalCostActual - Number(discountAmt);
+	const totalProfitActual = profitSubTotal - profitCostTotal - Number(discountAmt);
 
 	const formatPrice = (num: number) => {
 		return new Intl.NumberFormat('vi-VN').format(num || 0);
@@ -743,6 +755,11 @@ const QuickOrder = () => {
 			}
 
 		// ✅ FIX: Calculate accurate cost & profit from FIFO-processed items
+		// 🔧 Lọc bỏ sản phẩm excludeProfit (thợ ứng tiền, ...) khi tính lợi nhuận
+		const profitProcessedItems = processedItems.filter(it => {
+			const prod = products.find(p => p.id === it.id);
+			return !prod?.excludeProfit;
+		});
 		const totalCostFinal = processedItems.reduce((sum, it) => {
 			const prod = products.find(p => p.id === it.id);
 			let effectiveCost = Number(it.buyPrice) || 0;
@@ -751,8 +768,17 @@ const QuickOrder = () => {
 			}
 			return sum + effectiveCost * (Number(it.qty) || 0);
 		}, 0);
+		const profitSubTotalFinal = profitProcessedItems.reduce((sum, it) => sum + (Number(it.price) || 0) * (Number(it.qty) || 0), 0);
+		const profitCostFinal = profitProcessedItems.reduce((sum, it) => {
+			const prod = products.find(p => p.id === it.id);
+			let effectiveCost = Number(it.buyPrice) || 0;
+			if (prod?.applyOverheadCost && overheadRate > 0) {
+				effectiveCost = effectiveCost * (1 + overheadRate / 100);
+			}
+			return sum + effectiveCost * (Number(it.qty) || 0);
+		}, 0);
 		// Profit = subTotal (gross revenue) - cost - discount (shipping is pass-through, not profit)
-		const totalProfitFinal = subTotal - totalCostFinal - Number(discountAmt);
+		const totalProfitFinal = profitSubTotalFinal - profitCostFinal - Number(discountAmt);
 
 			// 📱 Lấy SĐT nhân viên từ profile (nếu có)
 			let staffPhone = '';

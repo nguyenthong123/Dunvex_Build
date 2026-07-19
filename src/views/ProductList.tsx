@@ -94,6 +94,7 @@ const ProductList = () => {
 		linkedProductId: '',
 		expiryDate: '',
 		applyOverheadCost: false,
+		excludeProfit: false, // Không tính lợi nhuận (VD: thợ ứng tiền)
 	});
 
 
@@ -610,6 +611,7 @@ const ProductList = () => {
 			linkedProductId: '',
 			expiryDate: '',
 			applyOverheadCost: false,
+			excludeProfit: false,
 		});
 		setSelectedProduct(null);
 	};
@@ -635,6 +637,7 @@ const ProductList = () => {
 			linkedProductId: product.linkedProductId || '',
 			expiryDate: product.expiryDate || '',
 			applyOverheadCost: product.applyOverheadCost || false,
+			excludeProfit: product.excludeProfit || false,
 		});
 		setShowEditForm(true);
 	};

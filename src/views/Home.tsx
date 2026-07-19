@@ -135,6 +135,8 @@ const Home = () => {
 		const itemsProfit = (o.items || []).reduce((pSum: number, item: any) => {
 			const sell = Number(item.price) || 0;
 			const currentProd = products.find(p => p.id === (item.productId || item.id));
+			// 🔧 Bỏ qua sản phẩm đặc thù không tính lợi nhuận (thợ ứng tiền, ...)
+			if (currentProd?.excludeProfit) return pSum;
 			const activeBuyPrice = (Number(item.buyPrice) || 0) > 0 ? Number(item.buyPrice) : (currentProd ? (Number(currentProd.priceImport) || 0) : 0);
 			const qty = Number(item.qty) || 0;
 			return pSum + ((sell - activeBuyPrice) * qty);
@@ -160,6 +162,8 @@ const Home = () => {
 		const itemsProfit = (o.items || []).reduce((pSum: number, item: any) => {
 			const sell = Number(item.price) || 0;
 			const currentProd = products.find(p => p.id === (item.productId || item.id));
+			// 🔧 Bỏ qua sản phẩm đặc thù không tính lợi nhuận (thợ ứng tiền, ...)
+			if (currentProd?.excludeProfit) return pSum;
 			const activeBuyPrice = (Number(item.buyPrice) || 0) > 0 ? Number(item.buyPrice) : (currentProd ? (Number(currentProd.priceImport) || 0) : 0);
 			const qty = Number(item.qty) || 0;
 			return pSum + ((sell - activeBuyPrice) * qty);

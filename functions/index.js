@@ -392,6 +392,10 @@ ${JSON.stringify(incomingTxs.map(t => ({ id: t['Transaction ID'], date: t['Ngày
 		}
 	} catch (e) {}
 
+	// Fetch Subscription Packages for duration calculation
+	const packagesSnap = await db.collection('subscription_packages').get();
+	const packages = packagesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
 	const parseDate = (val) => {
 		if (!val) return null;
 		if (val.toDate) return val.toDate();
@@ -406,6 +410,8 @@ ${JSON.stringify(incomingTxs.map(t => ({ id: t['Transaction ID'], date: t['Ngày
 		const s = settingsMap[u.uid] || {};
 		const customer = {
 			uid: u.uid,
+			email: u.email,
+			displayName: u.displayName,
 			createdAt: u.createdAt || null,
 			paymentConfirmedAt: s.paymentConfirmedAt || null,
 			planId: s.planId || null,
@@ -423,13 +429,6 @@ ${JSON.stringify(incomingTxs.map(t => ({ id: t['Transaction ID'], date: t['Ngày
 
 		// 3. Provision new users
 		if (!customer.planId && !customer.isAiProcessed) {
-			let trialDays = 60;
-			try {
-				const pkgSnap = await db.collection('subscription_packages').where('price', '==', 0).limit(1).get();
-				if (!pkgSnap.empty) {
-					trialDays = Number(pkgSnap.docs[0].data().durationDays) || 60;
-				}
-			} catch (e) {}
 			const expireDate = new Date();
 			expireDate.setDate(expireDate.getDate() + trialDays);
 			await db.collection('settings').doc(customer.uid).set({
@@ -442,15 +441,6 @@ ${JSON.stringify(incomingTxs.map(t => ({ id: t['Transaction ID'], date: t['Ngày
 			}, { merge: true });
 			continue;
 		}
-
-		const parseDate = (val) => {
-			if (!val) return null;
-			if (val.toDate) return val.toDate();
-			if (val.seconds) return new Date(val.seconds * 1000);
-			if (val instanceof Date) return val;
-			if (typeof val === 'string') return new Date(val);
-			return null;
-		};
 
 		// Calculate Effective Status
 		const joinedAt = parseDate(customer.paymentConfirmedAt) || parseDate(customer.createdAt);

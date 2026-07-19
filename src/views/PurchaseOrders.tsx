@@ -1076,7 +1076,7 @@ const PurchaseOrders = () => {
 						)}
 					</div>
 				</div>
-			) : (
+			{showCreateForm && (
 				<div className="mt-4 space-y-6">
 					{/* Banner khi đang sửa đơn */}
 					{editingPO && (

@@ -25,6 +25,7 @@ import {
   runTransaction,
   onSnapshot,
   serverTimestamp,
+  startAfter,
   type Unsubscribe,
   type DocumentData,
   type QueryConstraint,
@@ -85,9 +86,13 @@ export function ownerQuery(
 // ─── Product Service ────────────────────────────────────────
 
 export const productService = {
-  /** Lắng nghe tất cả products của owner */
-  listenByOwner(ownerId: string, onData: (products: WithId<DocumentData>[]) => void, onError?: (err: Error) => void): Unsubscribe {
-    const q = query(COLLECTIONS.products(), where('ownerId', '==', ownerId));
+  /** Lắng nghe products của owner (có limit an toàn, mặc định 2000) */
+  listenByOwner(ownerId: string, onData: (products: WithId<DocumentData>[]) => void, onError?: (err: Error) => void, maxResults = 2000): Unsubscribe {
+    const q = query(
+      COLLECTIONS.products(),
+      where('ownerId', '==', ownerId),
+      limit(maxResults),
+    );
     return onSnapshot(q, (snap: QuerySnapshot) => {
       onData(snap.docs.map(withId));
     }, onError);
@@ -132,13 +137,20 @@ export const productService = {
 
 // ─── Order Service ──────────────────────────────────────────
 
+/** Cursor-based pagination result */
+export interface PaginatedResult<T> {
+  items: WithId<T>[];
+  hasMore: boolean;
+  lastDoc: DocumentSnapshot | null;
+}
+
 export const orderService = {
-  /** Lắng nghe orders của owner (có phân trang) */
+  /** Lắng nghe orders của owner (có limit, mặc định 200) */
   listenByOwner(
     ownerId: string,
     onData: (orders: WithId<DocumentData>[]) => void,
     onError?: (err: Error) => void,
-    maxResults = 100,
+    maxResults = 200,
   ): Unsubscribe {
     const q = query(
       COLLECTIONS.orders(),
@@ -152,7 +164,7 @@ export const orderService = {
   },
 
   /** Get orders một lần */
-  async getByOwner(ownerId: string, maxResults = 100): Promise<WithId<DocumentData>[]> {
+  async getByOwner(ownerId: string, maxResults = 200): Promise<WithId<DocumentData>[]> {
     const q = query(
       COLLECTIONS.orders(),
       where('ownerId', '==', ownerId),
@@ -161,6 +173,30 @@ export const orderService = {
     );
     const snap = await getDocs(q);
     return snap.docs.map(withId);
+  },
+
+  /** 🔄 PHÂN TRANG: Load thêm orders (cursor-based, không ảnh hưởng realtime listener) */
+  async getByOwnerPaginated(
+    ownerId: string,
+    pageSize = 200,
+    startAfterDoc?: DocumentSnapshot | null,
+  ): Promise<PaginatedResult<DocumentData>> {
+    const constraints: QueryConstraint[] = [
+      where('ownerId', '==', ownerId),
+      orderBy('createdAt', 'desc'),
+      limit(pageSize),
+    ];
+    if (startAfterDoc) {
+      constraints.splice(2, 0, startAfter(startAfterDoc));
+    }
+    const q = query(COLLECTIONS.orders(), ...constraints);
+    const snap = await getDocs(q);
+    const items = snap.docs.map(withId);
+    return {
+      items,
+      hasMore: !snap.empty && snap.docs.length === pageSize,
+      lastDoc: snap.docs.length > 0 ? snap.docs[snap.docs.length - 1] : null,
+    };
   },
 
   /** Thêm order */
@@ -190,8 +226,12 @@ export const orderService = {
 // ─── Customer Service ───────────────────────────────────────
 
 export const customerService = {
-  listenByOwner(ownerId: string, onData: (customers: WithId<DocumentData>[]) => void, onError?: (err: Error) => void): Unsubscribe {
-    const q = query(COLLECTIONS.customers(), where('ownerId', '==', ownerId));
+  listenByOwner(ownerId: string, onData: (customers: WithId<DocumentData>[]) => void, onError?: (err: Error) => void, maxResults = 2000): Unsubscribe {
+    const q = query(
+      COLLECTIONS.customers(),
+      where('ownerId', '==', ownerId),
+      limit(maxResults),
+    );
     return onSnapshot(q, (snap: QuerySnapshot) => {
       onData(snap.docs.map(withId));
     }, onError);
@@ -221,7 +261,7 @@ export const paymentService = {
     ownerId: string,
     onData: (payments: WithId<DocumentData>[]) => void,
     onError?: (err: Error) => void,
-    maxResults = 100,
+    maxResults = 200,
   ): Unsubscribe {
     const q = query(
       COLLECTIONS.payments(),
@@ -233,16 +273,83 @@ export const paymentService = {
       onData(snap.docs.map(withId));
     }, onError);
   },
+
+  /** 🔄 PHÂN TRANG: Load thêm payments */
+  async getByOwnerPaginated(
+    ownerId: string,
+    pageSize = 200,
+    startAfterDoc?: DocumentSnapshot | null,
+  ): Promise<PaginatedResult<DocumentData>> {
+    const constraints: QueryConstraint[] = [
+      where('ownerId', '==', ownerId),
+      orderBy('createdAt', 'desc'),
+      limit(pageSize),
+    ];
+    if (startAfterDoc) {
+      constraints.splice(2, 0, startAfter(startAfterDoc));
+    }
+    const q = query(COLLECTIONS.payments(), ...constraints);
+    const snap = await getDocs(q);
+    const items = snap.docs.map(withId);
+    return {
+      items,
+      hasMore: !snap.empty && snap.docs.length === pageSize,
+      lastDoc: snap.docs.length > 0 ? snap.docs[snap.docs.length - 1] : null,
+    };
+  },
 };
 
 // ─── Inventory Service ──────────────────────────────────────
 
+/** 🔒 SAFETY: Số ngày tối đa lấy inventory_logs (tránh query toàn bộ lịch sử) */
+const INVENTORY_LOG_MAX_DAYS = 90;
+
 export const inventoryService = {
-  listenByOwner(ownerId: string, onData: (logs: WithId<DocumentData>[]) => void, onError?: (err: Error) => void): Unsubscribe {
-    const q = query(COLLECTIONS.inventoryLogs(), where('ownerId', '==', ownerId));
+  /** Lắng nghe inventory_logs của owner (giới hạn thời gian + số lượng) */
+  listenByOwner(
+    ownerId: string,
+    onData: (logs: WithId<DocumentData>[]) => void,
+    onError?: (err: Error) => void,
+    maxResults = 500,
+  ): Unsubscribe {
+    // 🔒 TIME FILTER: Chỉ lấy logs trong INVENTORY_LOG_MAX_DAYS ngày gần nhất
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - INVENTORY_LOG_MAX_DAYS);
+    
+    const q = query(
+      COLLECTIONS.inventoryLogs(),
+      where('ownerId', '==', ownerId),
+      where('createdAt', '>=', cutoffDate),
+      orderBy('createdAt', 'desc'),
+      limit(maxResults),
+    );
     return onSnapshot(q, (snap: QuerySnapshot) => {
       onData(snap.docs.map(withId));
     }, onError);
+  },
+
+  /** 🔄 PHÂN TRANG: Load thêm inventory_logs (dùng cho xem lịch sử cũ) */
+  async getByOwnerPaginated(
+    ownerId: string,
+    pageSize = 200,
+    startAfterDoc?: DocumentSnapshot | null,
+  ): Promise<PaginatedResult<DocumentData>> {
+    const constraints: QueryConstraint[] = [
+      where('ownerId', '==', ownerId),
+      orderBy('createdAt', 'desc'),
+      limit(pageSize),
+    ];
+    if (startAfterDoc) {
+      constraints.splice(1, 0, startAfter(startAfterDoc));
+    }
+    const q = query(COLLECTIONS.inventoryLogs(), ...constraints);
+    const snap = await getDocs(q);
+    const items = snap.docs.map(withId);
+    return {
+      items,
+      hasMore: !snap.empty && snap.docs.length === pageSize,
+      lastDoc: snap.docs.length > 0 ? snap.docs[snap.docs.length - 1] : null,
+    };
   },
 
   async addLog(data: DocumentData): Promise<string> {
@@ -268,7 +375,7 @@ export const auditService = {
     ownerId: string,
     onData: (logs: WithId<DocumentData>[]) => void,
     onError?: (err: Error) => void,
-    maxResults = 100,
+    maxResults = 200,
   ): Unsubscribe {
     const q = query(
       COLLECTIONS.auditLogs(),
@@ -325,7 +432,7 @@ export const checkinService = {
     ownerId: string,
     onData: (checkins: WithId<DocumentData>[]) => void,
     onError?: (err: Error) => void,
-    maxResults = 100,
+    maxResults = 500,
   ): Unsubscribe {
     const q = query(
       COLLECTIONS.checkins(),
@@ -342,8 +449,12 @@ export const checkinService = {
 // ─── Coupon Service ─────────────────────────────────────────
 
 export const couponService = {
-  listenByOwner(ownerId: string, onData: (coupons: WithId<DocumentData>[]) => void, onError?: (err: Error) => void): Unsubscribe {
-    const q = query(COLLECTIONS.coupons(), where('ownerId', '==', ownerId));
+  listenByOwner(ownerId: string, onData: (coupons: WithId<DocumentData>[]) => void, onError?: (err: Error) => void, maxResults = 500): Unsubscribe {
+    const q = query(
+      COLLECTIONS.coupons(),
+      where('ownerId', '==', ownerId),
+      limit(maxResults),
+    );
     return onSnapshot(q, (snap: QuerySnapshot) => {
       onData(snap.docs.map(withId));
     }, onError);
@@ -351,8 +462,13 @@ export const couponService = {
 };
 
 export const attendanceService = {
-  listenByOwner(ownerId: string, onData: (logs: WithId<DocumentData>[]) => void, onError?: (err: Error) => void): Unsubscribe {
-    const q = query(COLLECTIONS.attendance(), where('ownerId', '==', ownerId), orderBy('createdAt', 'desc'));
+  listenByOwner(ownerId: string, onData: (logs: WithId<DocumentData>[]) => void, onError?: (err: Error) => void, maxResults = 500): Unsubscribe {
+    const q = query(
+      COLLECTIONS.attendance(),
+      where('ownerId', '==', ownerId),
+      orderBy('createdAt', 'desc'),
+      limit(maxResults),
+    );
     return onSnapshot(q, (snap: QuerySnapshot) => {
       onData(snap.docs.map(withId));
     }, onError);
@@ -408,8 +524,12 @@ export const rebateTierService = {
 // ─── Supplier Service ────────────────────────────────────────
 
 export const supplierService = {
-  listenByOwner(ownerId: string, onData: (suppliers: WithId<DocumentData>[]) => void, onError?: (err: Error) => void): Unsubscribe {
-    const q = query(COLLECTIONS.suppliers(), where('ownerId', '==', ownerId));
+  listenByOwner(ownerId: string, onData: (suppliers: WithId<DocumentData>[]) => void, onError?: (err: Error) => void, maxResults = 2000): Unsubscribe {
+    const q = query(
+      COLLECTIONS.suppliers(),
+      where('ownerId', '==', ownerId),
+      limit(maxResults),
+    );
     return onSnapshot(q, (snap: QuerySnapshot) => {
       onData(snap.docs.map(withId));
     }, onError);

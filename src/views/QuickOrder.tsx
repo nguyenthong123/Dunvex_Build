@@ -3,7 +3,7 @@ import { ArrowLeft, Search, Plus, Minus, Trash2, ShoppingCart, User, Package, Ma
 import QRScanner from '../components/shared/QRScanner';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { db, auth } from '../services/firebase';
-import { collection, query, onSnapshot, addDoc, updateDoc, doc, getDoc, serverTimestamp, where, increment, writeBatch, getDocs, limit, Timestamp } from 'firebase/firestore';
+import { collection, query, onSnapshot, addDoc, updateDoc, doc, getDoc, serverTimestamp, where, increment, writeBatch, getDocs, limit, Timestamp, runTransaction } from 'firebase/firestore';
 import { useProducts } from '../hooks/useProducts';
 import { useCustomers } from '../hooks/useCustomers';
 import { usePayments } from '../hooks/usePayments';
@@ -784,23 +784,46 @@ const QuickOrder = () => {
 			};
 
 			if (id) {
-				const batch = writeBatch(db);
+			// 🔒 TRANSACTION: Cập nhật đơn hàng (atomic — chống race condition)
+			// Đọc lại stock thực tế trong transaction để đảm bảo FIFO chính xác
+			await runTransaction(db, async (transaction) => {
+				// Đọc lại stock của tất cả sản phẩm liên quan
+				const productIds = new Set(stockDeletions.map((d: any) => d.productId));
+				const freshProducts: Record<string, any> = {};
+				for (const pid of productIds) {
+					const prodSnap = await transaction.get(doc(db, 'products', pid));
+					if (prodSnap.exists()) {
+						freshProducts[pid] = { id: prodSnap.id, ...prodSnap.data() };
+					}
+				}
+
+				// Validate stock cho đơn chốt
+				if (orderStatus === 'Đơn chốt') {
+					for (const del of stockDeletions) {
+						const fp = freshProducts[del.productId];
+						if (fp) {
+							const currentStock = Number(fp.stock) || 0;
+							if (currentStock < del.qty && !del.isMissing) {
+								throw new Error(`Tồn kho "${fp.name}" không đủ: còn ${currentStock}, cần ${del.qty}`);
+							}
+						}
+					}
+				}
 
 				// 1. Update Order
-				batch.update(doc(db, 'orders', id), {
+				transaction.update(doc(db, 'orders', id), {
 					...orderData,
 					updatedAt: serverTimestamp()
 				});
 
-				// 1.5 Update Debt if status is Đơn chốt or was Đơn chốt
+				// 1.5 Update Debt
 				const oldTotal = originalOrder?.status === 'Đơn chốt' ? Number(originalOrder.totalAmount || 0) : 0;
 				const newTotal = orderStatus === 'Đơn chốt' ? Number(finalTotal || 0) : 0;
 				const diffDebt = newTotal - oldTotal;
 				if (diffDebt !== 0 && orderData.customerId) {
-					const custRef = doc(db, 'customers', orderData.customerId);
-					const custSnap = await getDoc(custRef);
+					const custSnap = await transaction.get(doc(db, 'customers', orderData.customerId));
 					if (custSnap.exists()) {
-						batch.update(custRef, {
+						transaction.update(doc(db, 'customers', orderData.customerId), {
 							debt: increment(diffDebt)
 						});
 					}
@@ -817,32 +840,27 @@ const QuickOrder = () => {
 				for (const logDoc of existingLogsSnap.docs) {
 					const logData = logDoc.data();
 					if (logData.productId && logData.qty) {
-						// SAFER: Only revert stock if the product still exists in the system
-						const productExists = products.some(p => p.id === logData.productId);
+						const productExists = products.some((p: any) => p.id === logData.productId);
 						if (productExists) {
-							const oldProdRef = doc(db, 'products', logData.productId);
-							batch.update(oldProdRef, {
-								stock: increment(logData.qty) // Revert the deduction
+							transaction.update(doc(db, 'products', logData.productId), {
+								stock: increment(logData.qty)
 							});
 						}
 					}
-					batch.delete(logDoc.ref);
+					transaction.delete(logDoc.ref);
 				}
 
-				// Apply NEW stock changes ONLY IF status is 'Đơn chốt'
+				// Apply NEW stock changes
 				if (orderStatus === 'Đơn chốt') {
-					stockDeletions.forEach(del => {
-						// SAFER: Only update stock if the product still exists
-						const productExists = products.some(p => p.id === del.productId);
+					stockDeletions.forEach((del: any) => {
+						const productExists = products.some((p: any) => p.id === del.productId);
 						if (productExists) {
-							const prodRef = doc(db, 'products', del.productId);
-							batch.update(prodRef, {
+							transaction.update(doc(db, 'products', del.productId), {
 								stock: increment(-del.qty)
 							});
 						}
-
 						const invLogRef = doc(collection(db, 'inventory_logs'));
-						batch.set(invLogRef, {
+						transaction.set(invLogRef, {
 							productId: del.productId,
 							orderId: id,
 							customerName: orderData.customerName,
@@ -859,7 +877,7 @@ const QuickOrder = () => {
 
 				// 3. Log Audit
 				const auditRef = doc(collection(db, 'audit_logs'));
-				batch.set(auditRef, {
+				transaction.set(auditRef, {
 					action: 'Cập nhật đơn hàng',
 					user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
 					userId: auth.currentUser?.uid || '',
@@ -867,23 +885,47 @@ const QuickOrder = () => {
 					details: `Đã cập nhật đơn hàng: ${orderData.customerName} - Tổng: ${finalTotal.toLocaleString('vi-VN')} đ`,
 					createdAt: serverTimestamp()
 				});
+			});
+		}
+		else {
+			orderData.createdAt = Timestamp.now();
+			let newOrderId = '';
 
-				await batch.commit();
-			}
-			else {
-				orderData.createdAt = Timestamp.now();
-				const batch = writeBatch(db);
+			// 🔒 TRANSACTION: Tạo đơn hàng mới (atomic — chống race condition)
+			await runTransaction(db, async (transaction) => {
+				// Đọc lại stock của tất cả sản phẩm liên quan
+				const productIds = new Set(stockDeletions.map((d: any) => d.productId));
+				const freshProducts: Record<string, any> = {};
+				for (const pid of productIds) {
+					const prodSnap = await transaction.get(doc(db, 'products', pid));
+					if (prodSnap.exists()) {
+						freshProducts[pid] = { id: prodSnap.id, ...prodSnap.data() };
+					}
+				}
+
+				// Validate stock cho đơn chốt
+				if (orderStatus === 'Đơn chốt') {
+					for (const del of stockDeletions) {
+						const fp = freshProducts[del.productId];
+						if (fp) {
+							const currentStock = Number(fp.stock) || 0;
+							if (currentStock < del.qty && !del.isMissing) {
+								throw new Error(`Tồn kho "${fp.name}" không đủ: còn ${currentStock}, cần ${del.qty}`);
+							}
+						}
+					}
+				}
 
 				// 1. Create Order
 				const newOrderRef = doc(collection(db, 'orders'));
-				batch.set(newOrderRef, orderData);
+				newOrderId = newOrderRef.id;
+				transaction.set(newOrderRef, orderData);
 
 				// 1.5 Add Debt to Customer
 				if (orderStatus === 'Đơn chốt' && orderData.customerId) {
-					const custRef = doc(db, 'customers', orderData.customerId);
-					const custSnap = await getDoc(custRef);
+					const custSnap = await transaction.get(doc(db, 'customers', orderData.customerId));
 					if (custSnap.exists()) {
-						batch.update(custRef, {
+						transaction.update(doc(db, 'customers', orderData.customerId), {
 							debt: increment(Number(finalTotal || 0))
 						});
 					}
@@ -891,7 +933,7 @@ const QuickOrder = () => {
 
 				// 2. Create Notification
 				const notifRef = doc(collection(db, 'notifications'));
-				batch.set(notifRef, {
+				transaction.set(notifRef, {
 					title: 'Đơn hàng mới',
 					message: `Đơn hàng cho ${orderData.customerName} đã được tạo thành công: ${finalTotal.toLocaleString('vi-VN')} đ`,
 					type: 'order',
@@ -901,20 +943,18 @@ const QuickOrder = () => {
 					createdAt: serverTimestamp()
 				});
 
-				// 3. Deduct Stock & Create Inventory Logs ONLY IF status is 'Đơn chốt'
+				// 3. Deduct Stock & Create Inventory Logs
 				if (orderStatus === 'Đơn chốt') {
-					stockDeletions.forEach(del => {
-						// SAFER: Only update stock if the product still exists
-						const productExists = products.some(p => p.id === del.productId);
+					stockDeletions.forEach((del: any) => {
+						const productExists = products.some((p: any) => p.id === del.productId);
 						if (productExists) {
-							const prodRef = doc(db, 'products', del.productId);
-							batch.update(prodRef, {
+							transaction.update(doc(db, 'products', del.productId), {
 								stock: increment(-del.qty)
 							});
 						}
 
 						const invLogRef = doc(collection(db, 'inventory_logs'));
-						batch.set(invLogRef, {
+						transaction.set(invLogRef, {
 							productId: del.productId,
 							orderId: newOrderRef.id,
 							customerName: orderData.customerName,
@@ -929,7 +969,7 @@ const QuickOrder = () => {
 					});
 				}
 
-				// 4. Update Coupon Usage if applicable
+				// 4. Update Coupon Usage
 				if (couponCode) {
 					const couponQ = query(
 						collection(db, 'coupons'),
@@ -939,7 +979,7 @@ const QuickOrder = () => {
 					);
 					const couponSnap = await getDocs(couponQ);
 					if (!couponSnap.empty) {
-						batch.update(doc(db, 'coupons', couponSnap.docs[0].id), {
+						transaction.update(doc(db, 'coupons', couponSnap.docs[0].id), {
 							usageCount: increment(1)
 						});
 					}
@@ -947,7 +987,7 @@ const QuickOrder = () => {
 
 				// 5. Log Audit
 				const logRef = doc(collection(db, 'audit_logs'));
-				batch.set(logRef, {
+				transaction.set(logRef, {
 					action: 'Lên đơn hàng mới',
 					user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
 					userId: auth.currentUser?.uid || '',
@@ -955,13 +995,15 @@ const QuickOrder = () => {
 					details: `Đã tạo đơn hàng cho ${orderData.customerName} - Tổng tiền: ${finalTotal.toLocaleString('vi-VN')} đ${couponCode ? ` (Mã: ${couponCode})` : ''}`,
 					createdAt: serverTimestamp()
 				});
+			});
 
-				await batch.commit();
-
-				if (orderStatus === 'Đơn chốt') {
-					sendTelegramNotification(owner.ownerId, `📦 <b>ĐƠN HÀNG MỚI (CHỐT)</b>\n- Khách hàng: <b>${orderData.customerName}</b>\n- Tổng tiền: <b>${finalTotal.toLocaleString('vi-VN')} đ</b>\n- Nhân viên lên đơn: ${auth.currentUser?.displayName || 'Admin'}`);
-				}
+			if (orderStatus === 'Đơn chốt') {
+				sendTelegramNotification(owner.ownerId, `📦 <b>ĐƠN HÀNG MỚI (CHỐT)</b>
+- Khách hàng: <b>${orderData.customerName}</b>
+- Tổng tiền: <b>${finalTotal.toLocaleString('vi-VN')} đ</b>
+- Nhân viên lên đơn: ${auth.currentUser?.displayName || 'Admin'}`);
 			}
+		}
 			vibrate([100, 50, 100]);
 			setShowSuccessModal(true);
 		} catch (error) {

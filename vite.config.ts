@@ -53,7 +53,7 @@ export default defineConfig({
 				runtimeCaching: [
 					{
 						urlPattern: ({ request }) => request.mode === 'navigate',
-						handler: 'NetworkFirst',
+						handler: 'StaleWhileRevalidate',
 						options: {
 							cacheName: 'pages-cache',
 							expiration: {

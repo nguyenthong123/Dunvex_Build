@@ -488,6 +488,16 @@ const QuickOrder = () => {
 	}, [location.state, products.length, customers.length, loading, fetchingOrder]);
 
 
+	// 🚀 Auto-navigate về danh sách đơn sau 1.2s, không cần nhấn nút
+	useEffect(() => {
+		if (showSuccessModal) {
+			const timer = setTimeout(() => navigate('/orders'), 1200);
+			return () => clearTimeout(timer);
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [showSuccessModal]);
+
+
 	const handleQRScan = (productId: string) => {
 		const product = products.find(p => p.id === productId);
 		if (product) {
@@ -1102,14 +1112,6 @@ const QuickOrder = () => {
 	}
 
 
-	// 🚀 Auto-navigate về danh sách đơn sau 1.2s, không cần nhấn nút
-	useEffect(() => {
-		if (showSuccessModal) {
-			const timer = setTimeout(() => navigate('/orders'), 1200);
-			return () => clearTimeout(timer);
-		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [showSuccessModal]);
 	return (
 		<div className="min-h-screen bg-[#f8f9fb] dark:bg-slate-950 p-4 md:p-8 font-sans pb-32 md:pb-8 transition-colors duration-300">
 			{/* TOP HEADER */}

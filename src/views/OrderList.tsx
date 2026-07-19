@@ -238,6 +238,19 @@ const OrderList = () => {
 					batch.update(doc(db, 'customers', order.customerId), {
 						debt: increment(Number(order.totalAmount || 0))
 					});
+					// 📊 Ghi vào debts collection
+					const debtRef = doc(collection(db, 'debts'));
+					batch.set(debtRef, {
+						customerId: order.customerId,
+						customerName: order.customerName || '',
+						type: 'debt_increase',
+						amount: Number(order.totalAmount || 0),
+						orderId: id,
+						note: 'Chốt đơn hàng',
+						ownerId: owner.ownerId || '',
+						createdBy: auth.currentUser?.uid || '',
+						createdAt: serverTimestamp()
+					});
 				}
 				
 				const auditRef = doc(collection(db, 'audit_logs'));
@@ -269,6 +282,19 @@ const OrderList = () => {
 			if (order?.customerId && order?.status === 'Đơn chốt') {
 				batch.update(doc(db, 'customers', order.customerId), {
 					debt: increment(-Number(order.totalAmount || 0))
+				});
+				// 📊 Ghi vào debts collection
+				const debtRef = doc(collection(db, 'debts'));
+				batch.set(debtRef, {
+					customerId: order.customerId,
+					customerName: order.customerName || '',
+					type: 'payment',
+					amount: Number(order.totalAmount || 0),
+					orderId: id,
+					note: newStatus === 'Đã hủy' ? 'Hủy đơn hàng' : 'Bỏ chốt đơn hàng',
+					ownerId: owner.ownerId || '',
+					createdBy: auth.currentUser?.uid || '',
+					createdAt: serverTimestamp()
 				});
 			}
 
@@ -335,6 +361,19 @@ const OrderList = () => {
 							debt: increment(-Number(order.totalAmount || 0))
 						});
 					}
+					// 📊 Ghi vào debts collection
+					const debtRef = doc(collection(db, 'debts'));
+					batch.set(debtRef, {
+						customerId: order.customerId,
+						customerName: order.customerName || '',
+						type: 'payment',
+						amount: Number(order.totalAmount || 0),
+						orderId: id,
+						note: 'Xóa đơn hàng - hoàn nợ',
+						ownerId: owner.ownerId || '',
+						createdBy: auth.currentUser?.uid || '',
+						createdAt: serverTimestamp()
+					});
 				}
 
 				// 3. Log Audit

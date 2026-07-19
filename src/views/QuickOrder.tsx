@@ -827,6 +827,19 @@ const QuickOrder = () => {
 							debt: increment(diffDebt)
 						});
 					}
+					// 📊 Ghi vào debts collection (single source of truth)
+					const debtRef = doc(collection(db, 'debts'));
+					transaction.set(debtRef, {
+						customerId: orderData.customerId,
+						customerName: orderData.customerName,
+						type: diffDebt > 0 ? 'debt_increase' : 'payment',
+						amount: Math.abs(diffDebt),
+						orderId: id,
+						note: diffDebt > 0 ? `Cập nhật đơn hàng tăng nợ` : `Cập nhật đơn hàng giảm nợ`,
+						ownerId: owner.ownerId || '',
+						createdBy: auth.currentUser?.uid || '',
+						createdAt: serverTimestamp()
+					});
 				}
 
 				// 2. Sync Inventory: Revert old logs and apply new ones
@@ -929,6 +942,19 @@ const QuickOrder = () => {
 							debt: increment(Number(finalTotal || 0))
 						});
 					}
+					// 📊 Ghi vào debts collection (single source of truth)
+					const debtRef = doc(collection(db, 'debts'));
+					transaction.set(debtRef, {
+						customerId: orderData.customerId,
+						customerName: orderData.customerName,
+						type: 'debt_increase',
+						amount: Number(finalTotal || 0),
+						orderId: newOrderRef.id,
+						note: `Tạo đơn hàng mới`,
+						ownerId: owner.ownerId || '',
+						createdBy: auth.currentUser?.uid || '',
+						createdAt: serverTimestamp()
+					});
 				}
 
 				// 2. Create Notification

@@ -66,6 +66,7 @@ export const COLLECTIONS = {
   suppliers: () => collection(db, 'suppliers'),
   purchaseOrders: () => collection(db, 'purchase_orders'),
   supplierDebts: () => collection(db, 'supplier_debts'),
+  customerDebts: () => collection(db, 'debts'),
 } as const;
 
 // ─── Common Query Helpers ───────────────────────────────────
@@ -632,6 +633,40 @@ export const supplierDebtService = {
 
   async update(id: string, data: Partial<DocumentData>): Promise<void> {
     await updateDoc(doc(COLLECTIONS.supplierDebts(), id), data);
+  },
+};
+
+// ─── Customer Debt Service ───────────────────────────────────
+
+export const customerDebtService = {
+  listenByOwner(
+    ownerId: string,
+    onData: (debts: WithId<DocumentData>[]) => void,
+    onError?: (err: Error) => void,
+    maxResults = 500,
+  ): Unsubscribe {
+    const q = query(
+      COLLECTIONS.customerDebts(),
+      where('ownerId', '==', ownerId),
+      orderBy('createdAt', 'desc'),
+      limit(maxResults),
+    );
+    return onSnapshot(q, (snap: QuerySnapshot) => {
+      onData(snap.docs.map(withId));
+    }, onError);
+  },
+
+  /** Ghi nhận 1 giao dịch công nợ KH (tăng/giảm) */
+  async create(data: DocumentData): Promise<string> {
+    const ref = await addDoc(COLLECTIONS.customerDebts(), {
+      ...data,
+      createdAt: serverTimestamp(),
+    });
+    return ref.id;
+  },
+
+  async remove(id: string): Promise<void> {
+    await deleteDoc(doc(COLLECTIONS.customerDebts(), id));
   },
 };
 

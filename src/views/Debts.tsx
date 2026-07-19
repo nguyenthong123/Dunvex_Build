@@ -740,6 +740,20 @@ const Debts: React.FC = () => {
 				batch.update(doc(db, 'customers', paymentData.customerId), {
 					debt: increment(-diffAmount)
 				});
+				// 📊 Ghi vào debts collection (single source of truth)
+				const debtRef = doc(collection(db, 'debts'));
+				batch.set(debtRef, {
+					customerId: paymentData.customerId,
+					customerName: paymentData.customerName,
+					type: 'payment',
+					amount: diffAmount,
+					paymentId: newPaymentId || '',
+					method: paymentData.paymentMethod || 'Chuyển khoản',
+					note: paymentData.note || 'Ghi nhận thu nợ',
+					ownerId: owner.ownerId || '',
+					createdBy: auth.currentUser?.uid || '',
+					createdAt: serverTimestamp()
+				});
 			}
 
 			await batch.commit();

@@ -4,7 +4,7 @@
  * 📊 DEBT UNIFICATION: Tính công nợ từ debts collection (single source of truth)
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { customerService, customerDebtService, type WithId } from '../services/dataAccess';
 
 interface UseCustomersOptions {
@@ -53,14 +53,13 @@ export function useCustomers({ ownerId, enabled = true }: UseCustomersOptions) {
     const unsubscribe = customerDebtService.listenByOwner(
       ownerId,
       (data) => setDebts(data),
-      (err) => console.error("Lỗi tải công nợ KH:", err),
-      5000
+      (err) => console.error("Lỗi tải công nợ KH:", err)
     );
     return () => unsubscribe();
   }, [ownerId]);
 
   // Merge debts vào customers: calculatedDebt = SUM(debts theo customerId)
-  const customersWithDebt = customers.map(c => {
+  const customersWithDebt = useMemo(() => customers.map(c => {
     const customerDebts = debts.filter(d => d.customerId === c.id);
     const calculatedDebt = customerDebts.reduce((sum, d) => {
       if (d.type === 'debt_increase') return sum + (Number(d.amount) || 0);
@@ -77,7 +76,7 @@ export function useCustomers({ ownerId, enabled = true }: UseCustomersOptions) {
       debt: finalDebt,
       calculatedDebt: Math.max(0, calculatedDebt),
     };
-  });
+  }), [customers, debts]);
 
   return {
     customers: customersWithDebt,

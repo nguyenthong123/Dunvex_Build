@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supplierService, supplierDebtService, WithId } from '../services/dataAccess';
 import { useOwner } from './useOwner';
 
@@ -50,7 +50,7 @@ export function useSuppliers() {
 
   // Merge debts vào suppliers: tính calculatedDebt = SUM(debts theo supplierId)
   // P0 #2: override totalDebt bằng calculatedDebt từ debts (realtime, luôn chính xác)
-  const suppliersWithDebt = suppliers.map(s => {
+  const suppliersWithDebt = useMemo(() => suppliers.map(s => {
     const supplierDebts = debts.filter(d => d.supplierId === s.id);
     const calculatedDebt = supplierDebts.reduce((sum, d) => {
       if (d.type === 'debt_increase') return sum + (Number(d.amount) || 0);
@@ -61,7 +61,7 @@ export function useSuppliers() {
     const fallbackDebt = Number(s.totalDebt) || 0;
     const finalDebt = hasDebtRecords ? Math.max(0, calculatedDebt) : fallbackDebt;
     return { ...s, totalDebt: finalDebt, calculatedDebt: Math.max(0, calculatedDebt) };
-  });
+  }), [suppliers, debts]);
 
   const addSupplier = async (data: Record<string, any>) => {
     if (!owner.ownerId) throw new Error("No owner found");

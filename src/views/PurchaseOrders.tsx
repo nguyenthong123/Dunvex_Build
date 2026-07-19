@@ -417,7 +417,6 @@ const PurchaseOrders = () => {
 				}));
 
 				resetEditForm();
-				showToast("Đã cập nhật phiếu nhập kho", "success");
 				return;
 			}
 
@@ -502,7 +501,6 @@ const PurchaseOrders = () => {
 			// If paidAmount > 0, we should record a payment transaction too, but to keep it simple, it's just "tiền trả ngay".
 
 			resetEditForm();
-			showToast("Đã hoàn thành phiếu nhập kho", "success");
 		} catch (error: any) {
 			console.error('Submit PO error:', error);
 			showToast(`Có lỗi xảy ra: ${error?.message || 'Không xác định'}`, "error");

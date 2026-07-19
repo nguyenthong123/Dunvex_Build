@@ -993,15 +993,14 @@ const PurchaseOrders = () => {
 							<span className="material-symbols-outlined text-[#1A237E] dark:text-[#FF6D00] text-3xl">local_shipping</span>
 							Nhập Kho
 						</h1>
-					<button onClick={() => { resetEditForm(); setShowCreateForm(true); }} className="hidden md:flex items-center gap-2 px-5 py-2.5 bg-[#FF6D00] text-white font-bold rounded-xl shadow-lg shadow-orange-500/30 hover:bg-[#E66000] active:scale-95 transition-all">
+					<button onClick={() => { resetEditForm(); setShowCreateForm(true); }} className="flex items-center gap-2 px-5 py-2.5 bg-[#FF6D00] text-white font-bold rounded-xl shadow-lg shadow-orange-500/30 hover:bg-[#E66000] active:scale-95 transition-all text-sm">
 						<Plus size={20} /> Tạo Đơn Nhập
 					</button>
 					</div>
 				</div>
 			</div>
 
-			{!showCreateForm ? (
-				<div className="mt-4">
+			<div className="mt-4">
 					<div className="mb-4">
 						<div className="relative">
 							<Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
@@ -1077,8 +1076,18 @@ const PurchaseOrders = () => {
 						)}
 					</div>
 				</div>
-			) : (
-				<div className="mt-4 space-y-6">
+			{showCreateForm && (
+		<div className="fixed inset-0 z-[100] flex items-start justify-center p-4 pt-20 bg-slate-900/60 backdrop-blur-md overflow-y-auto" onClick={() => { if (!editingPO) resetEditForm(); }}>
+			<div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-[2.5rem] shadow-2xl border border-white/20 dark:border-slate-800" onClick={e => e.stopPropagation()}>
+				<div className="px-6 py-4 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between sticky top-0 z-10 rounded-t-[2.5rem]">
+					<h3 className="text-xl font-black text-[#1A237E] dark:text-indigo-400">
+						{editingPO ? 'Chỉnh Sửa Đơn Nhập' : 'Tạo Đơn Nhập Hàng'}
+					</h3>
+					<button onClick={resetEditForm} className="size-8 rounded-full bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-500 transition-colors">
+						<X size={18} />
+					</button>
+				</div>
+				<div className="max-h-[70vh] overflow-y-auto p-6 space-y-6">
 					{/* Banner khi đang sửa đơn */}
 					{editingPO && (
 						<div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-2xl p-4 flex items-center justify-between">
@@ -1170,6 +1179,22 @@ const PurchaseOrders = () => {
 										</button>
 									)}
 
+
+								{/* Category Filter */}
+								{categories.length > 1 && (
+									<div className="mb-3">
+										<label className="block text-xs font-bold text-slate-500 uppercase mb-1">Danh mục</label>
+										<select
+											value={item.category || 'Tất cả'}
+											onChange={(e) => { updateRow(item.id, 'category', e.target.value); setActiveRow(index); }}
+											className="w-full h-10 px-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[#FF6D00] outline-none transition-all dark:text-white text-sm font-medium"
+										>
+											{categories.map((cat: string) => (
+												<option key={cat} value={cat}>{cat}</option>
+											))}
+										</select>
+									</div>
+								)}
 									<div className="grid grid-cols-1 md:grid-cols-12 gap-4">
 										{/* Tên sản phẩm */}
 										<div className="md:col-span-6 relative">
@@ -1305,20 +1330,11 @@ const PurchaseOrders = () => {
 							</button>
 						</div>
 					</div>
+					</div>
+					</div>
 				</div>
 			)}
 		</div>
-
-		{/* ─── Mobile Tạo Đơn Nhập FAB ─── */}
-		{!showCreateForm && (
-			<button
-				onClick={() => { resetEditForm(); setShowCreateForm(true); }}
-				className="md:hidden fixed bottom-6 right-6 z-50 bg-[#FF6D00] text-white w-14 h-14 rounded-full shadow-xl shadow-orange-500/40 flex items-center justify-center hover:scale-110 active:scale-95 transition-all"
-				title="Tạo Đơn Nhập"
-			>
-				<Plus size={24} />
-			</button>
-		)}
 
 		{/* ─── Supply Bot FAB + Chat Panel ─── */}
 		{!chatOpen && (

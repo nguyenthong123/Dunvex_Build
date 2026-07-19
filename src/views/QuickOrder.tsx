@@ -810,23 +810,33 @@ const QuickOrder = () => {
 					}
 				}
 
+				// 🔒 ĐỌC TẤT CẢ DỮ LIỆU TRƯỚC KHI GHI (Firestore transaction rule)
+				// Đọc customer để kiểm tra tồn tại (PHẢI đọc trước khi ghi bất kỳ gì)
+				const oldTotal = originalOrder?.status === 'Đơn chốt' ? Number(originalOrder.totalAmount || 0) : 0;
+				const newTotal = orderStatus === 'Đơn chốt' ? Number(finalTotal || 0) : 0;
+				const diffDebt = newTotal - oldTotal;
+				let custExists = false;
+				if (diffDebt !== 0 && orderData.customerId) {
+					const custSnap = await transaction.get(doc(db, 'customers', orderData.customerId));
+					custExists = custSnap.exists();
+				}
+
+				// Đọc inventory logs cũ
+				// 2. Sync Inventory: Revert old logs and apply new ones
+
+				// ═══════ TẤT CẢ WRITES SAU DÒNG NÀY ═══════
+
 				// 1. Update Order
 				transaction.update(doc(db, 'orders', id), {
 					...orderData,
 					updatedAt: serverTimestamp()
 				});
 
-				// 1.5 Update Debt
-				const oldTotal = originalOrder?.status === 'Đơn chốt' ? Number(originalOrder.totalAmount || 0) : 0;
-				const newTotal = orderStatus === 'Đơn chốt' ? Number(finalTotal || 0) : 0;
-				const diffDebt = newTotal - oldTotal;
-				if (diffDebt !== 0 && orderData.customerId) {
-					const custSnap = await transaction.get(doc(db, 'customers', orderData.customerId));
-					if (custSnap.exists()) {
-						transaction.update(doc(db, 'customers', orderData.customerId), {
-							debt: increment(diffDebt)
-						});
-					}
+				// 1.5 Update Debt (chỉ ghi, không đọc gì thêm)
+				if (diffDebt !== 0 && orderData.customerId && custExists) {
+					transaction.update(doc(db, 'customers', orderData.customerId), {
+						debt: increment(diffDebt)
+					});
 					// 📊 Ghi vào debts collection (single source of truth)
 					const debtRef = doc(collection(db, 'debts'));
 					transaction.set(debtRef, {
@@ -841,8 +851,6 @@ const QuickOrder = () => {
 						createdAt: serverTimestamp()
 					});
 				}
-
-				// 2. Sync Inventory: Revert old logs and apply new ones
 				const existingLogsQ = query(
 					collection(db, 'inventory_logs'),
 					where('ownerId', '==', owner.ownerId),
@@ -929,19 +937,25 @@ const QuickOrder = () => {
 					}
 				}
 
+				// Đọc customer trước khi ghi (PHẢI đọc trước tất cả writes)
+				let custExists = false;
+				if (orderStatus === 'Đơn chốt' && orderData.customerId) {
+					const custSnap = await transaction.get(doc(db, 'customers', orderData.customerId));
+					custExists = custSnap.exists();
+				}
+
+				// ═══════ TẤT CẢ WRITES SAU DÒNG NÀY ═══════
+
 				// 1. Create Order
 				const newOrderRef = doc(collection(db, 'orders'));
 				newOrderId = newOrderRef.id;
 				transaction.set(newOrderRef, orderData);
 
 				// 1.5 Add Debt to Customer
-				if (orderStatus === 'Đơn chốt' && orderData.customerId) {
-					const custSnap = await transaction.get(doc(db, 'customers', orderData.customerId));
-					if (custSnap.exists()) {
-						transaction.update(doc(db, 'customers', orderData.customerId), {
-							debt: increment(Number(finalTotal || 0))
-						});
-					}
+				if (orderStatus === 'Đơn chốt' && orderData.customerId && custExists) {
+					transaction.update(doc(db, 'customers', orderData.customerId), {
+						debt: increment(Number(finalTotal || 0))
+					});
 					// 📊 Ghi vào debts collection (single source of truth)
 					const debtRef = doc(collection(db, 'debts'));
 					transaction.set(debtRef, {

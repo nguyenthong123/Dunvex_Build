@@ -22,6 +22,8 @@ const AppSettings = () => {
 	const [savingTelegram, setSavingTelegram] = React.useState(false);
 	const [generating, setGenerating] = React.useState(false);
 	const [apiEnabled, setApiEnabled] = React.useState(false);
+	const [webhookSecret, setWebhookSecret] = React.useState('');
+	const [regeneratingWebhook, setRegeneratingWebhook] = React.useState(false);
 
 	React.useEffect(() => {
 		if (!owner.ownerId) return;
@@ -34,6 +36,7 @@ const AppSettings = () => {
 					setApiKey(data.key || '');
 					setApiEnabled(data.enabled === true);
 					setTelegramBotToken(data.telegramBotToken || '');
+					setWebhookSecret(data.webhookSecret || '');
 				}
 			} catch (e) { console.error(e); }
 		};
@@ -47,12 +50,16 @@ const AppSettings = () => {
 			const { doc: d, setDoc: sd } = await import('firebase/firestore');
 			const newKey = 'dvx_' + Array.from(crypto.getRandomValues(new Uint8Array(24)))
 				.map(b => b.toString(16).padStart(2, '0')).join('');
+			const newSecret = 'wh_' + Array.from(crypto.getRandomValues(new Uint8Array(16)))
+				.map(b => b.toString(16).padStart(2, '0')).join('');
 			await sd(d(db, 'api_keys', owner.ownerId), {
 				key: newKey, enabled: true, ownerId: owner.ownerId,
+				webhookSecret: newSecret,
 				createdAt: new Date().toISOString(),
 				createdBy: auth.currentUser?.email || '',
 			}, { merge: true });
 			setApiKey(newKey);
+			setWebhookSecret(newSecret);
 			setApiEnabled(true);
 			showToast('API Key đã được tạo!', 'success');
 		} catch (e: any) {
@@ -75,8 +82,29 @@ const AppSettings = () => {
 		}
 	};
 
-	const webhookUrl = typeof window !== 'undefined' ? `${window.location.origin}/api/order-webhook` : '/api/order-webhook';
+	const webhookUrl = typeof window !== 'undefined'
+		? `${window.location.origin}/api/order-webhook${webhookSecret ? `?token=${webhookSecret}` : ''}`
+		: `/api/order-webhook${webhookSecret ? `?token=${webhookSecret}` : ''}`;
 	const telegramWebhookUrl = typeof window !== 'undefined' ? `${window.location.origin}/api/telegram-webhook` : '/api/telegram-webhook';
+
+	const regenerateWebhookUrl = async () => {
+		if (!owner.ownerId) return;
+		setRegeneratingWebhook(true);
+		try {
+			const { doc: d, setDoc: sd } = await import('firebase/firestore');
+			const newSecret = 'wh_' + Array.from(crypto.getRandomValues(new Uint8Array(16)))
+				.map(b => b.toString(16).padStart(2, '0')).join('');
+			await sd(d(db, 'api_keys', owner.ownerId), {
+				webhookSecret: newSecret,
+			}, { merge: true });
+			setWebhookSecret(newSecret);
+			showToast('Webhook URL mới đã được tạo!', 'success');
+		} catch (e: any) {
+			showToast('Lỗi: ' + e.message, 'error');
+		} finally {
+			setRegeneratingWebhook(false);
+		}
+	};
 
 	const handleConnectTelegram = async () => {
 		if (!apiKey) {
@@ -344,15 +372,33 @@ const AppSettings = () => {
 					</div>
 
 					<div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800">
-						<div className="flex items-center gap-2 mb-2">
-							<Globe size={16} className="text-emerald-500" />
-							<span className="text-xs font-black text-slate-500 uppercase tracking-widest">Webhook URL</span>
+						<div className="flex items-center justify-between mb-2">
+							<div className="flex items-center gap-2">
+								<Globe size={16} className="text-emerald-500" />
+								<span className="text-xs font-black text-slate-500 uppercase tracking-widest">Webhook URL (Riêng)</span>
+							</div>
+							{apiKey && (
+								<button
+									onClick={regenerateWebhookUrl}
+									disabled={regeneratingWebhook}
+									className="px-3 py-1.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-black rounded-lg hover:bg-emerald-200 transition-all flex items-center gap-1"
+								>
+									{regeneratingWebhook ? <RefreshCw size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+									Tạo Mới
+								</button>
+							)}
 						</div>
-						<div className="flex items-center gap-2">
-							<code className="flex-1 px-3 py-2 bg-white dark:bg-slate-900 rounded-lg text-xs font-mono text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 truncate">{webhookUrl}</code>
-							<button onClick={() => {{ navigator.clipboard.writeText(webhookUrl); setUrlCopied(true); showToast('Copy xong!', 'success'); setTimeout(() => setUrlCopied(false), 2000); }}} className="p-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg transition-all">{urlCopied ? <Check size={16} /> : <Copy size={16} />}</button>
-						</div>
-						<p className="text-[10px] text-slate-400 mt-2">Gửi POST request với header <code className="bg-slate-200 dark:bg-slate-700 px-1 rounded">x-api-key</code> và body JSON đơn hàng.</p>
+						{webhookSecret ? (
+							<>
+								<div className="flex items-center gap-2">
+									<code className="flex-1 px-3 py-2 bg-white dark:bg-slate-900 rounded-lg text-xs font-mono text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 truncate">{webhookUrl}</code>
+									<button onClick={() => {{ navigator.clipboard.writeText(webhookUrl); setUrlCopied(true); showToast('Copy xong!', 'success'); setTimeout(() => setUrlCopied(false), 2000); }}} className="p-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg transition-all">{urlCopied ? <Check size={16} /> : <Copy size={16} />}</button>
+								</div>
+								<p className="text-[10px] text-slate-400 mt-2">Link này là <strong>duy nhất</strong> cho cửa hàng của bạn. Gửi POST request với header <code className="bg-slate-200 dark:bg-slate-700 px-1 rounded">x-api-key</code> và body JSON đơn hàng.</p>
+							</>
+						) : (
+							<p className="text-xs text-slate-400 italic">Vui lòng tạo API Key trước, sau đó nhấn <strong>Tạo Mới</strong> để sinh Webhook URL riêng.</p>
+						)}
 					</div>
 
 					{/* ─── Webhook Trợ Lý AI (Telegram) ─── */}

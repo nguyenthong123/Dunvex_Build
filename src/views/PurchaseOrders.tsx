@@ -1253,40 +1253,62 @@ const PurchaseOrders = () => {
 													</button>
 												</div>
 											) : (
-												<div>
-													<input
-														type="text"
-														placeholder="Gõ để tìm tên sản phẩm..."
-														value={activeRow === index ? productSearchQuery : ''}
-														onChange={(e) => { setProductSearchQuery(e.target.value); setActiveRow(index); }}
-														onFocus={() => setActiveRow(index)}
-														className="w-full h-12 px-4 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[#FF6D00] outline-none transition-all dark:text-white"
-													/>
-													{activeRow === index && productSearchQuery && (
-														<div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto">
-															{filteredProducts.map(product => (
-																<div
-																	key={product.id}
-																	onClick={() => handleSelectProduct(item.id, product)}
-																	className="p-3 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer border-b border-slate-100 dark:border-slate-700/50 last:border-0"
-																>
-																	<div className="font-bold text-slate-800 dark:text-white">{product.name}</div>
-																	<div className="text-xs text-slate-500">Giá nhập cũ: {formatCurrency(product.priceImport)} đ • Tồn: {product.stock}</div>
-																</div>
-															))}
-															{filteredProducts.length === 0 && (
-																<div className="p-3 text-center">
-																	<p className="text-sm text-slate-500 mb-2">Chưa có sản phẩm này</p>
-																	<button
-																		onClick={() => handleQuickAddProduct(item.id, productSearchQuery)}
-																		className="w-full py-2 bg-slate-100 dark:bg-slate-700 text-[#FF6D00] font-bold rounded-lg flex items-center justify-center gap-2 hover:bg-slate-200 transition-colors"
-																	>
-																		<Plus size={16} /> Thêm nhanh SP mới
-																	</button>
-																</div>
-															)}
-														</div>
-													)}
+													<div className="relative">
+														<Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+														<input
+															type="text"
+															placeholder="Tìm hoặc chọn tên sản phẩm..."
+															value={activeRow === index ? productSearchQuery : ''}
+															onChange={(e) => { setProductSearchQuery(e.target.value); setActiveRow(index); }}
+															onFocus={() => setActiveRow(index)}
+															className="w-full h-12 pl-12 pr-4 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[#FF6D00] outline-none transition-all dark:text-white"
+														/>
+														{activeRow === index && (
+															<div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl z-50 max-h-72 overflow-y-auto">
+																{!productSearchQuery && (
+																	<div className="px-4 py-2 text-xs font-bold text-slate-400 uppercase tracking-wider bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-700 sticky top-0 z-10">
+																		📋 Gợi ý {filteredProducts.length} sản phẩm gần đây (gõ để lọc)
+																	</div>
+																)}
+																{filteredProducts.length > 0 ? (
+																	<>
+																	{filteredProducts.map(product => (
+																		<div
+																			key={product.id}
+																			onClick={() => handleSelectProduct(item.id, product)}
+																			className="p-3 hover:bg-orange-50 dark:hover:bg-orange-900/10 cursor-pointer border-b border-slate-100 dark:border-slate-700/50 last:border-0 transition-colors"
+																		>
+																			<div className="flex items-center justify-between gap-2">
+																				<div className="flex-1 min-w-0">
+																					<div className="font-bold text-slate-800 dark:text-white text-sm line-clamp-1">{product.name}</div>
+																					<div className="flex items-center gap-3 mt-1">
+																						{product.sku && <span className="text-[10px] text-slate-400 font-mono">{product.sku}</span>}
+																						{(product as any).category && (product as any).category !== 'Chưa phân loại' && (
+																							<span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 font-medium">{(product as any).category}</span>
+																						)}
+																					</div>
+																				</div>
+																				<div className="text-right shrink-0">
+																					<div className="font-black text-[#FF6D00] text-sm">{formatCurrency(product.priceImport)} đ</div>
+																					<div className="text-[10px] text-slate-400">Tồn: <span className={product.stock > 0 ? 'text-emerald-500 font-bold' : 'text-red-400 font-bold'}>{product.stock || 0}</span></div>
+																				</div>
+																			</div>
+																		</div>
+																	))}
+																	</>
+																) : (
+																	<div className="p-4 text-center">
+																		<p className="text-sm text-slate-500 mb-3">🔍 Không tìm thấy sản phẩm "{productSearchQuery}"</p>
+																		<button
+																			onClick={() => handleQuickAddProduct(item.id, productSearchQuery)}
+																			className="w-full py-2.5 bg-[#FF6D00] text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-[#E66000] transition-colors shadow-lg shadow-orange-500/20"
+																		>
+																			<Plus size={16} /> Thêm nhanh "{productSearchQuery}"
+																		</button>
+																	</div>
+																)}
+															</div>
+														)}
 												</div>
 											)}
 										</div>

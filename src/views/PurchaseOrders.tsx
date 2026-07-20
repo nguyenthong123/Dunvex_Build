@@ -1248,7 +1248,7 @@ const PurchaseOrders = () => {
 											<label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tên SP (Kho đang có: {item.currentStock || 0})</label>
 											{item.productId ? (
 												<div className="flex items-center justify-between w-full h-12 px-4 bg-white dark:bg-slate-900 border border-emerald-500 rounded-xl shadow-sm">
-													<span className="font-bold text-slate-800 dark:text-white line-clamp-1">{item.name}</span>
+													<span className="font-bold text-slate-800 dark:text-white whitespace-normal break-words">{item.name}</span>
 													<button onClick={() => updateRow(item.id, 'productId', '')} className="text-slate-400 hover:text-red-500">
 														<X size={16} />
 													</button>
@@ -1281,7 +1281,7 @@ const PurchaseOrders = () => {
 																		>
 																			<div className="flex items-center justify-between gap-2">
 																				<div className="flex-1 min-w-0">
-																					<div className="font-bold text-slate-800 dark:text-white text-sm line-clamp-1">{product.name}</div>
+																					<div className="font-bold text-slate-800 dark:text-white text-sm whitespace-normal break-words">{product.name}</div>
 																					<div className="flex items-center gap-3 mt-1">
 																						{product.sku && <span className="text-[10px] text-slate-400 font-mono">{product.sku}</span>}
 																						{(product as any).category && (product as any).category !== 'Chưa phân loại' && (

@@ -485,9 +485,9 @@ const Debts: React.FC = () => {
 		const lifetimeTotalWaited = debtOrders.reduce((sum: any, o: any) => sum + (o.totalAmount || 0), 0);
 		const lifetimeTotalPaid = customerPayments.reduce((sum: any, p: any) => sum + (p.amount || 0), 0);
 		
-		// Use actual debt from database for registered customers
+		// Use realtime calculated debt (orders - payments) — tránh lệch với Firestore cache
 		const calcDebt = lifetimeTotalWaited - lifetimeTotalPaid;
-		const currentDebt = c.isGuest ? calcDebt : (Number(c.debt) || 0);
+		const currentDebt = calcDebt;
 
 		// Column display values based on status filter and date filter
 		let displayTotalOrders = 0;

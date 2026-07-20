@@ -328,8 +328,9 @@ const Pricing = () => {
 
 						<div className="grid grid-cols-1 md:grid-cols-2 gap-8">
 							{plans.filter(plan => {
-								// Ẩn gói FREE nếu tài khoản đã hoạt động > 1 tháng (trial hết hạn)
-								if (plan.price === 0 && (owner.subscriptionStatus === 'expired' || owner.subscriptionStatus === 'active')) {
+								// Chỉ hiện gói FREE khi tài khoản đang trong thời gian trial
+								// Ẩn nếu đã expired (hết trial) hoặc active (đã mua PRO)
+								if (plan.price === 0 && owner.subscriptionStatus !== 'trial') {
 									return false;
 								}
 								return true;

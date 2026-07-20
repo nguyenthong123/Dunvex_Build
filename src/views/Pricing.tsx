@@ -327,7 +327,13 @@ const Pricing = () => {
 						</div>
 
 						<div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-							{plans.map((plan) => (
+							{plans.filter(plan => {
+								// Ẩn gói FREE nếu tài khoản đã hoạt động > 1 tháng (trial hết hạn)
+								if (plan.price === 0 && (owner.subscriptionStatus === 'expired' || owner.subscriptionStatus === 'active')) {
+									return false;
+								}
+								return true;
+							}).map((plan) => (
 								<div
 									key={plan.id}
 									className={`relative bg-white dark:bg-slate-900 rounded-[2.5rem] p-8 shadow-xl transition-all hover:scale-[1.02] border-2 ${plan.recommended ? 'border-amber-400 dark:border-amber-500 shadow-amber-500/10' : 'border-transparent'}`}

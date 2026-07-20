@@ -489,21 +489,8 @@ const Debts: React.FC = () => {
 		const calcDebt = lifetimeTotalWaited - lifetimeTotalPaid;
 		const currentDebt = calcDebt;
 
-		// Column display values based on status filter and date filter
-		let displayTotalOrders = 0;
-		if (statusFilter === 'Tất cả') {
-			displayTotalOrders = periodOrders.reduce((sum: any, o: any) => sum + (o.totalAmount || 0), 0);
-		} else {
-			displayTotalOrders = periodOrders
-				.filter(o => o.status === statusFilter)
-				.reduce((sum: any, o: any) => sum + (o.totalAmount || 0), 0);
-		}
-
-		// If no date filter is applied, we adjust displayTotalOrders to match currentDebt for accuracy 
-		// (since orders might be missing due to 500 limit).
-		if (!hasDateFilter && (statusFilter === 'Tất cả' || statusFilter === 'Đơn chốt')) {
-			displayTotalOrders = (currentDebt > 0 ? currentDebt : 0) + lifetimeTotalPaid;
-		}
+		// Luôn hiển thị tổng đơn chốt (không còn filter Tất cả/Đơn nháp)
+		const displayTotalOrders = lifetimeTotalWaited;
 
 		const totalPaid = hasDateFilter ? periodPayments.reduce((sum: any, p: any) => sum + (p.amount || 0), 0) : lifetimeTotalPaid;
 
@@ -533,7 +520,7 @@ const Debts: React.FC = () => {
 			lastTx: allTx[0]?.date || null,
 			debtHealth,
 			turnoverDays,
-			hasStatusOrders: statusFilter === 'Tất cả' ? (periodOrders.length > 0 || periodPayments.length > 0 || currentDebt > 0) : (periodOrders.some(o => o.status === statusFilter) || currentDebt > 0),
+			hasStatusOrders: periodOrders.some(o => o.status === 'Đơn chốt') || periodPayments.length > 0 || currentDebt > 0,
 			initials: String(c.name || '').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || 'KH'
 		};
 	}).filter((item: any) => {
@@ -1013,18 +1000,9 @@ const Debts: React.FC = () => {
 							<div className="flex flex-col gap-4">
 								<div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
 									<div className="flex gap-2 overflow-x-auto no-scrollbar w-full md:w-auto">
-										{['Tất cả', 'Đơn chốt', 'Đơn nháp'].map((status) => (
-											<button
-												key={status}
-												onClick={() => setStatusFilter(status)}
-												className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${statusFilter === status
-													? 'bg-[#1A237E] dark:bg-indigo-600 text-white shadow-lg shadow-blue-900/20 dark:shadow-indigo-900/20'
-													: 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'
-													}`}
-											>
-												{status}
-											</button>
-										))}
+										<span className="px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest bg-[#1A237E] dark:bg-indigo-600 text-white shadow-lg shadow-blue-900/20 dark:shadow-indigo-900/20 whitespace-nowrap">
+											Đơn chốt
+										</span>
 									</div>
 									<div className="flex items-center gap-2 w-full md:w-auto">
 										<button

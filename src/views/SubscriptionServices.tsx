@@ -2,14 +2,35 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOwner } from '../hooks/useOwner';
 import { Crown, Download, Zap, CheckCircle2, ShoppingCart, Rocket, Shield, Clock, ChevronRight } from 'lucide-react';
-import { db } from '../services/firebase';
-import { doc, onSnapshot, collection } from 'firebase/firestore';
+import { db, auth } from '../services/firebase';
+import { doc, onSnapshot, getDoc, collection } from 'firebase/firestore';
 
 const SubscriptionServices = () => {
 	const navigate = useNavigate();
 	const owner = useOwner();
 	const [exportCount, setExportCount] = useState(0);
 	const [extraExportLimit, setExtraExportLimit] = useState(0);
+	const [accountAgeDays, setAccountAgeDays] = useState(0);
+
+	// Tính tuổi tài khoản (giống Pricing)
+	useEffect(() => {
+		const uid = auth.currentUser?.uid;
+		if (!uid) return;
+		getDoc(doc(db, 'users', uid)).then(snap => {
+			const data = snap.exists() ? snap.data() : null;
+			let created = null;
+			if (data?.createdAt) {
+				if (data.createdAt.toDate) created = data.createdAt.toDate().toISOString();
+				else if (data.createdAt.seconds) created = new Date(data.createdAt.seconds * 1000).toISOString();
+				else created = data.createdAt;
+			}
+			if (!created) created = auth.currentUser?.metadata.creationTime || null;
+			if (created) setAccountAgeDays(Math.floor((Date.now() - new Date(created).getTime()) / 86400000));
+		}).catch(() => {
+			const created = auth.currentUser?.metadata.creationTime;
+			if (created) setAccountAgeDays(Math.floor((Date.now() - new Date(created).getTime()) / 86400000));
+		});
+	}, [owner.loading]);
 
 	useEffect(() => {
 		if (!owner.ownerId) return;
@@ -126,7 +147,11 @@ const SubscriptionServices = () => {
 					</div>
 					
 					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-						{addons.map(addon => (
+						{addons.filter(addon => {
+						// Ẩn gói FREE (price=0) nếu tài khoản đã dùng > 60 ngày
+						if (Number(addon.price) === 0 && accountAgeDays > 60) return false;
+						return true;
+					}).map(addon => (
 							<div key={addon.id} className="bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-200 dark:border-slate-800 overflow-hidden shadow-lg shadow-slate-200/50 dark:shadow-none flex flex-col group hover:-translate-y-1 transition-all duration-300">
 								<div className={`h-32 ${addon.bgClass} relative flex items-center justify-center overflow-hidden`}>
 									<div className="absolute inset-0 opacity-20 bg-gradient-to-br from-transparent to-black/5 dark:to-white/5"></div>

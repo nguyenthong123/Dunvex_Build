@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 import { signOut } from 'firebase/auth';
-import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, deleteDoc, doc, writeBatch, getDocs, limit, orderBy, increment, Timestamp } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, deleteDoc, doc, writeBatch, getDocs, limit, orderBy, increment, Timestamp, getAggregateFromServer, sum } from 'firebase/firestore';
 import { useOrders } from '../hooks/useOrders';
 import { usePayments } from '../hooks/usePayments';
 import { useCustomers } from '../hooks/useCustomers';
@@ -41,6 +41,7 @@ const Debts: React.FC = () => {
 
 	const [activeTab, setActiveTab] = useState<'customers' | 'history'>('customers');
 	const [currentTime, setCurrentTime] = useState(new Date());
+	const [resolvedDebts, setResolvedDebts] = useState<Record<string, { totalOrdersAmount: number; totalPaymentsAmount: number; currentDebt: number }>>({});
 	const { orders } = useOrders({ ownerId: owner.ownerId, enabled: !owner.loading && !!owner.ownerId, maxResults: 500 });
 	const { payments } = usePayments({ ownerId: owner.ownerId, enabled: !owner.loading && !!owner.ownerId });
 	const { customers, loading } = useCustomers({ ownerId: owner.ownerId, enabled: !owner.loading && !!owner.ownerId });
@@ -145,6 +146,8 @@ const Debts: React.FC = () => {
 	const [statementToDate, setStatementToDate] = useState('');
 	const [statementScale, setStatementScale] = useState(1);
 	const [statementZoom, setStatementZoom] = useState(1);
+	const [statementTx, setStatementTx] = useState<any[]>([]);
+	const [loadingStatementTx, setLoadingStatementTx] = useState(false);
 
 	useEffect(() => {
 		const handleClickOutside = (event: MouseEvent) => {
@@ -171,12 +174,46 @@ const Debts: React.FC = () => {
 		}
 	}, [showStatement]);
 
-	const openStatement = (customer: any) => {
+	const openStatement = async (customer: any) => {
 		setSelectedCustomer(customer);
-		// Follow the main screen's filter if it exists
 		setStatementFromDate(fromDate || '');
 		setStatementToDate(toDate || '');
 		setShowStatement(true);
+		setStatementTx([]);
+		setLoadingStatementTx(true);
+		try {
+			let oQuery, pQuery;
+			if (customer.isGuest) {
+				oQuery = query(
+					collection(db, 'orders'),
+					where('customerName', '==', customer.name),
+					where('status', '==', 'Đơn chốt')
+				);
+				pQuery = query(
+					collection(db, 'payments'),
+					where('customerName', '==', customer.name)
+				);
+			} else {
+				oQuery = query(
+					collection(db, 'orders'),
+					where('customerId', '==', customer.id),
+					where('status', '==', 'Đơn chốt')
+				);
+				pQuery = query(
+					collection(db, 'payments'),
+					where('customerId', '==', customer.id)
+				);
+			}
+			const [oSnap, pSnap] = await Promise.all([getDocs(oQuery), getDocs(pQuery)]);
+			const loadedOrders = oSnap.docs.map(d => ({ id: d.id, ...d.data(), txType: 'order' }));
+			const loadedPayments = pSnap.docs.map(d => ({ id: d.id, ...d.data(), txType: 'payment' }));
+			setStatementTx([...loadedOrders, ...loadedPayments]);
+		} catch (err) {
+			console.error("Error loading statement transactions:", err);
+			showToast("Không thể tải chi tiết công nợ", "error");
+		} finally {
+			setLoadingStatementTx(false);
+		}
 	};
 
 	const handlePrintStatement = () => {
@@ -487,12 +524,14 @@ const Debts: React.FC = () => {
 		
 		// Use realtime calculated debt (orders - payments) — tránh lệch với Firestore cache
 		const calcDebt = lifetimeTotalWaited - lifetimeTotalPaid;
-		const currentDebt = calcDebt;
+		
+		const resolved = resolvedDebts[c.id];
+		const currentDebt = resolved ? resolved.currentDebt : (c.isGuest ? calcDebt : (Number(c.debt) || 0));
 
 		// Luôn hiển thị tổng đơn chốt (không còn filter Tất cả/Đơn nháp)
-		const displayTotalOrders = lifetimeTotalWaited;
+		const displayTotalOrders = resolved ? resolved.totalOrdersAmount : lifetimeTotalWaited;
 
-		const totalPaid = hasDateFilter ? periodPayments.reduce((sum: any, p: any) => sum + (p.amount || 0), 0) : lifetimeTotalPaid;
+		const totalPaid = resolved ? resolved.totalPaymentsAmount : (hasDateFilter ? periodPayments.reduce((sum: any, p: any) => sum + (p.amount || 0), 0) : lifetimeTotalPaid);
 
 		// Get last transaction (unfiltered for accurate sorting and health)
 		const allTx = [
@@ -543,6 +582,75 @@ const Debts: React.FC = () => {
 		(currentPage - 1) * ITEMS_PER_PAGE,
 		currentPage * ITEMS_PER_PAGE
 	);
+
+	useEffect(() => {
+		if (paginatedData.length === 0) return;
+
+		const fetchAggregates = async () => {
+			const newResolutions: Record<string, { totalOrdersAmount: number; totalPaymentsAmount: number; currentDebt: number }> = {};
+			let hasChanges = false;
+
+			for (const customer of paginatedData) {
+				if (customer.isGuest) continue;
+
+				try {
+					const ordersQuery = query(
+						collection(db, 'orders'),
+						where('customerId', '==', customer.id),
+						where('status', '==', 'Đơn chốt')
+					);
+					const ordersSumSnap = await getAggregateFromServer(ordersQuery, {
+						total: sum('totalAmount')
+					});
+					const totalOrdersAmount = ordersSumSnap.data().total || 0;
+
+					const paymentsQuery = query(
+						collection(db, 'payments'),
+						where('customerId', '==', customer.id)
+					);
+					const paymentsSumSnap = await getAggregateFromServer(paymentsQuery, {
+						total: sum('amount')
+					});
+					const totalPaymentsAmount = paymentsSumSnap.data().total || 0;
+
+					const currentDebt = totalOrdersAmount - totalPaymentsAmount;
+
+					const currentResolved = resolvedDebts[customer.id];
+					if (
+						!currentResolved ||
+						currentResolved.totalOrdersAmount !== totalOrdersAmount ||
+						currentResolved.totalPaymentsAmount !== totalPaymentsAmount ||
+						currentResolved.currentDebt !== currentDebt
+					) {
+						newResolutions[customer.id] = {
+							totalOrdersAmount,
+							totalPaymentsAmount,
+							currentDebt
+						};
+						hasChanges = true;
+					}
+
+					// Silent Self-Healing: update document if stored debt is wrong
+					if (Math.abs(Number(customer.debt || 0) - currentDebt) > 10) {
+						await updateDoc(doc(db, 'customers', customer.id), {
+							debt: currentDebt
+						});
+					}
+				} catch (err) {
+					console.error(`Error calculating aggregate debt for ${customer.name}:`, err);
+				}
+			}
+
+			if (hasChanges) {
+				setResolvedDebts(prev => ({
+					...prev,
+					...newResolutions
+				}));
+			}
+		};
+
+		fetchAggregates();
+	}, [JSON.stringify(paginatedData.map(c => c.id))]);
 
 	const getPageNumbers = () => {
 		const pages: (number | string)[] = [];
@@ -1639,7 +1747,13 @@ const Debts: React.FC = () => {
 							{/* DATE FILTER BAR FOR STATEMENT - REMOVED AS PER USER REQUEST */}
 
 							{/* SCROLLABLE DOCUMENT AREA */}
-							<div id="debt-statement-container" className="flex-1 overflow-y-auto overflow-x-hidden scroll-smooth custom-scrollbar">
+							{loadingStatementTx ? (
+								<div className="flex-1 flex flex-col items-center justify-center text-slate-500 py-20">
+									<div className="size-12 border-4 border-[#1A237E] dark:border-indigo-400 border-t-transparent rounded-full animate-spin mb-4"></div>
+									<p className="font-bold text-sm uppercase tracking-wider">Đang tải dữ liệu công nợ...</p>
+								</div>
+							) : (
+								<div id="debt-statement-container" className="flex-1 overflow-y-auto overflow-x-hidden scroll-smooth custom-scrollbar">
 								<div className="w-full max-w-full px-3 sm:px-4 py-3 sm:py-4 sm:w-fit sm:mx-auto" style={{ zoom: statementZoom, transformOrigin: 'top center' }}>
 
 										{/* 2. Customer Info */}
@@ -1673,20 +1787,7 @@ const Debts: React.FC = () => {
 												return `${year}-${month}-${day}`;
 											};
 
-											const allPossibleTx = [
-												...orders.filter(o => {
-													if (selectedCustomer.isGuest) {
-														return (!o.customerId || !registeredMap.has(o.customerId)) && (o.customerName === selectedCustomer.name || (!o.customerName && selectedCustomer.name === 'Khách vãng lai'));
-													}
-													return o.customerId === selectedCustomer.id;
-												}).filter(o => o.status === 'Đơn chốt').map(o => ({ ...o, txType: 'order' })),
-												...payments.filter(p => {
-													if (selectedCustomer.isGuest) {
-														return (!p.customerId || !registeredMap.has(p.customerId)) && (p.customerName === selectedCustomer.name || (!p.customerName && selectedCustomer.name === 'Khách vãng lai'));
-													}
-													return p.customerId === selectedCustomer.id;
-												}).map(p => ({ ...p, txType: 'payment' }))
-											];
+											const allPossibleTx = statementTx;
 
 											// Calculate Opening Balance (all tx before 'startVal')
 											const computedOpening = allPossibleTx.reduce((sum, tx) => {
@@ -1932,6 +2033,7 @@ const Debts: React.FC = () => {
 								</button>
 							</div>
 							</div>
+							)}
 						</div>
 					</div>
 				) : (

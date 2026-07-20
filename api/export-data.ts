@@ -124,11 +124,11 @@ async function fetchCollection(
 
     // Firestore REST pagination uses cursor, not startAt in structuredQuery
     // We'll use a simpler approach: loop with document.name as cursor
-    const url = pageToken
+    const url: string = pageToken
       ? `${FIRESTORE_BASE}:runQuery`
       : `${FIRESTORE_BASE}:runQuery`;
 
-    const res = await fetch(url, {
+    const res: any = await fetch(url, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -143,8 +143,8 @@ async function fetchCollection(
       break;
     }
 
-    const data = await res.json();
-    const batch = Array.isArray(data)
+    const data: any = await res.json();
+    const batch: any[] = Array.isArray(data)
       ? data.filter((item: any) => item.document).map((item: any) => item.document)
       : [];
 
@@ -154,7 +154,7 @@ async function fetchCollection(
 
     // Pagination: use the last doc's name as cursor
     if (batch.length === limit) {
-      const lastDoc = batch[batch.length - 1];
+      const lastDoc: any = batch[batch.length - 1];
       pageToken = lastDoc.name;
     } else {
       break;

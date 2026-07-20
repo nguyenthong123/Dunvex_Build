@@ -186,21 +186,25 @@ const Debts: React.FC = () => {
 			if (customer.isGuest) {
 				oQuery = query(
 					collection(db, 'orders'),
+					where('ownerId', '==', owner.ownerId),
 					where('customerName', '==', customer.name),
 					where('status', '==', 'Đơn chốt')
 				);
 				pQuery = query(
 					collection(db, 'payments'),
+					where('ownerId', '==', owner.ownerId),
 					where('customerName', '==', customer.name)
 				);
 			} else {
 				oQuery = query(
 					collection(db, 'orders'),
+					where('ownerId', '==', owner.ownerId),
 					where('customerId', '==', customer.id),
 					where('status', '==', 'Đơn chốt')
 				);
 				pQuery = query(
 					collection(db, 'payments'),
+					where('ownerId', '==', owner.ownerId),
 					where('customerId', '==', customer.id)
 				);
 			}
@@ -587,6 +591,7 @@ const Debts: React.FC = () => {
 		if (paginatedData.length === 0) return;
 
 		const fetchAggregates = async () => {
+			if (!owner.ownerId) return;
 			const newResolutions: Record<string, { totalOrdersAmount: number; totalPaymentsAmount: number; currentDebt: number }> = {};
 			let hasChanges = false;
 
@@ -596,6 +601,7 @@ const Debts: React.FC = () => {
 				try {
 					const ordersQuery = query(
 						collection(db, 'orders'),
+						where('ownerId', '==', owner.ownerId),
 						where('customerId', '==', customer.id),
 						where('status', '==', 'Đơn chốt')
 					);
@@ -606,6 +612,7 @@ const Debts: React.FC = () => {
 
 					const paymentsQuery = query(
 						collection(db, 'payments'),
+						where('ownerId', '==', owner.ownerId),
 						where('customerId', '==', customer.id)
 					);
 					const paymentsSumSnap = await getAggregateFromServer(paymentsQuery, {

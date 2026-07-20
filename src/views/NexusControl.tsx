@@ -818,9 +818,13 @@ const NexusControl = () => {
 	const toggleUserLock = async (ownerId: string, field: string, currentVal: boolean) => {
 		try {
 			const newVal = !currentVal;
-			await setDoc(doc(db, 'settings', ownerId), {
-				[field]: newVal
-			}, { merge: true });
+			const updateData: any = { [field]: newVal };
+			// Khi khoá → tự động set subscriptionStatus = expired để đồng bộ
+			if (newVal) {
+				updateData.subscriptionStatus = 'expired';
+				updateData.isPro = false;
+			}
+			await setDoc(doc(db, 'settings', ownerId), updateData, { merge: true });
 
 			const featureMap: Record<string, string> = {
 				'manualLockOrders': 'Chi tiết Đơn hàng',

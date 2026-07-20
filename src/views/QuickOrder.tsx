@@ -203,8 +203,9 @@ const QuickOrder = () => {
 	// Calculate Debt Map
 	const debtMap = React.useMemo(() => {
 		const map: Record<string, number> = {};
+		// Chỉ tính đơn đã chốt (đồng bộ với bảng công nợ)
 		allOrders.forEach(o => {
-			if (o.customerId) {
+			if (o.customerId && o.status === 'Đơn chốt') {
 				map[o.customerId] = (map[o.customerId] || 0) + (o.totalAmount || 0);
 			}
 		});
@@ -849,13 +850,20 @@ const QuickOrder = () => {
 
 				// 🔒 ĐỌC TẤT CẢ DỮ LIỆU TRƯỚC KHI GHI (Firestore transaction rule)
 				// Đọc customer để kiểm tra tồn tại (PHẢI đọc trước khi ghi bất kỳ gì)
+				const oldCustomerId = originalOrder?.customerId || '';
+				const customerChanged = !!oldCustomerId && oldCustomerId !== orderData.customerId;
 				const oldTotal = originalOrder?.status === 'Đơn chốt' ? Number(originalOrder.totalAmount || 0) : 0;
 				const newTotal = orderStatus === 'Đơn chốt' ? Number(finalTotal || 0) : 0;
 				const diffDebt = newTotal - oldTotal;
 				let custExists = false;
-				if (diffDebt !== 0 && orderData.customerId) {
+				let oldCustExists = false;
+				if (newTotal > 0 && orderData.customerId) {
 					const custSnap = await transaction.get(doc(db, 'customers', orderData.customerId));
 					custExists = custSnap.exists();
+				}
+				if (customerChanged && oldTotal > 0) {
+					const oldCustSnap = await transaction.get(doc(db, 'customers', oldCustomerId));
+					oldCustExists = oldCustSnap.exists();
 				}
 
 				// Đọc inventory logs cũ
@@ -869,20 +877,45 @@ const QuickOrder = () => {
 					updatedAt: serverTimestamp()
 				});
 
-				// 1.5 Update Debt (chỉ ghi, không đọc gì thêm)
-				if (diffDebt !== 0 && orderData.customerId && custExists) {
+				// 1.5 Update Debt — xử lý cả đổi khách hàng
+				// Nếu đổi khách: xóa nợ khách CŨ (nếu đơn cũ đã chốt)
+				if (customerChanged && oldTotal > 0 && oldCustExists) {
+					transaction.update(doc(db, 'customers', oldCustomerId), {
+						debt: increment(-oldTotal)
+					});
+					const oldDebtRef = doc(collection(db, 'debts'));
+					transaction.set(oldDebtRef, {
+						customerId: oldCustomerId,
+						customerName: originalOrder?.customerName || '',
+						type: 'payment',
+						amount: oldTotal,
+						orderId: id,
+						note: `Chuyển nợ sang: ${orderData.customerName}`,
+						ownerId: owner.ownerId || '',
+						createdBy: auth.currentUser?.uid || '',
+						createdAt: serverTimestamp()
+					});
+				}
+				// Thêm nợ cho khách MỚI (nếu đơn là chốt) hoặc cập nhật diffDebt
+				if (newTotal > 0 && orderData.customerId && custExists) {
+					transaction.update(doc(db, 'customers', orderData.customerId), {
+						debt: increment(customerChanged ? newTotal : diffDebt)
+					});
+				} else if (diffDebt < 0 && orderData.customerId && custExists) {
 					transaction.update(doc(db, 'customers', orderData.customerId), {
 						debt: increment(diffDebt)
 					});
-					// 📊 Ghi vào debts collection (single source of truth)
+				}
+				// Ghi log debts collection
+				if (diffDebt !== 0 || customerChanged) {
 					const debtRef = doc(collection(db, 'debts'));
 					transaction.set(debtRef, {
 						customerId: orderData.customerId,
 						customerName: orderData.customerName,
-						type: diffDebt > 0 ? 'debt_increase' : 'payment',
-						amount: Math.abs(diffDebt),
+						type: (customerChanged || diffDebt > 0) ? 'debt_increase' : 'payment',
+						amount: customerChanged ? newTotal : Math.abs(diffDebt),
 						orderId: id,
-						note: diffDebt > 0 ? `Cập nhật đơn hàng tăng nợ` : `Cập nhật đơn hàng giảm nợ`,
+						note: customerChanged ? `Đổi khách từ ${originalOrder?.customerName || '?'}` : (diffDebt > 0 ? `Cập nhật đơn hàng tăng nợ` : `Cập nhật đơn hàng giảm nợ`),
 						ownerId: owner.ownerId || '',
 						createdBy: auth.currentUser?.uid || '',
 						createdAt: serverTimestamp()

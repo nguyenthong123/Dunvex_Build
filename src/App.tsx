@@ -27,6 +27,7 @@ const Coupons = lazy(() => import('./views/Coupons'));
 const NexusControl = lazy(() => import('./views/NexusControl'));
 const SaleBot = lazy(() => import('./views/SaleBot'));
 const Profile = lazy(() => import('./views/Profile'));
+const Backup = lazy(() => import('./views/Backup'));
 
 import MainLayout from './components/layout/MainLayout';
 import ReloadPrompt from './components/ReloadPrompt';
@@ -181,6 +182,10 @@ function App() {
 						<Route
 							path="/profile"
 							element={currentUser ? <MainLayout><Profile /></MainLayout> : <Navigate to="/login" />}
+						/>
+						<Route
+							path="/backup"
+							element={currentUser ? <MainLayout><Backup /></MainLayout> : <Navigate to="/login" />}
 						/>
 
 						{/* Catch all */}

@@ -1,8 +1,3 @@
-/**
- * Vercel Serverless: /api/customers
- * GET: list customers by ownerId
- * POST: create/update customer
- */
 import crypto from "crypto";
 
 const PROJECT_ID = "dunvex-89461";
@@ -24,11 +19,11 @@ async function getAccessToken() {
     scope: "https://www.googleapis.com/auth/datastore"
   };
 
-  function b64obj(obj: any) {
+  function b64obj(obj) {
     return Buffer.from(JSON.stringify(obj)).toString("base64url");
   }
 
-  function sign(pk: string, data2: string) {
+  function sign(pk, data2) {
     const signer = crypto.createSign("RSA-SHA256");
     signer.update(data2);
     signer.end();
@@ -50,7 +45,7 @@ async function getAccessToken() {
   return data.access_token;
 }
 
-async function verifyApiKey(ownerId: string, key: string) {
+async function verifyApiKey(ownerId, key) {
   const token = await getAccessToken();
   const res = await fetch(`${FIRESTORE_BASE}/api_keys/${ownerId}`, {
     headers: { Authorization: `Bearer ${token}` }
@@ -61,7 +56,7 @@ async function verifyApiKey(ownerId: string, key: string) {
   return fields.enabled?.booleanValue === true && fields.key?.stringValue === key;
 }
 
-export default async function handler(req: any, res: any) {
+export default async function handler(req, res) {
   try {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
@@ -110,9 +105,9 @@ export default async function handler(req: any, res: any) {
       }
 
       const data = await customersRes.json();
-      const docs = Array.isArray(data) ? data.filter((item: any) => item.document).map((item: any) => item.document) : [];
+      const docs = Array.isArray(data) ? data.filter(item => item.document).map(item => item.document) : [];
 
-      const customers = docs.map((doc: any) => {
+      const customers = docs.map(doc => {
         const nameParts = doc.name.split("/");
         const id = nameParts[nameParts.length - 1];
         const f = doc.fields || {};
@@ -159,7 +154,7 @@ export default async function handler(req: any, res: any) {
         });
 
         const existingData = await existingRes.json();
-        const existingDocs = Array.isArray(existingData) ? existingData.filter((item: any) => item.document).map((item: any) => item.document) : [];
+        const existingDocs = Array.isArray(existingData) ? existingData.filter(item => item.document).map(item => item.document) : [];
 
         if (existingDocs.length > 0) {
           const docPath = existingDocs[0].name;
@@ -223,7 +218,7 @@ export default async function handler(req: any, res: any) {
     }
 
     return res.status(405).json({ error: "Method not allowed" });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Customers API error:", error);
     return res.status(500).json({ error: error.message || "Internal server error" });
   }

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Check, Zap, Crown, Rocket, ShieldCheck, ArrowLeft, CreditCard, QrCode, Lock, Settings, Mail, X, Save, Download, Database, Activity, Shield } from 'lucide-react';
 import { auth, db } from '../services/firebase';
-import { collection, addDoc, serverTimestamp, query, where, limit, getDocs, doc, updateDoc, setDoc, increment, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, limit, getDocs, getDoc, doc, updateDoc, setDoc, increment, onSnapshot } from 'firebase/firestore';
 import { useEffect } from 'react';
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
@@ -35,13 +35,28 @@ const Pricing = () => {
 	const [promoCode, setPromoCode] = useState('');
 	const [accountAgeDays, setAccountAgeDays] = useState(0);
 
-	// Tính tuổi tài khoản từ Firebase Auth metadata (đáng tin cậy nhất)
+	// Tính tuổi tài khoản: ưu tiên Firestore users/{uid}.createdAt, fallback Firebase Auth creationTime
 	useEffect(() => {
-		const created = auth.currentUser?.metadata.creationTime;
-		if (created) {
-			const days = Math.floor((Date.now() - new Date(created).getTime()) / (1000 * 60 * 60 * 24));
-			setAccountAgeDays(days);
-		}
+		const uid = auth.currentUser?.uid;
+		if (!uid) return;
+
+		// Ưu tiên lấy từ Firestore (ngày bắt đầu dùng Dunvex)
+		getDoc(doc(db, 'users', uid)).then(snap => {
+			const data = snap.exists() ? snap.data() : null;
+			let created: string | null = null;
+			if (data?.createdAt) {
+				// Firestore Timestamp
+				if (data.createdAt.toDate) created = data.createdAt.toDate().toISOString();
+				else if (data.createdAt.seconds) created = new Date(data.createdAt.seconds * 1000).toISOString();
+				else created = data.createdAt;
+			}
+			// Fallback: Firebase Auth creationTime (không thể bị sửa)
+			if (!created) created = auth.currentUser?.metadata.creationTime || null;
+			if (created) {
+				const days = Math.floor((Date.now() - new Date(created).getTime()) / (1000 * 60 * 60 * 24));
+				setAccountAgeDays(days);
+			}
+		});
 	}, []);
 	const [isApplying, setIsApplying] = useState(false);
 	const [appliedCode, setAppliedCode] = useState('');

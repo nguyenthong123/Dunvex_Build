@@ -395,6 +395,8 @@ const NexusControl = () => {
 						}
 					}
 					if (graceUntil && now >= graceUntil) { await hardLockUser(customer); return; }
+					// Grace đã hết → khoá cứng luôn (không cần đợi grace cycle tiếp theo)
+					if (!graceUntil) { await hardLockUser(customer); return; }
 				}
 				// 3. Auto-unlock after 30 min
 				if (customer.manualLockAi && customer.aiLockedAt) {
@@ -504,7 +506,31 @@ const NexusControl = () => {
 			} else if (newPlan === 'premium_yearly') {
 				expireDate.setFullYear(expireDate.getFullYear() + 1);
 			} else if (newPlan === 'test_expire') {
+				// Hết hạn → khoá ngay, không cho dùng
 				expireDate.setDate(expireDate.getDate() - 1);
+				await setDoc(doc(db, 'settings', ownerId), {
+					planId: newPlan,
+					isPro: false,
+					subscriptionStatus: 'expired',
+					paymentConfirmedAt: serverTimestamp(),
+					subscriptionExpiresAt: expireDate,
+					manualLockOrders: true,
+					manualLockDebts: true,
+					manualLockSheets: true,
+					manualLockAi: true,
+					graceUntil: null
+				}, { merge: true });
+				await addDoc(collection(db, 'notifications'), {
+					userId: ownerId,
+					title: '🔒 TÀI KHOẢN BỊ KHOÁ',
+					body: 'Admin đã thiết lập trạng thái hết hạn cho tài khoản.',
+					type: 'lock',
+					priority: 'high',
+					read: false,
+					createdAt: serverTimestamp()
+				});
+				showToast("Đã khoá tài khoản (TEST HẾT HẠN).", "success");
+				return;
 			} else {
 				// Free plan policy: 60 days
 				expireDate.setDate(expireDate.getDate() + 60);

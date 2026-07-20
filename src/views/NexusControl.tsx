@@ -414,6 +414,7 @@ const NexusControl = () => {
 	};
 
 	// 💰 Check bank transfer matches from AppScript (auto-confirm payments)
+	// 🔐 NOW validates BOTH transfer code AND amount before auto-approving
 	const checkBankTransferMatches = async () => {
 		const lastCheck = localStorage.getItem('nexus_last_bank_check');
 		const now = Date.now();
@@ -421,15 +422,45 @@ const NexusControl = () => {
 		
 		try {
 			const appscriptUrl = 'https://script.google.com/macros/s/AKfycbwu682rk8EZl4__DKtw-LgRLjozSvUk5Jj9QFQvvZnT5NLrUwdRn8a-1tfJ5oU5XIAABQ/exec';
-			const res = await fetch(`${appscriptUrl}?token=dunvex-nexus-2026&action=check_transfers`, { method: 'GET' });
+			
+			// Gửi kèm danh sách pending payments để Apps Script kiểm tra cả số tiền
+			const pendingPayments = requests
+				.filter((r: any) => r.status === 'pending' && r.transferCode)
+				.map((r: any) => ({ transferCode: r.transferCode, amount: r.amount, id: r.id }));
+			
+			const res = await fetch(`${appscriptUrl}?token=dunvex-nexus-2026&action=check_transfers`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+				body: JSON.stringify({ action: 'check_transfers', pendingPayments })
+			});
+			
 			if (res.ok) {
 				const data = await res.json();
-				if (data.matches > 0 && Array.isArray(data.matchedCodes)) {
-					// Auto-matched bank transfers
+				
+				// New format: matchedTransactions [{code, amount, bankAmount, date}]
+				if (data.matches > 0 && Array.isArray(data.matchedTransactions)) {
+					for (const tx of data.matchedTransactions) {
+						const matchedReq = requests.find((r: any) =>
+							r.transferCode === tx.code &&
+							r.status === 'pending' &&
+							// 🔐 Kiểm tra số tiền (±5% tolerance cho phí chuyển khoản)
+							Math.abs(r.amount - tx.bankAmount) <= Math.max(r.amount * 0.05, 10000)
+						);
+						if (matchedReq) {
+							console.log('Nexus AI: Auto-approving matched payment for', tx.code, 'amount:', tx.bankAmount);
+							await handleApprovePayment(matchedReq, true);
+						} else {
+							console.log('Nexus AI: Code matched but amount mismatch for', tx.code, 'bank amount:', tx.bankAmount);
+						}
+					}
+				}
+				// Old format fallback: matchedCodes (chỉ check code, không check amount)
+				else if (data.matches > 0 && Array.isArray(data.matchedCodes)) {
+					console.warn('⚠️ Apps Script đang dùng format cũ (chỉ check code, không check tiền). Nên nâng cấp!');
 					for (const code of data.matchedCodes) {
 						const matchedReq = requests.find((r: any) => r.transferCode === code && r.status === 'pending');
 						if (matchedReq) {
-							console.log('Nexus AI: Auto-approving matched payment for', code);
+							console.log('Nexus AI: Auto-approving (old format) for', code);
 							await handleApprovePayment(matchedReq, true);
 						}
 					}
@@ -437,6 +468,7 @@ const NexusControl = () => {
 			}
 		} catch (e) {
 			// AppScript có thể chưa bật Gmail API — silent fail
+			console.log('Bank check skipped:', (e as Error).message);
 		}
 		localStorage.setItem('nexus_last_bank_check', now.toString());
 	};

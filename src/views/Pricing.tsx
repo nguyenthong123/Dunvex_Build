@@ -56,8 +56,14 @@ const Pricing = () => {
 				const days = Math.floor((Date.now() - new Date(created).getTime()) / (1000 * 60 * 60 * 24));
 				setAccountAgeDays(days);
 			}
+		}).catch(() => {
+			// Fallback nếu Firestore lỗi: dùng Auth creationTime
+			const created = auth.currentUser?.metadata.creationTime;
+			if (created) {
+				setAccountAgeDays(Math.floor((Date.now() - new Date(created).getTime()) / (1000 * 60 * 60 * 24)));
+			}
 		});
-	}, []);
+	}, [owner.loading]); // Chạy lại khi owner đã load xong (auth ready)
 	const [isApplying, setIsApplying] = useState(false);
 	const [appliedCode, setAppliedCode] = useState('');
 	const [promoError, setPromoError] = useState('');

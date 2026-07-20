@@ -11,6 +11,7 @@ import { serverTimestamp, runTransaction, doc, collection, writeBatch, increment
 import { db, auth } from '../services/firebase';
 import { inventoryService } from '../services/dataAccess';
 import { parseSupplyMessage } from '../services/supplyBotService';
+import { getOptimizedImageUrl } from '../utils/validation';
 
 // 🔍 Chuẩn hóa tiếng Việt để tìm kiếm chính xác (bỏ dấu, lowercase, NFC)
 function normalizeVN(text: string): string {
@@ -1509,6 +1510,7 @@ const PurchaseOrders = () => {
 								<thead>
 									<tr className="border-b-2 border-slate-200 dark:border-slate-700">
 										<th className="py-3 px-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center w-10">STT</th>
+										<th className="py-3 px-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center w-16">Hình ảnh</th>
 										<th className="py-3 px-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Tên sản phẩm</th>
 										<th className="py-3 px-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right w-28">Giá</th>
 										<th className="py-3 px-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center w-16">SL</th>
@@ -1516,15 +1518,35 @@ const PurchaseOrders = () => {
 									</tr>
 								</thead>
 								<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-									{(detailPO.items || []).map((item: any, idx: number) => (
+									{(detailPO.items || []).map((item: any, idx: number) => {
+										const productImage = products.find(p => p.id === item.productId)?.imageUrl;
+										return (
 										<tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-											<td className="py-3 px-2 text-xs font-bold text-slate-500 text-center">{idx + 1}</td>
-											<td className="py-3 px-2 text-sm font-semibold text-slate-800 dark:text-white">{item.name}</td>
-											<td className="py-3 px-2 text-xs text-slate-600 dark:text-slate-400 text-right font-medium">{formatCurrency(item.priceImport)} đ</td>
-											<td className="py-3 px-2 text-xs font-bold text-slate-700 dark:text-slate-300 text-center">{item.qty}</td>
-											<td className="py-3 px-2 text-sm font-black text-slate-800 dark:text-white text-right">{formatCurrency((item.qty || 0) * (item.priceImport || 0))} đ</td>
+											<td className="py-3 px-2 text-xs font-bold text-slate-500 text-center align-middle">{idx + 1}</td>
+											<td className="py-2 px-2 text-center align-middle">
+												{productImage ? (
+													<img
+														src={getOptimizedImageUrl(productImage)}
+														alt={item.name}
+														className="w-12 h-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shadow-sm inline-block"
+														loading="lazy"
+														onError={(e) => {
+															(e.target as HTMLImageElement).style.display = 'none';
+															(e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+														}}
+													/>
+												) : null}
+												<div className={`w-12 h-12 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 flex items-center justify-center inline-flex ${productImage ? 'hidden' : ''}`}>
+													<Package size={18} className="text-slate-300 dark:text-slate-600" />
+												</div>
+											</td>
+											<td className="py-3 px-2 text-sm font-semibold text-slate-800 dark:text-white align-middle">{item.name}</td>
+											<td className="py-3 px-2 text-xs text-slate-600 dark:text-slate-400 text-right font-medium align-middle">{formatCurrency(item.priceImport)} đ</td>
+											<td className="py-3 px-2 text-xs font-bold text-slate-700 dark:text-slate-300 text-center align-middle">{item.qty}</td>
+											<td className="py-3 px-2 text-sm font-black text-slate-800 dark:text-white text-right align-middle">{formatCurrency((item.qty || 0) * (item.priceImport || 0))} đ</td>
 										</tr>
-									))}
+										);
+									})}
 								</tbody>
 							</table>
 						</div>

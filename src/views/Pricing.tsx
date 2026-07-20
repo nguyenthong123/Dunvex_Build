@@ -145,20 +145,41 @@ const Pricing = () => {
 		return () => unsubPlans();
 	}, []);
 
-	const handleSelectPlan = (plan: any) => {
+	const handleSelectPlan = async (plan: any) => {
 		setSelectedPlan(plan);
 		if (!plan.price || Number(plan.price) === 0) {
 			handleActivateFreeTrial(plan);
 			return;
-		}
-		if (auth.currentUser?.email) {
-			setTransferCode(generateTransferCode(auth.currentUser.email));
 		}
 		setDiscountAmt(0);
 		setAppliedCode('');
 		setPromoCode('');
 		setPromoError('');
 		setStep(2);
+
+		// Tự động tạo payment_request ngay khi chọn gói
+		const code = auth.currentUser?.email
+			? generateTransferCode(auth.currentUser.email)
+			: `DVX AUTO ${Math.floor(1000 + Math.random() * 9000)}`;
+		setTransferCode(code);
+
+		try {
+			await addDoc(collection(db, 'payment_requests'), {
+				userId: auth.currentUser?.uid,
+				userEmail: auth.currentUser?.email,
+				ownerId: owner.ownerId,
+				ownerEmail: owner.ownerEmail,
+				planId: plan.id,
+				planName: plan.name,
+				amount: plan.price,
+				originalAmount: plan.price,
+				transferCode: code,
+				status: 'pending',
+				createdAt: serverTimestamp()
+			});
+		} catch (e) {
+			console.error('Failed to create payment_request:', e);
+		}
 	};
 
 	const handleActivateFreeTrial = async (plan: any) => {
@@ -264,68 +285,7 @@ const Pricing = () => {
 	};
 
 
-	const handlePaid = async () => {
-		if (!auth.currentUser) return;
-		setLoading(true);
-		try {
-			await addDoc(collection(db, 'payment_requests'), {
-				userId: auth.currentUser.uid,
-				userEmail: auth.currentUser.email,
-				ownerId: owner.ownerId,
-				ownerEmail: owner.ownerEmail,
-				planId: selectedPlan.id,
-				planName: selectedPlan.name,
-				amount: selectedPlan.price - discountAmt,
-				originalAmount: selectedPlan.price,
-				appliedCode: appliedCode,
-				transferCode: transferCode,
-				status: 'pending',
-				createdAt: serverTimestamp()
-			});
-
-			// Tăng số lượt sử dụng mã giảm giá
-			if (promoProdId) {
-				try {
-					const promoRef = doc(db, 'coupons', promoProdId);
-					await updateDoc(promoRef, {
-						usageCount: increment(1)
-					});
-				} catch (err) {
-					console.error("Failed to update coupon usage:", err);
-				}
-			}
-
-			// Trigger Email notification through GAS (existing endpoint but with payment_request action)
-			try {
-				await fetch('https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec', {
-					method: 'POST',
-					mode: 'no-cors', // Critical for GAS bypass CORS
-					headers: {
-						'Content-Type': 'text/plain;charset=utf-8',
-					},
-					body: JSON.stringify({
-						action: 'payment_request',
-						email: auth.currentUser?.email || 'N/A',
-						ownerEmail: owner.ownerEmail || 'N/A',
-						systemAdminEmail: 'dunvex.green@gmail.com',
-						planName: selectedPlan.name,
-						amount: selectedPlan.price - discountAmt,
-						transferCode: transferCode
-					})
-				});
-			} catch (err) {
-				console.error("Failed to send payment email:", err);
-			}
-
-			showToast("Yêu cầu đã được gửi! Chúng tôi sẽ kiểm tra và kích hoạt ngay sau khi nhận được thanh toán.", "success");
-			navigate('/');
-		} catch (error) {
-			console.error("Error submitting payment:", error);
-			showToast("Lỗi khi gửi yêu cầu thanh toán.", "error");
-		} finally {
-			setLoading(false);
-		}
-	};
+	// 🚫 Đã bỏ nút "Tôi đã thanh toán" — bot VPS tự động quét và kích hoạt
 
 	return (
 		<div className="min-h-screen bg-[#f8f9fb] dark:bg-slate-950 transition-colors duration-300">
@@ -529,16 +489,22 @@ const Pricing = () => {
 							</div>
 
 							<div className="space-y-4">
+								<div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 rounded-2xl p-5 text-center">
+									<div className="flex items-center justify-center gap-2 mb-2">
+										<div className="size-3 bg-emerald-500 rounded-full animate-pulse"></div>
+										<span className="text-sm font-black text-emerald-700 dark:text-emerald-400 uppercase">Đang chờ thanh toán</span>
+									</div>
+									<p className="text-[11px] text-emerald-600 dark:text-emerald-300 font-medium leading-relaxed">
+										Hệ thống sẽ tự động kiểm tra và kích hoạt tài khoản của bạn trong vòng <span className="font-black">2-5 phút</span> sau khi nhận được chuyển khoản.<br/>
+										Bạn <span className="font-black">không cần</span> làm gì thêm!
+									</p>
+								</div>
 								<button
-									onClick={handlePaid}
-									disabled={loading}
-									className="w-full py-5 bg-indigo-600 dark:bg-indigo-500 text-white rounded-2xl font-black uppercase tracking-[2px] shadow-xl shadow-indigo-900/20 hover:bg-indigo-700 transition-all active:scale-[0.98] disabled:opacity-50"
+									onClick={() => navigate('/')}
+									className="w-full py-4 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-2xl font-black uppercase tracking-[2px] hover:bg-slate-300 dark:hover:bg-slate-700 transition-all"
 								>
-									{loading ? 'Đang gửi yêu cầu...' : 'Tôi Đã Thanh Toán'}
+									Về Trang Chủ
 								</button>
-								<p className="text-[10px] text-center text-slate-400 font-bold uppercase tracking-widest">
-									Yêu cầu sẽ được duyệt trong tối đa 15 phút.
-								</p>
 							</div>
 						</div>
 					</div>

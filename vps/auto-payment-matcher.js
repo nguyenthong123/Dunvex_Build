@@ -100,7 +100,9 @@ async function pollAndMatch() {
             amount: req.amount,
             matchedAmount: bankAmount,
             transferCode: req.transferCode,
-            matchConfidence: 'auto_bot_vps'
+            matchConfidence: 'auto_bot_vps',
+            durationDays: req.durationDays || null,
+            durationMonths: req.durationMonths || null
           }, {
             headers: { 'Authorization': `Bearer ${NEXUS_TOKEN}` }
           });

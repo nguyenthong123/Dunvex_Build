@@ -173,6 +173,8 @@ const Pricing = () => {
 				planName: plan.name,
 				amount: plan.price,
 				originalAmount: plan.price,
+				durationDays: plan.durationDays || null,
+				durationMonths: plan.durationMonths || null,
 				transferCode: code,
 				status: 'pending',
 				createdAt: serverTimestamp()

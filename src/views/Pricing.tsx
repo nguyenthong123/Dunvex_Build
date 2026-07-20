@@ -33,6 +33,16 @@ const Pricing = () => {
 	const [transferCode, setTransferCode] = useState('');
 	const [discountAmt, setDiscountAmt] = useState(0);
 	const [promoCode, setPromoCode] = useState('');
+	const [accountAgeDays, setAccountAgeDays] = useState(0);
+
+	// Tính tuổi tài khoản từ Firebase Auth metadata (đáng tin cậy nhất)
+	useEffect(() => {
+		const created = auth.currentUser?.metadata.creationTime;
+		if (created) {
+			const days = Math.floor((Date.now() - new Date(created).getTime()) / (1000 * 60 * 60 * 24));
+			setAccountAgeDays(days);
+		}
+	}, []);
 	const [isApplying, setIsApplying] = useState(false);
 	const [appliedCode, setAppliedCode] = useState('');
 	const [promoError, setPromoError] = useState('');
@@ -328,9 +338,9 @@ const Pricing = () => {
 
 						<div className="grid grid-cols-1 md:grid-cols-2 gap-8">
 							{plans.filter(plan => {
-								// Chỉ hiện gói FREE khi tài khoản đang trong thời gian trial
-								// Ẩn nếu đã expired (hết trial) hoặc active (đã mua PRO)
-								if (plan.price === 0 && owner.subscriptionStatus !== 'trial') {
+								// Dùng metadata.creationTime của Firebase Auth để biết chính xác tuổi tài khoản
+								// Tài khoản > 60 ngày → ẩn gói FREE trial
+								if (plan.price === 0 && accountAgeDays > 60) {
 									return false;
 								}
 								return true;

@@ -465,11 +465,11 @@ const QuickOrder = () => {
 					// Fallback nếu không tìm thấy chính xác
 					return {
 						id: Math.random(),
-						productId: '',
+						productId: p.productId || '',
 						name: p.name,
 						qty: p.quantity || 1,
-						price: 0,
-						buyPrice: 0,
+						price: p.price || 0,
+						buyPrice: p.buyPrice || 0,
 						unit: p.unit || '',
 						category: rawCat,
 						packaging: '',

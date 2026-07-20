@@ -479,8 +479,10 @@ const Debts: React.FC = () => {
 			});
 		}
 
-		// Tính công nợ từ TẤT CẢ đơn (giống QuickOrder debtMap)
-		const lifetimeTotalWaited = customerOrders.reduce((sum: any, o: any) => sum + (o.totalAmount || 0), 0);
+		// Chỉ tính đơn đã chốt — đơn nháp/chưa chốt không phải nợ thật
+		const confirmedStatuses = ['Đơn chốt'];
+		const debtOrders = customerOrders.filter(o => confirmedStatuses.includes(o.status));
+		const lifetimeTotalWaited = debtOrders.reduce((sum: any, o: any) => sum + (o.totalAmount || 0), 0);
 		const lifetimeTotalPaid = customerPayments.reduce((sum: any, p: any) => sum + (p.amount || 0), 0);
 		
 		// Use realtime calculated debt (orders - payments) — tránh lệch với Firestore cache

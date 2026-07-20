@@ -13,7 +13,7 @@ interface UseOrdersOptions {
   maxResults?: number;
 }
 
-export function useOrders({ ownerId, enabled = true, maxResults = 500 }: UseOrdersOptions) {
+export function useOrders({ ownerId, enabled = true, maxResults = 2000 }: UseOrdersOptions) {
   const [orders, setOrders] = useState<WithId<any>[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);

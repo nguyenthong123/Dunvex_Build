@@ -1530,15 +1530,9 @@ const PurchaseOrders = () => {
 														alt={item.name}
 														className="w-12 h-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shadow-sm inline-block"
 														loading="lazy"
-														onError={(e) => {
-															(e.target as HTMLImageElement).style.display = 'none';
-															(e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
-														}}
+														onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
 													/>
 												) : null}
-												<div className={`w-12 h-12 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 flex items-center justify-center inline-flex ${productImage ? 'hidden' : ''}`}>
-													<Package size={18} className="text-slate-300 dark:text-slate-600" />
-												</div>
 											</td>
 											<td className="py-3 px-2 text-sm font-semibold text-slate-800 dark:text-white align-middle">{item.name}</td>
 											<td className="py-3 px-2 text-xs text-slate-600 dark:text-slate-400 text-right font-medium align-middle">{formatCurrency(item.priceImport)} đ</td>

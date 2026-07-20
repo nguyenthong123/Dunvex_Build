@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 import { signOut } from 'firebase/auth';
-import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, deleteDoc, doc, writeBatch, getDocs, limit, orderBy, increment, Timestamp, getAggregateFromServer, sum } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, deleteDoc, doc, writeBatch, getDocs, limit, orderBy, increment, Timestamp } from 'firebase/firestore';
 import { useOrders } from '../hooks/useOrders';
 import { usePayments } from '../hooks/usePayments';
 import { useCustomers } from '../hooks/useCustomers';
@@ -605,20 +605,16 @@ const Debts: React.FC = () => {
 						where('customerId', '==', customer.id),
 						where('status', '==', 'Đơn chốt')
 					);
-					const ordersSumSnap = await getAggregateFromServer(ordersQuery, {
-						total: sum('totalAmount')
-					});
-					const totalOrdersAmount = ordersSumSnap.data().total || 0;
+					const ordersSnap = await getDocs(ordersQuery);
+					const totalOrdersAmount = ordersSnap.docs.reduce((sVal, d) => sVal + Number(d.data().totalAmount || 0), 0);
 
 					const paymentsQuery = query(
 						collection(db, 'payments'),
 						where('ownerId', '==', owner.ownerId),
 						where('customerId', '==', customer.id)
 					);
-					const paymentsSumSnap = await getAggregateFromServer(paymentsQuery, {
-						total: sum('amount')
-					});
-					const totalPaymentsAmount = paymentsSumSnap.data().total || 0;
+					const paymentsSnap = await getDocs(paymentsQuery);
+					const totalPaymentsAmount = paymentsSnap.docs.reduce((sVal, d) => sVal + Number(d.data().amount || 0), 0);
 
 					const currentDebt = totalOrdersAmount - totalPaymentsAmount;
 

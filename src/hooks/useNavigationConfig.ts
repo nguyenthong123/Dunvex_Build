@@ -193,7 +193,7 @@ export const useNavigationConfig = () => {
 		{ icon: 'settings', label: 'Cài đặt', path: '/settings' },                                            // 12
 		{ icon: 'smart_toy', label: 'Trợ lý AI', path: '/sale-bot' },                                         // 13 (NEW)
 		{ icon: 'security', label: 'Nexus Control', path: '/nexus-control', permissionKey: 'nexus_control' }, // 14
-		{ icon: 'cloud_download', label: 'Sao lưu & PH', path: '/backup' },                                     // 14.5
+		{ icon: 'cloud_download', label: 'Sao lưu & PH', path: '/backup', permissionKey: 'nexus_control' },                                     // 14.5
 		{ icon: 'person', label: 'Hồ sơ', path: '/profile' },                                              // 15
 	];
 

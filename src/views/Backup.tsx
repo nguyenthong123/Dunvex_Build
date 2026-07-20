@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { db } from '../services/firebase';
+import { db, auth } from '../services/firebase';
 import { collection, getDocs, query, where, orderBy, writeBatch, doc } from 'firebase/firestore';
 
 // ============================================================
@@ -162,6 +162,22 @@ async function importData(
 // Backup Component
 // ============================================================
 export default function Backup() {
+  const NEXUS_ADMIN_EMAIL = 'dunvex.green@gmail.com';
+  if (auth.currentUser?.email !== NEXUS_ADMIN_EMAIL) {
+    return (
+      <div className="flex flex-col h-full bg-[#f8f9fb] dark:bg-slate-950 items-center justify-center text-center p-8 min-h-screen">
+        <div className="bg-orange-50 dark:bg-orange-900/20 p-6 rounded-full text-orange-500 mb-4 animate-bounce">
+          <span className="material-symbols-outlined text-5xl">cloud_download</span>
+        </div>
+        <h2 className="text-2xl font-black text-slate-800 dark:text-white uppercase mb-2">Quyền hạn hạn chế</h2>
+        <p className="text-slate-500 dark:text-slate-400 max-w-md">
+          Chỉ có Super Admin mới có quyền truy cập tính năng Sao lưu & Phục hồi hệ thống.
+        </p>
+        <button onClick={() => window.history.length > 2 ? window.history.back() : (window.location.href = '/')} className="mt-6 bg-[#1A237E] text-white px-6 py-2 rounded-xl font-bold">Quay lại</button>
+      </div>
+    );
+  }
+
   const [activeTab, setActiveTab] = useState<'backup' | 'restore'>('backup');
 
   // Backup state

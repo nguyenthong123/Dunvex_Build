@@ -134,10 +134,10 @@ async function handler(req, res) {
     const keyDoc = await restGet(token, `api_keys/${ownerId}`);
     if (!keyDoc) return res.status(403).json({ error: "API key not found" });
     const kf = keyDoc.fields || {};
-    // Validate: API key must match AND token must match (if provided) AND must be enabled
+    // Validate: API key must match. If it matches, we can forgive an outdated token in the URL.
     const keyMatch = kf.key?.stringValue === apiKey;
     const tokenMatch = !webhookToken || kf.webhookSecret?.stringValue === webhookToken;
-    if (kf.enabled?.booleanValue !== true || !keyMatch || !tokenMatch) {
+    if (kf.enabled?.booleanValue !== true || !keyMatch) {
       return res.status(403).json({ error: "Invalid or disabled API key/token" });
     }
     const allProducts = await runStructuredQuery(token, "products", [

@@ -249,6 +249,7 @@ async function handler(req, res) {
           address: fString(body.customerAddress || ""),
           type: fString("Kh\xE1ch web"),
           createdAt: fTs(),
+          updatedAt: fTs(),
           createdBy: fString(ownerId)
         });
       }
@@ -303,13 +304,13 @@ async function handler(req, res) {
       totalWeight: fDouble(totalWeight),
       totalCost: fDouble(totalCost),
       totalProfit: fDouble(subTotal - totalCost),
-      status: fString("\u0110\u01A1n ch\u1ED1t"),
-      note: fString(body.note || "\u0110\u01A1n t\u1EEB Webhook API"),
-      orderDate: fString(body.orderDate ? new Date(body.orderDate).toISOString() : (/* @__PURE__ */ new Date()).toISOString()),
+      status: fString("Đơn chốt"),
+      note: fString(body.note || "Đơn từ Webhook API"),
+      orderDate: fString(body.orderDate ? new Date(body.orderDate).toISOString().slice(0, 10) : (new Date()).toISOString().slice(0, 10)),
       createdAt: fTs(),
       updatedAt: fTs(),
       createdBy: fString(ownerId),
-      createdByEmail: fString(customerEmail || "webhook"),
+      createdByEmail: fString(kf.createdBy?.stringValue || "webhook"),
       source: fString("webhook"),
       order_category: fString(items[0]?.category || "")
     };

@@ -116,6 +116,7 @@ async function handler(req, res) {
   if (!apiKey) return res.status(401).json({ error: "Missing x-api-key header" });
   try {
     const body = req.body;
+    const token = await getAccessToken();
     // Nếu có webhook token, tìm ownerId từ token thay vì yêu cầu trong body
     let ownerId = body.ownerId;
     if (webhookToken && !ownerId) {
@@ -130,7 +131,6 @@ async function handler(req, res) {
     }
     if (!ownerId) return res.status(400).json({ error: "Missing ownerId. Include in body or use a valid webhook URL." });
     if (!body.customerName || !body.items?.length) return res.status(400).json({ error: "Missing customerName or items" });
-    const token = await getAccessToken();
     const keyDoc = await restGet(token, `api_keys/${ownerId}`);
     if (!keyDoc) return res.status(403).json({ error: "API key not found" });
     const kf = keyDoc.fields || {};
@@ -179,14 +179,29 @@ async function handler(req, res) {
       if (matched) {
         items.push({
           productId: matched.id,
-          name: matched.name?.stringValue || "",
+          name: matched.name?.stringValue || item.productName || "",
           category: matched.category?.stringValue || matched.order_category?.stringValue || "",
           qty: Number(item.qty) || 0,
           price: Number(item.price) || Number(matched.priceSell?.doubleValue || matched.priceSell?.integerValue || 0),
           buyPrice: Number(matched.priceImport?.doubleValue || matched.priceImport?.integerValue || 0),
-          unit: matched.unit?.stringValue || "",
+          unit: matched.unit?.stringValue || "Cái",
           weight: matched.density?.stringValue || (matched.density?.doubleValue !== void 0 ? String(matched.density.doubleValue) : "") || (matched.density?.integerValue !== void 0 ? String(matched.density.integerValue) : "") || "",
-          stock: Number(matched.stock?.doubleValue || matched.stock?.integerValue || 0)
+          stock: Number(matched.stock?.doubleValue || matched.stock?.integerValue || 0),
+          isMatched: true
+        });
+      } else if (item.productName) {
+        // Vẫn tiếp nhận sản phẩm từ Zbuild để tránh từ chối lỗi 400 mất đơn hàng
+        items.push({
+          productId: item.productId || "web_custom_item",
+          name: item.productName,
+          category: "Khách web",
+          qty: Number(item.qty) || 1,
+          price: Number(item.price) || 0,
+          buyPrice: 0,
+          unit: "Cái",
+          weight: "0",
+          stock: 0,
+          isMatched: false
         });
       } else {
         notFound.push(item.productId || item.productName || "unknown");
@@ -247,6 +262,19 @@ async function handler(req, res) {
       ownerId: fString(ownerId),
       customerName: fString(customerName),
       customerPhone: fString(customerPhone),
+      customerAddress: fString(body.customerAddress || ""),
+      rawDeliveryLocation: fString(body.rawDeliveryLocation || ""),
+      deliveryLocation: body.deliveryLocation && body.deliveryLocation.lat !== undefined && body.deliveryLocation.lng !== undefined
+        ? {
+            mapValue: {
+              fields: {
+                lat: fDouble(Number(body.deliveryLocation.lat)),
+                lng: fDouble(Number(body.deliveryLocation.lng)),
+                rawAddress: fString(body.rawDeliveryLocation || "")
+              }
+            }
+          }
+        : (body.rawDeliveryLocation ? fString(body.rawDeliveryLocation) : { nullValue: null }),
       customerId: fString(customerId || ""),
       items: {
         arrayValue: {
@@ -287,11 +315,13 @@ async function handler(req, res) {
     };
     const orderId = await restCreate(token, "orders", orderFields);
     for (const item of items) {
-      const newStock = Math.max(0, item.stock - item.qty);
-      await restUpdate(token, `products/${item.productId}`, {
-        stock: fDouble(newStock),
-        updatedAt: fTs()
-      });
+      if (item.isMatched && item.productId !== "web_custom_item") {
+        const newStock = Math.max(0, item.stock - item.qty);
+        await restUpdate(token, `products/${item.productId}`, {
+          stock: fDouble(newStock),
+          updatedAt: fTs()
+        });
+      }
     }
     if (customerId) {
       try {

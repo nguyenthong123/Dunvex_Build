@@ -117,29 +117,31 @@ async function handler(req, res) {
   try {
     const body = req.body;
     const token = await getAccessToken();
-    // Nếu có webhook token, tìm ownerId từ token thay vì yêu cầu trong body
-    let ownerId = body.ownerId;
-    if (webhookToken && !ownerId) {
-      const allApiKeys = await runStructuredQuery(token, "api_keys", []);
-      const matchedKey = allApiKeys.find(doc => {
-        const f = doc.fields || {};
-        return f.webhookSecret?.stringValue === webhookToken && f.enabled?.booleanValue === true && f.key?.stringValue === apiKey;
-      });
-      if (matchedKey) {
-        ownerId = matchedKey.name.split("/").pop();
+    let ownerId = null;
+    let kf = null;
+
+    // Tự động nhận diện tài khoản dựa trên x-api-key (Đúng như user suggest!)
+    const keyDocs = await runStructuredQuery(token, "api_keys", [
+      {
+        fieldFilter: {
+          field: { fieldPath: "key" },
+          op: "EQUAL",
+          value: { stringValue: apiKey }
+        }
       }
+    ]);
+
+    if (keyDocs.length > 0) {
+      ownerId = keyDocs[0].name.split("/").pop();
+      kf = keyDocs[0].fields || {};
     }
-    if (!ownerId) return res.status(400).json({ error: "Missing ownerId. Include in body or use a valid webhook URL." });
+
+    if (!ownerId || kf.enabled?.booleanValue !== true) {
+      return res.status(403).json({ error: "Invalid or disabled API key" });
+    }
+
     if (!body.customerName || !body.items?.length) return res.status(400).json({ error: "Missing customerName or items" });
-    const keyDoc = await restGet(token, `api_keys/${ownerId}`);
-    if (!keyDoc) return res.status(403).json({ error: "API key not found" });
-    const kf = keyDoc.fields || {};
-    // Validate: API key must match. If it matches, we can forgive an outdated token in the URL.
-    const keyMatch = kf.key?.stringValue === apiKey;
-    const tokenMatch = !webhookToken || kf.webhookSecret?.stringValue === webhookToken;
-    if (kf.enabled?.booleanValue !== true || !keyMatch) {
-      return res.status(403).json({ error: "Invalid or disabled API key/token" });
-    }
+
     const allProducts = await runStructuredQuery(token, "products", [
       {
         fieldFilter: {

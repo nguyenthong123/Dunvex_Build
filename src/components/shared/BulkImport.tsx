@@ -180,6 +180,24 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 						if (unitSynonyms.some(s => cleanH.includes(s) || s.includes(cleanH))) return true;
 					}
 
+					// Synonyms for 'priceImport' (Giá nhập / giá vốn / giá gốc)
+					if (field.key === 'priceImport') {
+						const piSynonyms = ['giánhập', 'giávốn', 'giágốc', 'giámuavào', 'giánhậpvào'];
+						if (piSynonyms.some(s => cleanH.includes(s) || s.includes(cleanH))) return true;
+					}
+
+					// Synonyms for 'priceSell' (Giá bán / giá sản phẩm / đơn giá)
+					if (field.key === 'priceSell') {
+						const psSynonyms = ['giábán', 'giásảnphẩm', 'đơngiá', 'giátiền', 'giábánlẻ', 'giábánbuôn'];
+						if (psSynonyms.some(s => cleanH.includes(s) || s.includes(cleanH))) return true;
+					}
+
+					// Synonyms for 'density' (Trọng lượng / khối lượng)
+					if (field.key === 'density') {
+						const dSynonyms = ['khốilượng', 'trọnglượng', 'cânnặng'];
+						if (dSynonyms.some(s => cleanH.includes(s) || s.includes(cleanH))) return true;
+					}
+
 					// Synonyms for 'imageUrl'
 					if (field.key === 'imageUrl') {
 						const imgSynonyms = ['hìnhảnh', 'ảnh', 'hình', 'image', 'picture', 'url', 'link', 'linkảnh', 'linkhình', 'ảnhsảnphẩm', 'hìnhsảnphẩm'];
@@ -217,9 +235,17 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 										cleaned = cleaned.replace(/,/g, '');
 									}
 								}
-								// 2. If it has ONLY comma (1234,56 or 0,9) -> use comma as dot
+								// 2. If it has ONLY comma -> determine thousands (US) vs decimal (VN)
 								else if (cleaned.includes(',')) {
-									cleaned = cleaned.replace(',', '.');
+									const cparts = cleaned.split(',');
+									const clastPart = cparts[cparts.length - 1];
+									if (cparts.length > 2 || (cparts.length === 2 && clastPart.length === 3)) {
+										// Comma is thousands separator (US style) -> strip commas
+										cleaned = cleaned.replace(/,/g, '');
+									} else {
+										// Comma is decimal separator (VN style)
+										cleaned = cleaned.replace(',', '.');
+									}
 								}
 								// 3. If it has ONLY dot (133.215 or 1.234.567) -> In VN, this is often thousands
 								else if (cleaned.includes('.')) {

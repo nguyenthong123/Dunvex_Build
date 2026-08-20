@@ -1490,8 +1490,8 @@ const PriceList = () => {
 
 								{/* Footer Details */}
 								<div className="p-12 bg-white border-t border-slate-100">
-									<div className="flex flex-col md:flex-row justify-between items-end gap-8">
-										<div className="max-w-xl space-y-4">
+									<div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-8">
+										<div className="w-full md:max-w-xl space-y-4">
 											<div className="flex items-center justify-between gap-3">
 												<h4 className="flex items-center gap-2 text-[11px] font-black text-[#FF6D00] uppercase tracking-[0.2em]">
 													<Info size={14} /> Chính sách áp dụng

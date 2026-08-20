@@ -50,6 +50,7 @@ cors.json
 .npm-cache/
 
 # Test & debug scripts
+scripts/
 test-*.js
 test-*.cjs
 check_*.js
@@ -75,3 +76,16 @@ firestore.rules
 # PROJECT_SITEMAP.md
 .vercel
 .env*
+
+# Data dumps (sensitive — never commit)
+firestore_full_dump.json
+firestore_orders.json
+*.bak
+*.orig
+
+# Local runtime data & test artifacts (sensitive — never commit)
+data/
+test-results/
+*.db
+*.db-shm
+*.db-wal

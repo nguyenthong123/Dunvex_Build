@@ -808,9 +808,8 @@ const PriceList = () => {
 		const result: Record<string, { width: number; align: string }> = {};
 		const PAPER = 1000;
 		const PADDING = 96; // md:p-12 = 48px mỗi bên
-		const STT_W = 48;
 		const IMG_W = hasImages ? 85 : 0;
-		const available = Math.max(400, PAPER - PADDING - STT_W - IMG_W);
+		const available = Math.max(400, PAPER - PADDING - IMG_W);
 		const PAD = 32; // px-4 = 16px mỗi bên
 
 		// Ước lượng chiều rộng px của 1 chuỗi (font ~13px)
@@ -1345,7 +1344,6 @@ const PriceList = () => {
 										<table className="w-full text-left border-collapse table-fixed">
 											<thead>
 												<tr className="bg-orange-50/50">
-													<th className="py-5 px-4 text-[11px] font-black text-[#E65100] uppercase tracking-[0.1em] border border-slate-200 text-center w-12">STT</th>
 													{hasImages && (
 														<th className="py-5 px-2 text-[10px] font-black text-[#E65100] uppercase tracking-[0.1em] border border-slate-200 text-center w-[85px]">Hình ảnh</th>
 													)}
@@ -1363,7 +1361,6 @@ const PriceList = () => {
 											<tbody className="divide-y divide-slate-200">
 												{filteredData.map((row, rowIdx) => (
 													<tr key={rowIdx} className="hover:bg-orange-50/30 transition-colors">
-														<td className="py-4 px-4 text-[12px] font-black text-slate-500 text-center border border-slate-200 bg-slate-50/30">{rowIdx + 1}</td>
 														{/* 📸 Ảnh SP */}
 														{hasImages && (
 															<td className="py-2 px-1 text-center border border-slate-200 align-middle">
@@ -1435,6 +1432,11 @@ const PriceList = () => {
 															}
 
 															const isProductName = header.toLowerCase().includes('sản phẩm') || header.toLowerCase().includes('tên sp') || header.toLowerCase().includes('tên');
+															// Đánh số thứ tự vào đầu tên sản phẩm (thay cho cột STT riêng)
+															if (isProductName && value) {
+																displayValue = `${rowIdx + 1}. ${displayValue}`;
+															}
+
 															return (
 																<td
 																	key={colIdx}

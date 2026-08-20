@@ -8,7 +8,7 @@ import {
 	Printer, Search, Trash2, Globe, ArrowLeft, Building2,
 	Phone, Mail, MapPin, Hash, Info, RefreshCw, QrCode,
 	Calendar, User, ChevronRight, Maximize2, Check, Save,
-	Lock, Crown, Image, Camera, Loader2, Copy, Edit3, X
+	Lock, Crown, Image, Camera, Loader2, Copy, Edit3, X, Minus, Plus
 } from 'lucide-react';
 import { useOwner } from '../hooks/useOwner';
 import { getOptimizedImageUrl } from '../utils/validation';
@@ -59,6 +59,47 @@ const PriceList = () => {
 	const [zoomScale, setZoomScale] = useState(1);
 	const [autoScale, setAutoScale] = useState(1);
 	const [isDesktopLayout, setIsDesktopLayout] = useState(true);
+
+	// Zoom: nút +/- và pinch 2 ngón tay (cảm ứng)
+	const ZOOM_MIN = 0.2;
+	const ZOOM_MAX = 2.5;
+	const ZOOM_STEP = 0.15;
+	const clampZoom = (v: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(v * 100) / 100));
+	const zoomIn = () => setZoomScale(s => clampZoom(s + ZOOM_STEP));
+	const zoomOut = () => setZoomScale(s => clampZoom(s - ZOOM_STEP));
+
+	const pinchRef = useRef<{ dist: number; scale: number } | null>(null);
+	const onPinchStart = (e: React.TouchEvent) => {
+		if (e.touches.length === 2) {
+			const [a, b] = [e.touches[0], e.touches[1]];
+			pinchRef.current = { dist: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), scale: zoomScale };
+		}
+	};
+	const onPinchMove = (e: React.TouchEvent) => {
+		if (e.touches.length === 2 && pinchRef.current) {
+			e.preventDefault();
+			const [a, b] = [e.touches[0], e.touches[1]];
+			const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+			if (pinchRef.current.dist > 0) {
+				setZoomScale(clampZoom(pinchRef.current.scale * (dist / pinchRef.current.dist)));
+			}
+		}
+	};
+	const onPinchEnd = (e: React.TouchEvent) => {
+		if (e.touches.length < 2) pinchRef.current = null;
+	};
+
+	// Tự fit vừa màn hình khi vào chế độ xem chi tiết (tránh bị quá lớn trên điện thoại)
+	useEffect(() => {
+		if (viewMode === 'detail') {
+			const screenWidth = window.innerWidth;
+			const padding = window.innerWidth < 768 ? 16 : 48;
+			const fitScale = (screenWidth - padding) / 1000;
+			const finalScale = Math.min(1, Math.max(0.2, fitScale));
+			setAutoScale(finalScale);
+			setZoomScale(finalScale);
+		}
+	}, [viewMode]);
 	const [uploadingRow, setUploadingRow] = useState<any | null>(null); // Row đang upload
 	const { products } = useProducts({ ownerId: owner.ownerId || '', enabled: !owner.loading && !!owner.ownerId });
 	const imageInputRef = useRef<HTMLInputElement>(null); // Cho upload ảnh SP
@@ -1242,32 +1283,21 @@ const PriceList = () => {
 						)}
 					</div>
 				) : (
-					<div className="relative min-h-[800px] flex justify-center w-full overflow-x-auto overflow-y-auto md:overflow-visible">
+					<div
+						className="relative min-h-[800px] flex justify-center w-full overflow-x-auto overflow-y-auto md:overflow-visible"
+						style={{ touchAction: 'pan-x pan-y' }}
+						onTouchStart={onPinchStart}
+						onTouchMove={onPinchMove}
+						onTouchEnd={onPinchEnd}
+					>
 						{/* ZOOM CONTROLS - Floating Pill (Moved higher on mobile) */}
 						<div className="fixed bottom-28 md:bottom-8 left-1/2 -translate-x-1/2 z-[60] bg-slate-900/90 backdrop-blur-xl border border-white/10 rounded-full p-1.5 flex items-center gap-1 shadow-[0_20px_50px_rgba(0,0,0,0.5)] print:hidden scale-90 sm:scale-100 transition-all duration-500 overflow-hidden">
-							<button
-								onClick={() => setZoomScale(autoScale)}
-								className={`px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-widest transition-all ${Math.abs(zoomScale - autoScale) < 0.01 ? 'bg-white text-slate-900' : 'text-white/40 hover:text-white'}`}
-							>
-								Vừa
-							</button>
-							{[0.5, 0.75, 1.0].map((scale) => (
-								<button
-									key={scale}
-									onClick={() => setZoomScale(scale)}
-									className={`px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-widest transition-all ${Math.abs(zoomScale - scale) < 0.01 && Math.abs(zoomScale - autoScale) > 0.01 ? 'bg-white text-slate-900' : 'text-white/40 hover:text-white'}`}
-								>
-									{Math.round(scale * 100)}%
-								</button>
-							))}
-							<div className="w-px h-4 bg-white/20 mx-2"></div>
-							<button
-								onClick={() => setIsDesktopLayout(!isDesktopLayout)}
-								className={`p-2 rounded-full transition-all ${isDesktopLayout ? 'bg-indigo-600 text-white' : 'text-white/40 hover:text-white hover:bg-white/10'}`}
-								title="Bật/Tắt chế độ xem máy tính"
-							>
-								<Maximize2 size={18} />
-							</button>
+							<button onClick={zoomOut} disabled={zoomScale <= ZOOM_MIN} className="size-9 rounded-full flex items-center justify-center text-white transition-all hover:bg-white/10 disabled:opacity-30" title="Thu nhỏ"><Minus size={16} /></button>
+							<span className="min-w-[50px] text-center text-white font-black text-[11px] tabular-nums">{Math.round(zoomScale * 100)}%</span>
+							<button onClick={zoomIn} disabled={zoomScale >= ZOOM_MAX} className="size-9 rounded-full flex items-center justify-center text-white transition-all hover:bg-white/10 disabled:opacity-30" title="Phóng to"><Plus size={16} /></button>
+							<div className="w-px h-4 bg-white/20 mx-1"></div>
+							<button onClick={() => setZoomScale(autoScale)} className={`px-3 py-2 rounded-full font-black text-[10px] uppercase tracking-widest transition-all ${Math.abs(zoomScale - autoScale) < 0.01 ? 'bg-white text-slate-900' : 'text-white/40 hover:text-white'}`}>Vừa</button>
+							<button onClick={() => setIsDesktopLayout(!isDesktopLayout)} className={`p-2 rounded-full transition-all ${isDesktopLayout ? 'bg-indigo-600 text-white' : 'text-white/40 hover:text-white hover:bg-white/10'}`} title="Bật/Tắt chế độ xem máy tính"><Maximize2 size={18} /></button>
 						</div>
 
 						{/* Proper scaling wrapper to prevent flexbox clipping on mobile */}

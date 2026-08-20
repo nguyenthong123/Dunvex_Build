@@ -1461,7 +1461,7 @@ const PriceList = () => {
 																}
 															}
 
-															const isProductName = header.toLowerCase().includes('sản phẩm') || header.toLowerCase().includes('tên sp') || header.toLowerCase().includes('tên');
+															const isProductName = h.includes('tên') && !h.includes('mã') && !h.includes('sku') && !h.includes('code');
 															// Đánh số thứ tự vào đầu tên sản phẩm (thay cho cột STT riêng)
 															if (isProductName && value) {
 																displayValue = `${rowIdx + 1}. ${displayValue}`;

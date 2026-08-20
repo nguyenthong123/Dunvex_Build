@@ -6,7 +6,7 @@ import { usePriceLists } from '../hooks/usePriceLists';
 import {
 	FileSpreadsheet, Upload, Link as LinkIcon, Download,
 	Printer, Search, Trash2, Globe, ArrowLeft, Building2,
-	Phone, Mail, MapPin, Hash, Info, RefreshCw, QrCode,
+	Phone, Mail, MapPin, Hash, Info, RefreshCw,
 	Calendar, User, ChevronRight, Maximize2, Check, Save,
 	Lock, Crown, Image, Camera, Loader2, Copy, Edit3, X, Minus, Plus
 } from 'lucide-react';
@@ -1544,15 +1544,7 @@ const PriceList = () => {
 												</div>
 											)}
 										</div>
-										<div className="text-right space-y-3">
-											<div className="size-24 bg-orange-50 rounded-3xl mx-auto md:ml-auto flex items-center justify-center text-orange-200 border border-orange-100">
-												<QrCode size={48} />
-											</div>
-											<div>
-												<p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Xác nhận bởi</p>
-												<p className="text-lg font-black text-[#E65100] uppercase tracking-tighter mt-0.5">{companyInfo?.name || ''}</p>
-											</div>
-										</div>
+
 									</div>
 								</div>
 							</div>

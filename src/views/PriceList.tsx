@@ -8,12 +8,16 @@ import {
 	Printer, Search, Trash2, Globe, ArrowLeft, Building2,
 	Phone, Mail, MapPin, Hash, Info, RefreshCw, QrCode,
 	Calendar, User, ChevronRight, Maximize2, Check, Save,
-	Lock, Crown, Image, Camera, Loader2
+	Lock, Crown, Image, Camera, Loader2, Copy, Edit3, X
 } from 'lucide-react';
 import { useOwner } from '../hooks/useOwner';
 import { getOptimizedImageUrl } from '../utils/validation';
+import { generateTicketPng } from '../components/orderTicket/ticketImage';
 import { useToast } from '../components/shared/Toast';
 import { useProducts } from '../hooks/useProducts';
+
+const DEFAULT_POLICY = `Báo giá trên là giá niêm yết chính thức, chưa bao gồm chiết khấu linh hoạt theo số lượng.
+Mọi thắc mắc vui lòng liên hệ trực tiếp hotline hoặc truy cập website công ty để biết thêm chi tiết.`;
 
 const PriceList = () => {
 	const navigate = useNavigate();
@@ -28,6 +32,12 @@ const PriceList = () => {
 	const [searchTerm, setSearchTerm] = useState('');
 	const [selectedGroup, setSelectedGroup] = useState('');
 	const [priceSubtitle, setPriceSubtitle] = useState('Bảng giá tại kho');
+	// Copy ảnh bảng giá + Chính sách áp dụng
+	const [isCopyingImage, setIsCopyingImage] = useState(false);
+	const [pricePolicy, setPricePolicy] = useState<string>(DEFAULT_POLICY);
+	const [editingPolicy, setEditingPolicy] = useState(false);
+	const [policyDraft, setPolicyDraft] = useState('');
+	const [savingPolicy, setSavingPolicy] = useState(false);
 	const [showImportModal, setShowImportModal] = useState(false);
 	const [importMethod, setImportMethod] = useState<'file' | 'link'>('file');
 	const [sheetUrl, setSheetUrl] = useState('');
@@ -80,7 +90,11 @@ const PriceList = () => {
 				const settingsRef = doc(db, 'settings', owner.ownerId);
 				const settingsSnap = await getDoc(settingsRef);
 				if (settingsSnap.exists()) {
-					setCompanyInfo(settingsSnap.data());
+					const data = settingsSnap.data();
+					setCompanyInfo(data);
+					if (typeof data.pricePolicy === 'string' && data.pricePolicy.trim()) {
+						setPricePolicy(data.pricePolicy);
+					}
 				}
 			} catch (err) {
 				console.error("Settings fetch error:", err);
@@ -699,6 +713,64 @@ const PriceList = () => {
 		printWindow.document.close();
 	};
 
+	// 📸 Copy bảng giá dưới dạng ảnh (tái sử dụng cơ chế của phiếu giao hàng)
+	const dataURLtoBlob = (dataUrl: string): Blob => {
+		const arr = dataUrl.split(',');
+		const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png';
+		const bstr = atob(arr[1]);
+		let n = bstr.length;
+		const u8arr = new Uint8Array(n);
+		while (n--) u8arr[n] = bstr.charCodeAt(n);
+		return new Blob([u8arr], { type: mime });
+	};
+
+	const handleCopyImage = async () => {
+		const node = document.getElementById('price-list-paper');
+		if (!node) return;
+		setIsCopyingImage(true);
+		try {
+			const dataUrl = await generateTicketPng(node, false);
+			const blob = dataURLtoBlob(dataUrl);
+			if (!navigator.clipboard || !window.ClipboardItem) {
+				throw new Error('unsupported');
+			}
+			await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+			showToast('✅ Đã sao chép bảng giá dưới dạng ảnh!', 'success');
+		} catch (error) {
+			console.error('Lỗi sao chép ảnh bảng giá:', error);
+			// Fallback: tải ảnh xuống để gửi thủ công
+			try {
+				const dataUrl = await generateTicketPng(node, false);
+				const link = document.createElement('a');
+				link.download = `Bao-gia-${(selectedList?.title || 'danh-sach').replace(/[^\w\d-]/g, '-')}.png`;
+				link.href = dataUrl;
+				link.click();
+				showToast('⚠️ Trình duyệt không cho copy trực tiếp, đã tải ảnh xuống.', 'warning');
+			} catch (e2) {
+				console.error('Lỗi tạo ảnh bảng giá:', e2);
+				showToast('Không thể tạo ảnh bảng giá.', 'error');
+			}
+		} finally {
+			setIsCopyingImage(false);
+		}
+	};
+
+	const savePolicy = async () => {
+		if (!owner.ownerId) return;
+		setSavingPolicy(true);
+		try {
+			await setDoc(doc(db, 'settings', owner.ownerId), { pricePolicy: policyDraft }, { merge: true });
+			setPricePolicy(policyDraft);
+			setEditingPolicy(false);
+			showToast('✅ Đã lưu chính sách áp dụng', 'success');
+		} catch (error) {
+			console.error('Lỗi lưu chính sách:', error);
+			showToast('Lỗi khi lưu chính sách.', 'error');
+		} finally {
+			setSavingPolicy(false);
+		}
+	};
+
 	const groupColumn = React.useMemo(() => {
 		return headers.find(h => {
 			const lower = h.toLowerCase();
@@ -948,6 +1020,16 @@ const PriceList = () => {
 							>
 								<Printer size={16} />
 								<span className="hidden md:inline">In Báo Giá</span>
+							</button>
+
+							<button
+								onClick={handleCopyImage}
+								disabled={priceData.length === 0 || isCopyingImage}
+								className="size-9 md:w-auto bg-emerald-600 text-white md:px-4 md:py-2.5 rounded-xl flex items-center justify-center gap-2 font-bold text-sm shadow-lg shadow-emerald-500/20 hover:bg-emerald-700 transition-all disabled:opacity-50"
+								title="Sao chép ảnh bảng giá"
+							>
+								{isCopyingImage ? <Loader2 size={16} className="animate-spin" /> : <Copy size={16} />}
+								<span className="hidden md:inline">Copy ảnh</span>
 							</button>
 
 							{/* Show Save/Update button if data is unsaved OR if it's an existing list that we want to provide an update option for */}
@@ -1335,13 +1417,57 @@ const PriceList = () => {
 								<div className="p-12 bg-white border-t border-slate-100">
 									<div className="flex flex-col md:flex-row justify-between items-end gap-8">
 										<div className="max-w-xl space-y-4">
-											<h4 className="flex items-center gap-2 text-[11px] font-black text-[#FF6D00] uppercase tracking-[0.2em]">
-												<Info size={14} /> Chính sách áp dụng
-											</h4>
-											<p className="text-[11px] font-black text-slate-500 leading-relaxed italic border-l-4 border-orange-500 pl-4">
-												* Báo giá trên là giá niêm yết chính thức, chưa bao gồm chiết khấu linh hoạt theo số lượng.
-												Mọi thắc mắc vui lòng liên hệ trực tiếp hotline hoặc truy cập website công ty để biết thêm chi tiết.
-											</p>
+											<div className="flex items-center justify-between gap-3">
+												<h4 className="flex items-center gap-2 text-[11px] font-black text-[#FF6D00] uppercase tracking-[0.2em]">
+													<Info size={14} /> Chính sách áp dụng
+												</h4>
+												<button
+													onClick={() => { setPolicyDraft(pricePolicy); setEditingPolicy(!editingPolicy); }}
+													className="print:hidden inline-flex items-center gap-1.5 text-[10px] font-black text-slate-400 hover:text-[#FF6D00] uppercase tracking-widest transition-colors"
+												>
+													{editingPolicy ? <X size={12} /> : <Edit3 size={12} />}
+													{editingPolicy ? 'Đóng' : 'Chỉnh sửa'}
+												</button>
+											</div>
+
+											{/* Hiển thị chính sách (dùng cho in ấn & copy ảnh) */}
+											<div className="border-l-4 border-orange-500 pl-4 space-y-1.5">
+												{pricePolicy.split('\n').filter(l => l.trim()).map((line, i) => (
+													<p key={i} className="text-[11px] font-black text-slate-500 leading-relaxed italic">* {line.trim()}</p>
+												))}
+												{pricePolicy.split('\n').filter(l => l.trim()).length === 0 && (
+													<p className="text-[11px] font-black text-slate-400 italic">Chưa có chính sách áp dụng</p>
+												)}
+											</div>
+
+											{/* Form chỉnh sửa (chỉ hiện trên màn hình) */}
+											{editingPolicy && (
+												<div className="print:hidden space-y-2 pt-1">
+													<textarea
+														value={policyDraft}
+														onChange={(e) => setPolicyDraft(e.target.value)}
+														rows={5}
+														className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-700 outline-none focus:border-orange-400 transition-all resize-y"
+														placeholder={"Mỗi dòng là một chính sách. VD:\nGiá chưa bao gồm VAT\nChiết khấu linh hoạt theo số lượng..."}
+													/>
+													<div className="flex items-center gap-2 justify-end">
+														<button
+															onClick={() => setEditingPolicy(false)}
+															className="px-4 py-2 rounded-lg text-xs font-black text-slate-500 hover:bg-slate-100 transition-colors"
+														>
+															Hủy
+														</button>
+														<button
+															onClick={savePolicy}
+															disabled={savingPolicy}
+															className="px-4 py-2 rounded-lg bg-[#FF6D00] text-white text-xs font-black shadow-sm hover:bg-orange-600 disabled:opacity-50 transition-all inline-flex items-center gap-1.5"
+														>
+															{savingPolicy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+															Lưu chính sách
+														</button>
+													</div>
+												</div>
+											)}
 										</div>
 										<div className="text-right space-y-3">
 											<div className="size-24 bg-orange-50 rounded-3xl mx-auto md:ml-auto flex items-center justify-center text-orange-200 border border-orange-100">

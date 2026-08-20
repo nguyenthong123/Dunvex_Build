@@ -804,41 +804,73 @@ const PriceList = () => {
 	}, [headers, groupColumn]);
 
 	// Tính toán chiều rộng và định dạng căn lề động cho từng cột dựa trên tiêu đề & nội dung dữ liệu thực tế
-		const columnWidths = React.useMemo(() => {
+	const columnWidths = React.useMemo(() => {
 		const result: Record<string, { width: number; align: string }> = {};
 		const PAPER = 1000;
 		const PADDING = 96; // md:p-12 = 48px mỗi bên
 		const STT_W = 48;
 		const IMG_W = hasImages ? 85 : 0;
-		const available = Math.max(360, PAPER - PADDING - STT_W - IMG_W);
+		const available = Math.max(400, PAPER - PADDING - STT_W - IMG_W);
+		const PAD = 32; // px-4 = 16px mỗi bên
 
-		const weights: Record<string, number> = {};
+		// Ước lượng chiều rộng px của 1 chuỗi (font ~13px)
+		const est = (s: string) => {
+			let w = 0;
+			for (const ch of s) {
+				if (ch === ' ') w += 4;
+				else if (ch >= '0' && ch <= '9') w += 7;
+				else if (ch >= 'A' && ch <= 'Z') w += 8.5;
+				else if (ch >= 'a' && ch <= 'z') w += 6.5;
+				else w += 8.5; // ký tự tiếng Việt có dấu / ký tự rộng
+			}
+			return w;
+		};
+
+		// Phân loại + đo độ rộng tự nhiên & từ dài nhất từng cột
+		const meta: Record<string, { isPrice: boolean; isName: boolean; natural: number; minWord: number }> = {};
 		displayHeaders.forEach(header => {
-			const hLower = header.toLowerCase();
-			const isPrice = hLower.includes('giá') || hLower.includes('tiền');
-			const isName = hLower.includes('sản phẩm') || hLower.includes('quy cách') || hLower.includes('mô tả') || hLower.includes('chi tiết') || hLower.includes('tên') || hLower.includes('kích thước');
+			const h = header.toLowerCase();
+			const isPrice = h.includes('giá') || h.includes('tiền') || h.includes('số lượng') || h.includes('sl');
+			const isName = h.includes('sản phẩm') || h.includes('tên') || h.includes('mô tả') || h.includes('chi tiết') || h.includes('ghi chú');
 
-			let maxLen = header.length;
-			priceData.forEach(row => {
-				const val = String(row[header] || '');
-				if (val.length > maxLen) maxLen = val.length;
-			});
-
-			let weight: number;
-			if (isPrice) weight = 11;
-			else if (isName) weight = Math.max(12, Math.min(maxLen, 32));
-			else weight = Math.max(7, Math.min(maxLen, 16));
-			weights[header] = weight;
+			let natural = est(header);
+			let minWord = est(header);
+			const scan = (v: string) => {
+				const ev = est(v);
+				if (ev > natural) natural = ev;
+				v.split(/\s+/).forEach(word => {
+					const ew = est(word);
+					if (ew > minWord) minWord = ew;
+				});
+			};
+			scan(header);
+			priceData.forEach(row => scan(String(row[header] || '')));
+			meta[header] = { isPrice, isName, natural, minWord };
 		});
 
-		const total = Object.values(weights).reduce((a, b) => a + b, 0) || 1;
+		// Độ rộng mục tiêu từng cột
+		const target: Record<string, number> = {};
 		displayHeaders.forEach(header => {
-			const hLower = header.toLowerCase();
-			const isPrice = hLower.includes('giá') || hLower.includes('tiền');
-			const px = Math.round((weights[header] / total) * available);
+			const m = meta[header];
+			if (m.isPrice) {
+				target[header] = Math.min(110, Math.max(76, m.natural + PAD));
+			} else if (m.isName) {
+				target[header] = Math.min(240, Math.max(m.minWord + PAD + 12, m.natural + PAD));
+			} else {
+				target[header] = Math.min(180, Math.max(m.minWord + PAD + 8, m.natural + PAD));
+			}
+		});
+
+		// Scale tổng cho vừa khổ giấy (không tràn, không lệch)
+		const total = Object.values(target).reduce((a, b) => a + b, 0) || 1;
+		const scale = available / total;
+		displayHeaders.forEach(header => {
+			const m = meta[header];
+			let px = Math.round(target[header] * scale);
+			if (px < 56) px = 56;
 			result[header] = {
 				width: px,
-				align: isPrice ? 'text-right' : (weights[header] <= 8 ? 'text-center' : 'text-left')
+				align: m.isPrice ? 'text-right' : (m.isName ? 'text-left' : (px < 96 ? 'text-center' : 'text-left'))
 			};
 		});
 		return result;

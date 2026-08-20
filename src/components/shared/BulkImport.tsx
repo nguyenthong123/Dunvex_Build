@@ -3,6 +3,7 @@ import { db, auth } from '../../services/firebase';
 import { collection, writeBatch, doc, serverTimestamp, addDoc, getDocs, query, where } from '../../services/firebase';
 import { X, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Download, Link as LinkIcon, Globe } from 'lucide-react';
 import { useToast } from './Toast';
+import { getOptimizedImageUrl } from '../../utils/validation';
 
 interface BulkImportProps {
 	type: 'customers' | 'products';
@@ -16,7 +17,7 @@ interface FieldConfig {
 	key: string;
 	label: string;
 	required?: boolean;
-	type?: 'string' | 'number';
+	type?: 'string' | 'number' | 'boolean';
 	default?: any;
 }
 
@@ -65,7 +66,8 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 				{ key: 'density', label: 'Trọng lượng', type: 'number', default: 0 },
 				{ key: 'note', label: 'Ghi chú', type: 'string' },
 				{ key: 'expiryDate', label: 'Ngày hết hạn', type: 'string' },
-				{ key: 'imageUrl', label: 'Hình ảnh', type: 'string' }
+				{ key: 'imageUrl', label: 'Hình ảnh', type: 'string' },
+				{ key: 'applyOverheadCost', label: 'Áp hệ số chi phí', type: 'boolean', default: false }
 			]
 		}
 	};
@@ -180,8 +182,14 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 
 					// Synonyms for 'imageUrl'
 					if (field.key === 'imageUrl') {
-						const imgSynonyms = ['hìnhảnh', 'ảnh', 'hình', 'image', 'picture', 'url', 'link', 'linkảnh', 'linkhình'];
+						const imgSynonyms = ['hìnhảnh', 'ảnh', 'hình', 'image', 'picture', 'url', 'link', 'linkảnh', 'linkhình', 'ảnhsảnphẩm', 'hìnhsảnphẩm'];
 						if (imgSynonyms.some(s => cleanH.includes(s) || s.includes(cleanH))) return true;
+					}
+
+					// Synonyms for 'applyOverheadCost'
+					if (field.key === 'applyOverheadCost') {
+						const ohSynonyms = ['hệsốchiphí', 'hệsốtínhchiphí', 'áphệsố', 'áphệsốchiphí', 'overhead', 'costfactor'];
+						if (ohSynonyms.some(s => cleanH.includes(s) || s.includes(cleanH))) return true;
 					}
 
 					return false;
@@ -235,12 +243,20 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 							}
 						}
 						val = (val !== undefined && val !== null && !isNaN(Number(val))) ? Number(val) : (field.default || 0);
+					} else if (field.type === 'boolean') {
+						const bv = String(val !== undefined && val !== null ? val : '').trim().toLowerCase();
+						val = ['có', 'co', 'yes', 'true', '1', 'x', '✓', 'ok', 'check', 'checked'].includes(bv);
 					} else {
 						if (typeof val === 'number') {
 							// For general numbers, convert to vi-VN locale string
 							val = val.toLocaleString('vi-VN');
 						} else {
 							val = val !== undefined && val !== null ? String(val).trim() : (field.default || '');
+						}
+						
+						// --- Normalize image URL (Google Drive share link -> direct thumbnail) ---
+						if (field.key === 'imageUrl' && val) {
+							val = getOptimizedImageUrl(val);
 						}
 						
 						// --- Normalize expiryDate for HTML5 Date input (YYYY-MM-DD) ---
@@ -283,7 +299,7 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 					// Mark as missing so we don't overwrite during update
 					obj[`_${field.key}_isMissing`] = true;
 					if (obj[field.key] === undefined) {
-						obj[field.key] = field.default || (field.type === 'number' ? 0 : '');
+						obj[field.key] = field.default !== undefined ? field.default : (field.type === 'number' ? 0 : (field.type === 'boolean' ? false : ''));
 					}
 				}
 			});
@@ -824,7 +840,9 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 													{config.fields.map((field, colIdx) => (
 														<td key={colIdx} className="py-3 px-6 text-xs font-bold text-slate-600 dark:text-slate-300 whitespace-nowrap">
 															{field.key === 'imageUrl' && row[field.key] ? (
-																<img src={row[field.key]} alt="Preview" className="w-10 h-10 object-cover rounded-md border border-slate-200" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+																<img src={getOptimizedImageUrl(row[field.key])} alt="Preview" className="w-10 h-10 object-cover rounded-md border border-slate-200" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+															) : field.type === 'boolean' ? (
+																row[field.key] ? '✓ Có' : '—'
 															) : typeof row[field.key] === 'number' 
 																? Number(row[field.key]).toLocaleString('vi-VN', { 
 																	minimumFractionDigits: 0,

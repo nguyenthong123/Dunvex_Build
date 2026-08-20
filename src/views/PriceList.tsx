@@ -1473,8 +1473,8 @@ const PriceList = () => {
 																	style={{ width: `${columnWidths[header]?.width || 120}px` }}
 																	className={`py-4 px-4 text-[13px] border border-slate-200 whitespace-normal break-words ${
 																		isProductName 
-																			? 'text-[#E65100] bg-orange-50/10 font-bold' 
-																			: (isPrice ? 'text-slate-900 font-semibold' : 'text-slate-700 font-medium')
+																			? 'text-[#E65100] bg-orange-50/10 font-extrabold' 
+																			: (isPrice ? 'text-slate-900 font-bold' : 'text-slate-700 font-semibold')
 																	} ${columnWidths[header]?.align || 'text-left'}`}
 																>
 																	{displayValue}

@@ -215,6 +215,7 @@ const PriceList = () => {
 
 		setPriceData(mappedData);
 		setHeaders(finalHeaders);
+		setSelectedList({ isUnsaved: true });
 		setViewMode('detail');
 		navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
 		setSelectedGroup('');
@@ -1033,7 +1034,7 @@ const PriceList = () => {
 							</button>
 
 							{/* Show Save/Update button if data is unsaved OR if it's an existing list that we want to provide an update option for */}
-							{(selectedList?.isUnsaved || (selectedList?.id && priceData.length > 0)) && (
+							{(selectedList?.isUnsaved || priceData.length > 0) && (
 								<button
 									onClick={() => savePriceList(priceData, headers)}
 									disabled={importing}

@@ -21,7 +21,7 @@ npm run build
 
 echo "📦 [2/4] Đóng gói dữ liệu..."
 # Nén các file cần thiết
-tar -czf deploy.tar.gz dist/ server/ server.js package.json package-lock.json .env
+tar -czf deploy.tar.gz dist/ server/ vps/ scripts/ server.js package.json package-lock.json
 
 echo "📤 [3/4] Upload lên VPS ($VPS_USER@$VPS_IP)..."
 # Tạo thư mục trên VPS nếu chưa có
@@ -33,6 +33,19 @@ scp -o StrictHostKeyChecking=no -i $SSH_KEY deploy.tar.gz $VPS_USER@$VPS_IP:$VPS
 echo "⚙️  [4/4] Cài đặt và Khởi động lại ứng dụng trên VPS..."
 ssh -o StrictHostKeyChecking=no -i $SSH_KEY $VPS_USER@$VPS_IP << EOF
   cd $VPS_DIR
+  
+  # Backup bản cũ trước khi deploy (giữ 3 bản gần nhất)
+  if [ -d "dist" ]; then
+    BACKUP_NAME="backup_\$(date +%Y%m%d_%H%M%S)"
+    echo "📁 Backup bản cũ: \$BACKUP_NAME"
+    mkdir -p backups
+    tar -czf "backups/\${BACKUP_NAME}.tar.gz" dist/ server/ server.js 2>/dev/null || true
+    # Giữ 3 bản backup gần nhất, xóa cũ hơn
+    ls -t backups/*.tar.gz 2>/dev/null | tail -n +4 | xargs rm -f 2>/dev/null || true
+  fi
+  
+  # Xóa thư mục dist cũ để dọn dẹp các file compiled cũ tránh đọng cache
+  rm -rf dist
   
   # Giải nén đè lên file cũ
   tar -xzf deploy.tar.gz

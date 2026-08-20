@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { db, auth } from '../services/firebase';
-import { collection, query, where, getDocs, updateDoc, doc, serverTimestamp, addDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, updateDoc, doc, serverTimestamp, addDoc, deleteDoc } from '../services/firebase';
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
 import { createUserNotification } from '../utils/notifications';
@@ -26,6 +26,17 @@ const LeaveManagement = () => {
   const [editingRequest, setEditingRequest] = useState<any>(null);
   const [editData, setEditData] = useState({ type: 'leave', note: '', selectedDates: [] as string[] });
   const [processing, setProcessing] = useState(false);
+
+    // Handle browser back button — close detail modal
+  useEffect(() => {
+    const handlePopState = () => {
+      setSelectedRequest(null);
+      setEditingRequest(null);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
 
   const today = useMemo(() => {
     const d = new Date(); d.setHours(0,0,0,0); return d;
@@ -359,7 +370,7 @@ const LeaveManagement = () => {
 
               return (
                 <div key={req.id}
-                  onClick={() => isAdmin && setSelectedRequest(req)}
+                  onClick={() => { if(isAdmin) { setSelectedRequest(req); navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } }); }}}
                   className={`bg-white dark:bg-slate-900 rounded-2xl p-4 border transition-all relative ${
                     req.status === 'approved' ? 'border-emerald-100 dark:border-emerald-900/30' :
                     req.status === 'rejected' ? 'border-rose-100 dark:border-rose-900/30' :
@@ -405,12 +416,13 @@ const LeaveManagement = () => {
       {/* Detail Modal (Admin only) */}
       <AnimatePresence>
         {selectedRequest && isAdmin && (
-          <div className="fixed inset-0 z-[2000] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => { setSelectedRequest(null); }}>
             <motion.div
-              initial={{ y: '100%', opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: '100%', opacity: 0 }}
-              className="bg-white dark:bg-slate-900 w-full max-w-md rounded-t-[2.5rem] md:rounded-[2.5rem] p-6 shadow-2xl"
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white dark:bg-slate-900 w-full max-w-md rounded-[2.5rem] p-6 shadow-2xl"
+              onClick={e => e.stopPropagation()}
             >
               <h3 className="text-lg font-black text-slate-800 dark:text-white mb-4">Chi tiết yêu cầu</h3>
 
@@ -474,12 +486,13 @@ const LeaveManagement = () => {
 
         {/* Edit Modal (Employee only) */}
         {editingRequest && (
-          <div className="fixed inset-0 z-[2000] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => { setEditingRequest(null); }}>
             <motion.div
-              initial={{ y: '100%', opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: '100%', opacity: 0 }}
-              className="bg-white dark:bg-slate-900 w-full max-w-md rounded-t-[2.5rem] md:rounded-[2.5rem] p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white dark:bg-slate-900 w-full max-w-md rounded-[2.5rem] p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
+              onClick={e => e.stopPropagation()}
             >
               <h3 className="text-lg font-black text-slate-800 dark:text-white mb-4">Chỉnh sửa yêu cầu</h3>
 

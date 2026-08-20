@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
+import { SUPER_ADMIN_EMAIL } from '../constants';
 import { db, auth } from '../services/firebase';
-import { collection, getDocs, query, where, orderBy, writeBatch, doc } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, writeBatch, doc } from '../services/firebase';
 
 // ============================================================
 // 🔧 Cấu hình Collections
@@ -162,7 +163,7 @@ async function importData(
 // Backup Component
 // ============================================================
 export default function Backup() {
-  const NEXUS_ADMIN_EMAIL = 'dunvex.green@gmail.com';
+  const NEXUS_ADMIN_EMAIL = SUPER_ADMIN_EMAIL;
   if (auth.currentUser?.email !== NEXUS_ADMIN_EMAIL) {
     return (
       <div className="flex flex-col h-full bg-[#f8f9fb] dark:bg-slate-950 items-center justify-center text-center p-8 min-h-screen">
@@ -178,7 +179,7 @@ export default function Backup() {
     );
   }
 
-  const [activeTab, setActiveTab] = useState<'backup' | 'restore'>('backup');
+  const [activeTab, setActiveTab] = useState<'backup' | 'restore' | 'sqlite'>('backup');
 
   // Backup state
   const [selectedCollections, setSelectedCollections] = useState<string[]>(
@@ -198,6 +199,7 @@ export default function Backup() {
   const [restoreProgress, setRestoreProgress] = useState<any>(null);
   const [restoreResult, setRestoreResult] = useState<any>(null);
   const [isRestoring, setIsRestoring] = useState(false);
+  const [isUploadingSqlite, setIsUploadingSqlite] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ========== HELPERS ==========
@@ -336,6 +338,46 @@ export default function Backup() {
     }
   };
 
+  const handleUploadSqlite = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!window.confirm('⚠️ XÁC NHẬN CẬP NHẬT CƠ SỞ DỮ LIỆU\\n\\nHành động này sẽ GHI ĐÈ hoàn toàn cơ sở dữ liệu SQLite hiện tại trên server bằng file bạn chọn.\\n\\nBạn có chắc chắn muốn tiếp tục?')) {
+      e.target.value = '';
+      return;
+    }
+
+    setIsUploadingSqlite(true);
+    try {
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) {
+        throw new Error('Vui lòng đăng nhập trước!');
+      }
+
+      const response = await fetch('/api/db/upload', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${idToken}`,
+          'Content-Type': 'application/x-sqlite3'
+        },
+        body: file
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: 'Không thể tải lên CSDL' }));
+        throw new Error(err.error || 'Lỗi từ server');
+      }
+
+      alert('🎉 Phục hồi & Đồng bộ cơ sở dữ liệu SQLite thành công!');
+      window.location.reload();
+    } catch (err: any) {
+      alert('Tải lên CSDL thất bại: ' + err.message);
+    } finally {
+      setIsUploadingSqlite(false);
+      e.target.value = '';
+    }
+  };
+
   // ============================================================
   // RENDER
   // ============================================================
@@ -373,6 +415,16 @@ export default function Backup() {
           }`}
         >
           📥 Phục hồi (Restore)
+        </button>
+        <button
+          onClick={() => setActiveTab('sqlite')}
+          className={`px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${
+            activeTab === 'sqlite'
+              ? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-white shadow-sm'
+              : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+          }`}
+        >
+          🗄️ CSDL SQLite (.db)
         </button>
       </div>
 
@@ -746,6 +798,37 @@ export default function Backup() {
                 <li>Dữ liệu cũ <strong>KHÔNG bị xóa</strong> — chỉ bị ghi đè nếu trùng ID</li>
                 <li>Hãy <strong>backup trước</strong> khi phục hồi để tránh mất dữ liệu</li>
               </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== SQLITE TAB ==================== */}
+      {activeTab === 'sqlite' && (
+        <div className="space-y-5 animate-fadeIn">
+          {/* SQLite DB File Upload Restore */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 p-5">
+            <h3 className="font-bold text-[#1A237E] dark:text-white text-lg mb-2 flex items-center gap-2">
+              <span className="material-symbols-outlined text-orange-500">upload</span>
+              Tải lên & Khôi phục CSDL SQLite (.db)
+            </h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              Ghi đè trực tiếp CSDL SQLite trên server bằng tệp tin <code className="bg-gray-100 dark:bg-slate-700 px-1 py-0.5 rounded font-mono text-xs">dunvex.db</code> của bạn.
+              <br />
+              <strong className="text-red-500">⚠️ CẢNH BÁO QUAN TRỌNG:</strong> Thao tác này sẽ ghi đè toàn bộ dữ liệu đang có trên server. Hệ thống sẽ tự động tạo file backup CSDL cũ trên server trước khi ghi đè phòng trường hợp lỗi.
+            </p>
+            
+            <div className="flex items-center gap-3">
+              <input
+                type="file"
+                accept=".db"
+                onChange={handleUploadSqlite}
+                disabled={isUploadingSqlite}
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-[#FF6D00] hover:file:bg-orange-100 dark:file:bg-slate-700 dark:file:text-white"
+              />
+              {isUploadingSqlite && (
+                <span className="inline-block w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+              )}
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { getFirestore } from 'firebase-admin/firestore';
+import * as db from '../db.js';
 
 function getExpireDate(planId, durationDays, durationMonths) {
   const expireDate = new Date();
@@ -14,7 +14,7 @@ function getExpireDate(planId, durationDays, durationMonths) {
   return expireDate;
 }
 
-async function handler(req, res) {
+export default async function handler(req, res) {
   const apiToken = process.env.NEXUS_WEBHOOK_TOKEN || "dunvex-nexus-2026";
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -40,61 +40,108 @@ async function handler(req, res) {
     if (!requestId || !ownerId || !planId) {
       return res.status(400).json({ error: "Missing required fields" });
     }
-    console.log(`Confirming payment: ${transferCode} for ${planName} (${amount}\u0111) \u2014 confidence: ${matchConfidence}`);
+    console.log(`Confirming payment: ${transferCode} for ${planName} (${amount}đ) — confidence: ${matchConfidence}`);
 
-    const db = getFirestore();
     const now = new Date();
     const expireDate = getExpireDate(planId, req.body.durationDays, req.body.durationMonths);
 
-    const batch = db.batch();
+    // Build batch: update payment_request + settings + notification
+    const batchOps = [
+      {
+        type: 'update',
+        collection: 'payment_requests',
+        id: requestId,
+        data: {
+          status: "approved",
+          handledAt: now.toISOString(),
+          handledBy: "payment_matcher",
+          matchedAmount: matchedAmount || amount,
+          matchConfidence: matchConfidence || "auto"
+        }
+      },
+      {
+        type: 'update',
+        collection: 'settings',
+        id: ownerId,
+        data: {
+          subscriptionStatus: "active",
+          isPro: true,
+          planId: planId,
+          paymentConfirmedAt: now.toISOString(),
+          subscriptionExpiresAt: expireDate.toISOString(),
+          manualLockOrders: false,
+          manualLockDebts: false,
+          manualLockSheets: false,
+          manualLockAi: false,
+          graceUntil: null
+        }
+      },
+      {
+        type: 'create',
+        collection: 'notifications',
+        id: Date.now().toString(),
+        data: {
+          userId: ownerId,
+          title: "\u2705 THANH TO\u00c1N \u0110\u00c3 \u0110\u01af\u1ee2C X\u00c1C NH\u1eacN",
+          body: `H\u1ec7 th\u1ed1ng \u0111\u00e3 t\u1ef1 \u0111\u1ed9ng x\u00e1c nh\u1eadn thanh to\u00e1n ${amount.toLocaleString("vi-VN")}\u0111 cho g\u00f3i ${planName || planId}. T\u1ea5t c\u1ea3 t\u00ednh n\u0103ng \u0111\u00e3 \u0111\u01b0\u1ee3c m\u1edf kho\u00e1!`,
+          type: "success",
+          priority: "high",
+          read: false,
+          createdAt: now.toISOString()
+        }
+      }
+    ];
 
-    // Update payment_request
-    batch.set(db.collection("payment_requests").doc(requestId), {
-      status: "approved",
-      handledAt: now,
-      handledBy: "payment_matcher",
-      matchedAmount: matchedAmount || amount,
-      matchConfidence: matchConfidence || "auto"
-    }, { merge: true });
+    // \ud83d\udd25 Cascade UNLOCK: t\u00ecm t\u1ea5t c\u1ea3 staff c\u00f3 ownerId === adminId v\u00e0 m\u1edf kh\u00f3a
+    const allUsers = db.getAll('users') || [];
+    const staffUnderAdmin = allUsers.filter(u =>
+      u.ownerId === ownerId &&
+      u.role !== 'admin' &&
+      u.uid !== ownerId
+    );
+    for (const staff of staffUnderAdmin) {
+      const staffUid = staff.uid || staff.id;
+      const staffSettings = db.get('settings', staffUid);
+      if (staffSettings) {
+        batchOps.push({
+          type: 'update',
+          collection: 'settings',
+          id: staffUid,
+          data: {
+            manualLockOrders: false,
+            manualLockDebts: false,
+            manualLockSheets: false,
+            manualLockAi: false,
+            subscriptionStatus: 'active',
+            // X\u00f3a expiry ri\u00eang \u0111\u1ec3 staff k\u1ebf th\u1eeba t\u1eeb admin
+            subscriptionExpiresAt: null,
+            planId: null,
+            isPro: null
+          }
+        });
+      } else {
+        batchOps.push({
+          type: 'create',
+          collection: 'settings',
+          id: staffUid,
+          data: { subscriptionStatus: 'active' }
+        });
+      }
+      console.log(`[UNLOCK-CASCADE] Unlocked staff: ${staff.displayName || staff.email} (admin: ${ownerId?.slice(0,12)})`);
+    }
 
-    // Update settings - unlock user
-    batch.set(db.collection("settings").doc(ownerId), {
-      subscriptionStatus: "active",
-      isPro: true,
-      planId: planId,
-      paymentConfirmedAt: now,
-      subscriptionExpiresAt: expireDate,
-      manualLockOrders: false,
-      manualLockDebts: false,
-      manualLockSheets: false,
-      manualLockAi: false,
-      graceUntil: null
-    }, { merge: true });
+    db.batchWrite(batchOps);
 
-    // Create notification
-    const notifRef = db.collection("notifications").doc();
-    batch.set(notifRef, {
-      userId: ownerId,
-      title: "\u2705 THANH TO\xC1N \u0110\xC3 \u0110\u01AF\u1EE2C X\xC1C NH\u1EACN",
-      body: `H\u1EC7 th\u1ED1ng \u0111\xE3 t\u1EF1 \u0111\u1ED9ng x\xE1c nh\u1EADn thanh to\xE1n ${amount.toLocaleString("vi-VN")}\u0111 cho g\xF3i ${planName || planId}. T\u1EA5t c\u1EA3 t\xEDnh n\u0103ng \u0111\xE3 \u0111\u01B0\u1EE3c m\u1EDF kho\xE1!`,
-      type: "success",
-      priority: "high",
-      read: false,
-      createdAt: now
-    });
-
-    await batch.commit();
-
-    console.log(`\u2705 Payment confirmed: ${requestId} \u2192 ${planName} for ${ownerId}`);
+    console.log(`\u2705 Payment confirmed: ${requestId} \u2192 ${planName} for ${ownerId} + ${staffUnderAdmin.length} staff unlocked`);
     return res.status(200).json({
       success: true,
       message: `Payment confirmed for ${planName}`,
       requestId,
-      ownerId
+      ownerId,
+      staffUnlocked: staffUnderAdmin.length
     });
   } catch (error) {
     console.error("confirm-transfer error:", error);
     return res.status(500).json({ error: error.message || "Internal server error" });
   }
 }
-export { handler as default };

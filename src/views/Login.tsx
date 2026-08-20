@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { auth, googleProvider, db } from '../services/firebase';
+import { auth, googleProvider, db, doc, getDoc, setDoc, deleteDoc, serverTimestamp } from '../services/firebase';
 import { signInWithPopup, signInWithRedirect, getRedirectResult, setPersistence, browserLocalPersistence, signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
-import { doc, getDoc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { setApiCredentials } from '../services/apiClient';
 import {
 	Building2,
 	Mail,
@@ -91,6 +91,11 @@ const Login = () => {
 				});
 			} else {
 				setLoginStatus('Cập nhật thông tin đăng nhập...');
+				const userData = userSnap.data();
+				if (userData?.ownerId && userData.ownerId !== user.uid) {
+					console.log("Logged in as employee of:", userData.ownerId);
+					setApiCredentials('', userData.ownerId);
+				}
 				await setDoc(userRef, {
 					lastLogin: serverTimestamp()
 				}, { merge: true });

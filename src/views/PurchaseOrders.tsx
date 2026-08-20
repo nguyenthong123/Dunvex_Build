@@ -1,61 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Store, Plus, Search, Trash, X, ArrowLeft, CheckCircle2, Package, History, MessageCircle, Send, Loader, Edit3 } from 'lucide-react';
+import { Store, Plus, Search, Trash, X, ArrowLeft, CheckCircle2, Package, History, MessageCircle, Send, Loader, Edit3, Printer, Image as ImageIcon, Copy } from 'lucide-react';
+import html2canvas from 'html2canvas-pro';
 import { useOwner } from '../hooks/useOwner';
 import { useSuppliers } from '../hooks/useSuppliers';
 import { useProducts } from '../hooks/useProducts';
 import { usePurchaseOrders } from '../hooks/usePurchaseOrders';
 import { useSupplierDebts } from '../hooks/useSupplierDebts';
 import { useToast } from '../components/shared/Toast';
-import { serverTimestamp, runTransaction, doc, collection, writeBatch, increment, addDoc, getDoc, setDoc, updateDoc, getDocs, query, where, deleteDoc } from 'firebase/firestore';
+import { serverTimestamp, runTransaction, doc, collection, writeBatch, increment, addDoc, getDoc, setDoc, updateDoc, getDocs, query, where, deleteDoc } from '../services/firebase';
 import { db, auth } from '../services/firebase';
 import { inventoryService } from '../services/dataAccess';
-import { parseSupplyMessage } from '../services/supplyBotService';
 import { getOptimizedImageUrl } from '../utils/validation';
+import { SupplierSelection } from '../components/purchase/SupplierSelection';
+import { ProductSearchTable } from '../components/purchase/ProductSearchTable';
+import { PurchaseOrderSummary } from '../components/purchase/PurchaseOrderSummary';
 
-// 🔍 Chuẩn hóa tiếng Việt để tìm kiếm chính xác (bỏ dấu, lowercase, NFC)
-function normalizeVN(text: string): string {
-    return text
-        .normalize('NFC')
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/đ/g, 'd')
-        .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\s]+/g, '')
-        .trim();
-}
 
-// 🔍 Fuzzy match sản phẩm (copy từ SaleBot)
-function findMatchingProduct(name: string, allProducts: any[]): any | null {
-    const searchName = (name || '').toLowerCase().trim();
-    const searchNameVN = normalizeVN(name || '');
-    
-    // 1: Khớp chính xác tên
-    let found = allProducts.find(p => (p.name || '').toLowerCase() === searchName);
-    if (found) return found;
-    
-    // 2: DB name contains search name
-    found = allProducts.find(p => (p.name || '').toLowerCase().includes(searchName));
-    if (found) return found;
-    
-    // 3: Search name contains DB name
-    found = allProducts.find(p => searchName.includes((p.name || '').toLowerCase()));
-    if (found) return found;
-    
-    // 4: Fuzzy Vietnamese match
-    if (searchNameVN.length >= 2) {
-        found = allProducts.find(p => normalizeVN(p.name || '').includes(searchNameVN));
-        if (found) return found;
-        
-        found = allProducts.find(p => {
-            const dbVN = normalizeVN(p.name || '');
-            return dbVN.length >= 2 && searchNameVN.includes(dbVN);
-        });
-        if (found) return found;
-    }
-    
-    return null;
-}
+
 
 const PurchaseOrders = () => {
 	const navigate = useNavigate();
@@ -72,55 +34,36 @@ const PurchaseOrders = () => {
 
 	const searchInputRef = useRef<HTMLInputElement>(null);
 
-	// ─── Supply Bot Chat State ───
-	const [chatOpen, setChatOpen] = useState(false);
-	const [chatInput, setChatInput] = useState('');
-	const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'bot'; text: string }[]>([
-		{ role: 'bot', text: '👋 Chào anh! Tôi là trợ lý nhập hàng. Tôi có thể giúp anh:\n• Tạo nhà cung cấp mới\n• Tạo đơn nhập hàng\n• Ghi nhận trả nợ NCC\n• Nhập hàng từ Google Sheet' }
-	]);
-	const [chatLoading, setChatLoading] = useState(false);
-	const chatInitialLoad = useRef(true);
-
-	// 🔄 Lưu & tải lịch sử chat từ Firestore
-	const supplyChatDocId = owner.ownerId && auth.currentUser?.uid ? `supply_bot_${owner.ownerId}_${auth.currentUser.uid}` : null;
-
-	useEffect(() => {
-		if (!supplyChatDocId) return;
-		const loadChat = async () => {
-			try {
-				const snap = await getDoc(doc(db, 'supply_bot_chats', supplyChatDocId));
-				if (snap.exists()) {
-					const data = snap.data();
-					if (data.messages && data.messages.length > 0) {
-						setChatMessages(data.messages);
-					}
-				}
-			} catch (err) {
-				console.error('Load supply chat error:', err);
-			} finally {
-				setTimeout(() => { chatInitialLoad.current = false; }, 200);
-			}
-		};
-		loadChat();
-	}, [supplyChatDocId]);
-
-	useEffect(() => {
-		if (chatInitialLoad.current || !supplyChatDocId) return;
-		const recent = chatMessages.slice(-30);
-		setDoc(doc(db, 'supply_bot_chats', supplyChatDocId), {
-			ownerId: owner.ownerId,
-			userId: auth.currentUser?.uid,
-			messages: recent,
-			updatedAt: serverTimestamp()
-		}, { merge: true }).catch(err => console.error('Save supply chat error:', err));
-	}, [chatMessages, supplyChatDocId, owner.ownerId]);
-	const [pendingSheetOrder, setPendingSheetOrder] = useState<{ items: any[]; total: number; notFound: string[] } | null>(null);
 	const [detailPO, setDetailPO] = useState<any | null>(null);
 	const [poZoom, setPoZoom] = useState(1);
 	const [deletingPO, setDeletingPO] = useState<string | null>(null); // PO đang chờ xác nhận xoá
 	const [cancellingPO, setCancellingPO] = useState<string | null>(null); // PO đang được xoá (loading)
 	const [editingPO, setEditingPO] = useState<any>(null); // PO đang được chỉnh sửa
-	const chatEndRef = useRef<HTMLDivElement>(null);
+	const [isSavingProduct, setIsSavingProduct] = useState(false);
+
+	const [companyInfo, setCompanyInfo] = useState<any>(null);
+	const [isSavingImage, setIsSavingImage] = useState(false);
+	const [capturedImage, setCapturedImage] = useState<string | null>(null);
+	const [showCopySuccess, setShowCopySuccess] = useState(false);
+
+	const getTicketImageUrl = (url: string) => {
+		const optimized = getOptimizedImageUrl(url);
+		if (!optimized) return '';
+		return optimized + (optimized.includes('?') ? '&' : '?') + 'nocache=1';
+	};
+
+	useEffect(() => {
+		if (!owner.ownerId) return;
+		const fetchSettings = async () => {
+			const settingsRef = doc(db, 'settings', owner.ownerId);
+			const settingsSnap = await getDoc(settingsRef);
+			if (settingsSnap.exists()) {
+				setCompanyInfo(settingsSnap.data());
+			}
+		};
+		fetchSettings();
+	}, [owner.ownerId]);
+
 
 	useEffect(() => {
 		const handleOpenSearch = () => {
@@ -131,11 +74,286 @@ const PurchaseOrders = () => {
 		return () => window.removeEventListener('open-mobile-search', handleOpenSearch);
 	}, [showCreateForm]);
 
+	// Handle browser back button — close PO detail modal
+	// Track modal state for back button
+	const detailPORef = useRef(detailPO);
+	useEffect(() => { detailPORef.current = detailPO; }, [detailPO]);
+
+	// Handle browser back button — close modal
+	useEffect(() => {
+		const handlePopState = () => {
+			if (detailPORef.current) {
+				setDetailPO(null); setPoZoom(1);
+			}
+		};
+		window.addEventListener("popstate", handlePopState);
+		return () => window.removeEventListener("popstate", handlePopState);
+	}, []);
+
+	const handlePrint = () => {
+		if (!detailPO) return;
+		const printContent = document.getElementById('purchase-order-ticket-bill');
+		if (!printContent) return;
+
+		const printWindow = window.open('', '_blank', 'width=1200,height=1000');
+		if (!printWindow) {
+			alert("Vui lòng cho phép trình duyệt mở popup để in!");
+			return;
+		}
+
+		let styles = '';
+		try {
+			for (const sheet of document.styleSheets) {
+				try {
+					if (sheet.cssRules) {
+						for (const rule of sheet.cssRules) {
+							styles += rule.cssText + '\n';
+						}
+					}
+				} catch (e) {
+					if (sheet.href) {
+						styles += `@import url("${sheet.href}");\n`;
+					}
+				}
+			}
+		} catch (err) {
+			console.warn("Could not inline all styles directly", err);
+		}
+
+		let fallbackTags = '';
+		document.querySelectorAll('style, link[rel="stylesheet"]').forEach(node => {
+			fallbackTags += node.outerHTML;
+		});
+
+		printWindow.document.write(`
+			<html>
+				<head>
+					<base href="${window.location.origin}/">
+					<title>In Phiếu Nhập Hàng - ${detailPO.id || ''}</title>
+					<link rel="preconnect" href="https://fonts.googleapis.com">
+					<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+					<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Manrope:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+					<style>${styles}</style>
+					${fallbackTags}
+					<style>
+						@page { size: 80mm auto; margin: 0; }
+						body {
+							width: 80mm !important;
+							margin: 0 auto !important;
+							padding: 0 !important;
+							background: white !important;
+							font-family: 'Inter', 'Manrope', sans-serif !important;
+						}
+						#purchase-order-ticket-bill {
+							width: 80mm !important;
+							max-width: 80mm !important;
+							padding: 10px 14px !important;
+							box-shadow: none !important;
+							border: none !important;
+							background: white !important;
+							visibility: visible !important;
+							display: block !important;
+							box-sizing: border-box !important;
+						}
+						#purchase-order-ticket-bill .border-slate-950 span {
+							font-size: 14px !important;
+						}
+						#purchase-order-ticket-bill .border-slate-950 .text-lg {
+							font-size: 16px !important;
+						}
+						* {
+							box-sizing: border-box !important;
+							-webkit-print-color-adjust: exact !important;
+							print-color-adjust: exact !important;
+						}
+					</style>
+				</head>
+				<body>
+					<div style="width: 80mm;">
+						${printContent.outerHTML}
+					</div>
+					<script>
+						function checkStylesAndPrint() {
+							const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
+							let loadedCount = 0;
+							
+							const printAndClose = () => {
+								if (window.hasPrinted) return;
+								window.hasPrinted = true;
+								
+								if (document.fonts && document.fonts.ready) {
+									document.fonts.ready.then(() => {
+										setTimeout(() => {
+											window.print();
+											if (!/Android|iPhone|iPad/i.test(navigator.userAgent)) {
+												window.close();
+											}
+										}, 250);
+									}).catch(() => {
+										setTimeout(() => {
+											window.print();
+											if (!/Android|iPhone|iPad/i.test(navigator.userAgent)) {
+												window.close();
+											}
+										}, 250);
+									});
+								} else {
+									setTimeout(() => {
+										window.print();
+										if (!/Android|iPhone|iPad/i.test(navigator.userAgent)) {
+											window.close();
+										}
+									}, 250);
+								}
+							};
+
+							if (links.length === 0) {
+								printAndClose();
+								return;
+							}
+							
+							links.forEach(link => {
+								if (link.sheet) {
+									loadedCount++;
+									if (loadedCount === links.length) {
+										printAndClose();
+									}
+								} else {
+									link.onload = () => {
+										loadedCount++;
+										if (loadedCount === links.length) {
+											printAndClose();
+										}
+									};
+									link.onerror = () => {
+										loadedCount++;
+										if (loadedCount === links.length) {
+											printAndClose();
+										}
+									};
+								}
+							});
+							
+							setTimeout(printAndClose, 1200);
+						}
+						
+						if (document.readyState === 'complete') {
+							checkStylesAndPrint();
+						} else {
+							window.onload = checkStylesAndPrint;
+						}
+					</script>
+				</body>
+			</html>
+		`);
+		printWindow.document.close();
+	};
+
+	const handleSaveImage = async () => {
+		if (!detailPO) return;
+		const node = document.getElementById('purchase-order-ticket-bill');
+		if (!node) return;
+
+		setIsSavingImage(true);
+		try {
+			const targetWidth = 420;
+			const canvas = await html2canvas(node, {
+				backgroundColor: '#ffffff',
+				width: targetWidth,
+				scale: 2,
+				useCORS: true,
+				allowTaint: false,
+				logging: false,
+			});
+			const dataUrl = canvas.toDataURL('image/png');
+
+			const link = document.createElement('a');
+			link.download = `phieu_nhap_hang_\${detailPO.id?.slice(0, 8).toUpperCase()}.png`;
+			link.href = dataUrl;
+			link.click();
+		} catch (error) {
+			console.error("Lỗi tạo hình ảnh:", error);
+			alert("Không thể tạo hình ảnh phiếu nhập hàng: " + (error instanceof Error ? error.message : String(error)));
+		} finally {
+			setIsSavingImage(false);
+		}
+	};
+
+	const handleCopyImage = async () => {
+		if (!capturedImage) return;
+		try {
+			const response = await fetch(capturedImage);
+			const blob = await response.blob();
+			await navigator.clipboard.write([
+				new ClipboardItem({
+					[blob.type]: blob
+				})
+			]);
+			setShowCopySuccess(true);
+			setTimeout(() => setShowCopySuccess(false), 2500);
+		} catch (error) {
+			console.error("Lỗi sao chép hình ảnh:", error);
+			alert("Thiết bị hoặc trình duyệt không hỗ trợ sao chép trực tiếp. Bạn vui lòng nhấn giữ hình ảnh để Sao chép!");
+		}
+	};
+
+	const handleDirectCopyImage = async () => {
+		if (!detailPO) return;
+		const node = document.getElementById('purchase-order-ticket-bill');
+		if (!node) return;
+
+		setIsSavingImage(true);
+		let generatedUrl = '';
+		try {
+			const targetWidth = 420;
+
+			if (!navigator.clipboard || !window.ClipboardItem) {
+				throw new Error("Trình duyệt không hỗ trợ Clipboard API hoặc kết nối HTTP không bảo mật");
+			}
+			// Sử dụng Promise bên trong ClipboardItem để bảo toàn quyền user gesture trong sự kiện click
+			const blobPromise = (async () => {
+				const canvas = await html2canvas(node, {
+					backgroundColor: '#ffffff',
+					width: targetWidth,
+					scale: 2,
+					useCORS: true,
+					allowTaint: false,
+					logging: false,
+				});
+				const dataUrl = canvas.toDataURL('image/png');
+				generatedUrl = dataUrl;
+				const response = await fetch(dataUrl);
+				if (!response.ok) throw new Error(`HTTP status ${response.status}`);
+				return await response.blob();
+			})();
+
+			await navigator.clipboard.write([
+				new ClipboardItem({
+					'image/png': blobPromise
+				})
+			]);
+			setShowCopySuccess(true);
+			setTimeout(() => setShowCopySuccess(false), 2500);
+		} catch (error) {
+			console.error("Lỗi sao chép hình ảnh:", error);
+			if (generatedUrl) {
+				setCapturedImage(generatedUrl);
+				alert("Sao chép trực tiếp thất bại (do thiết bị, trình duyệt, hoặc do bạn truy cập web bằng liên kết HTTP không bảo mật). Hệ thống đã tự động tạo ảnh phía dưới, bạn hãy NHẤN GIỮ VÀO ẢNH để Sao chép hoặc Lưu lại nhé!");
+			} else {
+				alert("Không thể tạo hình ảnh phiếu nhập hàng: " + (error instanceof Error ? error.message : String(error)));
+			}
+		} finally {
+			setIsSavingImage(false);
+		}
+	};
+
+
 	// Create PO Form State
 	const [selectedSupplier, setSelectedSupplier] = useState<any>(null);
 	const [orderNote, setOrderNote] = useState('');
 	const [items, setItems] = useState<any[]>([{ id: crypto.randomUUID(), category: 'Tất cả', productId: '', name: '', qty: '', priceImport: 0 }]);
 	const [paidAmount, setPaidAmount] = useState('');
+	const [shippingFee, setShippingFee] = useState('');
 
 	// 💾 Persist form state to sessionStorage (chống mất form khi tab bị reload/logout)
 	const PO_DRAFT_KEY = 'po_form_draft';
@@ -153,6 +371,7 @@ const PurchaseOrders = () => {
 					if (data.orderNote) setOrderNote(data.orderNote);
 					if (data.items?.length) setItems(data.items);
 					if (data.paidAmount) setPaidAmount(data.paidAmount);
+					if (data.shippingFee) setShippingFee(data.shippingFee);
 					setShowCreateForm(true);
 					formRestored.current = true;
 				}
@@ -179,11 +398,12 @@ const PurchaseOrders = () => {
 					orderNote,
 					items,
 					paidAmount,
+					shippingFee,
 				}));
 			} catch {}
 		}, 500);
 		return () => clearTimeout(saveTimer.current);
-	}, [showCreateForm, editingPO, selectedSupplier, orderNote, items, paidAmount]);
+	}, [showCreateForm, editingPO, selectedSupplier, orderNote, items, paidAmount, shippingFee]);
 
 	// UI State for dropdowns
 	const [activeRow, setActiveRow] = useState<number | null>(null);
@@ -235,11 +455,13 @@ const PurchaseOrders = () => {
 		return matchSearch && matchCategory;
 	}).slice(0, 20);
 
-	const calculateTotal = () => {
+	const calculateSubTotal = () => {
 		return items.reduce((sum, item) => sum + (Number(item.qty) || 0) * (Number(item.priceImport) || 0), 0);
 	};
 
-	const totalAmount = calculateTotal();
+	const subTotal = calculateSubTotal();
+	const shipFeeNum = Number(shippingFee.replace(/\D/g, '')) || 0;
+	const totalAmount = subTotal + shipFeeNum;
 	const unpaidAmount = totalAmount - (Number(paidAmount.replace(/\D/g, '')) || 0);
 
 	const handleAddRow = () => {
@@ -276,7 +498,9 @@ const PurchaseOrders = () => {
 	};
 
 	const handleQuickAddProduct = async (rowId: string, name: string) => {
+		if (isSavingProduct) return;
 		try {
+			setIsSavingProduct(true);
 			// Thêm nhanh sản phẩm mới với các giá trị mặc định
 			const newProductId = await create({
 				name,
@@ -304,6 +528,8 @@ const PurchaseOrders = () => {
 			setProductSearchQuery('');
 		} catch (error) {
 			showToast("Lỗi khi thêm sản phẩm", "error");
+		} finally {
+			setIsSavingProduct(false);
 		}
 	};
 
@@ -329,6 +555,8 @@ const PurchaseOrders = () => {
 			supplierId: selectedSupplier.id,
 			supplierName: selectedSupplier.name,
 			items: validItems,
+			subTotal,
+			shippingFee: shipFeeNum,
 			totalAmount,
 			paidAmount: paidNum,
 			debtAmount: unpaidAmount,
@@ -382,19 +610,41 @@ const PurchaseOrders = () => {
 						}
 					}
 
+					const oldTotal = editingPO.totalAmount || 0;
+					const oldPaid = editingPO.paidAmount || 0;
+					const newTotal = totalAmount;
+					const newPaid = paidNum;
+
+					const totalDiff = newTotal - oldTotal;
+					const paidDiff = newPaid - oldPaid;
+					
 					const oldDebt = editingPO.debtAmount || 0;
 					const debtDiff = unpaidAmount - oldDebt;
+
 					if (debtDiff !== 0) {
 						transaction.update(supplierRef, {
 							totalDebt: (supplierData.totalDebt || 0) + debtDiff
 						});
 					}
-					if (debtDiff > 0) {
+
+					if (totalDiff !== 0) {
 						const debtRef = doc(collection(db, 'supplier_debts'));
 						transaction.set(debtRef, {
 							ownerId: owner.ownerId, supplierId: selectedSupplier.id, supplierName: selectedSupplier.name,
-							type: 'debt_increase', amount: debtDiff,
-							note: `Điều chỉnh nợ - sửa PO #${editingPO.id.slice(0, 8)}`,
+							type: totalDiff > 0 ? 'debt_increase' : 'cancellation', 
+							amount: Math.abs(totalDiff),
+							note: `Điều chỉnh tổng tiền - sửa PO #${editingPO.id.slice(0, 8)}`,
+							orderId: editingPO.id, createdBy: owner.ownerId, createdAt: serverTimestamp()
+						});
+					}
+
+					if (paidDiff !== 0) {
+						const payRef = doc(collection(db, 'supplier_debts'));
+						transaction.set(payRef, {
+							ownerId: owner.ownerId, supplierId: selectedSupplier.id, supplierName: selectedSupplier.name,
+							type: paidDiff > 0 ? 'payment' : 'debt_increase',
+							amount: Math.abs(paidDiff),
+							note: `Điều chỉnh thanh toán - sửa PO #${editingPO.id.slice(0, 8)}`,
 							orderId: editingPO.id, createdBy: owner.ownerId, createdAt: serverTimestamp()
 						});
 					}
@@ -465,20 +715,40 @@ const PurchaseOrders = () => {
 					// Sẽ ghi sau transaction
 				}
 
-				// 4. Tạo công nợ + Cập nhật totalDebt của NCC (nếu có nợ)
-				if (unpaidAmount > 0) {
+				// 4. Tạo công nợ + Cập nhật totalDebt của NCC
+				// Luôn ghi nhận tổng tiền đơn hàng (totalAmount) là tăng nợ
+				if (totalAmount > 0) {
 					const debtRef = doc(collection(db, 'supplier_debts'));
 					transaction.set(debtRef, {
 						ownerId: owner.ownerId,
 						supplierId: selectedSupplier.id,
 						supplierName: selectedSupplier.name,
 						type: 'debt_increase',
-						amount: unpaidAmount,
-						note: `Nợ đơn nhập hàng ngày ${new Date().toLocaleDateString('vi-VN')}`,
+						amount: totalAmount,
+						note: `Nhập hàng - PO #${poId.slice(0, 8)}`,
 						orderId: poId,
 						createdBy: owner.ownerId,
 						createdAt: serverTimestamp()
 					});
+				}
+
+				// Nếu có thanh toán ngay lúc nhập hàng -> Ghi nhận thanh toán
+				if (paidNum > 0) {
+					const paymentRef = doc(collection(db, 'supplier_debts'));
+					transaction.set(paymentRef, {
+						ownerId: owner.ownerId,
+						supplierId: selectedSupplier.id,
+						supplierName: selectedSupplier.name,
+						type: 'payment',
+						amount: paidAmount,
+						note: `Thanh toán ngay lúc nhập hàng - PO #${poId.slice(0, 8)}`,
+						orderId: poId,
+						createdBy: owner.ownerId,
+						createdAt: serverTimestamp()
+					});
+				}
+
+				if (unpaidAmount !== 0) {
 					transaction.update(supplierRef, {
 						totalDebt: (supplierData.totalDebt || 0) + unpaidAmount
 					});
@@ -521,6 +791,7 @@ const PurchaseOrders = () => {
 		setOrderNote('');
 		setItems([{ id: crypto.randomUUID(), category: 'Tất cả', productId: '', name: '', qty: '', priceImport: 0 }]);
 		setPaidAmount('');
+		setShippingFee('');
 		setShowCreateForm(false);
 	};
 
@@ -530,6 +801,7 @@ const PurchaseOrders = () => {
 		setSelectedSupplier({ id: po.supplierId, name: po.supplierName, phone: po.supplierPhone });
 		setOrderNote(po.note || '');
 		setPaidAmount(po.paidAmount ? po.paidAmount.toLocaleString('vi-VN') : '0');
+		setShippingFee(po.shippingFee ? po.shippingFee.toLocaleString('vi-VN') : '0');
 		const mappedItems = (po.items || []).map((item: any) => ({
 			id: crypto.randomUUID(),
 			category: 'Tất cả',
@@ -609,419 +881,7 @@ const PurchaseOrders = () => {
 		}
 	};
 
-	// ─── Supply Bot: Xử lý chat nhập hàng ───
-	const handleSupplyChat = async () => {
-		const msg = chatInput.trim();
-		if (!msg) return;
 
-		setChatMessages(prev => [...prev, { role: 'user', text: msg }]);
-		setChatInput('');
-		setChatLoading(true);
-
-		// Nếu có pending sheet order → user đang nhập tên NCC để xác nhận
-		if (pendingSheetOrder) {
-			try {
-				const supplier = suppliers.find(s => s.name.toLowerCase() === msg.toLowerCase());
-				if (!supplier) {
-					setChatMessages(prev => [...prev, { role: 'bot',
-						text: `❌ Không tìm thấy NCC "${msg}". Hãy tạo NCC trước hoặc nhập đúng tên.` }]);
-					setChatLoading(false);
-					return;
-				}
-
-				const items = pendingSheetOrder.items;
-				const totalAmount = pendingSheetOrder.total;
-
-				await runTransaction(db, async (transaction) => {
-					const productRefs = items.map(i => doc(db, 'products', i.productId));
-					const snaps = await Promise.all(productRefs.map(ref => transaction.get(ref)));
-					const supplierRef = doc(db, 'suppliers', supplier.id);
-					const supplierSnap = await transaction.get(supplierRef);
-					const supplierData = supplierSnap.data() || {};
-
-					const poRef = doc(collection(db, 'purchase_orders'));
-					const poId = poRef.id;
-					transaction.set(poRef, {
-						ownerId: owner.ownerId,
-						supplierId: supplier.id,
-						supplierName: supplier.name,
-						items: items,
-						totalAmount, paidAmount: 0, debtAmount: totalAmount,
-						note: 'Tạo từ Google Sheet (AI)',
-						status: 'Hoàn thành',
-						orderDate: new Date().toISOString(),
-						createdAt: serverTimestamp(),
-						createdBy: owner.ownerId
-					});
-
-					for (let i = 0; i < items.length; i++) {
-						if (snaps[i].exists()) {
-							const oldStock = Number(snaps[i].data()?.stock) || 0;
-							transaction.update(productRefs[i], { stock: oldStock + Number(items[i].qty), priceImport: Number(items[i].priceImport) });
-						}
-					}
-
-					if (totalAmount > 0) {
-						const debtRef = doc(collection(db, 'supplier_debts'));
-						transaction.set(debtRef, {
-							ownerId: owner.ownerId, supplierId: supplier.id, supplierName: supplier.name,
-							type: 'debt_increase', amount: totalAmount,
-							note: `Nợ đơn nhập hàng (AI Sheet) ${new Date().toLocaleDateString('vi-VN')}`,
-							orderId: poId, createdBy: owner.ownerId, createdAt: serverTimestamp()
-						});
-						transaction.update(supplierRef, { totalDebt: (supplierData.totalDebt || 0) + totalAmount });
-					}
-				});
-
-				const itemsSummary = items.map(i =>
-					`• ${i.name} x${i.qty} = ${(Number(i.qty) * Number(i.priceImport)).toLocaleString('vi-VN')}đ`
-				).join('\n');
-
-				setChatMessages(prev => [...prev, { role: 'bot',
-					text: `✅ Đã tạo đơn nhập hàng từ Google Sheet!\n\n🏭 NCC: **${supplier.name}**\n${itemsSummary}\n💰 Tổng: **${totalAmount.toLocaleString('vi-VN')}đ**\n📋 Nợ NCC: ${totalAmount.toLocaleString('vi-VN')}đ` }]);
-
-				setPendingSheetOrder(null);
-			} catch (err: any) {
-				console.error('pendingSheetOrder error:', err);
-				setChatMessages(prev => [...prev, { role: 'bot', text: `❌ Lỗi: ${err.message || 'Không xác định'}` }]);
-			} finally {
-				setChatLoading(false);
-			}
-			return;
-		}
-
-		// 📊 Pre-check: Google Sheet link → parse trực tiếp (giống SaleBot)
-		const sheetMatch = msg.match(/https?:\/\/docs\.google\.com\/spreadsheets\/[^\s]+/);
-		if (sheetMatch) {
-			setChatLoading(true);
-			await importFromSheet(sheetMatch[0]);
-			setChatLoading(false);
-			return;
-		}
-
-		try {
-			const ctx = {
-				suppliers: suppliers.map(s => `${s.name} (nợ: ${(s.totalDebt||0).toLocaleString('vi-VN')}đ)`).join('\n'),
-				products: products.slice(0, 50).map(p => `${p.name} (tồn: ${p.stock||0}, giá nhập: ${(p.priceImport||0).toLocaleString('vi-VN')}đ)`).join('\n'),
-			};
-
-			const result = await parseSupplyMessage(msg, ctx);
-
-			// ─── Thực thi intent ───
-			switch (result.intent) {
-				case 'CREATE_SUPPLIER': {
-					if (!result.supplier?.name) {
-						setChatMessages(prev => [...prev, { role: 'bot', text: '⚠️ Vui lòng cung cấp tên nhà cung cấp.' }]);
-						break;
-					}
-					await addSupplierFromBot(result.supplier);
-					break;
-				}
-				case 'CREATE_PURCHASE_ORDER': {
-					if (!result.purchase_order?.supplierName || !result.purchase_order?.items?.length) {
-						setChatMessages(prev => [...prev, { role: 'bot', text: '⚠️ Cần tên NCC và ít nhất 1 sản phẩm để tạo đơn nhập hàng.' }]);
-						break;
-					}
-					await createPOFromBot(result.purchase_order);
-					break;
-				}
-				case 'RECORD_SUPPLIER_PAYMENT': {
-					if (!result.supplier_payment?.supplierName || !result.supplier_payment?.amount) {
-						setChatMessages(prev => [...prev, { role: 'bot', text: '⚠️ Cần tên NCC và số tiền để ghi nhận trả nợ.' }]);
-						break;
-					}
-					await recordPaymentFromBot(result.supplier_payment);
-					break;
-				}
-				case 'IMPORT_GOOGLE_SHEET': {
-					if (!result.google_sheet?.url) {
-						setChatMessages(prev => [...prev, { role: 'bot', text: '⚠️ Vui lòng gửi link Google Sheet.' }]);
-						break;
-					}
-					await importFromSheet(result.google_sheet);
-					break;
-				}
-				default: {
-					setChatMessages(prev => [...prev, { role: 'bot', text: result.response_message || 'Xin lỗi, tôi chưa hiểu yêu cầu.' }]);
-				}
-			}
-		} catch (error) {
-			console.error('SupplyBot error:', error);
-			setChatMessages(prev => [...prev, { role: 'bot', text: '❌ Có lỗi xảy ra, vui lòng thử lại.' }]);
-		} finally {
-			setChatLoading(false);
-		}
-	};
-
-	// ─── Bot Action Handlers ───
-	const addSupplierFromBot = async (s: any) => {
-		const { addDoc: addDocFn, collection: colFn } = await import('firebase/firestore');
-		await addDocFn(colFn(db, 'suppliers'), {
-			ownerId: owner.ownerId,
-			name: s.name,
-			phone: s.phone || '',
-			address: s.address || '',
-			category: s.category || 'Vật liệu khác',
-			note: s.note || '',
-			totalDebt: 0,
-			createdAt: serverTimestamp(),
-		});
-		setChatMessages(prev => [...prev, { role: 'bot', text: `✅ Đã tạo nhà cung cấp **${s.name}** thành công!` }]);
-	};
-
-	const createPOFromBot = async (po: any) => {
-		const supplier = suppliers.find(s => s.name.toLowerCase() === po.supplierName.toLowerCase());
-		if (!supplier) {
-			setChatMessages(prev => [...prev, { role: 'bot', text: `❌ Không tìm thấy NCC "${po.supplierName}". Hãy tạo NCC trước.` }]);
-			return;
-		}
-
-		const validItems: any[] = [];
-		for (const item of (po.items || [])) {
-			const product = findMatchingProduct(item.productName, products);
-			if (!product) {
-				setChatMessages(prev => [...prev, { role: 'bot', text: `❌ SP "${item.productName}" chưa có trong kho. Hãy tạo SP trước.` }]);
-				return;
-			}
-			validItems.push({ productId: product.id, name: product.name, qty: item.qty, priceImport: item.priceImport });
-		}
-
-		const totalAmount = validItems.reduce((sum, i) => sum + (Number(i.qty) * Number(i.priceImport)), 0);
-		const paidNum = Number(po.paidAmount) || 0;
-		const unpaidAmount = totalAmount - paidNum;
-
-		await runTransaction(db, async (transaction) => {
-			const productRefs = validItems.map(i => doc(db, 'products', i.productId));
-			const snaps = await Promise.all(productRefs.map(ref => transaction.get(ref)));
-			const supplierRef = doc(db, 'suppliers', supplier.id);
-			const supplierSnap = await transaction.get(supplierRef);
-			const supplierData = supplierSnap.data() || {};
-
-			const poRef = doc(collection(db, 'purchase_orders'));
-			const poId = poRef.id;
-			transaction.set(poRef, {
-				ownerId: owner.ownerId,
-				supplierId: supplier.id,
-				supplierName: supplier.name,
-				items: validItems,
-				totalAmount, paidAmount: paidNum, debtAmount: unpaidAmount,
-				note: po.note || 'Tạo bởi AI',
-				status: 'Hoàn thành',
-				orderDate: new Date().toISOString(),
-				createdAt: serverTimestamp(),
-				createdBy: owner.ownerId
-			});
-
-			for (let i = 0; i < validItems.length; i++) {
-				if (snaps[i].exists()) {
-					const oldStock = Number(snaps[i].data()?.stock) || 0;
-					transaction.update(productRefs[i], { stock: oldStock + Number(validItems[i].qty), priceImport: Number(validItems[i].priceImport) });
-				}
-			}
-
-			if (unpaidAmount > 0) {
-				const debtRef = doc(collection(db, 'supplier_debts'));
-				transaction.set(debtRef, {
-					ownerId: owner.ownerId, supplierId: supplier.id, supplierName: supplier.name,
-					type: 'debt_increase', amount: unpaidAmount,
-					note: `Nợ đơn nhập hàng (AI) ${new Date().toLocaleDateString('vi-VN')}`,
-					orderId: poId, createdBy: owner.ownerId, createdAt: serverTimestamp()
-				});
-				transaction.update(supplierRef, { totalDebt: (supplierData.totalDebt || 0) + unpaidAmount });
-			}
-		});
-
-		setChatMessages(prev => [...prev, { role: 'bot', text: `✅ Đã tạo đơn nhập hàng từ **${supplier.name}**\n📦 ${validItems.length} SP • 💰 ${totalAmount.toLocaleString('vi-VN')}đ • 📋 Nợ: ${unpaidAmount.toLocaleString('vi-VN')}đ` }]);
-	};
-
-	const recordPaymentFromBot = async (payment: any) => {
-		const supplier = suppliers.find(s => s.name.toLowerCase() === payment.supplierName.toLowerCase());
-		if (!supplier) {
-			setChatMessages(prev => [...prev, { role: 'bot', text: `❌ Không tìm thấy NCC "${payment.supplierName}".` }]);
-			return;
-		}
-
-		const { addDoc: addDocFn, collection: colFn } = await import('firebase/firestore');
-		await addDocFn(colFn(db, 'supplier_debts'), {
-			ownerId: owner.ownerId,
-			supplierId: supplier.id,
-			supplierName: supplier.name,
-			type: 'payment',
-			amount: payment.amount,
-			method: payment.method || 'Tiền mặt',
-			note: payment.note || `Trả nợ (AI) ${new Date().toLocaleDateString('vi-VN')}`,
-			createdBy: owner.ownerId,
-			createdAt: serverTimestamp()
-		});
-
-		setChatMessages(prev => [...prev, { role: 'bot', text: `✅ Đã ghi nhận trả nợ **${payment.amount.toLocaleString('vi-VN')}đ** cho ${supplier.name}` }]);
-	};
-
-	const importFromSheet = async (sheet: any) => {
-		const url = typeof sheet === 'string' ? sheet : sheet?.url;
-		if (!url) {
-			setChatMessages(prev => [...prev, { role: 'bot', text: '⚠️ Vui lòng gửi link Google Sheet.' }]);
-			return;
-		}
-
-		setChatMessages(prev => [...prev, { role: 'bot', text: '⏳ Đang đọc danh sách sản phẩm từ Google Sheet...' }]);
-
-		try {
-			let csvUrl = url;
-			const match = csvUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
-			if (!match) {
-				setChatMessages(prev => [...prev, { role: 'bot', text: '❌ Link Google Sheet không đúng định dạng.' }]);
-				return;
-			}
-			const sheetId = match[1];
-			const gidMatch = csvUrl.match(/gid=(\d+)/);
-			const gid = gidMatch ? gidMatch[1] : '0';
-			csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
-
-			const res = await fetch(csvUrl);
-			if (!res.ok) {
-				setChatMessages(prev => [...prev, { role: 'bot', text: '❌ Không đọc được Sheet. Sheet cần được chia sẻ công khai (Anyone with link).' }]);
-				return;
-			}
-
-			const csvText = await res.text();
-			const lines = csvText.split('\n').filter(l => l.trim());
-			if (lines.length < 2) {
-				setChatMessages(prev => [...prev, { role: 'bot', text: '❌ Sheet trống hoặc không có dữ liệu.' }]);
-				return;
-			}
-
-			const parseCSVLine = (line: string): string[] => {
-				const result: string[] = [];
-				let current = ''; let inQuotes = false;
-				for (const ch of line) {
-					if (ch === '"') { inQuotes = !inQuotes; continue; }
-					if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ''; continue; }
-					current += ch;
-				}
-				result.push(current.trim());
-				return result;
-			};
-
-			const headersRaw = parseCSVLine(lines[0]);
-			const headers = headersRaw.map(h => h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
-			
-			// Tên SP: ưu tiên cột có "tên" hoặc "sản phẩm"
-			const nameColIdx = headers.findIndex((h: string) =>
-				(h.includes('ten') && !h.includes('ncc') && !h.includes('ghichu')) || h.includes('sanpham') || h.includes('product') || h.includes('name'));
-			
-			// Số lượng: ưu tiên "số lượng" hoặc "SL" (đứng riêng)
-			let qtyColIdx = headers.findIndex((h: string) => h === 'sl' || h === 'so luong' || h === 'soluong');
-			if (qtyColIdx < 0) qtyColIdx = headers.findIndex((h: string) =>
-				h.includes('soluong') || h.includes('qty') || h.includes('quantity'));
-			
-			// Giá: ưu tiên "đơn giá" > "giá bán" > "giá nhập" > "giá" > "dongia" > "price"
-			const priceCandidates = [
-				{ match: (h: string) => h.includes('dongia') || h.includes('don gia'), label: 'đơn giá' },
-				{ match: (h: string) => h.includes('gianhap') || h.includes('gia nhap') || h.startsWith('nhap') || h.includes('import'), label: 'giá nhập' },
-				{ match: (h: string) => h.includes('giaban') || h.includes('gia ban') || h.startsWith('ban'), label: 'giá bán' },
-				{ match: (h: string) => h.includes('price'), label: 'price' },
-				{ match: (h: string) => h.includes('gia') && !h.includes('ghichu') && !h.includes('danhgia') && !h.includes('thanh'), label: 'giá' },
-			];
-			let priceColIdx = -1; let priceColLabel = '';
-			for (const c of priceCandidates) {
-				const idx = headers.findIndex(h => c.match(h));
-				if (idx >= 0) { priceColIdx = idx; priceColLabel = c.label; break; }
-			}
-
-			// Debug: hiện headers + cột đã detect + sample dữ liệu dòng đầu
-			const sampleRows: string[] = [];
-			for (let i = 1; i < Math.min(lines.length, 5); i++) {
-				const cols = parseCSVLine(lines[i]);
-				const name = (cols[nameColIdx] || '').trim();
-				if (!name) continue;
-				const rawQty = qtyColIdx >= 0 ? (cols[qtyColIdx] || '').trim() : 'N/A';
-				const rawPrice = priceColIdx >= 0 ? (cols[priceColIdx] || '').trim() : 'N/A';
-				const parsedQty = qtyColIdx >= 0 ? (parseInt(rawQty.replace(/[^\d]/g, ''), 10) || 1) : 1;
-				const matchedProduct = findMatchingProduct(name, products);
-				const dbPrice = matchedProduct ? Number(matchedProduct.priceImport) || 0 : 0;
-				const finalPrice = priceColIdx >= 0 ? parseFloat(rawPrice.replace(/[^\d.,]/g, '').replace(/,/g, '')) || 0 : (dbPrice || 0);
-				const subtotal = parsedQty * finalPrice;
-				sampleRows.push(`  ▸ ${name}: SL="${rawQty}"→${parsedQty} Giá="${rawPrice}" DB=${dbPrice.toLocaleString('vi-VN')}đ →${finalPrice.toLocaleString('vi-VN')}đ (${subtotal.toLocaleString('vi-VN')}đ)`);
-			}
-			const sampleInfo = sampleRows.length > 0 ? `\n\n📋 **Dữ liệu đọc được (dòng đầu):**\n${sampleRows.join('\n')}` : '';
-
-			const debugInfo = `📊 **Các cột phát hiện:**\n• Tên SP: cột ${nameColIdx + 1} (${headersRaw[nameColIdx] || '?'})\n• Số lượng: ${qtyColIdx >= 0 ? `cột ${qtyColIdx + 1} (${headersRaw[qtyColIdx]})` : '❌ KHÔNG TÌM THẤY (mặc định = 1)'}\n• Giá: ${priceColIdx >= 0 ? `cột ${priceColIdx + 1} (${headersRaw[priceColIdx]}) → loại: ${priceColLabel}` : '❌ KHÔNG TÌM THẤY (mặc định = giá nhập trong kho)'}\n\n📋 Tất cả cột: ${headersRaw.join(' | ')}${sampleInfo}`;
-
-			if (nameColIdx < 0) {
-				setChatMessages(prev => [...prev, { role: 'bot',
-					text: `❌ Không tìm thấy cột "Tên sản phẩm". Các cột: ${headers.join(', ')}` }]);
-				return;
-			}
-
-			const orderItems: any[] = [];
-			const notFound: string[] = [];
-
-			for (let i = 1; i < lines.length; i++) {
-				const cols = parseCSVLine(lines[i]);
-				const rowName = (cols[nameColIdx] || '').trim();
-				if (!rowName) continue;
-
-				const rawQty = (cols[qtyColIdx] || '').trim();
-				const rowQty = qtyColIdx >= 0 ? (parseInt(rawQty.replace(/[^\d]/g, ''), 10) || 1) : 1;
-				const rawPrice = (cols[priceColIdx] || '0').replace(/[^\d.,-]/g, '').trim();
-				let rowPrice = 0;
-				if (rawPrice) {
-					// Xử lý format tiếng Việt: dấu , là phân cách hàng nghìn, . là thập phân (nếu có)
-					// VD: "79,000" → 79000, "1,234.56" → 1234.56, "1.234,56" → 1234.56
-					if (rawPrice.includes('.') && rawPrice.includes(',')) {
-						const lastDot = rawPrice.lastIndexOf('.');
-						const lastComma = rawPrice.lastIndexOf(',');
-						if (lastDot > lastComma) {
-							rowPrice = parseFloat(rawPrice.replace(/,/g, '')) || 0;
-						} else {
-							rowPrice = parseFloat(rawPrice.replace(/\./g, '').replace(',', '.')) || 0;
-						}
-					} else if (rawPrice.includes(',')) {
-						const afterComma = rawPrice.split(',').pop() || '';
-						if (afterComma.length <= 2 && !/,\d{3}$/.test(rawPrice)) {
-							rowPrice = parseFloat(rawPrice.replace(',', '.')) || 0;
-						} else {
-							rowPrice = parseFloat(rawPrice.replace(/,/g, '')) || 0;
-						}
-					} else {
-						rowPrice = parseFloat(rawPrice) || 0;
-					}
-				}
-
-				const product = findMatchingProduct(rowName, products);
-				if (product) {
-					// Nếu sheet có cột giá và giá = 0 (KM/tặng) → giữ 0, không fallback DB
-					const finalPrice = priceColIdx >= 0 ? rowPrice : (rowPrice || Number(product.priceImport) || 0);
-					orderItems.push({ productId: product.id, name: product.name, qty: rowQty, priceImport: finalPrice });
-				} else {
-					notFound.push(rowName);
-				}
-			}
-
-			if (orderItems.length === 0) {
-				setChatMessages(prev => [...prev, { role: 'bot',
-					text: `❌ Không tìm thấy sản phẩm nào khớp.\nDanh sách: ${notFound.join(', ')}` }]);
-				return;
-			}
-
-			const supplierName = sheet?.supplierName || '';
-			const totalAmount = orderItems.reduce((sum, it) => sum + (Number(it.qty) * Number(it.priceImport)), 0);
-			const itemsSummary = orderItems.map(it =>
-				`• ${it.name} x${it.qty} = ${(Number(it.qty) * Number(it.priceImport)).toLocaleString('vi-VN')}đ`
-			).join('\n');
-
-			const confirmMsg = `${debugInfo}\n\n📦 **Đơn Nhập Hàng từ Sheet**\n\n${itemsSummary}\n\n💰 Tổng tiền nhập: **${totalAmount.toLocaleString('vi-VN')}đ**${supplierName ? '\n🏭 NCC: ' + supplierName : ''}${notFound.length > 0 ? '\n\n⚠️ Không tìm thấy: ' + notFound.join(', ') : ''}\n\nVui lòng nhập **tên nhà cung cấp** để tạo đơn:`;
-
-			setChatMessages(prev => [...prev, { role: 'bot', text: confirmMsg }]);
-
-			// Lưu pending order để xử lý khi user nhập tên NCC
-			setPendingSheetOrder({ items: orderItems, total: totalAmount, notFound });
-		} catch (err: any) {
-			console.error('importFromSheet error:', err);
-			setChatMessages(prev => [...prev, { role: 'bot', text: `❌ Lỗi: ${err.message || 'Không xác định'}` }]);
-		}
-	};
 
 	const formatCurrency = (val: any) => Number(val || 0).toLocaleString('vi-VN');
 
@@ -1065,25 +925,24 @@ const PurchaseOrders = () => {
 					<div className="space-y-3">
 							{filteredPOs.map(po => (
 							<div key={po.id} 
-							onClick={() => setDetailPO(po)}
+							onClick={() => { setDetailPO(po); navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } }); }}
 							className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm group cursor-pointer hover:border-[#FF6D00]/30 hover:shadow-md transition-all">
-								<div className="flex justify-between items-start mb-2">
+								<div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-2">
 									<div>
-										<h4 className="font-bold text-slate-800 dark:text-white">{po.supplierName}</h4>
+										<h4 className="font-black text-slate-800 dark:text-white text-base">{po.supplierName}</h4>
 										<div className="text-xs text-slate-500 mt-1">{new Date(po.orderDate).toLocaleString('vi-VN')}</div>
 									</div>
-									<div className="flex items-center gap-2">
-										<div className="text-right">
-											<div className="font-black text-slate-800 dark:text-white">{formatCurrency(po.totalAmount)} đ</div>
-											{po.debtAmount > 0 && <div className="text-xs text-red-500 font-bold mt-1">Nợ: {formatCurrency(po.debtAmount)} đ</div>}
+									<div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100 dark:border-slate-800">
+										<div className="text-left sm:text-right">
+											<div className="font-black text-[#FF6D00] text-base">{formatCurrency(po.totalAmount)} đ</div>
 										</div>
 									{deletingPO === po.id ? (
 										<div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
 											<span className="text-xs text-red-500 font-bold mr-1">Xoá?</span>
 											<button onClick={() => handleCancelPO(po)}
-												className="px-2 py-1 bg-red-500 text-white text-xs font-bold rounded-lg hover:bg-red-600">✓ Có</button>
+												className="px-2.5 py-1 bg-red-500 text-white text-xs font-bold rounded-lg hover:bg-red-600">✓ Có</button>
 											<button onClick={() => setDeletingPO(null)}
-												className="px-2 py-1 bg-slate-200 dark:bg-slate-700 text-xs rounded-lg hover:bg-slate-300">✕</button>
+												className="px-2.5 py-1 bg-slate-200 dark:bg-slate-700 text-xs rounded-lg hover:bg-slate-300">✕</button>
 										</div>
 									) : cancellingPO === po.id ? (
 										<div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
@@ -1091,17 +950,17 @@ const PurchaseOrders = () => {
 											<span className="text-xs text-red-500">Đang xoá...</span>
 										</div>
 									) : (
-										<div className="flex items-center gap-1">
+										<div className="flex items-center gap-2">
 											<button
 												onClick={(e) => { e.stopPropagation(); handleEditPO(po); }}
-												className="p-2 text-slate-300 hover:text-[#FF6D00] hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+												className="p-2 md:opacity-0 md:group-hover:opacity-100 opacity-100 text-amber-600 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-400 hover:bg-amber-100 hover:text-amber-700 dark:hover:bg-amber-900/40 rounded-xl transition-all shadow-sm cursor-pointer"
 												title="Chỉnh sửa đơn nhập hàng"
 											>
 												<Edit3 size={16} />
 											</button>
 											<button
 												onClick={(e) => { e.stopPropagation(); handleCancelPO(po); }}
-												className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+												className="p-2 md:opacity-0 md:group-hover:opacity-100 opacity-100 text-red-600 bg-red-50 dark:bg-red-950/40 dark:text-red-400 hover:bg-red-100 hover:text-red-700 dark:hover:bg-red-900/40 rounded-xl transition-all shadow-sm cursor-pointer"
 												title="Huỷ đơn nhập hàng"
 											>
 												<Trash size={16} />
@@ -1124,9 +983,9 @@ const PurchaseOrders = () => {
 					</div>
 				</div>
 			{showCreateForm && (
-		<div className="fixed inset-0 z-[100] flex items-start justify-center p-4 pt-20 bg-slate-900/60 backdrop-blur-md overflow-y-auto" onClick={() => { if (!editingPO) resetEditForm(); }}>
-			<div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-[2.5rem] shadow-2xl border border-white/20 dark:border-slate-800" onClick={e => e.stopPropagation()}>
-				<div className="px-6 py-4 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between sticky top-0 z-10 rounded-t-[2.5rem]">
+		<div className="fixed inset-0 z-[100] flex items-end sm:items-start justify-center sm:p-4 bg-slate-900/60 backdrop-blur-md overflow-y-auto" onClick={() => { if (!editingPO) resetEditForm(); }}>
+			<div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-t-[2rem] sm:rounded-[2.5rem] h-[92vh] sm:h-auto shadow-2xl border border-white/20 dark:border-slate-800 flex flex-col" onClick={e => e.stopPropagation()}>
+				<div className="px-6 py-4 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between sticky top-0 z-10 rounded-t-[2rem] sm:rounded-t-[2.5rem]">
 					<h3 className="text-xl font-black text-[#1A237E] dark:text-indigo-400">
 						{editingPO ? 'Chỉnh Sửa Đơn Nhập' : 'Tạo Đơn Nhập Hàng'}
 					</h3>
@@ -1134,7 +993,7 @@ const PurchaseOrders = () => {
 						<X size={18} />
 					</button>
 				</div>
-				<div className="max-h-[70vh] overflow-y-auto p-6 space-y-6">
+				<div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
 					{/* Banner khi đang sửa đơn */}
 					{editingPO && (
 						<div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-2xl p-4 flex items-center justify-between">
@@ -1155,405 +1014,223 @@ const PurchaseOrders = () => {
 					)}
 
 					{/* Chọn Nhà Cung Cấp */}
-					<div className="bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
-						<h3 className="font-black text-slate-800 dark:text-white uppercase tracking-tight mb-4 flex items-center gap-2">
-							<Store size={18} className="text-[#FF6D00]" /> 1. Chọn Nhà Cung Cấp
-						</h3>
-						<div className="relative" ref={supplierSearchRef}>
-							{selectedSupplier ? (
-								<div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl">
-									<div>
-										<div className="font-bold text-slate-800 dark:text-white">{selectedSupplier.name}</div>
-										<div className="text-sm text-slate-500 dark:text-slate-400 mt-1">{selectedSupplier.phone || 'Không có SĐT'}</div>
-									</div>
-									<button onClick={() => setSelectedSupplier(null)} className="p-2 text-slate-400 hover:text-red-500 bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-200 dark:border-slate-800">
-										<X size={18} />
-									</button>
-								</div>
-							) : (
-								<div>
-									<div className="relative">
-										<Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-										<input
-											type="text"
-											placeholder="Tìm kiếm nhà cung cấp..."
-											value={supplierSearchQuery}
-											onChange={(e) => { setSupplierSearchQuery(e.target.value); setShowSupplierResults(true); }}
-											onFocus={() => setShowSupplierResults(true)}
-											className="w-full h-12 pl-12 pr-4 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-[#FF6D00] outline-none transition-all dark:text-white"
-										/>
-									</div>
-									{showSupplierResults && (
-										<div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto">
-											{filteredSuppliers.map(supplier => (
-												<div
-													key={supplier.id}
-													onClick={() => { setSelectedSupplier(supplier); setShowSupplierResults(false); setSupplierSearchQuery(''); }}
-													className="p-3 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer border-b border-slate-100 dark:border-slate-800/50 last:border-0"
-												>
-													<div className="font-bold text-slate-800 dark:text-white">{supplier.name}</div>
-													<div className="text-sm text-slate-500">{supplier.phone}</div>
-												</div>
-											))}
-											{filteredSuppliers.length === 0 && (
-												<div className="p-4 text-center text-slate-500">
-													Không tìm thấy nhà cung cấp này. 
-													<span className="text-[#FF6D00] font-bold block mt-1">Gợi ý: Cần qua mục Nhà Cung Cấp để tạo mới trước.</span>
-												</div>
-											)}
-										</div>
-									)}
-								</div>
-							)}
-						</div>
-					</div>
+					<SupplierSelection
+						selectedSupplier={selectedSupplier} setSelectedSupplier={setSelectedSupplier}
+						supplierSearchRef={supplierSearchRef} supplierSearchQuery={supplierSearchQuery}
+						setSupplierSearchQuery={setSupplierSearchQuery} showSupplierResults={showSupplierResults}
+						setShowSupplierResults={setShowSupplierResults} filteredSuppliers={filteredSuppliers}
+					/>
 
 					{/* Nhập Sản Phẩm */}
-					<div className="bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
-						<div className="flex items-center justify-between mb-4">
-							<h3 className="font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2">
-								<Package size={18} className="text-[#FF6D00]" /> 2. Sản Phẩm Nhập
-							</h3>
-						</div>
-
-						<div className="space-y-4" ref={productDropdownRef}>
-							{items.map((item, index) => (
-								<div key={item.id} className="p-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl relative group">
-									{/* Delete Button */}
-									{items.length > 1 && (
-										<button onClick={() => handleRemoveRow(item.id)} className="absolute -top-3 -right-3 size-8 bg-red-100 dark:bg-red-900/30 text-red-500 rounded-full flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
-											<Trash size={14} />
-										</button>
-									)}
-
-
-								{/* Category Filter */}
-								{categories.length > 1 && (
-									<div className="mb-3">
-										<label className="block text-xs font-bold text-slate-500 uppercase mb-1">Danh mục</label>
-										<select
-											value={item.category || 'Tất cả'}
-											onChange={(e) => { updateRow(item.id, 'category', e.target.value); setActiveRow(index); }}
-											className="w-full h-10 px-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[#FF6D00] outline-none transition-all dark:text-white text-sm font-medium"
-										>
-											{categories.map((cat: string) => (
-												<option key={cat} value={cat}>{cat}</option>
-											))}
-										</select>
-									</div>
-								)}
-									<div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-										{/* Tên sản phẩm */}
-										<div className="md:col-span-6 relative">
-											<label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tên SP (Kho đang có: {item.currentStock || 0})</label>
-											{item.productId ? (
-												<div className="flex items-center justify-between w-full h-12 px-4 bg-white dark:bg-slate-900 border border-emerald-500 rounded-xl shadow-sm">
-													<span className="font-bold text-slate-800 dark:text-white whitespace-normal break-words">{item.name}</span>
-													<button onClick={() => updateRow(item.id, 'productId', '')} className="text-slate-400 hover:text-red-500">
-														<X size={16} />
-													</button>
-												</div>
-											) : (
-													<div className="relative">
-														<Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-														<input
-															type="text"
-															placeholder="Tìm hoặc chọn tên sản phẩm..."
-															value={activeRow === index ? productSearchQuery : ''}
-															onChange={(e) => { setProductSearchQuery(e.target.value); setActiveRow(index); }}
-															onFocus={() => setActiveRow(index)}
-															className="w-full h-12 pl-12 pr-4 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[#FF6D00] outline-none transition-all dark:text-white"
-														/>
-														{activeRow === index && (
-															<div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl z-50 max-h-72 overflow-y-auto">
-																{!productSearchQuery && (
-																	<div className="px-4 py-2 text-xs font-bold text-slate-400 uppercase tracking-wider bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-700 sticky top-0 z-10">
-																		📋 Gợi ý {filteredProducts.length} sản phẩm gần đây (gõ để lọc)
-																	</div>
-																)}
-																{filteredProducts.length > 0 ? (
-																	<>
-																	{filteredProducts.map(product => (
-																		<div
-																			key={product.id}
-																			onClick={() => handleSelectProduct(item.id, product)}
-																			className="p-3 hover:bg-orange-50 dark:hover:bg-orange-900/10 cursor-pointer border-b border-slate-100 dark:border-slate-700/50 last:border-0 transition-colors"
-																		>
-																			<div className="flex items-center justify-between gap-2">
-																				<div className="flex-1 min-w-0">
-																					<div className="font-bold text-slate-800 dark:text-white text-sm whitespace-normal break-words">{product.name}</div>
-																					<div className="flex items-center gap-3 mt-1">
-																						{product.sku && <span className="text-[10px] text-slate-400 font-mono">{product.sku}</span>}
-																						{(product as any).category && (product as any).category !== 'Chưa phân loại' && (
-																							<span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 font-medium">{(product as any).category}</span>
-																						)}
-																					</div>
-																				</div>
-																				<div className="text-right shrink-0">
-																					<div className="font-black text-[#FF6D00] text-sm">{formatCurrency(product.priceImport)} đ</div>
-																					<div className="text-[10px] text-slate-400">Tồn: <span className={product.stock > 0 ? 'text-emerald-500 font-bold' : 'text-red-400 font-bold'}>{product.stock || 0}</span></div>
-																				</div>
-																			</div>
-																		</div>
-																	))}
-																	</>
-																) : (
-																	<div className="p-4 text-center">
-																		<p className="text-sm text-slate-500 mb-3">🔍 Không tìm thấy sản phẩm "{productSearchQuery}"</p>
-																		<button
-																			onClick={() => handleQuickAddProduct(item.id, productSearchQuery)}
-																			className="w-full py-2.5 bg-[#FF6D00] text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-[#E66000] transition-colors shadow-lg shadow-orange-500/20"
-																		>
-																			<Plus size={16} /> Thêm nhanh "{productSearchQuery}"
-																		</button>
-																	</div>
-																)}
-															</div>
-														)}
-												</div>
-											)}
-										</div>
-
-										{/* Số lượng */}
-										<div className="md:col-span-2">
-											<label className="block text-xs font-bold text-slate-500 uppercase mb-1">Số lượng</label>
-											<input
-												type="number"
-												min="0"
-												value={item.qty}
-												onChange={(e) => updateRow(item.id, 'qty', e.target.value)}
-												className="w-full h-12 px-4 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[#FF6D00] outline-none transition-all dark:text-white"
-												placeholder="0"
-											/>
-										</div>
-
-										{/* Giá nhập */}
-										<div className="md:col-span-4">
-											<label className="block text-xs font-bold text-slate-500 uppercase mb-1">Giá nhập (Cập nhật nếu đổi)</label>
-											<div className="relative">
-												<input
-													type="text"
-													value={item.priceImport ? Number(item.priceImport).toLocaleString('vi-VN') : ''}
-													onChange={(e) => updateRow(item.id, 'priceImport', e.target.value.replace(/\D/g, ''))}
-													className="w-full h-12 pl-4 pr-10 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[#FF6D00] outline-none transition-all dark:text-white text-right font-bold text-[#FF6D00]"
-													placeholder="0"
-												/>
-												<span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">đ</span>
-											</div>
-										</div>
-									</div>
-								</div>
-							))}
-						</div>
-
-						<button onClick={handleAddRow} className="mt-4 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold rounded-xl flex items-center gap-2 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-							<Plus size={18} /> Thêm dòng
-						</button>
-					</div>
+					<ProductSearchTable
+						items={items} categories={categories} filteredProducts={filteredProducts}
+						activeRow={activeRow} setActiveRow={setActiveRow} productDropdownRef={productDropdownRef}
+						productSearchQuery={productSearchQuery} setProductSearchQuery={setProductSearchQuery}
+						handleRemoveRow={handleRemoveRow} updateRow={updateRow} handleSelectProduct={handleSelectProduct}
+						handleQuickAddProduct={handleQuickAddProduct} handleAddRow={handleAddRow} formatCurrency={formatCurrency}
+					/>
 
 					{/* Thanh Toán & Hoàn Thành */}
-					<div className="bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 mb-8">
-						<div className="space-y-4">
-							<div>
-								<label className="block text-xs font-bold text-slate-500 uppercase mb-1">Ghi chú phiếu nhập</label>
-								<input
-									type="text"
-									value={orderNote}
-									onChange={(e) => setOrderNote(e.target.value)}
-									className="w-full h-12 px-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-[#FF6D00] outline-none transition-all dark:text-white"
-									placeholder="Ví dụ: Nhập hàng đợt 1 tháng 11..."
-								/>
-							</div>
-
-							<div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
-								<div className="flex items-center justify-between">
-									<span className="text-slate-500 dark:text-slate-400 font-medium">Tổng tiền hàng:</span>
-									<span className="font-bold text-slate-800 dark:text-white text-lg">{formatCurrency(totalAmount)} đ</span>
-								</div>
-								
-								<div className="flex items-center justify-between">
-									<span className="text-slate-500 dark:text-slate-400 font-bold">Tiền trả ngay NCC:</span>
-									<div className="relative w-48">
-										<input
-											type="text"
-											value={paidAmount}
-											onChange={(e) => setPaidAmount(e.target.value ? Number(e.target.value.replace(/\D/g, '')).toLocaleString('vi-VN') : '')}
-											className="w-full h-10 pl-4 pr-8 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition-all dark:text-white text-right font-bold text-emerald-600 dark:text-emerald-400"
-											placeholder="0"
-										/>
-										<span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">đ</span>
-									</div>
-								</div>
-
-								<div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">
-									<span className="text-slate-600 dark:text-slate-300 font-black uppercase">Còn nợ lại:</span>
-									<span className="font-black text-red-600 dark:text-red-400 text-xl">{formatCurrency(unpaidAmount)} đ</span>
-								</div>
-							</div>
-
-							<button type="button"
-								onClick={handleSubmit}
-								className="w-full mt-6 py-4 bg-[#FF6D00] text-white font-black rounded-xl shadow-lg shadow-orange-500/30 hover:bg-[#E66000] active:scale-[0.98] transition-all flex justify-center items-center gap-2 uppercase tracking-wide text-lg"
-							>
-								<CheckCircle2 size={24} /> {editingPO ? 'Cập Nhật Đơn Nhập' : 'Hoàn Thành Nhập Kho'}
-							</button>
-						</div>
-					</div>
+					<PurchaseOrderSummary
+						orderNote={orderNote} setOrderNote={setOrderNote}
+						subTotal={subTotal} shippingFee={shippingFee} setShippingFee={setShippingFee}
+						totalAmount={totalAmount} paidAmount={paidAmount} setPaidAmount={setPaidAmount}
+						unpaidAmount={unpaidAmount} handleSubmit={handleSubmit} editingPO={editingPO}
+						formatCurrency={formatCurrency}
+					/>
 					</div>
 					</div>
 				</div>
 			)}
 		</div>
 
-		{/* ─── Supply Bot FAB + Chat Panel ─── */}
-		{!chatOpen && (
-			<button
-				onClick={() => setChatOpen(true)}
-				className="fixed bottom-24 right-6 z-50 bg-[#FF6D00] text-white w-14 h-14 rounded-full shadow-xl shadow-orange-500/40 flex items-center justify-center hover:scale-110 active:scale-95 transition-all"
-				title="Trợ lý nhập hàng AI"
-			>
-				<MessageCircle size={24} />
-			</button>
-		)}
 
-		{chatOpen && (
-			<div className="fixed bottom-20 right-4 z-50 w-[360px] max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden" style={{ height: '480px', maxHeight: '70vh' }}>
-				<div className="flex items-center justify-between px-4 py-3 bg-[#FF6D00] text-white shrink-0">
-					<div className="flex items-center gap-2">
-						<MessageCircle size={18} />
-						<span className="font-black text-sm uppercase">Trợ lý Nhập Hàng</span>
-					</div>
-					<button onClick={() => setChatOpen(false)} className="p-1 hover:bg-white/20 rounded-lg transition-all"><X size={18} /></button>
-				</div>
-				<div className="flex-1 overflow-y-auto p-4 space-y-3">
-					{chatMessages.map((m, i) => (
-						<div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-							<div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${
-								m.role === 'user' 
-									? 'bg-[#FF6D00] text-white rounded-br-md' 
-									: 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-bl-md'
-							}`}>
-								{m.text}
-							</div>
-						</div>
-					))}
-					{chatLoading && (
-						<div className="flex justify-start">
-							<div className="bg-slate-100 dark:bg-slate-800 rounded-2xl rounded-bl-md px-4 py-3">
-								<Loader size={16} className="animate-spin text-[#FF6D00]" />
-							</div>
-						</div>
-					)}
-					<div ref={chatEndRef} />
-				</div>
-				<div className="p-3 border-t border-slate-200 dark:border-slate-800 shrink-0">
-					<div className="flex gap-2">
-						<input
-							type="text"
-							value={chatInput}
-							onChange={e => setChatInput(e.target.value)}
-							onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSupplyChat()}
-							placeholder="VD: Nhập 10 tấm thạch cao từ NCC Xi măng Hà Tiên, giá 85k..."
-							className="flex-1 px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm dark:text-white outline-none focus:ring-2 focus:ring-[#FF6D00]/30"
-						/>
+
+		{detailPO && (
+			<div className="fixed inset-0 z-[150] bg-slate-955/95 backdrop-blur-xl animate-in fade-in duration-200 print:hidden" onClick={() => { setDetailPO(null); setPoZoom(1); }}>
+				{/* Controls bar */}
+				<div className="fixed top-0 left-0 right-0 flex items-center justify-between p-3 bg-slate-950/80 backdrop-blur-lg border-b border-white/5 z-[160] no-print" onClick={e => e.stopPropagation()}>
+					<span className="text-white text-xs font-black uppercase tracking-wider pl-2">Chi tiết phiếu nhập</span>
+					
+					{/* Desktop buttons (Hidden on Mobile) */}
+					<div className="hidden md:flex bg-white/10 backdrop-blur-md rounded-full p-1 border border-white/20 gap-2 shrink-0">
 						<button
-							onClick={handleSupplyChat}
-							disabled={chatLoading || !chatInput.trim()}
-							className="p-2.5 bg-[#FF6D00] text-white rounded-xl hover:bg-[#E66000] disabled:opacity-40 transition-all"
+							onClick={handlePrint}
+							className="px-3.5 py-1.5 bg-white text-slate-900 rounded-full text-xs font-black uppercase tracking-wider transition-all hover:bg-slate-100 flex items-center gap-1"
 						>
-							<Send size={18} />
+							<Printer size={14} /> In Phiếu
+						</button>
+						<button
+							onClick={handleSaveImage}
+							disabled={isSavingImage}
+							className="px-3.5 py-1.5 bg-emerald-500 text-white rounded-full text-xs font-black uppercase tracking-wider transition-all hover:bg-emerald-600 flex items-center gap-1 disabled:opacity-50"
+						>
+							{isSavingImage ? <Loader size={14} className="animate-spin" /> : <ImageIcon size={14} />} Lưu Ảnh
+						</button>
+						<button
+							onClick={handleDirectCopyImage}
+							disabled={isSavingImage}
+							className="px-3.5 py-1.5 bg-blue-500 text-white rounded-full text-xs font-black uppercase tracking-wider transition-all hover:bg-blue-600 flex items-center gap-1 disabled:opacity-50"
+						>
+							{isSavingImage ? <Loader size={14} className="animate-spin" /> : <Copy size={14} />} Copy Ảnh
 						</button>
 					</div>
+
+					{/* Close button - always visible */}
+					<button
+						onClick={() => { setDetailPO(null); setPoZoom(1); }}
+						className="size-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center border border-white/20 transition-all font-bold text-xs active:scale-95"
+						title="Đóng"
+					>
+						<X size={18} />
+					</button>
 				</div>
-			</div>
-		)}
-
-		{/* 🧾 PHIẾU CHI TIẾT ĐƠN NHẬP HÀNG */}
-		{detailPO && (
-			<div className="fixed inset-0 z-[150] flex flex-col items-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto custom-scrollbar" onClick={() => { setDetailPO(null); setPoZoom(1); }}>
-				<div className="my-auto w-full max-w-2xl flex flex-col" style={{ zoom: poZoom, transformOrigin: 'top center' }}>
-					<div className="bg-white dark:bg-slate-900 w-full rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col border border-white/20 dark:border-slate-800 transition-colors duration-300" onClick={e => e.stopPropagation()}>
-						{/* Header */}
-						<div className="px-6 py-5 bg-gradient-to-r from-[#FF6D00] to-[#E65100] text-white flex items-center justify-between shrink-0">
-							<div>
-								<h2 className="text-lg font-black uppercase tracking-tight">Phiếu Nhập Hàng</h2>
-								<p className="text-white/70 text-xs mt-0.5">#{detailPO.id?.slice(0, 12).toUpperCase()}</p>
-							</div>
-							<button onClick={() => { setDetailPO(null); setPoZoom(1); }} className="size-10 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors">
-								<X size={20} />
-							</button>
-						</div>
-
-						{/* Info */}
-						<div className="px-6 py-4 bg-orange-50/50 dark:bg-orange-900/10 border-b border-orange-100 dark:border-orange-900/20 shrink-0">
-							<div className="grid grid-cols-2 gap-3 text-sm">
-								<div>
-									<span className="text-[10px] font-bold text-slate-400 uppercase">Nhà cung cấp</span>
-									<p className="font-black text-slate-800 dark:text-white mt-0.5">{detailPO.supplierName}</p>
+				{/* SCROLLABLE WRAPPER FOR TICKET CONTENT */}
+				<div className="w-full h-full overflow-y-auto pt-20 pb-28 md:pt-16 md:pb-10 flex flex-col items-center justify-start p-4 custom-scrollbar">
+					<div className="my-auto flex flex-col items-center" style={{ zoom: poZoom, transformOrigin: 'top center' }} onClick={e => e.stopPropagation()}>
+					<div
+						id="purchase-order-ticket-bill"
+						className="bg-white text-black font-sans mx-auto text-left shadow-2xl relative border border-slate-200"
+						style={{
+							width: '420px',
+							padding: '24px',
+							boxSizing: 'border-box'
+						}}
+					>
+						<main className="bg-white text-black text-sm">
+							{/* Company Header */}
+							<div className="flex items-center gap-4 mb-4">
+								{companyInfo?.logoUrl ? (
+									<div className="w-16 h-16 rounded-full border border-slate-200 overflow-hidden bg-white shrink-0 shadow-[inset_0_2px_4px_rgba(0,0,0,0.05)]">
+										<img src={getTicketImageUrl(companyInfo.logoUrl)} alt="Logo" className="w-full h-full object-cover" loading="lazy" crossOrigin="anonymous" />
+									</div>
+								) : (
+									<div className="w-16 h-16 bg-slate-900 rounded-full flex items-center justify-center text-white shrink-0">
+										<Package size={28} />
+									</div>
+								)}
+								<div className="text-left min-w-0">
+									<h2 className="text-xl font-black uppercase leading-tight tracking-tight text-black break-words">
+										{companyInfo?.name || 'DUNVEX'}
+									</h2>
+									<div className="text-[11px] text-slate-600 font-semibold space-y-0.5 mt-1 leading-snug">
+										<p className="truncate">{companyInfo?.address || 'XÃ KIẾN ĐỨC , LÂM ĐỒNG'}</p>
+										<p>SĐT: {companyInfo?.phone || '0988765444'}</p>
+									</div>
 								</div>
-								<div>
-									<span className="text-[10px] font-bold text-slate-400 uppercase">Ngày nhập</span>
-									<p className="font-black text-slate-800 dark:text-white mt-0.5">{new Date(detailPO.orderDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+							</div>
+
+							{/* Bill Title */}
+							<div className="text-center border-t border-b border-dashed border-slate-400 py-2 my-3">
+								<h1 className="text-base font-black uppercase tracking-wider">PHIẾU NHẬP HÀNG</h1>
+								<p className="text-[10px] text-slate-500 font-bold mt-0.5">#{detailPO.id?.slice(0, 12).toUpperCase()}</p>
+							</div>
+
+							{/* Bill Metadata */}
+							<div className="space-y-1.5 text-xs text-slate-800 font-semibold mb-4 leading-normal">
+								<div className="flex justify-between items-start gap-3">
+									<span className="shrink-0 text-slate-500">Ngày nhập:</span>
+									<span className="text-right">{new Date(detailPO.orderDate).toLocaleString('vi-VN')}</span>
+								</div>
+								<div className="flex justify-between items-start gap-3">
+									<span className="shrink-0 text-slate-500">Nhà cung cấp:</span>
+									<span className="font-bold text-black uppercase text-right">{detailPO.supplierName}</span>
+								</div>
+								<div className="flex justify-between items-start gap-3">
+									<span className="shrink-0 text-slate-500">Người lập phiếu:</span>
+									<span className="text-right">{auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên'}</span>
 								</div>
 							</div>
+
+							{/* Items Header */}
+							<div className="border-t border-dashed border-slate-400 pt-2 font-bold text-xs text-slate-500 flex justify-between uppercase">
+								<span>Tên sản phẩm</span>
+								<span>Thành tiền</span>
+							</div>
+
+							{/* Items List */}
+							<div className="divide-y divide-dashed divide-slate-200 mt-1">
+								{(detailPO.items || []).map((item: any, idx: number) => {
+									const productImage = products.find(p => p.id === item.productId)?.imageUrl;
+									return (
+										<div key={idx} className="py-2.5 space-y-1">
+											<div className="flex items-start gap-2.5 font-extrabold text-black uppercase leading-tight text-sm">
+												<span className="shrink-0 pt-0.5">{idx + 1}.</span>
+												{productImage && (
+													<div className="w-8 h-8 rounded-full border border-slate-200 overflow-hidden bg-white shrink-0 shadow-sm flex justify-center items-center">
+														<img 
+															src={getTicketImageUrl(productImage)} 
+															alt={item.name} 
+															className="w-full h-full object-cover rounded-full" 
+															loading="lazy"
+															crossOrigin="anonymous"
+															onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+														/>
+													</div>
+												)}
+												<span className="min-w-0 break-words pt-0.5">{item.name}</span>
+											</div>
+											<div className="flex justify-between items-center text-xs font-bold text-slate-700">
+												<span className="whitespace-nowrap">
+													SL: <strong className="text-black text-sm">{item.qty}</strong> x {formatCurrency(item.priceImport)}
+												</span>
+												<span className="text-black text-sm font-black whitespace-nowrap">
+													{formatCurrency((item.qty || 0) * (item.priceImport || 0))} đ
+												</span>
+											</div>
+										</div>
+									);
+								})}
+							</div>
+
+							{/* Ghi chú */}
 							{detailPO.note && (
-								<div className="mt-2 pt-2 border-t border-orange-200 dark:border-orange-900/30">
-									<span className="text-[10px] font-bold text-slate-400 uppercase">Ghi chú</span>
-									<p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5 italic">{detailPO.note}</p>
+								<div className="border-t border-dashed border-slate-400 py-3 text-xs">
+									<p className="font-bold text-slate-400 uppercase tracking-wider mb-1">Ghi chú đơn hàng:</p>
+									<p className="font-medium text-slate-800 italic leading-relaxed">"{detailPO.note}"</p>
 								</div>
 							)}
-						</div>
 
-						{/* Table */}
-						<div className="flex-1 px-6 py-4">
-							<table className="w-full text-left border-collapse">
-								<thead>
-									<tr className="border-b-2 border-slate-200 dark:border-slate-700">
-										<th className="py-3 px-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center w-10">STT</th>
-										<th className="py-3 px-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center w-16">Hình ảnh</th>
-										<th className="py-3 px-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">Tên sản phẩm</th>
-										<th className="py-3 px-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right w-28">Giá</th>
-										<th className="py-3 px-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center w-16">SL</th>
-										<th className="py-3 px-2 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right w-32">Thành tiền</th>
-									</tr>
-								</thead>
-								<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-									{(detailPO.items || []).map((item: any, idx: number) => {
-										const productImage = products.find(p => p.id === item.productId)?.imageUrl;
-										return (
-										<tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-											<td className="py-3 px-2 text-xs font-bold text-slate-500 text-center align-middle">{idx + 1}</td>
-											<td className="py-2 px-2 text-center align-middle">
-												{productImage ? (
-													<img
-														src={getOptimizedImageUrl(productImage)}
-														alt={item.name}
-														className="w-12 h-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shadow-sm inline-block"
-														loading="lazy"
-														onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-													/>
-												) : null}
-											</td>
-											<td className="py-3 px-2 text-sm font-semibold text-slate-800 dark:text-white align-middle">{item.name}</td>
-											<td className="py-3 px-2 text-xs text-slate-600 dark:text-slate-400 text-right font-medium align-middle">{formatCurrency(item.priceImport)} đ</td>
-											<td className="py-3 px-2 text-xs font-bold text-slate-700 dark:text-slate-300 text-center align-middle">{item.qty}</td>
-											<td className="py-3 px-2 text-sm font-black text-slate-800 dark:text-white text-right align-middle">{formatCurrency((item.qty || 0) * (item.priceImport || 0))} đ</td>
-										</tr>
-										);
-									})}
-								</tbody>
-							</table>
-						</div>
+							{/* Totals Section */}
+							<div className="border-t border-dashed border-slate-400 pt-3 space-y-2 text-xs font-bold text-slate-700">
+								<div className="flex justify-between items-center gap-4">
+									<span className="shrink-0">Cộng tiền hàng:</span>
+									<span className="text-black whitespace-nowrap">{formatCurrency(detailPO.subTotal || (detailPO.totalAmount - (detailPO.shippingFee || 0)))} đ</span>
+								</div>
 
-						{/* Footer - Tổng tiền */}
-						<div className="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t-2 border-slate-200 dark:border-slate-700 flex items-center justify-between shrink-0">
-							<span className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase">Tổng tiền</span>
-							<span className="text-2xl font-black text-[#E65100]">{formatCurrency(detailPO.totalAmount)} đ</span>
-						</div>
+								{detailPO.shippingFee > 0 && (
+									<div className="flex justify-between items-center gap-4">
+										<span className="shrink-0">Phí vận chuyển (+):</span>
+										<span className="text-black whitespace-nowrap">+{formatCurrency(detailPO.shippingFee)} đ</span>
+									</div>
+								)}
+
+								<div className="border-t border-slate-950 pt-2 flex justify-between items-center font-black text-base text-black uppercase gap-4">
+									<span className="shrink-0">Tổng thanh toán:</span>
+									<span className="text-lg whitespace-nowrap">{formatCurrency(detailPO.totalAmount)} đ</span>
+								</div>
+							</div>
+
+							{/* Signatures */}
+							<div className="border-t border-dashed border-slate-400 mt-6 pt-4 grid grid-cols-2 gap-4 text-center text-[10px] font-bold text-slate-500 uppercase leading-normal">
+								<div>
+									<p className="mb-10">Người giao (NCC)</p>
+									<div className="mx-auto h-px w-16 bg-slate-300"></div>
+								</div>
+								<div>
+									<p className="mb-10">Người nhận (Lập phiếu)</p>
+									<span className="text-black font-extrabold">{auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên'}</span>
+								</div>
+							</div>
+
+							<div className="text-center text-[10px] text-slate-400 font-bold mt-8 italic leading-snug">
+								Cảm ơn quý đối tác đã tin tưởng Dunvex Build!
+							</div>
+						</main>
 					</div>
-					
+
 					{/* Zoom Controls */}
-					<div className="mt-4 flex justify-center w-full" onClick={e => e.stopPropagation()}>
+					<div className="mt-4 flex justify-center w-full no-print">
 						<div className="flex items-center gap-1 bg-white/10 backdrop-blur-md px-2 py-1.5 rounded-xl border border-white/20">
 							<button onClick={() => setPoZoom(prev => Math.max(0.5, prev - 0.05))} className="size-8 sm:size-10 rounded-lg hover:bg-white/20 text-white transition-all flex items-center justify-center" title="Thu nhỏ">
 								<span className="material-symbols-outlined text-lg sm:text-xl">zoom_out</span>
@@ -1565,6 +1242,110 @@ const PurchaseOrders = () => {
 							<div className="w-px h-6 bg-white/20 mx-1"></div>
 							<button onClick={() => setPoZoom(1)} className="px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg hover:bg-white/20 text-white text-[10px] sm:text-xs font-black uppercase transition-all">100%</button>
 						</div>
+					</div>
+				</div>
+			</div>
+
+		{/* Mobile Image Sharing / Long Press Helper Modal */}
+		{capturedImage && (
+			<div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-slate-950/90 backdrop-blur-md p-4 animate-in fade-in duration-200">
+				<div className="relative w-full max-w-lg flex flex-col bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-6 overflow-hidden max-h-[90vh]">
+					<div className="flex items-center justify-between pb-4 border-b border-slate-800 shrink-0">
+						<div className="flex items-center gap-2">
+							<span className="material-symbols-outlined text-[#FF6D00] text-xl animate-pulse">download_done</span>
+							<h3 className="text-sm sm:text-base font-black text-white uppercase tracking-wider">Ảnh Phiếu Nhập Hàng</h3>
+						</div>
+						<button 
+							onClick={() => setCapturedImage(null)} 
+							className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-full transition-colors"
+						>
+							<X size={20} />
+						</button>
+					</div>
+
+					<div className="py-3 text-center shrink-0">
+						<p className="text-xs sm:text-sm font-extrabold text-[#FF6D00] bg-orange-500/10 py-2.5 px-4 rounded-xl inline-block leading-snug">
+							👉 Nhấn giữ vào ảnh bên dưới, chọn "Lưu ảnh" hoặc "Chia sẻ" trực tiếp sang Zalo / Facebook!
+						</p>
+					</div>
+
+					<div className="flex-1 overflow-y-auto min-h-0 bg-white rounded-2xl border border-slate-800 p-2 flex justify-center items-start shadow-inner">
+						<img 
+							src={capturedImage} 
+							alt="Phiếu Nhập Hàng" 
+							className="max-w-full h-auto rounded-lg select-all" 
+						/>
+					</div>
+
+					<div className="pt-4 border-t border-slate-800 shrink-0 flex gap-2">
+						<button
+							onClick={handleCopyImage}
+							className="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl active:scale-95 transition-all text-[11px] uppercase tracking-wider hover:bg-emerald-700"
+						>
+							Sao chép ảnh
+						</button>
+						<button
+							onClick={() => {
+								const link = document.createElement('a');
+								link.download = `phieu_nhap_hang_${detailPO.id?.slice(0, 8).toUpperCase()}.png`;
+								link.href = capturedImage;
+								link.click();
+							}}
+							className="flex-1 py-3 bg-[#FF6D00] text-white font-bold rounded-xl shadow-lg active:scale-95 transition-all text-[11px] uppercase tracking-wider hover:bg-[#e66200]"
+						>
+							Tải về
+						</button>
+						<button
+							onClick={() => setCapturedImage(null)}
+							className="flex-1 py-3 bg-slate-800 text-slate-300 font-bold rounded-xl active:scale-95 transition-all text-[11px] uppercase tracking-wider hover:bg-slate-700"
+						>
+							Đóng
+						</button>
+					</div>
+				</div>
+			</div>
+		)}
+
+				{/* MOBILE BOTTOM ACTION BAR FOR PO */}
+				<div className="fixed bottom-0 left-0 right-0 p-4 bg-slate-955/90 backdrop-blur-xl border-t border-white/10 z-[160] flex items-center justify-around gap-3 md:hidden no-print" onClick={e => e.stopPropagation()}>
+					<button
+						onClick={handleSaveImage}
+						disabled={isSavingImage}
+						className="flex-1 h-12 rounded-xl bg-emerald-600 text-white flex items-center justify-center border border-emerald-500/30 shadow-lg transition-all font-extrabold text-[11px] uppercase tracking-wider active:scale-95 hover:bg-emerald-700 disabled:opacity-50 gap-1.5"
+					>
+						<ImageIcon size={16} />
+						<span>{isSavingImage ? 'Đang tạo...' : 'Lưu ảnh'}</span>
+					</button>
+
+					<button
+						onClick={handleDirectCopyImage}
+						disabled={isSavingImage}
+						className="flex-1 h-12 rounded-xl bg-blue-600 text-white flex items-center justify-center border border-blue-500/30 shadow-lg transition-all font-extrabold text-[11px] uppercase tracking-wider active:scale-95 hover:bg-blue-700 disabled:opacity-50 gap-1.5"
+					>
+						<Copy size={16} />
+						<span>{isSavingImage ? 'Đang copy...' : 'Copy ảnh'}</span>
+					</button>
+
+					<button
+						onClick={handlePrint}
+						className="w-12 h-12 rounded-xl bg-slate-800 text-white flex items-center justify-center border border-slate-700 shadow-lg transition-all active:scale-95 hover:bg-black"
+						title="In phiếu"
+					>
+						<Printer size={16} />
+					</button>
+				</div>
+			</div>
+		)}
+
+		{showCopySuccess && (
+			<div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+				<div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 flex flex-col items-center gap-4 text-center max-w-sm mx-4 animate-in zoom-in-95 duration-200 shadow-2xl">
+					<div className="size-16 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.25)] animate-bounce">
+						<CheckCircle2 size={36} className="stroke-[2.5]" />
+					</div>
+					<div>
+						<h4 className="text-white font-black text-base uppercase tracking-wider mb-1">Sao chép thành công!</h4>
+						<p className="text-slate-400 text-xs leading-relaxed">Đã sao chép ảnh phiếu nhập hàng vào khay nhớ tạm. Bạn có thể dán (Paste) gửi ngay sang Zalo / Facebook!</p>
 					</div>
 				</div>
 			</div>

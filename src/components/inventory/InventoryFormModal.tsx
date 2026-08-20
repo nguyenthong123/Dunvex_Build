@@ -18,6 +18,7 @@ interface InventoryFormModalProps {
 	copyToClipboard: (text: string, label: string) => void;
 	hasManagePermission: boolean;
 	getImageUrl: (url: string) => string;
+	saving?: boolean;
 }
 
 const InventoryFormModal: React.FC<InventoryFormModalProps> = ({
@@ -37,7 +38,8 @@ const InventoryFormModal: React.FC<InventoryFormModalProps> = ({
 	generateSKU,
 	copyToClipboard,
 	hasManagePermission,
-	getImageUrl
+	getImageUrl,
+	saving = false
 }) => {
 	if (!show) return null;
 
@@ -320,9 +322,10 @@ const InventoryFormModal: React.FC<InventoryFormModalProps> = ({
 						</button>
 						<button
 							type="submit"
-							className="flex-[2] py-4 px-6 bg-[#1A237E] dark:bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-500/20 hover:scale-[1.02] active:scale-95 transition-all"
+							disabled={saving}
+							className="flex-[2] py-4 px-6 bg-[#1A237E] dark:bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-500/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
 						>
-							{isEdit ? 'Lưu cập nhật' : 'Thêm sản phẩm'}
+							{saving ? 'Đang xử lý...' : (isEdit ? 'Lưu cập nhật' : 'Thêm sản phẩm')}
 						</button>
 					</div>
 				</form>

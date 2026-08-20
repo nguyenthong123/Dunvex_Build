@@ -52,14 +52,14 @@ const InventoryMobileGrid: React.FC<InventoryMobileGridProps> = ({
 
 	return (
 		<div className="lg:hidden pb-4 relative">
-			<div className="grid grid-cols-1 gap-4 pb-12">
+			<div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-12">
 				{activeTab === 'products' ? (
 					paginatedProducts.map((product) => (
 						<div key={product.id} className="bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-slate-800 flex flex-col justify-between" onClick={() => openDetail(product)}>
 							<div className="flex justify-between items-start mb-4">
 								<div className="flex items-center gap-3 flex-1 min-w-0">
 									<div className="size-14 rounded-xl bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 flex items-center justify-center overflow-hidden border border-gray-100 dark:border-slate-700 shrink-0">
-										{product.imageUrl ? <img src={getImageUrl(product.imageUrl)} alt={product.name} className="size-full object-cover" /> : <span className="material-symbols-outlined text-2xl">package_2</span>}
+										{product.imageUrl ? <img src={getImageUrl(product.imageUrl)} alt={product.name} className="size-full object-cover"  loading="lazy" /> : <span className="material-symbols-outlined text-2xl">package_2</span>}
 									</div>
 									<div className="flex-1 min-w-0">
 										<h4 className="font-black text-slate-900 dark:text-white line-clamp-2 whitespace-normal break-words">{product.name}</h4>
@@ -93,7 +93,7 @@ const InventoryMobileGrid: React.FC<InventoryMobileGridProps> = ({
 									<div className="flex items-center gap-3 flex-1 min-w-0">
 										<div className="size-12 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center overflow-hidden border border-slate-100 dark:border-slate-700 shrink-0">
 											{product.imageUrl ? (
-												<img src={getImageUrl(product.imageUrl)} alt="" className="size-full object-cover" />
+												<img src={getImageUrl(product.imageUrl)} alt="" className="size-full object-cover"  loading="lazy" />
 											) : (
 												<span className="material-symbols-outlined text-slate-300">image</span>
 											)}

@@ -2,7 +2,7 @@
  * Notification utilities - tạo thông báo cho toàn tổ chức hoặc riêng admin
  */
 import { db } from '../services/firebase';
-import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, serverTimestamp } from '../services/firebase';
 
 type NotifPayload = {
   title: string;

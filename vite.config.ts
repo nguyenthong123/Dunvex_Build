@@ -3,16 +3,14 @@ import react from '@vitejs/plugin-react-swc'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 import { VitePWA } from 'vite-plugin-pwa'
-import { devApiPlugin } from './vite-api-dev'
 
 // https://vitejs.dev/config/
 export default defineConfig({
 	plugins: [
 		react(),
-		devApiPlugin(), // 🔐 Xử lý /api/gemini-proxy và /api/gemini-vision trong dev mode
 		tailwindcss(),
 		VitePWA({
-			registerType: 'prompt',
+			registerType: 'autoUpdate',
 			includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png'],
 			manifest: {
 				name: 'Dunvex Build Management',
@@ -46,9 +44,9 @@ export default defineConfig({
 				]
 			},
 			workbox: {
-				maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
 				skipWaiting: true,
 				clientsClaim: true,
+				maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
 				globPatterns: ['**/*.{js,css,ico,png,svg,woff2,html}'], // Precache html to avoid navigation errors
 				runtimeCaching: [
 					{
@@ -84,8 +82,24 @@ export default defineConfig({
 			'@': path.resolve(__dirname, './src'),
 		},
 	},
+	server: {
+		proxy: {
+			'/api/upload': {
+				target: 'http://localhost:5000',
+				changeOrigin: true
+			},
+			'/api/data': {
+				target: 'http://localhost:5000',
+				changeOrigin: true
+			},
+			'/api/db': {
+				target: 'http://localhost:5000',
+				changeOrigin: true
+			}
+		}
+	},
 	build: {
-		sourcemap: false,
+		sourcemap: 'hidden',
 		minify: 'esbuild',
 		esbuild: {
 			drop: ['console', 'debugger'],
@@ -95,7 +109,7 @@ export default defineConfig({
 			output: {
 				manualChunks: {
 					'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-					'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/storage'],
+					'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/functions'],
 					'vendor-ui': ['lucide-react', 'framer-motion'],
 					'vendor-map': ['leaflet', 'react-leaflet'],
 					'vendor-xlsx': ['xlsx'],

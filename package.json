@@ -6,12 +6,19 @@
   "scripts": {
     "dev": "vite",
     "start": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview"
+    "build": "vite build",
+    "preview": "vite preview",
+    "server:start": "npm start --workspace=server",
+    "server:dev": "npm run dev --workspace=server",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "workspaces": [
+    "server"
+  ],
   "description": "",
   "dependencies": {
     "@capacitor-firebase/authentication": "^8.3.0",
@@ -22,16 +29,14 @@
     "@google/generative-ai": "^0.24.1",
     "@types/react-virtualized-auto-sizer": "^1.0.4",
     "@types/react-window": "^1.8.8",
-    "cors": "^2.8.6",
-    "dotenv": "^17.4.2",
-    "express": "^5.2.1",
     "firebase": "^12.15.0",
     "firebase-admin": "^14.1.0",
     "framer-motion": "^12.33.0",
+    "html-to-image": "^1.11.13",
+    "html2canvas-pro": "^2.3.8",
     "html5-qrcode": "^2.3.8",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.563.0",
-    "node-cron": "^4.5.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
@@ -44,6 +49,9 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.18",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.3",
     "@types/leaflet": "^1.9.21",
     "@types/node": "^25.2.2",
     "@types/react": "^19.2.13",
@@ -52,11 +60,13 @@
     "@vitejs/plugin-react-swc": "^4.2.3",
     "autoprefixer": "^10.4.24",
     "esbuild": "^0.28.1",
+    "jsdom": "^27.0.1",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.18",
     "tsx": "^4.23.0",
     "typescript": "^5.9.3",
     "vite": "^7.3.1",
-    "vite-plugin-pwa": "^1.2.0"
+    "vite-plugin-pwa": "^1.2.0",
+    "vitest": "^3.2.7"
   }
 }

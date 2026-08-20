@@ -26,18 +26,24 @@ import {
   onSnapshot,
   serverTimestamp,
   startAfter,
-  type Unsubscribe,
-  type DocumentData,
-  type QueryConstraint,
-  type DocumentSnapshot,
-  type QuerySnapshot,
-} from 'firebase/firestore';
+  increment,
+  offset,
+  search,
+  getCountFromServer,
+} from './firebase';
+
+// Type stubs for Firebase-compatible interfaces
+type Unsubscribe = () => void;
+type DocumentData = Record<string, any>;
+type QueryConstraint = any;
+type DocumentSnapshot = any;
+type QuerySnapshot = any;
 
 // ─── Type Helpers ───────────────────────────────────────────
 
 export type WithId<T> = T & { id: string };
 
-export function withId<T>(doc: DocumentSnapshot<DocumentData>): WithId<T> {
+export function withId<T>(doc: DocumentSnapshot): WithId<T> {
   return { id: doc.id, ...doc.data() } as WithId<T>;
 }
 
@@ -88,7 +94,7 @@ export function ownerQuery(
 
 export const productService = {
   /** Lắng nghe products của owner (có limit an toàn, mặc định 2000) */
-  listenByOwner(ownerId: string, onData: (products: WithId<DocumentData>[]) => void, onError?: (err: Error) => void, maxResults = 2000): Unsubscribe {
+  listenByOwner(ownerId: string, onData: (products: WithId<DocumentData>[]) => void, onError?: (err: Error) => void, maxResults = 999999): Unsubscribe {
     const q = query(
       COLLECTIONS.products(),
       where('ownerId', '==', ownerId),
@@ -97,6 +103,32 @@ export const productService = {
     return onSnapshot(q, (snap: QuerySnapshot) => {
       onData(snap.docs.map(withId));
     }, onError);
+  },
+
+  async getProductsPaginated(
+    ownerId: string,
+    page: number = 1,
+    pageSize: number = 50,
+    searchKeyword?: string
+  ): Promise<{ items: WithId<DocumentData>[]; totalItems: number; totalPages: number }> {
+    const offsetVal = (page - 1) * pageSize;
+    const constraints: any[] = [
+      where('ownerId', '==', ownerId),
+      orderBy('createdAt', 'desc'),
+      limit(pageSize),
+      offset(offsetVal)
+    ];
+    if (searchKeyword) {
+      constraints.push(search(searchKeyword));
+    }
+    const q = query(COLLECTIONS.products(), ...constraints);
+    const [snap, countResult] = await Promise.all([
+      getDocs(q),
+      getCountFromServer(q)
+    ]);
+    const totalItems = countResult.data().count;
+    const totalPages = Math.ceil(totalItems / pageSize);
+    return { items: snap.docs.map(withId), totalItems, totalPages };
   },
 
   /** Tìm product theo SKU toàn cục */
@@ -134,6 +166,26 @@ export const productService = {
     const snap = await getDoc(doc(COLLECTIONS.products(), id));
     return snap.exists() ? withId(snap) : null;
   },
+
+  /** Lấy tất cả danh mục (category) duy nhất của owner */
+  async getAllCategories(ownerId: string): Promise<string[]> {
+    const q = query(
+      COLLECTIONS.products(),
+      where('ownerId', '==', ownerId),
+      limit(2000),
+    );
+    const snap = await getDocs(q);
+    const categories = new Set<string>();
+    snap.docs.forEach(doc => {
+      const data = doc.data();
+      if (data.category && typeof data.category === 'string') {
+        categories.add(data.category.trim());
+      }
+    });
+    return Array.from(categories).sort((a, b) =>
+      String(a).localeCompare(String(b))
+    );
+  },
 };
 
 // ─── Order Service ──────────────────────────────────────────
@@ -146,12 +198,12 @@ export interface PaginatedResult<T> {
 }
 
 export const orderService = {
-  /** Lắng nghe orders của owner (có limit, mặc định 200) */
+  /** Lắng nghe orders của owner (có limit, mặc định 999999) */
   listenByOwner(
     ownerId: string,
     onData: (orders: WithId<DocumentData>[]) => void,
     onError?: (err: Error) => void,
-    maxResults = 200,
+    maxResults = 999999,
   ): Unsubscribe {
     const q = query(
       COLLECTIONS.orders(),
@@ -165,7 +217,7 @@ export const orderService = {
   },
 
   /** Get orders một lần */
-  async getByOwner(ownerId: string, maxResults = 200): Promise<WithId<DocumentData>[]> {
+  async getByOwner(ownerId: string, maxResults = 999999): Promise<WithId<DocumentData>[]> {
     const q = query(
       COLLECTIONS.orders(),
       where('ownerId', '==', ownerId),
@@ -174,6 +226,34 @@ export const orderService = {
     );
     const snap = await getDocs(q);
     return snap.docs.map(withId);
+  },
+
+  async getOrdersPaginated(
+    ownerId: string,
+    page: number = 1,
+    pageSize: number = 50,
+    searchKeyword?: string
+  ): Promise<{ items: WithId<DocumentData>[]; totalItems: number; totalPages: number }> {
+    const offsetVal = (page - 1) * pageSize;
+    const constraints: any[] = [
+      where('ownerId', '==', ownerId),
+      orderBy('createdAt', 'desc'),
+      limit(pageSize),
+      offset(offsetVal)
+    ];
+    if (searchKeyword) {
+      constraints.push(search(searchKeyword));
+    }
+    // 🔧 Tách query: dùng query KHÔNG có limit/offset để đếm total
+    const countQ = query(COLLECTIONS.orders(), where('ownerId', '==', ownerId), ...(searchKeyword ? [search(searchKeyword)] : []));
+    const q = query(COLLECTIONS.orders(), ...constraints);
+    const [snap, countResult] = await Promise.all([
+      getDocs(q),
+      getCountFromServer(countQ)
+    ]);
+    const totalItems = countResult.data().count;
+    const totalPages = Math.ceil(totalItems / pageSize);
+    return { items: snap.docs.map(withId), totalItems, totalPages };
   },
 
   /** 🔄 PHÂN TRANG: Load thêm orders (cursor-based, không ảnh hưởng realtime listener) */
@@ -227,7 +307,7 @@ export const orderService = {
 // ─── Customer Service ───────────────────────────────────────
 
 export const customerService = {
-  listenByOwner(ownerId: string, onData: (customers: WithId<DocumentData>[]) => void, onError?: (err: Error) => void, maxResults = 2000): Unsubscribe {
+  listenByOwner(ownerId: string, onData: (customers: WithId<DocumentData>[]) => void, onError?: (err: Error) => void, maxResults = 999999): Unsubscribe {
     const q = query(
       COLLECTIONS.customers(),
       where('ownerId', '==', ownerId),
@@ -236,6 +316,34 @@ export const customerService = {
     return onSnapshot(q, (snap: QuerySnapshot) => {
       onData(snap.docs.map(withId));
     }, onError);
+  },
+
+  async getCustomersPaginated(
+    ownerId: string,
+    page: number = 1,
+    pageSize: number = 50,
+    searchKeyword?: string
+  ): Promise<{ items: WithId<DocumentData>[]; totalItems: number; totalPages: number }> {
+    const offsetVal = (page - 1) * pageSize;
+    const constraints: any[] = [
+      where('ownerId', '==', ownerId),
+      orderBy('createdAt', 'desc'),
+      limit(pageSize),
+      offset(offsetVal)
+    ];
+    if (searchKeyword) {
+      constraints.push(search(searchKeyword));
+    }
+    // 🔧 Tách query: dùng query KHÔNG có limit/offset để đếm total
+    const countQ = query(COLLECTIONS.customers(), where('ownerId', '==', ownerId), ...(searchKeyword ? [search(searchKeyword)] : []));
+    const q = query(COLLECTIONS.customers(), ...constraints);
+    const [snap, countResult] = await Promise.all([
+      getDocs(q),
+      getCountFromServer(countQ)
+    ]);
+    const totalItems = countResult.data().count;
+    const totalPages = Math.ceil(totalItems / pageSize);
+    return { items: snap.docs.map(withId), totalItems, totalPages };
   },
 
   async create(data: DocumentData): Promise<string> {
@@ -262,7 +370,7 @@ export const paymentService = {
     ownerId: string,
     onData: (payments: WithId<DocumentData>[]) => void,
     onError?: (err: Error) => void,
-    maxResults = 200,
+    maxResults = 999999,
   ): Unsubscribe {
     const q = query(
       COLLECTIONS.payments(),
@@ -311,7 +419,7 @@ export const inventoryService = {
     ownerId: string,
     onData: (logs: WithId<DocumentData>[]) => void,
     onError?: (err: Error) => void,
-    maxResults = 500,
+    maxResults = 999999,
   ): Unsubscribe {
     const q = query(
       COLLECTIONS.inventoryLogs(),
@@ -371,7 +479,7 @@ export const auditService = {
     ownerId: string,
     onData: (logs: WithId<DocumentData>[]) => void,
     onError?: (err: Error) => void,
-    maxResults = 200,
+    maxResults = 999999,
   ): Unsubscribe {
     const q = query(
       COLLECTIONS.auditLogs(),
@@ -428,7 +536,7 @@ export const checkinService = {
     ownerId: string,
     onData: (checkins: WithId<DocumentData>[]) => void,
     onError?: (err: Error) => void,
-    maxResults = 500,
+    maxResults = 999999,
   ): Unsubscribe {
     const q = query(
       COLLECTIONS.checkins(),
@@ -445,7 +553,7 @@ export const checkinService = {
 // ─── Coupon Service ─────────────────────────────────────────
 
 export const couponService = {
-  listenByOwner(ownerId: string, onData: (coupons: WithId<DocumentData>[]) => void, onError?: (err: Error) => void, maxResults = 500): Unsubscribe {
+  listenByOwner(ownerId: string, onData: (coupons: WithId<DocumentData>[]) => void, onError?: (err: Error) => void, maxResults = 999999): Unsubscribe {
     const q = query(
       COLLECTIONS.coupons(),
       where('ownerId', '==', ownerId),
@@ -458,7 +566,7 @@ export const couponService = {
 };
 
 export const attendanceService = {
-  listenByOwner(ownerId: string, onData: (logs: WithId<DocumentData>[]) => void, onError?: (err: Error) => void, maxResults = 500): Unsubscribe {
+  listenByOwner(ownerId: string, onData: (logs: WithId<DocumentData>[]) => void, onError?: (err: Error) => void, maxResults = 999999): Unsubscribe {
     const q = query(
       COLLECTIONS.attendance(),
       where('ownerId', '==', ownerId),
@@ -520,7 +628,7 @@ export const rebateTierService = {
 // ─── Supplier Service ────────────────────────────────────────
 
 export const supplierService = {
-  listenByOwner(ownerId: string, onData: (suppliers: WithId<DocumentData>[]) => void, onError?: (err: Error) => void, maxResults = 2000): Unsubscribe {
+  listenByOwner(ownerId: string, onData: (suppliers: WithId<DocumentData>[]) => void, onError?: (err: Error) => void, maxResults = 999999): Unsubscribe {
     const q = query(
       COLLECTIONS.suppliers(),
       where('ownerId', '==', ownerId),
@@ -560,7 +668,7 @@ export const purchaseOrderService = {
     ownerId: string,
     onData: (pos: WithId<DocumentData>[]) => void,
     onError?: (err: Error) => void,
-    maxResults = 100,
+    maxResults = 999999,
   ): Unsubscribe {
     const q = query(
       COLLECTIONS.purchaseOrders(),
@@ -601,7 +709,7 @@ export const supplierDebtService = {
     ownerId: string,
     onData: (debts: WithId<DocumentData>[]) => void,
     onError?: (err: Error) => void,
-    maxResults = 100,
+    maxResults = 999999,
   ): Unsubscribe {
     const q = query(
       COLLECTIONS.supplierDebts(),
@@ -638,7 +746,7 @@ export const customerDebtService = {
     ownerId: string,
     onData: (debts: WithId<DocumentData>[]) => void,
     onError?: (err: Error) => void,
-    maxResults = 500,
+    maxResults = 999999,
   ): Unsubscribe {
     const q = query(
       COLLECTIONS.customerDebts(),

@@ -1,4 +1,5 @@
 import { useLocation } from 'react-router-dom';
+import { SUPER_ADMIN_EMAIL } from '../constants';
 import { useOwner } from './useOwner';
 import { auth } from '../services/firebase';
 
@@ -24,16 +25,17 @@ export const useNavigationConfig = () => {
 	const hasPermission = (key?: string) => {
 		if (!key) return true;
 		
-		// Chủ sở hữu (Owner) luôn có toàn quyền
-		if (!owner.isEmployee && key !== 'nexus_control') return true;
+		// Chủ sở hữu (Owner) hoặc Nhân viên có vai trò Admin luôn có toàn quyền (trừ nexus_control)
+		if ((!owner.isEmployee || owner.role === 'admin') && key !== 'nexus_control') return true;
 
 		if (key === 'nexus_control') {
-			return auth.currentUser?.email === 'dunvex.green@gmail.com';
+			return auth.currentUser?.email === SUPER_ADMIN_EMAIL;
 		}
 
 		// Nếu kiểm tra quyền Truy cập Admin, cho phép nếu có bất kỳ quyền quản lý nào
 		if (key === 'admin') {
-			if (owner.accessRights?.admin === true || 
+			if (owner.role === 'admin' ||
+				owner.accessRights?.admin === true || 
 				owner.accessRights?.users_manage === true || 
 				owner.accessRights?.system_manage === true) {
 				return true;
@@ -121,13 +123,7 @@ export const useNavigationConfig = () => {
 			};
 		}
 
-		if (path === '/sale-bot') {
-			return {
-				icon: 'forum',
-				label: 'Chat AI',
-				path: 'event:toggle-salebot',
-			};
-		}
+
 
 		if (path === '/settings') {
 			return {
@@ -184,14 +180,13 @@ export const useNavigationConfig = () => {
 		{ icon: 'storefront', label: 'Nhà cung cấp', path: '/suppliers', permissionKey: 'admin' }, // NEW
 		{ icon: 'account_balance', label: 'Công nợ NCC', path: '/supplier-debts', permissionKey: 'admin' }, // NEW
 		{ icon: 'request_quote', label: 'Báo giá', path: '/price-list' },                                     // 6
-		{ icon: 'location_on', label: 'Checkin', path: '/checkin?action=history', permissionKey: 'checkin_create' }, // 7
+		{ icon: 'route', label: 'Giao hàng', path: '/checkin', permissionKey: 'checkin_create' }, // 7
 		{ icon: 'confirmation_number', label: 'Ưu đãi', path: '/coupons' },                                    // 8
 		{ icon: 'timer', label: 'Chấm công', path: '/attendance' },                                           // 9
 		{ icon: 'event_available', label: 'Nghỉ phép', path: '/leaves' },                                          // 9.5
 		{ icon: 'workspace_premium', label: 'Dịch vụ', path: '/services' },                                          // 10
 		{ icon: 'admin_panel_settings', label: 'Quản trị', path: '/admin', permissionKey: 'admin' },          // 11
 		{ icon: 'settings', label: 'Cài đặt', path: '/settings' },                                            // 12
-		{ icon: 'smart_toy', label: 'Trợ lý AI', path: '/sale-bot' },                                         // 13 (NEW)
 		{ icon: 'security', label: 'Nexus Control', path: '/nexus-control', permissionKey: 'nexus_control' }, // 14
 		{ icon: 'cloud_download', label: 'Sao lưu & PH', path: '/backup', permissionKey: 'nexus_control' },                                     // 14.5
 		{ icon: 'person', label: 'Hồ sơ', path: '/profile' },                                              // 15
@@ -213,11 +208,11 @@ export const useNavigationConfig = () => {
 			path: hasLocalSearch ? 'event:open-mobile-search' : '/orders?search=focus' 
 		};
 
-		const aiBot = allItems.find(i => i.path === '/sale-bot') || allItems[13];
+		const profileBtn = allItems.find(i => i.path === '/profile') || allItems[allItems.length - 1];
 		const center = { ...getCenterItem(), isCenter: true };
 
 		// Các vị trí 1, 2, 4, 5 (không tính center ở vị trí 3)
-		const slots = [home, orders, searchBtn, aiBot];
+		const slots = [home, orders, searchBtn, profileBtn];
 		
 		// Kiểm tra quyền cho từng slot, nếu không có quyền thì thay thế bằng fallback hợp lệ
 		const validatedSlots = slots.map(item => {

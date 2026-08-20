@@ -32,11 +32,11 @@ const MobileNav = () => {
 										navigate(item.path);
 									}
 								}}
-								className="absolute -top-7 w-14 h-14 bg-gradient-to-br from-[#FF6D00] to-[#FF9100] text-white rounded-full shadow-[0_8px_25px_rgba(255,109,0,0.4)] flex items-center justify-center border-4 border-white dark:border-slate-900 active:scale-90 transition-all z-10"
+								className="absolute -top-7 w-14 h-14 bg-gradient-to-br from-[#1A237E] to-[#283593] dark:from-indigo-600 dark:to-indigo-800 text-white rounded-full shadow-[0_8px_20px_rgba(26,35,126,0.35)] flex items-center justify-center border-4 border-white dark:border-slate-900 active:scale-90 transition-all z-10"
 							>
 								<span className="material-symbols-outlined text-2xl font-black">{item.icon}</span>
 							</button>
-							<span className="mt-10 text-[8px] font-black uppercase tracking-tighter text-[#FF6D00] dark:text-orange-500 whitespace-nowrap overflow-hidden w-full text-center px-1">
+							<span className="mt-10 text-[9px] font-black uppercase tracking-tight text-[#1A237E] dark:text-indigo-400 whitespace-nowrap overflow-hidden w-full text-center px-1">
 								{item.label}
 							</span>
 						</div>

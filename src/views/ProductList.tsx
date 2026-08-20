@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 // 🔧 REFACTOR: Chỉ giữ Firestore write ops (addDoc, updateDoc, deleteDoc, batch...)
 // Read ops đã chuyển qua hooks: useProducts, useOrders, useInventoryLogs
-import { addDoc, serverTimestamp, updateDoc, doc, deleteDoc, where, writeBatch, increment, limit, getDocs, collection, query } from 'firebase/firestore';
+import { addDoc, serverTimestamp, updateDoc, doc, deleteDoc, where, writeBatch, increment, limit, getDocs, collection, query } from '../services/firebase';
 // 🔧 REFACTOR: Dùng hooks mới thay vì onSnapshot trực tiếp
 import { useProducts } from '../hooks/useProducts';
 import { useOrders } from '../hooks/useOrders';
@@ -19,6 +19,7 @@ import InventoryLogsTable from '../components/inventory/InventoryLogsTable';
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
 import { getOptimizedImageUrl } from '../utils/validation';
+import { productService } from '../services/dataAccess';
 
 
 const ProductList = () => {
@@ -28,9 +29,27 @@ const ProductList = () => {
 	const { showToast } = useToast();
 
 	// 🔧 REFACTOR: Data từ hooks — bỏ 3 useState + 3 useEffect onSnapshot
-	const { products, loading, create: createProduct, update: updateProduct, remove: removeProduct, findBySku } = useProducts({
+	const [searchTerm, setSearchTerm] = useState('');
+	const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
+	const [currentPage, setCurrentPage] = useState(1);
+	const ITEMS_PER_PAGE = 20;
+
+	useEffect(() => {
+		const timer = setTimeout(() => {
+			setDebouncedSearchTerm(searchTerm);
+			setCurrentPage(1); // Reset page on search change
+		}, 300);
+		return () => clearTimeout(timer);
+	}, [searchTerm]);
+
+	// 🔧 REFACTOR: Data từ hooks — bỏ 3 useState + 3 useEffect onSnapshot
+	const { products, totalItems, totalPages, loading, create: createProduct, update: updateProduct, remove: removeProduct, findBySku } = useProducts({
 		ownerId: owner.ownerId,
 		enabled: !owner.loading && !!owner.ownerId,
+		isPaginated: true,
+		page: currentPage,
+		pageSize: ITEMS_PER_PAGE,
+		searchKeyword: debouncedSearchTerm
 	});
 	const { logs: inventoryLogs } = useInventoryLogs({
 		ownerId: owner.ownerId,
@@ -47,17 +66,15 @@ const ProductList = () => {
 	const [showEditForm, setShowEditForm] = useState(false);
 	const [showDetail, setShowDetail] = useState(false);
 	const [selectedProduct, setSelectedProduct] = useState<any>(null);
-	const [searchTerm, setSearchTerm] = useState('');
 	const [uploading, setUploading] = useState(false);
 	const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+	const [isSaving, setIsSaving] = useState(false);
 	// 🔧 REFACTOR: inventoryLogs + orders đã chuyển qua hooks useInventoryLogs + useOrders
 	const [expandedSkus, setExpandedSkus] = useState<Set<string>>(new Set());
-	const [currentPage, setCurrentPage] = useState(1);
 	const [showMobileSearch, setShowMobileSearch] = useState(false);
 	const [showScanner, setShowScanner] = useState(false);
 	const [selectedIds, setSelectedIds] = useState<string[]>([]);
 	const [currentFilter, setCurrentFilter] = useState<string | null>(null);
-	const ITEMS_PER_PAGE = 20;
 	const searchRef = useRef<HTMLInputElement>(null);
 	const qrRef = useRef<HTMLCanvasElement>(null);
 
@@ -98,14 +115,27 @@ const ProductList = () => {
 	});
 
 
-	// Get unique categories for suggestions
-	const categories = Array.from(new Set([
-		'Tôn lợp', 'Xà gồ', 'Sắt hộp', 'Phụ kiện', 'Inox',
-		...products.map(p => {
-			// @ts-ignore
-			return p.category;
-		}).filter(Boolean)
-	])).sort((a: any, b: any) => String(a).localeCompare(String(b)));
+	// Get unique categories for suggestions (fetch ALL categories from Firestore, not just current page)
+	const [categories, setCategories] = useState<string[]>(['Tôn lợp', 'Xà gồ', 'Sắt hộp', 'Phụ kiện', 'Inox']);
+
+	useEffect(() => {
+		if (!owner.loading && owner.ownerId) {
+			productService.getAllCategories(owner.ownerId).then(cats => {
+				const merged = Array.from(new Set([
+					'Tôn lợp', 'Xà gồ', 'Sắt hộp', 'Phụ kiện', 'Inox',
+					...cats
+				]));
+				setCategories(merged);
+			}).catch(() => {
+				// fallback: build from current page products
+				const fallback = Array.from(new Set([
+					'Tôn lợp', 'Xà gồ', 'Sắt hộp', 'Phụ kiện', 'Inox',
+					...products.map((p: any) => p.category).filter(Boolean)
+				])).sort((a: any, b: any) => String(a).localeCompare(String(b)));
+				setCategories(fallback);
+			});
+		}
+	}, [owner.loading, owner.ownerId]);
 
 	// Get unique units for suggestions
 	const units = Array.from(new Set([
@@ -142,8 +172,7 @@ const ProductList = () => {
 				if (product) {
 					setSelectedProduct(product);
 					setShowDetail(true);
-					// Clear the param after opening
-					navigate('/inventory', { replace: true });
+					navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
 				}
 			}
 		}
@@ -158,21 +187,15 @@ const ProductList = () => {
 		const params = new URLSearchParams(search);
 		if (params.get('new') === 'true') {
 			setShowAddForm(true);
-			navigate('/inventory', { replace: true });
-		} else if (params.get('tab') === 'inventory') {
-			navigate('/inventory', { replace: true });
-		} else if (params.get('tab') === 'logs') {
-			navigate('/inventory', { replace: true });
+			navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
 		} else if (params.get('import') === 'true') {
 			setShowImport(true);
-			navigate('/inventory', { replace: true });
+			navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
 		} else if (params.get('search') === 'focus') {
 			setShowMobileSearch(true);
 			setTimeout(() => searchRef.current?.focus(), 200);
-			navigate('/inventory', { replace: true });
 		} else if (params.get('filter') === 'low_stock') {
 			setCurrentFilter('low_stock');
-			navigate('/inventory', { replace: true });
 		}
 	}, [search, navigate]);
 
@@ -193,10 +216,49 @@ const ProductList = () => {
 	useEffect(() => {
 		const handleOpenAdd = () => {
 			setShowAddForm(true);
+			navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
 		};
 		window.addEventListener('open-mobile-add', handleOpenAdd);
 		return () => window.removeEventListener('open-mobile-add', handleOpenAdd);
 	}, []);
+
+	// Track modal state for back button
+	const showDetailRef = useRef(showDetail);
+	const showAddFormRef = useRef(showAddForm);
+	const showEditFormRef = useRef(showEditForm);
+	const showImportRef = useRef(showImport);
+
+	useEffect(() => { showDetailRef.current = showDetail; }, [showDetail]);
+	useEffect(() => { showAddFormRef.current = showAddForm; }, [showAddForm]);
+	useEffect(() => { showEditFormRef.current = showEditForm; }, [showEditForm]);
+	useEffect(() => { showImportRef.current = showImport; }, [showImport]);
+
+	// Handle browser back button — close modal
+	useEffect(() => {
+		const handlePopState = () => {
+			if (showDetailRef.current) {
+				setShowDetail(false);
+			}
+			if (showAddFormRef.current) {
+				setShowAddForm(false);
+			}
+			if (showEditFormRef.current) {
+				setShowEditForm(false);
+			}
+			if (showImportRef.current) {
+				setShowImport(false);
+			}
+		};
+		window.addEventListener('popstate', handlePopState);
+		return () => window.removeEventListener('popstate', handlePopState);
+	}, []);
+
+	// Auto-reset form state when form is closed
+	useEffect(() => {
+		if (!showAddForm && !showEditForm) {
+			resetForm();
+		}
+	}, [showAddForm, showEditForm]);
 
 	const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
@@ -204,28 +266,12 @@ const ProductList = () => {
 
 		setUploading(true);
 		try {
-			const formData = new FormData();
-			formData.append('file', file);
-			formData.append('upload_preset', 'dunvexbuil');
-			formData.append('folder', 'dunvex_products');
-
-			const response = await fetch(
-				`https://api.cloudinary.com/v1_1/dtx0uvb4e/image/upload`,
-				{
-					method: 'POST',
-					body: formData,
-				}
-			);
-
-			const data = await response.json();
-
-			if (data.secure_url) {
-				setFormData(prev => ({ ...prev, imageUrl: data.secure_url }));
+			const { uploadImageToVPS } = await import('../utils/vpsUpload');
+			const url = await uploadImageToVPS(file);
+			if (url) {
+				setFormData(prev => ({ ...prev, imageUrl: url }));
 				showToast("Tải ảnh lên thành công", "success");
-			} else {
-				showToast("Lỗi upload Cloudinary: " + (data.error?.message || "Không xác định"), "error");
 			}
-
 		} catch (error: any) {
 			showToast(`Lỗi upload: ${error.message}`, "error");
 		} finally {
@@ -346,6 +392,7 @@ const ProductList = () => {
 
 	const handleAddProduct = async (e: React.FormEvent) => {
 		e.preventDefault();
+		if (isSaving) return;
 		try {
 			if (!formData.name) {
 				showToast("Vui lòng nhập tên sản phẩm", "warning");
@@ -356,6 +403,8 @@ const ProductList = () => {
 				showToast("Đang tải dữ liệu người dùng, vui lòng thử lại sau", "warning");
 				return;
 			}
+
+			setIsSaving(true);
 
 			// NEW: Check if SKU exists for this Admin
 			if (formData.sku) {
@@ -418,19 +467,26 @@ const ProductList = () => {
 				});
 			}
 
-			setShowAddForm(false);
-			resetForm();
+			window.history.back();
+			// Add new category to suggestions if not already present
+			if (formData.category && !categories.includes(formData.category)) {
+				setCategories(prev => [...prev, formData.category].sort((a: any, b: any) => String(a).localeCompare(String(b))));
+			}
 			showToast("Thêm sản phẩm thành công", "success");
 		} catch (error: any) {
 			console.error("Add product error:", error);
 			showToast(`Lỗi khi thêm sản phẩm: ${error?.message || 'Không xác định'}`, "error");
+		} finally {
+			setIsSaving(false);
 		}
 	};
 
 	const handleUpdateProduct = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (!selectedProduct) return;
+		if (isSaving) return;
 		try {
+			setIsSaving(true);
 			// NEW: Check if SKU exists for this Admin (excluding current product)
 			if (formData.sku) {
 				const normalize = (s: string) => String(s || '').toLowerCase().replace(/\s+/g, '').trim();
@@ -483,11 +539,16 @@ const ProductList = () => {
 			});
 
 			await batch.commit();
-			setShowEditForm(false);
-			resetForm();
+			window.history.back();
+			// Add new category to suggestions if not already present
+			if (formData.category && !categories.includes(formData.category)) {
+				setCategories(prev => [...prev, formData.category].sort((a: any, b: any) => String(a).localeCompare(String(b))));
+			}
 			showToast("Cập nhật sản phẩm thành công", "success");
 		} catch (error) {
 			showToast("Lỗi khi cập nhật sản phẩm", "error");
+		} finally {
+			setIsSaving(false);
 		}
 	};
 
@@ -618,6 +679,12 @@ const ProductList = () => {
 
 
 	const openEdit = (product: any) => {
+		// Nếu đang mở modal chi tiết, đóng nó trước (không back history)
+		// rồi replace history state thay vì push thêm entry mới
+		const wasShowingDetail = showDetailRef.current;
+		if (wasShowingDetail) {
+			setShowDetail(false);
+		}
 		setSelectedProduct(product);
 		setFormData({
 			name: product.name,
@@ -640,11 +707,18 @@ const ProductList = () => {
 			excludeProfit: product.excludeProfit || false,
 		});
 		setShowEditForm(true);
+		if (wasShowingDetail) {
+			// Reuse history entry đã có từ modal chi tiết, chỉ replace state
+			navigate(window.location.pathname + window.location.search, { state: { modalOpen: true }, replace: true });
+		} else {
+			navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
+		}
 	};
 
 	const openDetail = (product: any) => {
 		setSelectedProduct(product);
 		setShowDetail(true);
+		navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
 	};
 
 	const sourceList = products;
@@ -658,28 +732,14 @@ const ProductList = () => {
 			return missingSkus.includes(product.sku);
 		}
 
-		const matchesSearch = isMatch(product.name || '', searchTerm) ||
-			isMatch(product.sku || '', searchTerm) ||
-			isMatch(product.serialNumber || '', searchTerm) ||
-			isMatch(product.id || '', searchTerm) ||
-			isMatch(product.category || '', searchTerm) ||
-			isMatch(product.note || '', searchTerm) ||
-			isMatch(product.specification || '', searchTerm) ||
-			isMatch(product.packaging || '', searchTerm) ||
-			isMatch(product.density || '', searchTerm);
-
 		if (currentFilter === 'low_stock') {
-			return matchesSearch && (Number(product.stock) || 0) <= 10;
+			return (Number(product.stock) || 0) <= 10;
 		}
 
-		return matchesSearch;
+		return true;
 	});
 
-	const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
-	const paginatedProducts = filteredProducts.slice(
-		(currentPage - 1) * ITEMS_PER_PAGE,
-		currentPage * ITEMS_PER_PAGE
-	);
+	const paginatedProducts = filteredProducts;
 
 	const formatPrice = (price: number) => {
 		return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
@@ -758,7 +818,7 @@ const ProductList = () => {
 				<body>
 					<div class="label-container">
 						<div class="brand">DUNVEX BUILD</div>
-						<img src="${qrDataURL}" class="qr-img" />
+						<img src="${qrDataURL}" class="qr-img"  loading="lazy" />
 						<div class="product-name">${product.name}</div>
 						<div class="sku-details">ID: ${product.id}</div>
 						<div class="sku-details">SKU: ${product.sku || '---'}</div>
@@ -861,14 +921,20 @@ const ProductList = () => {
 							)}
 
 							<button
-								onClick={() => setShowImport(true)}
+								onClick={() => {
+									setShowImport(true);
+									navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
+								}}
 								className="hidden md:flex bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-3 xl:px-4 py-2.5 rounded-xl font-bold border border-slate-200 dark:border-slate-800 active:scale-95 transition-all items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-700"
 							>
 								<span className="material-symbols-outlined">file_upload</span>
 								<span className="hidden xl:inline">Nhập Excel</span>
 							</button>
 							<button
-								onClick={() => setShowAddForm(true)}
+								onClick={() => {
+									setShowAddForm(true);
+									navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
+								}}
 								className="hidden md:flex bg-[#FF6D00] hover:bg-orange-600 text-white px-3 xl:px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-orange-500/20 active:scale-95 transition-all items-center gap-2"
 							>
 								<span className="material-symbols-outlined text-xl">add</span>
@@ -884,7 +950,7 @@ const ProductList = () => {
 					type="products"
 					ownerId={owner.ownerId}
 					ownerEmail={owner.ownerEmail}
-					onClose={() => setShowImport(false)}
+					onClose={() => window.history.back()}
 					onSuccess={() => {
 						// Optional: refresh data or show success message
 					}}
@@ -897,7 +963,7 @@ const ProductList = () => {
 
 				{/* Mobile Search Bar - Conditional */}
 				{showMobileSearch && (
-					<div className="md:hidden mb-6 animate-in slide-in-from-top duration-300">
+					<div className="lg:hidden mb-6 animate-in slide-in-from-top duration-300">
 						<div className="flex items-center gap-3 bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-200 dark:border-slate-800">
 							<span className="material-symbols-outlined text-slate-400">search</span>
 							<input
@@ -979,7 +1045,7 @@ const ProductList = () => {
 										onClick={() => {
 											const state = { ...location.state };
 											delete state.missingSkus;
-											navigate('/inventory', { state, replace: true });
+											navigate('/products', { state, replace: true });
 										}}
 										className="px-4 py-2 bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 font-bold text-xs rounded-lg border border-amber-200 dark:border-amber-700/50 hover:bg-amber-50 dark:hover:bg-amber-900/40 transition-colors"
 									>
@@ -993,7 +1059,7 @@ const ProductList = () => {
 								totalPages > 1 && (
 									<div className="mt-8 mb-12 flex flex-col md:flex-row items-center justify-between gap-4">
 										<p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-											Hiển thị {((currentPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredProducts.length)} trên tổng {filteredProducts.length} sản phẩm
+											Hiển thị {((currentPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, totalItems)} trên tổng {totalItems} sản phẩm
 										</p>
 										<div className="flex items-center gap-1">
 											<button
@@ -1050,7 +1116,7 @@ const ProductList = () => {
 
 			<InventoryFormModal
 				show={showAddForm || showEditForm}
-				onClose={() => { setShowAddForm(false); setShowEditForm(false); resetForm(); }}
+				onClose={() => window.history.back()}
 				isEdit={showEditForm}
 				formData={formData}
 				setFormData={setFormData}
@@ -1066,12 +1132,13 @@ const ProductList = () => {
 				copyToClipboard={copyToClipboard}
 				hasManagePermission={hasManagePermission}
 				getImageUrl={getImageUrl}
+				saving={isSaving}
 			/>
 
 			{/* DETAIL MODAL */}
 			<InventoryDetailModal
 				show={showDetail}
-				onClose={() => setShowDetail(false)}
+				onClose={() => window.history.back()}
 				selectedProduct={selectedProduct}
 				products={products}
 				hasManagePermission={hasManagePermission}

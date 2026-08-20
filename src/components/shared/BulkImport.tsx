@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { db, auth } from '../../services/firebase';
-import { collection, writeBatch, doc, serverTimestamp, addDoc, getDocs, query, where } from 'firebase/firestore';
+import { collection, writeBatch, doc, serverTimestamp, addDoc, getDocs, query, where } from '../../services/firebase';
 import { X, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Download, Link as LinkIcon, Globe } from 'lucide-react';
 import { useToast } from './Toast';
 
@@ -64,7 +64,8 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 				{ key: 'packaging', label: 'Đóng gói', type: 'number', default: 0 },
 				{ key: 'density', label: 'Trọng lượng', type: 'number', default: 0 },
 				{ key: 'note', label: 'Ghi chú', type: 'string' },
-				{ key: 'expiryDate', label: 'Ngày hết hạn', type: 'string' }
+				{ key: 'expiryDate', label: 'Ngày hết hạn', type: 'string' },
+				{ key: 'imageUrl', label: 'Hình ảnh', type: 'string' }
 			]
 		}
 	};
@@ -175,6 +176,12 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 					if (field.key === 'unit') {
 						const unitSynonyms = ['đvt', 'đơnvịtính', 'dvt', 'unit'];
 						if (unitSynonyms.some(s => cleanH.includes(s) || s.includes(cleanH))) return true;
+					}
+
+					// Synonyms for 'imageUrl'
+					if (field.key === 'imageUrl') {
+						const imgSynonyms = ['hìnhảnh', 'ảnh', 'hình', 'image', 'picture', 'url', 'link', 'linkảnh', 'linkhình'];
+						if (imgSynonyms.some(s => cleanH.includes(s) || s.includes(cleanH))) return true;
 					}
 
 					return false;
@@ -816,7 +823,9 @@ const BulkImport: React.FC<BulkImportProps> = ({ type, ownerId, ownerEmail, onCl
 												<tr key={rowIdx} className="hover:bg-indigo-50/30 dark:hover:bg-indigo-500/5 transition-colors">
 													{config.fields.map((field, colIdx) => (
 														<td key={colIdx} className="py-3 px-6 text-xs font-bold text-slate-600 dark:text-slate-300 whitespace-nowrap">
-															{typeof row[field.key] === 'number' 
+															{field.key === 'imageUrl' && row[field.key] ? (
+																<img src={row[field.key]} alt="Preview" className="w-10 h-10 object-cover rounded-md border border-slate-200" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+															) : typeof row[field.key] === 'number' 
 																? Number(row[field.key]).toLocaleString('vi-VN', { 
 																	minimumFractionDigits: 0,
 																	maximumFractionDigits: 3 

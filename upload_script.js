@@ -216,13 +216,13 @@ function handleFileUpload(data) {
     var folder = DriveApp.getFolderById(folderId);
     var blob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType, filename);
     var file = folder.createFile(blob);
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     
     return ContentService.createTextOutput(JSON.stringify({
       status: "success",
       fileUrl: "https://drive.google.com/uc?export=view&id=" + file.getId()
     })).setMimeType(ContentService.MimeType.JSON);
 }
+
 
 function handleInviteUser(data) {
   var email = data.email;
@@ -607,3 +607,64 @@ function testNexusAI() {
   var result = callNexusAI("Chào bạn, bạn là ai? Trả lời thật ngắn gọn.");
   Logger.log("KẾT QUẢ AI: " + result);
 }
+
+function triggerDrivePermission() {
+  DriveApp.getRootFolder();
+  Logger.log("DriveApp authorized successfully!");
+}
+
+function autoCleanupTrigger() {
+  cleanupOldBackups("1kQciC7-VvMdKmt6rpiyspNNkQeThydxg");
+}
+
+function cleanupOldBackups(folderId) {
+  var targetFolderId = folderId || "1kQciC7-VvMdKmt6rpiyspNNkQeThydxg";
+  var folder = DriveApp.getFolderById(targetFolderId);
+  var files = [];
+  var iterator = folder.getFiles();
+  while (iterator.hasNext()) {
+    var file = iterator.next();
+    files.push({
+      file: file,
+      dateCreated: file.getDateCreated()
+    });
+  }
+  
+  // Sắp xếp các file theo thời gian tạo giảm dần (mới nhất lên đầu)
+  files.sort(function(a, b) {
+    return b.dateCreated - a.dateCreated;
+  });
+  
+  // Giữ lại 5 phiên bản mới nhất, xóa các phiên bản cũ hơn
+  if (files.length > 5) {
+    for (var i = 5; i < files.length; i++) {
+      var fileToDelete = files[i].file;
+      Logger.log("Đang xóa bản sao lưu cũ: " + fileToDelete.getName() + " (Tạo lúc: " + files[i].dateCreated + ")");
+      try {
+        fileToDelete.setTrashed(true);
+      } catch (err) {
+        Logger.log("Không thể xóa file này (có thể do quyền sở hữu): " + err.message);
+      }
+    }
+  }
+}
+
+
+function createCleanupTrigger() {
+  var triggers = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'autoCleanupTrigger') {
+      ScriptApp.deleteTrigger(triggers[i]);
+    }
+  }
+  
+  // Tạo trigger chạy hàng ngày lúc 12:00 trưa đến 1:00 chiều
+  ScriptApp.newTrigger('autoCleanupTrigger')
+    .timeBased()
+    .everyDays(1)
+    .atHour(12)
+    .create();
+  Logger.log("Đã cấu hình trigger tự động xóa bản sao lưu cũ lúc 12h trưa hàng ngày!");
+}
+
+

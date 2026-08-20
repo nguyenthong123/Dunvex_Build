@@ -35,8 +35,15 @@ const ReloadPrompt: React.FC = () => {
 
   const handleUpdate = () => {
     if (waitingWorker) {
-      waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+      try {
+        waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+      } catch (err) {
+        console.error("SKIP_WAITING error:", err);
+      }
     }
+    setTimeout(() => {
+      window.location.reload();
+    }, 200);
   };
 
   const handleDismiss = () => {

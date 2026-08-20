@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
-import { doc, getDoc, setDoc, serverTimestamp, collection, addDoc, deleteDoc, query, where } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, collection, addDoc, deleteDoc, query, where } from '../services/firebase';
 import { usePriceLists } from '../hooks/usePriceLists';
 import {
 	FileSpreadsheet, Upload, Link as LinkIcon, Download,
@@ -11,6 +11,7 @@ import {
 	Lock, Crown, Image, Camera, Loader2
 } from 'lucide-react';
 import { useOwner } from '../hooks/useOwner';
+import { getOptimizedImageUrl } from '../utils/validation';
 import { useToast } from '../components/shared/Toast';
 import { useProducts } from '../hooks/useProducts';
 
@@ -111,11 +112,29 @@ const PriceList = () => {
 		setCurrentPage(1);
 	}, [viewMode]);
 
+	// Handle browser back button — close price detail via React Router blocker
+	// Handle browser back button — close modal
+	// Track modal open state for back button
+	const viewModeRef = useRef(viewMode);
+	useEffect(() => { viewModeRef.current = viewMode; }, [viewMode]);
+
+	// Handle browser back button — close detail modal
+	useEffect(() => {
+		const handlePopState = () => {
+			if (viewModeRef.current === 'detail') {
+				setViewMode('list');
+			}
+		};
+		window.addEventListener('popstate', handlePopState);
+		return () => window.removeEventListener('popstate', handlePopState);
+	}, []);
+
 	const handleSelectList = (list: any) => {
 		setSelectedList(list);
 		setPriceData(list.items || []);
 		setHeaders(list.headers || []);
 		setViewMode('detail');
+		navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
 		setSelectedGroup('');
 		setPriceSubtitle(list.subtitle || 'Bảng giá tại kho');
 
@@ -139,10 +158,28 @@ const PriceList = () => {
 		const rawHeaders = (jsonData[0] as any[]).map(h => String(h || '').trim());
 		const rawRows = jsonData.slice(1);
 
+		// Detect image column synonyms in spreadsheet headers
+		const imageSynonyms = ['hình ảnh', 'ảnh', 'hình', 'image', 'picture', 'url', 'link', 'link ảnh', 'link hình'];
+		const imageColIdx = rawHeaders.findIndex(h => {
+			const cleanH = String(h || '').toLowerCase().trim().replace(/\s/g, '');
+			return imageSynonyms.some(syn => {
+				const cleanSyn = syn.replace(/\s/g, '');
+				return cleanH === cleanSyn || cleanH.includes(cleanSyn) || cleanSyn.includes(cleanH);
+			});
+		});
+
+		const imageHeaderName = imageColIdx !== -1 ? rawHeaders[imageColIdx] : null;
+
+		// Filter out the image column header from standard text headers
+		const finalHeaders = imageHeaderName
+			? rawHeaders.filter(h => h !== imageHeaderName)
+			: rawHeaders;
+
 		const mappedData = rawRows.map((row: any[]) => {
 			const obj: any = {};
+			
+			// Map standard headers
 			rawHeaders.forEach((header, idx) => {
-				// Convert everything to string to preserve formatting (like 0.6)
 				let val = row[idx];
 				if (val === undefined || val === null) {
 					obj[header] = '';
@@ -150,13 +187,22 @@ const PriceList = () => {
 					obj[header] = String(val).trim();
 				}
 			});
+
+			// Map to imageUrl specifically for thumbnail rendering
+			if (imageColIdx !== -1) {
+				const imgVal = row[imageColIdx];
+				obj.imageUrl = imgVal !== undefined && imgVal !== null ? String(imgVal).trim() : '';
+			} else {
+				obj.imageUrl = obj.imageUrl || '';
+			}
+
 			return obj;
 		}).filter(row => Object.values(row).some(v => v !== '')); // Skip empty rows
 
 		setPriceData(mappedData);
-		setHeaders(rawHeaders);
-		setSelectedList({ items: mappedData, headers: rawHeaders, isUnsaved: true });
+		setHeaders(finalHeaders);
 		setViewMode('detail');
+		navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
 		setSelectedGroup('');
 		setPriceSubtitle('Bảng giá tại kho');
 
@@ -183,19 +229,13 @@ const PriceList = () => {
 		setUploadingRow(targetRow);
 		
 		try {
-			const fData = new FormData();
-			fData.append('file', file);
-			fData.append('upload_preset', 'dunvexbuil');
-			fData.append('folder', 'dunvex_pricelist');
-			const res = await fetch('https://api.cloudinary.com/v1_1/dtx0uvb4e/image/upload', { method: 'POST', body: fData });
-			const data = await res.json();
-			if (data.secure_url) {
+			const { uploadImageToVPS } = await import('../utils/vpsUpload');
+			const url = await uploadImageToVPS(file);
+			if (url) {
 				setPriceData(prev => prev.map(item =>
-					item === targetRow ? { ...item, imageUrl: data.secure_url } : item
+					item === targetRow ? { ...item, imageUrl: url } : item
 				));
 				showToast('✅ Đã tải ảnh lên!', 'success');
-			} else {
-				showToast('❌ Lỗi tải ảnh', 'error');
 			}
 		} catch {
 			showToast('❌ Lỗi kết nối', 'error');
@@ -209,6 +249,22 @@ const PriceList = () => {
 		imageInputRef.current?.click();
 	};
 
+	const triggerImageLinkPaste = (targetRow: any) => {
+		const url = window.prompt("Nhập hoặc dán link ảnh sản phẩm:");
+		if (url === null) return;
+		
+		const cleanUrl = url.trim();
+		if (!cleanUrl) {
+			showToast("Link ảnh không được để trống", "warning");
+			return;
+		}
+
+		setPriceData(prev => prev.map(item =>
+			item === targetRow ? { ...item, imageUrl: cleanUrl } : item
+		));
+		showToast("✅ Đã dán link ảnh!", "success");
+	};
+
 	const handleImageRemove = (targetRow: any) => {
 		setPriceData(prev => prev.map(item =>
 			item === targetRow ? { ...item, imageUrl: '' } : item
@@ -217,6 +273,7 @@ const PriceList = () => {
 
 	// Kiểm tra có item nào có ảnh không
 	const hasImages = priceData.some(item => item.imageUrl);
+
 
 	const savePriceList = async (items: any[], headers: string[]) => {
 		if (!owner.ownerId) return;
@@ -438,19 +495,95 @@ const PriceList = () => {
 							font-size: 11px !important;
 							text-transform: uppercase !important;
 							letter-spacing: 0.5px !important;
-							padding: 12px 14px !important;
+							padding: 8px 10px !important;
 						}
 						td {
 							border: 1px solid #e2e8f0 !important;
 							font-size: 11px !important;
-							padding: 10px 14px !important;
+							padding: 6px 10px !important;
 							color: #1e293b !important;
-							line-height: 1.4 !important;
+							line-height: 1.3 !important;
 						}
 						
 						/* Force typography and elements to print elegantly */
 						.text-\[\#E65100\], .text-\[\#FF6D00\] {
 							color: #e65100 !important;
+						}
+
+						/* Print layout optimization for compact headers */
+						.price-list-header {
+							padding: 10px 0 15px 0 !important;
+							border-bottom: 2px solid #fed7aa !important;
+							margin-bottom: 10px !important;
+						}
+						.price-list-main-row {
+							gap: 16px !important;
+							align-items: center !important;
+						}
+						.price-list-header .space-y-6 {
+							margin: 0 !important;
+						}
+						.price-list-header .space-y-6 > * {
+							margin-top: 0 !important;
+							margin-bottom: 0 !important;
+						}
+						/* Adjust logo and title inline */
+						.price-list-header .size-16 {
+							width: 42px !important;
+							height: 42px !important;
+							border-radius: 10px !important;
+						}
+						.price-list-header .size-16 svg {
+							width: 22px !important;
+							height: 22px !important;
+						}
+						.price-list-header h1 {
+							font-size: 18px !important;
+							margin: 0 !important;
+							font-weight: 800 !important;
+						}
+						.price-list-header .space-y-2.5 {
+							margin-top: 4px !important;
+							display: flex !important;
+							flex-direction: column !important;
+							gap: 2px !important;
+						}
+						.price-list-header .space-y-2.5 > * {
+							margin: 0 !important;
+						}
+						.price-list-header .space-y-2.5 .flex.items-center.gap-6 {
+							gap: 12px !important;
+							margin-top: 1px !important;
+						}
+						/* Adjust Right column - Báo Giá */
+						.price-list-header h2 {
+							font-size: 26px !important;
+							letter-spacing: 0.1em !important;
+							margin: 0 !important;
+							white-space: nowrap !important;
+							text-align: right !important;
+							line-height: 1.1 !important;
+							font-weight: 800 !important;
+						}
+						.price-list-header input {
+							font-size: 9px !important;
+							letter-spacing: 0.1em !important;
+							margin-top: 2px !important;
+							margin-bottom: 4px !important;
+							text-align: right !important;
+							white-space: nowrap !important;
+							border: none !important;
+							padding: 0 !important;
+						}
+						.price-list-header .w-32 {
+							display: none !important; /* Hide separator line */
+						}
+						.price-list-header p.text-\[11px\] {
+							font-size: 8px !important;
+							padding: 1px 6px !important;
+							margin-top: 1px !important;
+							display: inline-block !important;
+							text-align: right !important;
 						}
 						
 						@media print {
@@ -597,6 +730,39 @@ const PriceList = () => {
 		});
 	}, [headers, groupColumn]);
 
+	// Tính toán chiều rộng và định dạng căn lề động cho từng cột dựa trên tiêu đề & nội dung dữ liệu thực tế
+	const columnWidths = React.useMemo(() => {
+		const widths: Record<string, string> = {};
+		displayHeaders.forEach(header => {
+			const hLower = header.toLowerCase();
+			const isPrice = hLower.includes('giá') || hLower.includes('tiền');
+			
+			if (isPrice) {
+				widths[header] = 'w-[120px] min-w-[120px] text-right';
+				return;
+			}
+
+			// Đo độ dài lớn nhất của dữ liệu trong cột này
+			let maxLen = header.length;
+			priceData.forEach(row => {
+				const val = String(row[header] || '');
+				if (val.length > maxLen) {
+					maxLen = val.length;
+				}
+			});
+
+			// Phân loại cột dựa trên độ dài và nội dung để gán độ rộng phù hợp
+			if (maxLen > 30 || hLower.includes('sản phẩm') || hLower.includes('quy cách') || hLower.includes('mô tả') || hLower.includes('chi tiết') || hLower.includes('tên')) {
+				widths[header] = 'w-[320px] min-w-[200px] text-left';
+			} else if (maxLen < 8 || hLower.includes('đơn vị') || hLower.includes('dày') || hLower.includes('stt') || hLower.includes('mã')) {
+				widths[header] = 'w-[75px] min-w-[55px] text-center';
+			} else {
+				widths[header] = 'w-[140px] min-w-[100px] text-left';
+			}
+		});
+		return widths;
+	}, [displayHeaders, priceData]);
+
 	// Hàm hỗ trợ loại bỏ dấu tiếng Việt để tìm kiếm thông minh hơn
 	const normalizeString = (str: string) => {
 		return String(str)
@@ -723,7 +889,7 @@ const PriceList = () => {
 			<header className="h-14 md:h-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 md:px-8 shrink-0 relative md:sticky top-0 z-[40] print:hidden transition-all duration-300">
 				<div className="flex items-center gap-3 md:gap-4 flex-1 truncate">
 					<button
-						onClick={() => viewMode === 'detail' ? setViewMode('list') : navigate('/')}
+						onClick={() => { if (viewMode === 'detail') { setViewMode('list'); window.history.back(); } else navigate('/'); }}
 						className="size-9 md:size-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-indigo-600 transition-all shadow-sm shrink-0"
 					>
 						<ArrowLeft size={18} />
@@ -1002,31 +1168,31 @@ const PriceList = () => {
 									className="bg-white dark:bg-slate-900 shadow-2xl rounded-[3rem] overflow-hidden border border-slate-200 dark:border-slate-800 print:shadow-none print:rounded-none print:border-none w-full"
 								>
 								{/* Báo giá Header */}
-								<div className="p-12 bg-white border-b border-slate-50 relative">
-									<div className="flex justify-between items-start gap-8">
+								<div className="p-6 md:p-12 bg-white border-b border-slate-50 relative price-list-header">
+									<div className="flex justify-between items-start gap-4 md:gap-8 price-list-main-row">
 										<div className="space-y-6">
 											<div className="flex items-center gap-4">
 												<div className="size-16 bg-[#FF6D00] rounded-2xl flex items-center justify-center text-white shadow-xl shadow-orange-500/20 shrink-0">
 													<Building2 size={36} />
 												</div>
 												<h1 className="text-4xl font-black text-[#E65100] uppercase tracking-tighter leading-tight">
-													{companyInfo?.name || 'DUNVEX'}
+													{companyInfo?.name || ''}
 												</h1>
 											</div>
 
 											<div className="space-y-2.5 pl-1">
 												<div className="flex items-start gap-3 text-slate-700">
 													<MapPin size={14} className="text-[#FF6D00] shrink-0 mt-0.5" />
-													<span className="text-xs font-black uppercase tracking-wide leading-tight">{companyInfo?.address || 'XÃ KIẾN ĐỨC , LÂM ĐỒNG'}</span>
+													<span className="text-xs font-black uppercase tracking-wide leading-tight">{companyInfo?.address || ''}</span>
 												</div>
 												<div className="flex items-center gap-6">
 													<div className="flex items-center gap-2 text-slate-800">
 														<Phone size={14} className="text-[#FF6D00]" />
-														<span className="text-sm font-black">{companyInfo?.phone || '0988765444'}</span>
+														<span className="text-sm font-black">{companyInfo?.phone || ''}</span>
 													</div>
 													<div className="flex items-center gap-2 text-slate-800">
 														<Mail size={14} className="text-[#FF6D00]" />
-														<span className="text-sm font-black">{companyInfo?.email || 'dunvex.green@gmail.com'}</span>
+														<span className="text-sm font-black">{companyInfo?.email || ''}</span>
 													</div>
 												</div>
 											</div>
@@ -1057,17 +1223,17 @@ const PriceList = () => {
 											<thead>
 												<tr className="bg-orange-50/50">
 													<th className="py-5 px-4 text-[11px] font-black text-[#E65100] uppercase tracking-[0.1em] border border-slate-200 text-center w-12">STT</th>
-													<th className="py-5 px-2 text-[10px] font-black text-[#E65100] uppercase tracking-[0.1em] border border-slate-200 text-center w-[85px]">Hình ảnh</th>
-													{displayHeaders.map((header, idx) => {
-														const isPriceHeader = header.toLowerCase().includes('giá') || header.toLowerCase().includes('tiền');
-														return (
+													{hasImages && (
+														<th className="py-5 px-2 text-[10px] font-black text-[#E65100] uppercase tracking-[0.1em] border border-slate-200 text-center w-[85px]">Hình ảnh</th>
+													)}
+													{displayHeaders.map((header, idx) => (
 														<th
 															key={idx}
-															className={`py-5 px-4 text-[12px] font-black text-slate-950 uppercase tracking-[0.05em] border border-slate-200 ${isPriceHeader ? 'whitespace-nowrap min-w-[110px]' : 'whitespace-normal break-words'}`}
+															className={`py-5 px-4 text-[12px] font-black text-slate-950 uppercase tracking-[0.05em] border border-slate-200 whitespace-normal break-words ${columnWidths[header] || ''}`}
 														>
 															{header}
 														</th>
-													)})}
+													))}
 												</tr>
 											</thead>
 											<tbody className="divide-y divide-slate-200">
@@ -1075,35 +1241,47 @@ const PriceList = () => {
 													<tr key={rowIdx} className="hover:bg-orange-50/30 transition-colors">
 														<td className="py-4 px-4 text-[12px] font-black text-slate-500 text-center border border-slate-200 bg-slate-50/30">{rowIdx + 1}</td>
 														{/* 📸 Ảnh SP */}
-														<td className="py-2 px-1 text-center border border-slate-200 align-middle">
-															{row.imageUrl ? (
-																<div className="relative inline-block group">
-																	<img
-																		src={row.imageUrl}
-																		alt={row['Tên sản phẩm'] || row['Tên SP'] || row['Sản phẩm'] || ''}
-																		className="w-16 h-16 object-cover rounded-lg border border-slate-200 shadow-sm group-hover:scale-[2.5] group-hover:z-50 group-hover:shadow-xl transition-transform duration-200 origin-center"
-																	/>
-																	<button
-																		onClick={() => handleImageRemove(row)}
-																		className="absolute -top-2 -right-2 size-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-																		title="Xoá ảnh"
-																	>
-																		<Trash2 size={10} />
-																	</button>
-																</div>
-															) : uploadingRow === row ? (
-																<Loader2 className="w-5 h-5 animate-spin text-orange-500 mx-auto" />
-															) : (
-																<button
-																	onClick={() => triggerImageUpload(row)}
-																	className="w-16 h-16 border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center gap-0.5 text-slate-400 hover:border-orange-400 hover:text-orange-500 transition-colors"
-																	title="Tải ảnh lên"
-																>
-																	<Camera size={14} />
-																	<span className="text-[8px] font-bold">Thêm</span>
-																</button>
-															)}
-														</td>
+														{hasImages && (
+															<td className="py-2 px-1 text-center border border-slate-200 align-middle">
+																{row.imageUrl ? (
+																	<div className="relative inline-block group">
+																		<img
+																			src={getOptimizedImageUrl(row.imageUrl)}
+																			alt={row['Tên sản phẩm'] || row['Tên SP'] || row['Sản phẩm'] || ''}
+																			className="w-16 h-16 object-cover rounded-lg border border-slate-200 shadow-sm group-hover:scale-[2.5] group-hover:z-50 group-hover:shadow-xl transition-transform duration-200 origin-center"
+																		/>
+																		<button
+																			onClick={() => handleImageRemove(row)}
+																			className="absolute -top-2 -right-2 size-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity print:hidden"
+																			title="Xoá ảnh"
+																		>
+																			<Trash2 size={10} />
+																		</button>
+																	</div>
+																) : uploadingRow === row ? (
+																	<Loader2 className="w-5 h-5 animate-spin text-orange-500 mx-auto" />
+																) : (
+																	<div className="flex flex-col gap-1.5 items-center justify-center w-16 mx-auto print:hidden">
+																		<button
+																			onClick={() => triggerImageUpload(row)}
+																			className="w-16 h-8 border border-dashed border-slate-300 rounded-lg flex items-center justify-center gap-1.5 text-slate-400 hover:border-orange-400 hover:text-orange-500 transition-all active:scale-95"
+																			title="Tải ảnh từ file"
+																		>
+																			<Camera size={12} />
+																			<span className="text-[8px] font-bold">File</span>
+																		</button>
+																		<button
+																			onClick={() => triggerImageLinkPaste(row)}
+																			className="w-16 h-8 border border-dashed border-slate-300 rounded-lg flex items-center justify-center gap-1.5 text-slate-400 hover:border-orange-400 hover:text-orange-500 transition-all active:scale-95"
+																			title="Dán link ảnh"
+																		>
+																			<LinkIcon size={12} />
+																			<span className="text-[8px] font-bold">Link</span>
+																		</button>
+																	</div>
+																)}
+															</td>
+														)}
 														{displayHeaders.map((header, colIdx) => {
 															const value = row[header];
 															const h = header.toLowerCase();
@@ -1132,10 +1310,15 @@ const PriceList = () => {
 																}
 															}
 
+															const isProductName = header.toLowerCase().includes('sản phẩm') || header.toLowerCase().includes('tên sp') || header.toLowerCase().includes('tên');
 															return (
 																<td
 																	key={colIdx}
-																	className={`py-4 px-4 text-[13px] font-black border border-slate-200 ${colIdx === 0 ? 'text-[#E65100] leading-relaxed w-[350px] bg-orange-50/10 whitespace-normal break-words' : (isPrice ? 'text-slate-900 whitespace-nowrap min-w-[110px]' : 'text-slate-900 whitespace-normal break-words')}`}
+																	className={`py-4 px-4 text-[13px] border border-slate-200 whitespace-normal break-words ${
+																		isProductName 
+																			? 'text-[#E65100] bg-orange-50/10 font-bold' 
+																			: (isPrice ? 'text-slate-900 font-semibold' : 'text-slate-700 font-medium')
+																	} ${columnWidths[header] || ''}`}
 																>
 																	{displayValue}
 																</td>
@@ -1166,7 +1349,7 @@ const PriceList = () => {
 											</div>
 											<div>
 												<p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Xác nhận bởi</p>
-												<p className="text-lg font-black text-[#E65100] uppercase tracking-tighter mt-0.5">{companyInfo?.name || 'DUNVEX'}</p>
+												<p className="text-lg font-black text-[#E65100] uppercase tracking-tighter mt-0.5">{companyInfo?.name || ''}</p>
 											</div>
 										</div>
 									</div>

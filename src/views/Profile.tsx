@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Phone, Mail, Save, ArrowLeft, Shield, CheckCircle2, MapPin } from 'lucide-react';
 import { auth, db } from '../services/firebase';
-import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit } from '../services/firebase';
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
 import SalesChart from '../components/profile/SalesChart';
@@ -184,6 +184,25 @@ const Profile = () => {
                     <p className="text-xs text-indigo-700 dark:text-indigo-300 font-medium">
                         💡 <b>Lưu ý:</b> Khi bạn lưu số điện thoại tại đây, tất cả đơn hàng bạn tạo sẽ hiển thị SĐT của bạn thay vì SĐT chung của cửa hàng. Khách hàng sẽ liên hệ trực tiếp với bạn!
                     </p>
+                </div>
+
+                {/* 📱 PWA Pin App Card */}
+                <div className="mt-5 p-5 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-slate-900 dark:to-indigo-950/20 border border-indigo-100/80 dark:border-indigo-900/30 rounded-3xl shadow-sm">
+                    <div className="flex items-start gap-4">
+                        <div className="p-3 bg-indigo-500 text-white rounded-2xl shadow-md">
+                            <span className="material-symbols-outlined text-2xl font-bold">install_mobile</span>
+                        </div>
+                        <div className="flex-1">
+                            <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight">Ghim ứng dụng ra MH chính</h3>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">Chạy toàn màn hình, mượt mà và tiết kiệm dữ liệu như một ứng dụng gốc trên điện thoại.</p>
+                            <button 
+                                onClick={() => window.dispatchEvent(new CustomEvent('pin-app'))}
+                                className="mt-3.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all active:scale-95 shadow-sm shadow-indigo-500/20 cursor-pointer"
+                            >
+                                Xem hướng dẫn ghim app
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 

@@ -11,11 +11,14 @@ import { auth, db, functions } from '../services/firebase';
 import {
 	collection, query, onSnapshot, doc, updateDoc, addDoc, serverTimestamp,
 	orderBy, limit, deleteDoc, getDoc, setDoc, where, getDocs, writeBatch, Timestamp
-} from 'firebase/firestore';
+} from '../services/firebase';
 import { httpsCallable } from 'firebase/functions';
 
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
+import { TabItem, InputSection, LogoUploadSection } from '../components/admin/SharedComponents';
+import { UserManagement } from '../components/admin/UserManagement';
+import { AttendanceAdmin } from '../components/admin/AttendanceAdmin';
 
 const scrollbarHideStyle = `
   .no-scrollbar::-webkit-scrollbar {
@@ -1020,559 +1023,6 @@ const AdminSettings = () => {
 	);
 };
 
-const TabItem = ({ active, onClick, icon, label }: any) => (
-	<button
-		onClick={onClick}
-		className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 whitespace-nowrap min-w-fit ${active
-			? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-none translate-y-[-1px]'
-			: 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-			}`}
-	>
-		{icon}
-		<span className="text-[10px] md:text-xs font-bold uppercase tracking-widest">{label}</span>
-	</button>
-);
-
-const InputSection = ({ label, value, onChange, fullWidth = false, type = 'text' }: any) => (
-	<div className={`space-y-2 ${fullWidth ? 'md:col-span-2' : ''}`}>
-		<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</label>
-		<input type={type} className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" value={value} onChange={e => onChange(e.target.value)} />
-	</div>
-);
-
-const LogoUploadSection = ({ label, value, onUpload, uploading }: any) => {
-	const fileInputRef = useRef<HTMLInputElement>(null);
-
-	return (
-		<div className="space-y-2 md:col-span-2 mb-4">
-			<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</label>
-			<div className="flex flex-col md:flex-row items-center gap-6 p-6 bg-slate-50 dark:bg-slate-800/20 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl transition-all hover:border-indigo-500/50">
-				<div className="relative group shrink-0">
-					<div className="w-24 h-24 md:w-32 md:h-32 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden flex items-center justify-center p-2">
-						{value ? (
-							<img src={value} alt="Company Logo" className="w-full h-full object-contain" />
-						) : (
-							<div className="text-slate-300 dark:text-slate-600">
-								<Globe size={48} />
-							</div>
-						)}
-						{uploading && (
-							<div className="absolute inset-0 bg-white/80 dark:bg-slate-900/80 flex items-center justify-center">
-								<div className="animate-spin rounded-full h-8 w-8 border-4 border-indigo-500 border-t-transparent"></div>
-							</div>
-						)}
-					</div>
-				</div>
-
-				<div className="flex-1 space-y-3 text-center md:text-left">
-					<h4 className="font-bold text-slate-700 dark:text-slate-300">Logo Thương Hiệu</h4>
-					<p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-loose">PNG, JPG hoặc SVG. Khuyên dùng 300x100px.</p>
-					<div className="flex flex-wrap justify-center md:justify-start gap-2">
-						<button
-							onClick={() => fileInputRef.current?.click()}
-							disabled={uploading}
-							className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-indigo-700 transition-all flex items-center gap-2"
-						>
-							<Plus size={14} />
-							{value ? 'Thay đổi Logo' : 'Tải lên Logo'}
-						</button>
-						{value && (
-							<button
-								onClick={() => onUpload('')}
-								className="bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-all flex items-center gap-2"
-							>
-								<Trash2 size={14} />
-								Xóa
-							</button>
-						)}
-					</div>
-					<input
-						type="file"
-						ref={fileInputRef}
-						className="hidden"
-						accept="image/*"
-						onChange={(e) => {
-							const file = e.target.files?.[0];
-							if (file) onUpload(file);
-						}}
-					/>
-				</div>
-			</div>
-		</div>
-	);
-}
-
-const UserManagement = ({ userList, showAdd, onShowAdd, newUser, setNewUser, handleAddUser, onUpdateRole, onDelete, editingUser, setEditingUser, handleUpdateUser }: any) => {
-	const [deletingUserId, setDeletingUserId] = React.useState<string | null>(null);
-
-	return (
-		<div className="space-y-6">
-			<div className="flex justify-between items-center">
-				<h2 className="text-xl font-black uppercase text-slate-800 dark:text-white tracking-tight">Danh sách nhân sự</h2>
-				<button onClick={() => onShowAdd(true)} className="flex items-center gap-2 bg-[#FF6D00] text-white px-4 py-2 rounded-xl font-bold text-xs uppercase hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/20"><Plus size={16} /> Thêm nhân viên</button>
-			</div>
-
-			{/* Add User Form */}
-			{showAdd && (
-				<div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 mb-6 animate-in fade-in slide-in-from-top-4 duration-300">
-					<h3 className="font-bold text-lg mb-4 dark:text-white">Mời nhân viên mới</h3>
-					<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-						<div className="space-y-1">
-							<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Tên hiển thị</label>
-							<input type="text" placeholder="VD: Nguyễn Văn A" className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold text-sm dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" value={newUser.displayName} onChange={e => setNewUser({ ...newUser, displayName: e.target.value })} />
-						</div>
-						<div className="space-y-1">
-							<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Email Google</label>
-							<input type="email" placeholder="email@gmail.com" className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold text-sm dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })} />
-						</div>
-						<div className="space-y-1">
-							<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Vai trò</label>
-							<select className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold text-sm dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })}>
-								<option value="sale">Nhân viên Sale</option>
-								<option value="warehouse">Thủ kho</option>
-								<option value="accountant">Kế toán</option>
-								<option value="admin">Quản trị viên</option>
-							</select>
-						</div>
-					</div>
-					<div className="flex justify-end gap-3 mt-4">
-						<button onClick={() => onShowAdd(false)} className="px-6 py-2 text-slate-500 dark:text-slate-400 font-bold text-sm hover:text-slate-700 transition-colors">Hủy</button>
-						<button onClick={handleAddUser} className="px-6 py-2 bg-[#1A237E] dark:bg-indigo-600 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-200 dark:shadow-none hover:opacity-90 transition-all">Gửi lời mời</button>
-					</div>
-				</div>
-			)}
-
-			{/* Edit User Form/Modal */}
-			{editingUser && (
-				<div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
-					<div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-[2rem] shadow-2xl border border-slate-100 dark:border-slate-800 p-8">
-						<div className="flex justify-between items-center mb-6">
-							<div>
-								<h3 className="text-xl font-black uppercase text-[#1A237E] dark:text-indigo-400">Chỉnh sửa nhân sự</h3>
-								<p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-1">{editingUser.email}</p>
-							</div>
-							<button onClick={() => setEditingUser(null)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400 transition-colors"><XCircle size={24} /></button>
-						</div>
-
-						<div className="space-y-5">
-							<div className="space-y-2">
-								<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Tên hiển thị</label>
-								<input
-									type="text"
-									className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20"
-									value={editingUser.displayName}
-									onChange={e => setEditingUser({ ...editingUser, displayName: e.target.value })}
-								/>
-							</div>
-
-							<div className="space-y-2">
-								<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Vai trò</label>
-								<select
-									className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20"
-									value={editingUser.role}
-									onChange={e => setEditingUser({ ...editingUser, role: e.target.value })}
-								>
-									<option value="sale">Nhân viên Sale</option>
-									<option value="warehouse">Thủ kho</option>
-									<option value="accountant">Kế toán</option>
-									<option value="admin">Quản trị viên</option>
-								</select>
-							</div>
-
-							<div className="space-y-2">
-								<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">💰 Lương / tháng (VNĐ)</label>
-								<input
-									type="number"
-									className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20"
-									value={editingUser.monthlyWage || ''}
-									onChange={e => setEditingUser({ ...editingUser, monthlyWage: e.target.value })}
-									placeholder="VD: 8000000"
-								/>
-								{editingUser.monthlyWage > 0 && (
-									<p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold px-1">
-										≈ {Math.round(Number(editingUser.monthlyWage) / 26).toLocaleString('vi-VN')}đ/ngày (26 ngày công)
-									</p>
-								)}
-							</div>
-
-							<div className="flex gap-3 pt-4">
-								<button onClick={() => setEditingUser(null)} className="flex-1 px-4 py-3 text-slate-500 dark:text-slate-400 font-bold text-sm hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all">Bỏ qua</button>
-								<button onClick={handleUpdateUser} className="flex-1 px-4 py-3 bg-[#1A237E] dark:bg-indigo-600 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-200 dark:shadow-none hover:scale-[1.02] active:scale-[0.98] transition-all">Lưu thay đổi</button>
-							</div>
-						</div>
-					</div>
-				</div>
-			)}
-
-			<div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
-				<div className="overflow-x-auto custom-scrollbar">
-					<table className="w-full text-left min-w-[700px]">
-						<thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-400">
-							<tr><th className="px-6 py-4">Nhân viên</th><th className="px-6 py-4">Vai trò</th><th className="px-6 py-4">Trạng thái</th><th className="px-6 py-4 text-right">Hành động</th></tr>
-						</thead>
-						<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-							{userList.map((user: any) => (
-								<tr key={user.id} className="group hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
-									<td className="px-6 py-4">
-										<div className="font-bold text-sm dark:text-white">{user.displayName || 'Guest'}</div>
-										<div className="text-[10px] text-slate-400 font-bold lowercase">{user.email}</div>
-									</td>
-									<td className="px-6 py-4">
-										<span className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight">
-											{user.role === 'admin' ? 'Quản trị' : user.role === 'sale' ? 'Sale' : user.role === 'warehouse' ? 'Kho' : 'Kế toán'}
-										</span>
-									</td>
-									<td className="px-6 py-4">
-										<span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter ${user.status === 'active' ? 'bg-emerald-100 text-emerald-600' : 'bg-orange-100 text-orange-600'}`}>
-											{user.status === 'active' ? 'Đã kích hoạt' : 'Chờ xác nhận'}
-										</span>
-									</td>
-									<td className="px-6 py-4 text-right">
-										{deletingUserId === user.id ? (
-											<div className="flex items-center justify-end gap-2 animate-in fade-in zoom-in-95 duration-200">
-												<span className="text-[11px] text-rose-500 font-extrabold dark:text-rose-400 mr-1 animate-pulse">Xác nhận xóa?</span>
-												<button
-													onClick={(e) => {
-														e.stopPropagation();
-														e.preventDefault();
-														onDelete(user);
-														setDeletingUserId(null);
-													}}
-													className="px-3 py-1.5 bg-rose-500 text-white rounded-lg text-[10px] font-black uppercase hover:bg-rose-600 active:scale-95 transition-all shadow-md shadow-rose-500/20"
-												>
-													Có
-												</button>
-												<button
-													onClick={(e) => {
-														e.stopPropagation();
-														e.preventDefault();
-														setDeletingUserId(null);
-													}}
-													className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-[10px] font-black uppercase active:scale-95 transition-all"
-												>
-													Hủy
-												</button>
-											</div>
-										) : (
-											<div className="flex items-center justify-end gap-2">
-												<button
-													onClick={(e) => {
-														e.stopPropagation();
-														e.preventDefault();
-														setEditingUser(user);
-													}}
-													className="p-2 text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-all"
-													title="Chỉnh sửa"
-												>
-													<Edit3 size={18} />
-												</button>
-												<button
-													onClick={(e) => {
-														e.stopPropagation();
-														e.preventDefault();
-														setDeletingUserId(user.id);
-													}}
-													className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-all"
-													title="Xóa nhân viên"
-												>
-													<Trash2 size={18} />
-												</button>
-											</div>
-										)}
-									</td>
-								</tr>
-							))}
-						</tbody>
-					</table>
-				</div>
-			</div>
-		</div>
-	);
-};
-
-const AttendanceAdmin = ({ logs, fieldLogs, companyInfo, setCompanyInfo, onSave, error }: { logs: any[], fieldLogs: any[], companyInfo: any, setCompanyInfo: any, onSave: any, error?: string | null }) => {
-	const [viewerEmail, setViewerEmail] = useState('');
-	const [startDate, setStartDate] = useState('');
-	const [endDate, setEndDate] = useState('');
-	const [currentPage, setCurrentPage] = useState(1);
-
-	// Hiển thị lỗi nếu query Firestore thất bại
-	if (error) {
-		return (
-			<div className="flex flex-col items-center justify-center p-12 text-center">
-				<div className="bg-amber-500/10 p-6 rounded-full text-amber-500 mb-4 border border-amber-500/20">
-					<AlertTriangle size={48} />
-				</div>
-				<h3 className="text-lg font-black text-slate-800 dark:text-white mb-2">Đang gặp sự cố kết nối</h3>
-				<p className="text-sm text-slate-500 max-w-md mb-6">{error}</p>
-				<p className="text-xs text-slate-400 mb-4">Vui lòng tạo composite index trong Firebase Console:<br/><code className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-[10px]">attendance_logs: ownerId ASC, createdAt DESC</code></p>
-				<button onClick={() => window.location.reload()} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm">Thử lại</button>
-			</div>
-		);
-	}
-	const rowsPerPage = 10;
-
-	// Aggregate data by User and Date
-	const aggregatedData = useMemo(() => {
-		const data: any = {};
-
-		// 1. Process Office Logs & Requests
-		logs.forEach(log => {
-			const key = `${log.userEmail}_${log.date}`;
-			if (!data[key]) data[key] = {
-				userName: log.userName,
-				userEmail: log.userEmail,
-				date: log.date,
-				officeIn: null,
-				officeOut: null,
-				fieldFirst: null,
-				fieldLast: null,
-				requests: [],
-				status: 'on-time'
-			};
-
-			if (log.type === 'request') {
-				data[key].requests.push(log);
-			} else {
-				if (log.checkInAt) data[key].officeIn = log.checkInAt;
-				if (log.checkOutAt) data[key].officeOut = log.checkOutAt;
-				if (log.status === 'late') data[key].status = 'late';
-			}
-		});
-
-		// 2. Process Field Checkins
-		fieldLogs.forEach(f => {
-			const date = f.createdAt?.seconds ? new Date(f.createdAt.seconds * 1000).toISOString().split('T')[0] : '';
-			if (!date) return;
-			const key = `${f.userEmail}_${date}`;
-
-			if (!data[key]) data[key] = {
-				userName: f.userName || f.userEmail,
-				userEmail: f.userEmail,
-				date: date,
-				officeIn: null,
-				officeOut: null,
-				fieldFirst: f.createdAt,
-				fieldLast: f.createdAt,
-				requests: [],
-				status: 'field-trip'
-			}; else {
-				if (!data[key].fieldFirst || f.createdAt.seconds < data[key].fieldFirst.seconds) data[key].fieldFirst = f.createdAt;
-				if (!data[key].fieldLast || f.createdAt.seconds > data[key].fieldLast.seconds) data[key].fieldLast = f.createdAt;
-			}
-		});
-
-		const result = Object.values(data).sort((a: any, b: any) => b.date.localeCompare(a.date));
-
-		// 3. Filter by Date Range
-		return result.filter((item: any) => {
-			if (startDate && item.date < startDate) return false;
-			if (endDate && item.date > endDate) return false;
-			return true;
-		});
-	}, [logs, fieldLogs, startDate, endDate]);
-
-	const totalPages = Math.ceil(aggregatedData.length / rowsPerPage);
-	const paginatedData = aggregatedData.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
-
-	useEffect(() => {
-		setCurrentPage(1);
-	}, [startDate, endDate]);
-
-	const addViewer = () => {
-		if (!viewerEmail || !viewerEmail.includes('@')) return;
-		const newList = [...(companyInfo.attendanceViewers || []), viewerEmail];
-		setCompanyInfo({ ...companyInfo, attendanceViewers: newList });
-		setViewerEmail('');
-	};
-
-	const removeViewer = (email: string) => {
-		const newList = companyInfo.attendanceViewers.filter((e: string) => e !== email);
-		setCompanyInfo({ ...companyInfo, attendanceViewers: newList });
-	};
-
-	if (error) {
-		return (
-			<div className="flex flex-col items-center justify-center p-12 text-center">
-				<div className="bg-amber-500/10 p-6 rounded-full text-amber-500 mb-4 border border-amber-500/20">
-					<AlertTriangle size={48} />
-				</div>
-				<h3 className="text-lg font-black text-slate-800 dark:text-white mb-2">Đang gặp sự cố kết nối</h3>
-				<p className="text-sm text-slate-500 max-w-md mb-6">{error}</p>
-				<p className="text-xs text-slate-400 mb-4">Vui lòng tạo composite index trong Firebase Console:<br/><code className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-[10px]">attendance_logs: ownerId ASC, createdAt DESC</code></p>
-				<button onClick={() => window.location.reload()} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm">Thử lại</button>
-			</div>
-		);
-	}
-
-	return (
-		<div className="space-y-6">
-			{/* Sharing Header */}
-			<div className="bg-white dark:bg-slate-900 rounded-[2rem] p-4 md:p-6 shadow-sm border border-slate-100 dark:border-slate-800">
-				<div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-					<div>
-						<h3 className="font-bold dark:text-white uppercase text-[10px] md:text-sm tracking-widest flex items-center gap-2">
-							<ExternalLink size={18} className="text-indigo-600" /> Chia sẻ bảng công
-						</h3>
-						<p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1">Cho phép Kế toán/Quản lý truy cập</p>
-					</div>
-					<div className="flex flex-col sm:flex-row gap-2">
-						<input
-							type="email"
-							placeholder="Email người xem..."
-							className="bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-xs font-bold outline-none ring-2 ring-transparent focus:ring-indigo-500/20 flex-1 md:w-64"
-							value={viewerEmail}
-							onChange={(e) => setViewerEmail(e.target.value)}
-						/>
-						<div className="flex gap-2">
-							<button onClick={addViewer} className="flex-1 sm:flex-none bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all">Thêm</button>
-							<button onClick={onSave} className="flex-1 sm:flex-none bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-emerald-700 transition-all">Lưu</button>
-						</div>
-					</div>
-				</div>
-				{companyInfo.attendanceViewers?.length > 0 && (
-					<div className="mt-4 flex flex-wrap gap-2">
-						{companyInfo.attendanceViewers.map((email: string) => (
-							<span key={email} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-lg text-[10px] font-bold text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-								{email}
-								<button onClick={() => removeViewer(email)} className="text-red-500 hover:scale-110 transition-transform"><X size={14} /></button>
-							</span>
-						))}
-					</div>
-				)}
-			</div>
-
-			<div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
-				<div className="p-4 md:p-6 border-b border-slate-50 dark:border-slate-800 flex flex-col lg:flex-row justify-between lg:items-center gap-4">
-					<div>
-						<h3 className="font-bold dark:text-white uppercase text-[10px] md:text-sm tracking-widest font-['Manrope']">Nhật ký Tổng hợp (Văn phòng & Thị trường)</h3>
-						<p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">
-							Hiển thị {paginatedData.length}/{aggregatedData.length} bản ghi
-						</p>
-					</div>
-
-					<div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-						<div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-xl border border-slate-100 dark:border-slate-700 flex-1">
-							<span className="text-[9px] font-black text-slate-400 uppercase min-w-[30px]">Từ</span>
-							<input
-								type="date"
-								className="bg-transparent border-none text-xs font-bold outline-none dark:text-white dark:color-scheme-dark flex-1"
-								value={startDate}
-								onChange={(e) => setStartDate(e.target.value)}
-							/>
-						</div>
-						<div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-xl border border-slate-100 dark:border-slate-700 flex-1">
-							<span className="text-[9px] font-black text-slate-400 uppercase min-w-[30px]">Đến</span>
-							<input
-								type="date"
-								className="bg-transparent border-none text-xs font-bold outline-none dark:text-white dark:color-scheme-dark flex-1"
-								value={endDate}
-								onChange={(e) => setEndDate(e.target.value)}
-							/>
-						</div>
-					</div>
-				</div>
-				<div className="overflow-x-auto custom-scrollbar">
-					<table className="w-full text-left min-w-[1000px]">
-						<thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-400">
-							<tr>
-								<th className="px-6 py-4">Nhân viên</th>
-								<th className="px-6 py-4">Ngày</th>
-								<th className="px-6 py-4 text-center">Văn phòng (Vào/Ra)</th>
-								<th className="px-6 py-4 text-center">Thị trường (Đầu/Cuối)</th>
-								<th className="px-6 py-4">Đăng ký / Lý do</th>
-								<th className="px-6 py-4">Trạng thái</th>
-							</tr>
-						</thead>
-						<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-							{paginatedData.length === 0 ? (
-								<tr><td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-bold uppercase text-xs">Chưa có nhật ký hoạt động</td></tr>
-							) : paginatedData.map((row: any) => (
-								<tr key={`${row.userEmail}_${row.date}`} className="text-sm hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors">
-									<td className="px-6 py-4">
-										<div className="font-bold dark:text-white">{row.userName}</div>
-										<div className="text-[10px] text-slate-400">{row.userEmail}</div>
-									</td>
-									<td className="px-6 py-4 font-black text-slate-600 dark:text-slate-400">{row.date}</td>
-									<td className="px-6 py-4">
-										<div className="flex items-center justify-center gap-2">
-											<span className={`px-2 py-1 rounded-lg text-[10px] font-bold ${row.officeIn ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-300'}`}>
-												In: {row.officeIn ? new Date(row.officeIn.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
-											</span>
-											<span className={`px-2 py-1 rounded-lg text-[10px] font-bold ${row.officeOut ? 'bg-orange-50 text-orange-600' : 'bg-slate-50 text-slate-300'}`}>
-												Out: {row.officeOut ? new Date(row.officeOut.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
-											</span>
-										</div>
-									</td>
-									<td className="px-6 py-4">
-										<div className="flex items-center justify-center gap-2">
-											<span className={`px-2 py-1 rounded-lg text-[10px] font-bold ${row.fieldFirst ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-50 text-slate-300'}`}>
-												{row.fieldFirst ? new Date(row.fieldFirst.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
-											</span>
-											<span className="text-slate-200">→</span>
-											<span className={`px-2 py-1 rounded-lg text-[10px] font-bold ${row.fieldLast ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-50 text-slate-300'}`}>
-												{row.fieldLast ? new Date(row.fieldLast.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
-											</span>
-										</div>
-									</td>
-									<td className="px-6 py-4 max-w-[200px]">
-										{row.requests.length > 0 ? (
-											<div className="space-y-1">
-												{row.requests.map((req: any, i: number) => (
-													<div key={i} className="flex flex-col">
-														<span className={`text-[9px] font-black uppercase ${req.requestType === 'leave' ? 'text-red-500' : 'text-amber-500'}`}>
-															{req.requestType === 'leave' ? 'Nghỉ phép' : 'Đi muộn'}
-														</span>
-														<p className="text-[10px] italic text-slate-500 line-clamp-1" title={req.note}>{req.note}</p>
-													</div>
-												))}
-											</div>
-										) : <span className="text-slate-300">---</span>}
-									</td>
-									<td className="px-6 py-4">
-										<span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase 
-											${row.status === 'on-time' ? 'bg-emerald-100 text-emerald-600' :
-												row.status === 'late' ? 'bg-rose-100 text-rose-600' :
-													row.status === 'field-trip' ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-500'}`}>
-											{row.status === 'on-time' ? 'Đúng giờ' :
-												row.status === 'late' ? 'Đi trễ' :
-													row.status === 'field-trip' ? 'Thị trường' : 'N/A'}
-										</span>
-									</td>
-								</tr>
-							))}
-						</tbody>
-					</table>
-				</div>
-
-				{/* Pagination Footer */}
-				{totalPages > 1 && (
-					<div className="px-6 py-4 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-						<p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-							Trang {currentPage} / {totalPages}
-						</p>
-						<div className="flex items-center gap-2">
-							<button
-								onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-								disabled={currentPage === 1}
-								className="p-2 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-lg text-slate-500 disabled:opacity-50 hover:bg-slate-50 transition-all shadow-sm"
-							>
-								<ChevronLeft size={16} />
-							</button>
-							<button
-								onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-								disabled={currentPage === totalPages}
-								className="p-2 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-lg text-slate-500 disabled:opacity-50 hover:bg-slate-50 transition-all shadow-sm"
-							>
-								<ChevronRight size={16} />
-							</button>
-						</div>
-					</div>
-				)}
-			</div>
-		</div>
-	);
-};
 // ==================== BẢNG LƯƠNG NHÂN VIÊN ====================
 const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string }) => {
 	const [salaryData, setSalaryData] = useState<any[]>([]);
@@ -1674,7 +1124,7 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 		return Object.entries(user.dailyDetails)
 			.sort(([a], [b]) => b.localeCompare(a))
 			.map(([day, detail]: [string, any]) => ({
-				day,
+								day,
 				checkinTime: detail.checkin ? (() => {
 					const dt = detail.checkin.createdAt?.toDate?.() || new Date(detail.checkin.createdAt);
 					return dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
@@ -1708,107 +1158,197 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 			{loading ? (
 				<div className="text-center py-8 text-slate-400">Đang tính...</div>
 			) : (
-				<div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
-					<table className="w-full text-left">
-						<thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-400">
-							<tr>
-								<th className="px-4 py-3">Nhân viên</th>
-								<th className="px-4 py-3 text-center">Ngày làm</th>
-								<th className="px-4 py-3 text-center">Lượt chấm</th>
-								<th className="px-4 py-3 text-right">Lương/tháng</th>
-								<th className="px-4 py-3 text-right">Lương/ngày</th>
-								<th className="px-4 py-3 text-right">Thực lãnh</th>
-							</tr>
-						</thead>
-						<tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-							{salaryData.map((d, i) => {
-								const isExpanded = expandedUser === d.userId;
-								const details = isExpanded ? getDetailForUser(d.userId) : [];
-								return (
-									<React.Fragment key={i}>
-										<tr
-											className={`hover:bg-slate-50 dark:hover:bg-slate-800/30 cursor-pointer transition-all ${isExpanded ? 'bg-indigo-50/50 dark:bg-indigo-900/10' : ''}`}
-											onClick={() => setExpandedUser(isExpanded ? null : d.userId)}
-										>
-											<td className="px-4 py-3">
-												<div className="flex items-center gap-2">
-													<ChevronRight size={14} className={`text-slate-300 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
-													<div>
-														<div className="font-bold text-sm dark:text-white">{d.name}</div>
-														<div className="text-[10px] text-slate-400">{d.role === 'admin' ? 'Quản trị' : d.role === 'sale' ? 'Sale' : d.role === 'warehouse' ? 'Kho' : 'Kế toán'}</div>
-													</div>
-												</div>
-											</td>
-											<td className="px-4 py-3 text-center">
-												<span className={`font-black text-sm ${d.daysWorked > 0 ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-300'}`}>
-													{d.daysWorked} ngày
-												</span>
-											</td>
-											<td className="px-4 py-3 text-center text-xs text-slate-500">{d.checkins} lượt</td>
-											<td className="px-4 py-3 text-right text-xs font-bold text-slate-600 dark:text-slate-300">
-												{d.monthlyWage > 0 ? formatPrice(d.monthlyWage) + 'đ' : <span className="text-slate-300 italic">-</span>}
-											</td>
-											<td className="px-4 py-3 text-right text-xs font-bold text-slate-600 dark:text-slate-300">
-												{d.dailyWage > 0 ? formatPrice(d.dailyWage) + 'đ' : <span className="text-slate-300 italic">-</span>}
-											</td>
-											<td className="px-4 py-3 text-right">
-												<span className={`font-black text-sm ${d.totalSalary > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-300'}`}>
-													{formatPrice(d.totalSalary)}đ
-												</span>
-											</td>
-										</tr>
-										{isExpanded && details.length > 0 && (
-											<tr key={`detail-${i}`}>
-												<td colSpan={6} className="px-4 py-3 bg-slate-50/50 dark:bg-slate-800/30">
-													<div className="space-y-2">
-														<p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">📅 Chi tiết chấm công tháng {month}</p>
-														<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-															{details.map((day: any, di: number) => (
-																<div key={di} className="bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-700 p-3">
-																	<div className="flex items-center justify-between mb-2">
-																		<span className="font-black text-sm text-indigo-600 dark:text-indigo-400">
-																			{new Date(day.day).toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' })}
-																		</span>
-																		{day.checkinTime && (
-																			<span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full">
-																				{day.checkinTime}
-																			</span>
-																		)}
-																	</div>
-																	{day.checkinNote && (
-																		<p className="text-[10px] text-slate-400 mb-1">📍 {day.checkinNote}</p>
-																	)}
-																	{day.attendances.length > 0 && (
-																		<div className="space-y-1 mt-2 pt-2 border-t border-slate-100 dark:border-slate-700">
-																			{day.attendances.map((att: any, ai: number) => (
-																				<div key={ai} className="flex items-center justify-between">
-																					<span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${att.type === 'checkin' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400' : att.type === 'checkout' ? 'bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'}`}>
-																						{att.type === 'checkin' ? 'Vào' : att.type === 'checkout' ? 'Ra' : att.type}
-																					</span>
-																					<span className="text-[10px] text-slate-500">{att.time}</span>
-																				</div>
-																			))}
-																		</div>
-																	)}
-																</div>
-															))}
+				<>
+					{/* Desktop View */}
+					<div className="hidden md:block bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+						<div className="overflow-x-auto custom-scrollbar">
+							<table className="w-full text-left min-w-[800px] md:min-w-0">
+								<thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-400">
+									<tr>
+										<th className="px-4 py-3">Nhân viên</th>
+										<th className="px-4 py-3 text-center">Ngày làm</th>
+										<th className="px-4 py-3 text-center">Lượt chấm</th>
+										<th className="px-4 py-3 text-right">Lương/tháng</th>
+										<th className="px-4 py-3 text-right">Lương/ngày</th>
+										<th className="px-4 py-3 text-right">Thực lãnh</th>
+									</tr>
+								</thead>
+								<tbody className="divide-y divide-slate-50 dark:divide-slate-800">
+									{salaryData.map((d, i) => {
+										const isExpanded = expandedUser === d.userId;
+										const details = isExpanded ? getDetailForUser(d.userId) : [];
+										return (
+											<React.Fragment key={i}>
+												<tr
+													className={`hover:bg-slate-50 dark:hover:bg-slate-800/30 cursor-pointer transition-all ${isExpanded ? 'bg-indigo-50/50 dark:bg-indigo-900/10' : ''}`}
+													onClick={() => setExpandedUser(isExpanded ? null : d.userId)}
+												>
+													<td className="px-4 py-3">
+														<div className="flex items-center gap-2">
+															<ChevronRight size={14} className={`text-slate-300 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+															<div>
+																<div className="font-bold text-sm dark:text-white">{d.name}</div>
+																<div className="text-[10px] text-slate-400">{d.role === 'admin' ? 'Quản trị' : d.role === 'sale' ? 'Sale' : d.role === 'warehouse' ? 'Kho' : 'Kế toán'}</div>
+															</div>
 														</div>
+													</td>
+													<td className="px-4 py-3 text-center">
+														<span className={`font-black text-sm ${d.daysWorked > 0 ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-300'}`}>
+															{d.daysWorked} ngày
+														</span>
+													</td>
+													<td className="px-4 py-3 text-center text-xs text-slate-500">{d.checkins} lượt</td>
+													<td className="px-4 py-3 text-right text-xs font-bold text-slate-600 dark:text-slate-300">
+														{d.monthlyWage > 0 ? formatPrice(d.monthlyWage) + 'đ' : <span className="text-slate-300 italic">-</span>}
+													</td>
+													<td className="px-4 py-3 text-right text-xs font-bold text-slate-600 dark:text-slate-300">
+														{d.dailyWage > 0 ? formatPrice(d.dailyWage) + 'đ' : <span className="text-slate-300 italic">-</span>}
+													</td>
+													<td className="px-4 py-3 text-right">
+														<span className={`font-black text-sm ${d.totalSalary > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-300'}`}>
+															{formatPrice(d.totalSalary)}đ
+														</span>
+													</td>
+												</tr>
+												{isExpanded && details.length > 0 && (
+													<tr key={`detail-${i}`}>
+														<td colSpan={6} className="px-4 py-3 bg-slate-50/50 dark:bg-slate-800/30">
+															<div className="space-y-2">
+																<p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">📅 Chi tiết chấm công tháng {month}</p>
+																<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+																	{details.map((day: any, di: number) => (
+																		<div key={di} className="bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-700 p-3">
+																			<div className="flex items-center justify-between mb-2">
+																				<span className="font-black text-sm text-indigo-600 dark:text-indigo-400">
+																					{new Date(day.day).toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' })}
+																				</span>
+																				{day.checkinTime && (
+																					<span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full">
+																						{day.checkinTime}
+																					</span>
+																				)}
+																			</div>
+																			{day.checkinNote && (
+																				<p className="text-[10px] text-slate-400 mb-1">📍 {day.checkinNote}</p>
+																			)}
+																			{day.attendances.length > 0 && (
+																				<div className="space-y-1 mt-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+																					{day.attendances.map((att: any, ai: number) => (
+																						<div key={ai} className="flex items-center justify-between">
+																							<span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${att.type === 'checkin' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400' : att.type === 'checkout' ? 'bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'}`}>
+																								{att.type === 'checkin' ? 'Vào' : att.type === 'checkout' ? 'Ra' : att.type}
+																							</span>
+																							<span className="text-[10px] text-slate-500">{att.time}</span>
+																						</div>
+																					))}
+																				</div>
+																			)}
+																		</div>
+																	))}
+																</div>
+															</div>
+														</td>
+													</tr>
+												)}
+											</React.Fragment>
+										);
+									})}
+								</tbody>
+								<tfoot className="bg-indigo-50 dark:bg-indigo-900/20">
+									<tr>
+										<td colSpan={5} className="px-4 py-3 text-xs font-black uppercase text-indigo-600 dark:text-indigo-400 text-right">TỔNG CỘNG</td>
+										<td className="px-4 py-3 text-right font-black text-lg text-indigo-600 dark:text-indigo-400">{formatPrice(totalAll)}đ</td>
+									</tr>
+								</tfoot>
+							</table>
+						</div>
+					</div>
+
+					{/* Mobile View */}
+					<div className="md:hidden space-y-4">
+						{salaryData.map((d, i) => {
+							const isExpanded = expandedUser === d.userId;
+							const details = isExpanded ? getDetailForUser(d.userId) : [];
+							return (
+								<div key={i} className="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-100 dark:border-slate-800 space-y-3">
+									<div 
+										className="flex justify-between items-start cursor-pointer"
+										onClick={() => setExpandedUser(isExpanded ? null : d.userId)}
+									>
+										<div className="flex items-center gap-2">
+											<ChevronRight size={14} className={`text-slate-300 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+											<div>
+												<h4 className="font-bold text-sm dark:text-white">{d.name}</h4>
+												<span className="text-[10px] text-slate-400 font-bold uppercase">{d.role === 'admin' ? 'Quản trị' : d.role === 'sale' ? 'Sale' : d.role === 'warehouse' ? 'Kho' : 'Kế toán'}</span>
+											</div>
+										</div>
+										<div className="text-right">
+											<span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-0.5 rounded-md">
+												{d.daysWorked} ngày
+											</span>
+										</div>
+									</div>
+
+									<div className="flex justify-between items-center text-xs pt-3 border-t border-slate-50 dark:border-slate-800/50">
+										<div className="space-y-0.5">
+											<div className="text-slate-400 text-[10px]">Lương tháng: <strong>{d.monthlyWage > 0 ? formatPrice(d.monthlyWage) + 'đ' : '-'}</strong></div>
+											<div className="text-slate-400 text-[10px]">Lương ngày: <strong>{d.dailyWage > 0 ? formatPrice(d.dailyWage) + 'đ' : '-'}</strong></div>
+											<div className="text-slate-400 text-[10px]">Lượt chấm: <strong>{d.checkins} lượt</strong></div>
+										</div>
+										<div className="text-right">
+											<div className="text-[9px] text-slate-400 uppercase font-black">Thực lãnh</div>
+											<div className="text-sm font-black text-emerald-600 dark:text-emerald-400">{formatPrice(d.totalSalary)}đ</div>
+										</div>
+									</div>
+
+									{isExpanded && details.length > 0 && (
+										<div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2 animate-in fade-in duration-200">
+											<p className="text-[9px] font-black uppercase text-slate-400 tracking-wider">📅 Chi tiết chấm công tháng {month}</p>
+											<div className="space-y-2">
+												{details.map((day: any, di: number) => (
+													<div key={di} className="bg-slate-50 dark:bg-slate-850 rounded-xl p-3 space-y-2">
+														<div className="flex justify-between items-center">
+															<div className="font-bold text-xs text-indigo-600 dark:text-indigo-400">
+																{new Date(day.day).toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' })}
+															</div>
+															{day.checkinTime && (
+																<span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full">
+																	{day.checkinTime}
+																</span>
+															)}
+														</div>
+														{day.checkinNote && (
+															<p className="text-[10px] text-slate-400">📍 {day.checkinNote}</p>
+														)}
+														{day.attendances && day.attendances.length > 0 && (
+															<div className="space-y-1 mt-1 pt-1.5 border-t border-slate-100 dark:border-slate-800">
+																{day.attendances.map((att: any, ai: number) => (
+																	<div key={ai} className="flex items-center justify-between text-[10px]">
+																		<span className={`font-bold px-1.5 py-0.5 rounded ${att.type === 'checkin' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400' : att.type === 'checkout' ? 'bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'}`}>
+																			{att.type === 'checkin' ? 'Vào' : att.type === 'checkout' ? 'Ra' : att.type}
+																		</span>
+																		<span className="text-slate-500">{att.time}</span>
+																	</div>
+																))}
+															</div>
+														)}
 													</div>
-												</td>
-											</tr>
-										)}
-									</React.Fragment>
-								);
-							})}
-						</tbody>
-						<tfoot className="bg-indigo-50 dark:bg-indigo-900/20">
-							<tr>
-								<td colSpan={5} className="px-4 py-3 text-xs font-black uppercase text-indigo-600 dark:text-indigo-400 text-right">TỔNG CỘNG</td>
-								<td className="px-4 py-3 text-right font-black text-lg text-indigo-600 dark:text-indigo-400">{formatPrice(totalAll)}đ</td>
-							</tr>
-						</tfoot>
-					</table>
+												)
+											)}
+										</div>
+									</div>
+								)}
+							</div>
+						);
+					})}
+					
+					{/* Mobile Total Card */}
+					<div className="bg-indigo-50 dark:bg-indigo-950/40 rounded-2xl p-4 border border-indigo-100 dark:border-indigo-900/30 flex justify-between items-center">
+						<span className="text-xs font-black uppercase text-indigo-600 dark:text-indigo-400 tracking-wider">TỔNG CỘNG LƯƠNG</span>
+						<span className="font-black text-lg text-indigo-600 dark:text-indigo-400">{formatPrice(totalAll)}đ</span>
+					</div>
 				</div>
+			</>
 			)}
 		</div>
 	);

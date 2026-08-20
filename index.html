@@ -42,8 +42,8 @@
 	</script>
 	<!-- 🔄 Force cleanup old service workers (một lần duy nhất) -->
 	<script>
-		if ('serviceWorker' in navigator && !sessionStorage.getItem('sw_cleaned_v2')) {
-			sessionStorage.setItem('sw_cleaned_v2', '1');
+		if ('serviceWorker' in navigator && !localStorage.getItem('sw_cleaned_v14')) {
+			localStorage.setItem('sw_cleaned_v14', '1');
 			navigator.serviceWorker.getRegistrations().then(function(regs) {
 				regs.forEach(function(reg) { reg.unregister(); });
 				// Xóa toàn bộ cache storage

@@ -192,11 +192,11 @@ async function handler(req, res) {
     }
     const ordersData = recentOrders.map((o) => {
       const emailName = o.fields?.createdByEmail?.stringValue ? o.fields.createdByEmail.stringValue.split("@")[0] : "";
-      const fallbackStaff = o.fields?.createdBy?.stringValue === ownerId ? adminName : emailName || "Nh\xE2n vi\xEAn";
+      const fallbackStaff = o.fields?.createdBy?.stringValue === ownerId ? adminName : emailName || "Nhân viên";
       return {
         customerName: o.fields?.customerName?.stringValue || "",
         totalAmount: Number(o.fields?.totalAmount?.integerValue || o.fields?.totalAmount?.doubleValue || 0),
-        staffName: o.fields?.staffName?.stringValue || fallbackStaff,
+        staffName: o.fields?.createdByDisplayName?.stringValue || o.fields?.staffName?.stringValue || fallbackStaff,
         date: o.fields?.orderDate?.stringValue || ""
       };
     });

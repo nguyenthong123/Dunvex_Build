@@ -54,9 +54,32 @@ const SupplierList = () => {
 			setSelectedSupplier(null);
 			setFormData({ name: '', phone: '', address: '', category: 'Sắt Thép', note: '', bankName: '', bankAccount: '', bankHolder: '' });
 			setShowAddForm(true);
+			navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
 		};
 		window.addEventListener('open-mobile-add', handleOpenAdd);
 		return () => window.removeEventListener('open-mobile-add', handleOpenAdd);
+	}, []);
+
+// Handle browser back button — close modals (detail, edit, QR)
+	// Track modal state for back button
+	const supplierRef = useRef(selectedSupplier);
+	useEffect(() => { supplierRef.current = selectedSupplier; }, [selectedSupplier]);
+	const qrRef = useRef(qrModalSupplier);
+	useEffect(() => { qrRef.current = qrModalSupplier; }, [qrModalSupplier]);
+	const addFormRef = useRef(showAddForm);
+	useEffect(() => { addFormRef.current = showAddForm; }, [showAddForm]);
+
+	// Handle browser back button — close modal
+	useEffect(() => {
+		const handlePopState = () => {
+			if (supplierRef.current || qrRef.current || addFormRef.current) {
+				setSelectedSupplier(null);
+				setQrModalSupplier(null);
+				setShowAddForm(false);
+			}
+		};
+		window.addEventListener('popstate', handlePopState);
+		return () => window.removeEventListener('popstate', handlePopState);
 	}, []);
 
 	const normalizeText = (text: any) => text ? String(text).normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase() : '';
@@ -84,7 +107,7 @@ const SupplierList = () => {
 				await addSupplier(formData);
 				showToast("Thêm nhà cung cấp thành công", "success");
 			}
-			setShowAddForm(false);
+			window.history.back();
 		} catch (error) {
 			console.error("Lỗi:", error);
 			showToast("Có lỗi xảy ra, vui lòng thử lại", "error");
@@ -108,8 +131,12 @@ const SupplierList = () => {
 		}
 	};
 
-	const openEdit = (supplier: any) => {
+	const openDetail = (supplier: any) => {
 		setSelectedSupplier(supplier);
+		navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
+	};
+
+	const handleEditSupplier = (supplier: any) => {
 		setFormData({
 			name: supplier.name || '',
 			phone: supplier.phone || '',
@@ -145,7 +172,14 @@ const SupplierList = () => {
 							<button onClick={() => setShowMobileSearch(!showMobileSearch)} className="lg:hidden p-2 text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
 								<Search size={20} />
 							</button>
-							<button onClick={() => { setSelectedSupplier(null); setFormData({ name: '', phone: '', address: '', category: 'Sắt Thép', note: '', bankName: '', bankAccount: '', bankHolder: '' }); setShowAddForm(true); }} className="hidden lg:flex items-center gap-2 px-4 py-2.5 bg-[#FF6D00] text-white font-bold rounded-xl shadow-lg shadow-orange-500/30 hover:scale-105 active:scale-95 transition-all">
+							<button 
+							onClick={() => {
+								setSelectedSupplier(null);
+								setFormData({ name: '', phone: '', address: '', category: 'Sắt Thép', note: '', bankName: '', bankAccount: '', bankHolder: '' });
+								setShowAddForm(true);
+								navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
+							}}
+							className="hidden lg:flex items-center gap-2 px-4 py-2.5 bg-[#FF6D00] text-white font-bold rounded-xl shadow-lg shadow-orange-500/30 hover:scale-105 active:scale-95 transition-all">
 								<Plus size={20} /> Thêm NCC
 							</button>
 						</div>
@@ -175,7 +209,7 @@ const SupplierList = () => {
 			{/* Supplier Grid */}
 			<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 pb-24 mt-4">
 				{filteredSuppliers.map((supplier) => (
-					<div key={supplier.id} onClick={() => openEdit(supplier)} className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/60 dark:border-slate-800/60 shadow-sm hover:shadow-md hover:border-[#FF6D00]/30 transition-all cursor-pointer relative group">
+					<div key={supplier.id} onClick={() => openDetail(supplier)} className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/60 dark:border-slate-800/60 shadow-sm hover:shadow-md hover:border-[#FF6D00]/30 transition-all cursor-pointer relative group">
 						<div className="flex justify-between items-start mb-3">
 							<div className="flex-1 min-w-0 pr-4">
 								<h3 className="font-bold text-slate-800 dark:text-white text-lg truncate flex items-center gap-2">
@@ -194,14 +228,14 @@ const SupplierList = () => {
 							</div>
 							<div className="flex gap-2">
 								{supplier.bankAccount && (
-									<button onClick={(e) => { e.stopPropagation(); setQrModalSupplier(supplier); }} className="p-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-lg transition-colors" title="QR Chuyển khoản">
+									<button onClick={(e) => { e.stopPropagation(); setQrModalSupplier(supplier); navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } }); }} className="p-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-lg transition-colors" title="QR Chuyển khoản">
 										<QrCode size={18} />
 									</button>
 								)}
-								<button onClick={(e) => { e.stopPropagation(); openEdit(supplier); }} className="p-2 text-slate-400 hover:text-[#FF6D00] hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors" title="Chỉnh sửa">
+								<button onClick={(e) => { e.stopPropagation(); handleEditSupplier(supplier); }} className="p-2 text-amber-600 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 rounded-xl transition-all shadow-sm cursor-pointer" title="Chỉnh sửa">
 									<PenSquare size={18} />
 								</button>
-								<button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(supplier.id); }} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" title="Xoá">
+								<button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(supplier.id); }} className="p-2 text-red-600 bg-red-50 dark:bg-red-950/40 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-xl transition-all shadow-sm cursor-pointer" title="Xoá">
 									<Trash size={18} />
 								</button>
 							</div>
@@ -244,6 +278,52 @@ const SupplierList = () => {
 				)}
 			</div>
 
+			{/* Supplier Detail Modal */}
+			{selectedSupplier && !showAddForm && (
+				<div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200" onClick={() => { window.history.back(); }}>
+					<div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+						<div className="flex items-center justify-between p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 shrink-0">
+							<h2 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tight">Chi Tiết Nhà Cung Cấp</h2>
+							<div className="flex items-center gap-2">
+								<button onClick={() => { setShowAddForm(true); handleEditSupplier(selectedSupplier); navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } }); }} className="p-2 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 rounded-full transition-colors" title="Chỉnh sửa">
+									<PenSquare size={20} />
+								</button>
+								<button onClick={() => { window.history.back(); }} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-full transition-colors">
+									<X size={22} />
+								</button>
+							</div>
+						</div>
+						<div className="overflow-y-auto p-5 sm:p-6 flex-1 custom-scrollbar space-y-4">
+							<SupplierDetailRow icon={<Store size={18} className="text-slate-400" />} label="Tên" value={selectedSupplier.name} />
+							<SupplierDetailRow icon={<Building2 size={18} className="text-slate-400" />} label="Danh mục" value={selectedSupplier.category || '—'} />
+							<SupplierDetailRow icon={<Phone size={18} className="text-slate-400" />} label="SĐT" value={selectedSupplier.phone || '—'} />
+							<SupplierDetailRow icon={<MapPin size={18} className="text-slate-400" />} label="Địa chỉ" value={selectedSupplier.address || '—'} />
+							{selectedSupplier.note && <SupplierDetailRow icon={<FileText size={18} className="text-slate-400" />} label="Ghi chú" value={selectedSupplier.note} />}
+							{(selectedSupplier.bankName || selectedSupplier.bankAccount || selectedSupplier.bankHolder) && (
+								<div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 border border-slate-100 dark:border-slate-700">
+									<p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+										<CreditCard size={14} /> Thông tin ngân hàng
+									</p>
+									<div className="space-y-2">
+										{selectedSupplier.bankName && <div className="text-sm font-bold text-slate-700 dark:text-slate-300">{selectedSupplier.bankName}</div>}
+										{selectedSupplier.bankAccount && <div className="text-sm font-mono text-slate-600 dark:text-slate-400">{selectedSupplier.bankAccount}</div>}
+										{selectedSupplier.bankHolder && <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400"><User size={12} /> {selectedSupplier.bankHolder}</div>}
+									</div>
+								</div>
+							)}
+						</div>
+						<div className="p-4 sm:px-6 border-t border-slate-100 dark:border-slate-800 shrink-0 flex gap-3">
+							<button onClick={() => { setShowAddForm(true); handleEditSupplier(selectedSupplier); navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } }); }} className="flex-1 py-3 px-4 bg-[#FF6D00] text-white font-bold rounded-xl shadow-lg shadow-orange-500/30 hover:bg-[#E66000] active:scale-95 transition-all flex items-center justify-center gap-2">
+								<PenSquare size={16} /> Chỉnh sửa
+							</button>
+							<button onClick={() => { window.history.back(); }} className="flex-1 py-3 px-4 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+								Đóng
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
 			{/* Form Modal */}
 			{showAddForm && (
 				<div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
@@ -252,7 +332,7 @@ const SupplierList = () => {
 							<h2 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tight">
 								{selectedSupplier ? 'Cập Nhật Nhà Cung Cấp' : 'Thêm Nhà Cung Cấp'}
 							</h2>
-							<button onClick={() => setShowAddForm(false)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-full transition-colors">
+							<button onClick={() => window.history.back()} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-full transition-colors">
 								<X size={24} />
 							</button>
 						</div>
@@ -358,7 +438,7 @@ const SupplierList = () => {
 						</div>
 
 						<div className="p-4 sm:p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex gap-3">
-							<button onClick={() => setShowAddForm(false)} type="button" className="flex-1 px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+							<button onClick={() => window.history.back()} type="button" className="flex-1 px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
 								Huỷ
 							</button>
 							<button type="submit" form="supplierForm" className="flex-1 px-4 py-3 bg-[#FF6D00] text-white font-bold rounded-xl shadow-lg shadow-orange-500/30 hover:bg-[#E66000] active:scale-[0.98] transition-all">
@@ -396,11 +476,22 @@ const SupplierList = () => {
 			{qrModalSupplier && (
 				<SupplierQRModal
 					supplier={qrModalSupplier}
-					onClose={() => setQrModalSupplier(null)}
+					onClose={() => window.history.back()}
 				/>
 			)}
 		</div>
 	);
 };
+
+// Small helper for supplier detail rows
+const SupplierDetailRow = ({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) => (
+	<div className="flex items-start gap-3">
+		<div className="mt-0.5 flex-shrink-0">{icon}</div>
+		<div className="flex-1 min-w-0">
+			<p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">{label}</p>
+			<p className="text-sm font-bold text-slate-800 dark:text-white mt-0.5 break-words">{value}</p>
+		</div>
+	</div>
+);
 
 export default SupplierList;

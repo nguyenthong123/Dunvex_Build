@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useOwner } from '../hooks/useOwner';
 import { Crown, Download, Zap, CheckCircle2, ShoppingCart, Rocket, Shield, Clock, ChevronRight } from 'lucide-react';
 import { db, auth } from '../services/firebase';
-import { doc, onSnapshot, getDoc, collection } from 'firebase/firestore';
+import { doc, onSnapshot, getDoc, collection } from '../services/firebase';
 
 const SubscriptionServices = () => {
 	const navigate = useNavigate();
@@ -172,12 +172,40 @@ const SubscriptionServices = () => {
 									</p>
 									
 									<div className="space-y-3 mb-8">
-										{addon.features?.map((feature: string, idx: number) => (
-											<div key={idx} className="flex items-start gap-2">
-												<CheckCircle2 size={16} className={`${addon.textClass} shrink-0 mt-0.5`} />
-												<span className="text-xs font-bold text-slate-600 dark:text-slate-300">{feature}</span>
-											</div>
-										))}
+										{(() => {
+											if (!addon.features) return null;
+											if (Array.isArray(addon.features)) {
+												return addon.features.map((feature: string, idx: number) => (
+													<div key={idx} className="flex items-start gap-2">
+														<CheckCircle2 size={16} className={`${addon.textClass} shrink-0 mt-0.5`} />
+														<span className="text-xs font-bold text-slate-600 dark:text-slate-300">{feature}</span>
+													</div>
+												));
+											}
+											
+											// Handle object format
+											const featureMap: Record<string, string> = {
+												orders: 'Quản lý Đơn Hàng',
+												debts: 'Quản lý Công Nợ',
+												sheets: 'Quản lý Bảng Tính',
+												ai_assistant: 'Trợ Lý AI',
+												export_excel: 'Xuất Excel',
+												import_excel: 'Nhập Excel',
+												max_products: 'Sản Phẩm',
+												max_customers: 'Khách Hàng',
+											};
+											
+											return Object.entries(addon.features).map(([k, v], idx) => {
+												if (v === false) return null;
+												const text = typeof v === 'boolean' ? (featureMap[k] || k) : `${featureMap[k] || k}: ${v}`;
+												return (
+													<div key={idx} className="flex items-start gap-2">
+														<CheckCircle2 size={16} className={`${addon.textClass} shrink-0 mt-0.5`} />
+														<span className="text-xs font-bold text-slate-600 dark:text-slate-300">{text}</span>
+													</div>
+												);
+											});
+										})()}
 									</div>
 
 									<button 

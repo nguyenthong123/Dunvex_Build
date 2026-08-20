@@ -23,17 +23,17 @@ const BottomNav = () => {
 						return (
 							<div key={`${item.path}-${item.label}`} className="absolute left-1/2 -translate-x-1/2 -top-10">
 								{isEvent ? (
-									<button type="button" onClick={() => handleCenterClick(item)} className="h-16 w-16 bg-[#FF6D00] rounded-full shadow-lg shadow-orange-500/40 flex items-center justify-center text-white hover:scale-105 active:scale-95 transition-transform border-4 border-white dark:border-slate-900">
+									<button type="button" onClick={() => handleCenterClick(item)} className="h-16 w-16 bg-gradient-to-br from-[#1A237E] to-[#283593] dark:from-indigo-600 dark:to-indigo-800 rounded-full shadow-lg shadow-indigo-900/30 flex items-center justify-center text-white hover:scale-105 active:scale-95 transition-transform border-4 border-white dark:border-slate-900">
 										<span className="material-symbols-outlined text-3xl font-bold">{item.icon}</span>
 									</button>
 								) : (
 									<NavLink to={item.path}>
-										<button type="button" className="h-16 w-16 bg-[#FF6D00] rounded-full shadow-lg shadow-orange-500/40 flex items-center justify-center text-white hover:scale-105 active:scale-95 transition-transform border-4 border-white dark:border-slate-900">
+										<button type="button" className="h-16 w-16 bg-gradient-to-br from-[#1A237E] to-[#283593] dark:from-indigo-600 dark:to-indigo-800 rounded-full shadow-lg shadow-indigo-900/30 flex items-center justify-center text-white hover:scale-105 active:scale-95 transition-transform border-4 border-white dark:border-slate-900">
 											<span className="material-symbols-outlined text-3xl font-bold">{item.icon}</span>
 										</button>
 									</NavLink>
 								)}
-								<span className="text-[10px] font-bold text-[#FF6D00] text-center block mt-1 uppercase">{item.label}</span>
+								<span className="text-[10px] font-bold text-[#1A237E] dark:text-indigo-400 text-center block mt-1 uppercase">{item.label}</span>
 							</div>
 						);
 					}

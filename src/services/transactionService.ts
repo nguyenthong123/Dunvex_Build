@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { collection, query, where, getDocs, doc, writeBatch, increment, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, writeBatch, increment, getDoc } from './firebase';
 
 export const transactionService = {
   /**

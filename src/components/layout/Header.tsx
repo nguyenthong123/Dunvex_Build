@@ -16,7 +16,7 @@ const Header = ({ userName = "Tuấn Anh", avatarUrl, showRevenue = true }: Head
 				<div className="flex gap-3 items-center">
 					<div className="h-12 w-12 rounded-full border-2 border-white/30 overflow-hidden bg-gray-200">
 						{avatarUrl ? (
-							<img src={avatarUrl} alt={userName} className="h-full w-full object-cover" />
+							<img src={avatarUrl} alt={userName} className="h-full w-full object-cover"  loading="lazy" />
 						) : (
 							<div className="h-full w-full flex items-center justify-center bg-accent text-white font-bold">
 								{userName.charAt(0)}

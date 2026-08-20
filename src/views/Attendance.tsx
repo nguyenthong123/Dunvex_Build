@@ -5,7 +5,7 @@ import { auth, db } from '../services/firebase';
 import {
 	collection, query, where, onSnapshot, doc, getDoc,
 	setDoc, serverTimestamp, updateDoc, addDoc, orderBy, limit
-} from 'firebase/firestore';
+} from '../services/firebase';
 import { useOwner } from '../hooks/useOwner';
 import {
 	Clock, MapPin, CheckCircle, AlertCircle, Calendar,

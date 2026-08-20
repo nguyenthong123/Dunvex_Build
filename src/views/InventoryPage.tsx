@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 // 🔧 REFACTOR: Chỉ giữ Firestore write ops — read ops đã chuyển qua hooks
-import { addDoc, serverTimestamp, updateDoc, doc, deleteDoc, where, writeBatch, increment, limit, getDocs, collection, query } from 'firebase/firestore';
+import { addDoc, serverTimestamp, updateDoc, doc, deleteDoc, where, writeBatch, increment, limit, getDocs, collection, query } from '../services/firebase';
 // 🔧 REFACTOR: Dùng hooks mới thay vì onSnapshot trực tiếp
 import { useProducts } from '../hooks/useProducts';
 import { useOrders } from '../hooks/useOrders';
@@ -52,6 +52,7 @@ const InventoryPage = () => {
 	const [selectedProduct, setSelectedProduct] = useState<any>(null);
 	const [showImport, setShowImport] = useState(false);
 	const [showScanner, setShowScanner] = useState(false);
+	const [isSaving, setIsSaving] = useState(false);
 	const [searchTerm, setSearchTerm] = useState(() => {
 		// Khôi phục từ khóa tìm kiếm sau khi reload (để liền mạch công việc)
 		return sessionStorage.getItem('inventory_search') || '';
@@ -195,6 +196,7 @@ const InventoryPage = () => {
 		const params = new URLSearchParams(search);
 		if (params.get('new') === 'true') {
 			setShowAddForm(true);
+			navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
 			navigate('/inventory', { replace: true });
 		} else if (params.get('tab') === 'inventory') {
 			setActiveTab('inventory');
@@ -204,6 +206,7 @@ const InventoryPage = () => {
 			navigate('/inventory', { replace: true });
 		} else if (params.get('import') === 'true') {
 			setShowImport(true);
+			navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
 			navigate('/inventory', { replace: true });
 		} else if (params.get('search') === 'focus') {
 			setShowMobileSearch(true);
@@ -216,6 +219,55 @@ const InventoryPage = () => {
 			navigate('/inventory', { replace: true });
 		}
 	}, [search, navigate]);
+
+	// Track modal state for back button
+	const showDetailRef = useRef(showDetail);
+	const showActionRef = useRef(showActionModal);
+	const showAddFormRef = useRef(showAddForm);
+	const showEditFormRef = useRef(showEditForm);
+	const showImportRef = useRef(showImport);
+
+	useEffect(() => { showDetailRef.current = showDetail; }, [showDetail]);
+	useEffect(() => { showActionRef.current = showActionModal; }, [showActionModal]);
+	useEffect(() => { showAddFormRef.current = showAddForm; }, [showAddForm]);
+	useEffect(() => { showEditFormRef.current = showEditForm; }, [showEditForm]);
+	useEffect(() => { showImportRef.current = showImport; }, [showImport]);
+
+	// Handle browser back button — close modal
+	useEffect(() => {
+		const handlePopState = () => {
+			if (showDetailRef.current) {
+				setShowDetail(false);
+			}
+			if (showActionRef.current) {
+				setShowActionModal(false);
+			}
+			if (showAddFormRef.current) {
+				setShowAddForm(false);
+			}
+			if (showEditFormRef.current) {
+				setShowEditForm(false);
+			}
+			if (showImportRef.current) {
+				setShowImport(false);
+			}
+		};
+		window.addEventListener('popstate', handlePopState);
+		return () => window.removeEventListener('popstate', handlePopState);
+	}, []);
+
+	// Auto-reset form state when form is closed
+	useEffect(() => {
+		if (!showAddForm && !showEditForm) {
+			resetForm();
+		}
+	}, [showAddForm, showEditForm]);
+
+	useEffect(() => {
+		if (!showActionModal) {
+			setActionModalInitialProduct(null);
+		}
+	}, [showActionModal]);
 
 	useEffect(() => {
 		setCurrentPage(1);
@@ -235,6 +287,7 @@ const InventoryPage = () => {
 		const handleOpenAdd = () => {
 			setActionModalInitialProduct(null);
 			setShowActionModal(true);
+			navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
 		};
 		window.addEventListener('open-mobile-add', handleOpenAdd);
 		return () => window.removeEventListener('open-mobile-add', handleOpenAdd);
@@ -246,28 +299,12 @@ const InventoryPage = () => {
 
 		setUploading(true);
 		try {
-			const formData = new FormData();
-			formData.append('file', file);
-			formData.append('upload_preset', 'dunvexbuil');
-			formData.append('folder', 'dunvex_products');
-
-			const response = await fetch(
-				`https://api.cloudinary.com/v1_1/dtx0uvb4e/image/upload`,
-				{
-					method: 'POST',
-					body: formData,
-				}
-			);
-
-			const data = await response.json();
-
-			if (data.secure_url) {
-				setFormData(prev => ({ ...prev, imageUrl: data.secure_url }));
+			const { uploadImageToVPS } = await import('../utils/vpsUpload');
+			const url = await uploadImageToVPS(file);
+			if (url) {
+				setFormData(prev => ({ ...prev, imageUrl: url }));
 				showToast("Tải ảnh lên thành công", "success");
-			} else {
-				showToast("Lỗi upload Cloudinary: " + (data.error?.message || "Không xác định"), "error");
 			}
-
 		} catch (error: any) {
 			showToast(`Lỗi upload: ${error.message}`, "error");
 		} finally {
@@ -388,6 +425,7 @@ const InventoryPage = () => {
 
 	const handleAddProduct = async (e: React.FormEvent) => {
 		e.preventDefault();
+		if (isSaving) return;
 		try {
 			if (!formData.name) {
 				showToast("Vui lòng nhập tên sản phẩm", "warning");
@@ -398,6 +436,8 @@ const InventoryPage = () => {
 				showToast("Đang tải dữ liệu người dùng, vui lòng thử lại sau", "warning");
 				return;
 			}
+
+			setIsSaving(true);
 
 			// NEW: Check if SKU exists for this Admin
 			if (formData.sku) {
@@ -460,19 +500,22 @@ const InventoryPage = () => {
 				});
 			}
 
-			setShowAddForm(false);
-			resetForm();
+			window.history.back();
 			showToast("Thêm sản phẩm thành công", "success");
 		} catch (error: any) {
 			console.error("Add product error:", error);
 			showToast(`Lỗi khi thêm sản phẩm: ${error?.message || 'Không xác định'}`, "error");
+		} finally {
+			setIsSaving(false);
 		}
 	};
 
 	const handleUpdateProduct = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (!selectedProduct) return;
+		if (isSaving) return;
 		try {
+			setIsSaving(true);
 			// NEW: Check if SKU exists for this Admin (excluding current product)
 			if (formData.sku) {
 				const normalize = (s: string) => String(s || '').toLowerCase().replace(/\s+/g, '').trim();
@@ -525,11 +568,12 @@ const InventoryPage = () => {
 			});
 
 			await batch.commit();
-			setShowEditForm(false);
-			resetForm();
+			window.history.back();
 			showToast("Cập nhật sản phẩm thành công", "success");
 		} catch (error) {
 			showToast("Lỗi khi cập nhật sản phẩm", "error");
+		} finally {
+			setIsSaving(false);
 		}
 	};
 
@@ -678,11 +722,13 @@ const InventoryPage = () => {
 			expiryDate: product.expiryDate || ''
 		});
 		setShowEditForm(true);
+		navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
 	};
 
 	const openDetail = (product: any) => {
 		setSelectedProduct(product);
 		setShowDetail(true);
+		navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
 	};
 
 	const sourceList = groupedProducts;
@@ -796,7 +842,7 @@ const InventoryPage = () => {
 				<body>
 					<div class="label-container">
 						<div class="brand">DUNVEX BUILD</div>
-						<img src="${qrDataURL}" class="qr-img" />
+						<img src="${qrDataURL}" class="qr-img"  loading="lazy" />
 						<div class="product-name">${product.name}</div>
 						<div class="sku-details">ID: ${product.id}</div>
 						<div class="sku-details">SKU: ${product.sku || '---'}</div>
@@ -912,6 +958,7 @@ const InventoryPage = () => {
 								onClick={() => {
 									setActionModalInitialProduct(null);
 									setShowActionModal(true);
+									navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
 								}}
 								className="hidden md:flex bg-[#FF6D00] hover:bg-orange-600 text-white px-3 xl:px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-orange-500/20 active:scale-95 transition-all items-center gap-2"
 							>
@@ -928,7 +975,7 @@ const InventoryPage = () => {
 					type="products"
 					ownerId={owner.ownerId}
 					ownerEmail={owner.ownerEmail}
-					onClose={() => setShowImport(false)}
+					onClose={() => window.history.back()}
 					onSuccess={() => {
 						// Optional: refresh data or show success message
 					}}
@@ -941,7 +988,7 @@ const InventoryPage = () => {
 
 				{/* Mobile Search Bar - Conditional */}
 				{showMobileSearch && (
-					<div className="md:hidden mb-6 animate-in slide-in-from-top duration-300">
+					<div className="lg:hidden mb-6 animate-in slide-in-from-top duration-300">
 						<div className="flex items-center gap-3 bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-200 dark:border-slate-800">
 							<span className="material-symbols-outlined text-slate-400">search</span>
 							<input
@@ -1099,7 +1146,7 @@ const InventoryPage = () => {
 
 			<InventoryFormModal
 				show={showAddForm || showEditForm}
-				onClose={() => { setShowAddForm(false); setShowEditForm(false); resetForm(); }}
+				onClose={() => window.history.back()}
 				isEdit={showEditForm}
 				formData={formData}
 				setFormData={setFormData}
@@ -1115,12 +1162,13 @@ const InventoryPage = () => {
 				copyToClipboard={copyToClipboard}
 				hasManagePermission={hasManagePermission}
 				getImageUrl={getImageUrl}
+				saving={isSaving}
 			/>
 
 			{/* DETAIL MODAL */}
 			<InventoryDetailModal
 				show={showDetail}
-				onClose={() => setShowDetail(false)}
+				onClose={() => window.history.back()}
 				selectedProduct={selectedProduct}
 				products={products}
 				hasManagePermission={hasManagePermission}
@@ -1131,6 +1179,8 @@ const InventoryPage = () => {
 				getImageUrl={getImageUrl}
 				formatPrice={formatPrice}
 				printQRLabel={printQRLabel}
+				context="inventory"
+				inventoryLogs={inventoryLogs}
 			/>
 
 			<InventoryActionModal
@@ -1154,16 +1204,14 @@ const InventoryPage = () => {
 				)
 			}
 
-			{/* Mobile FAB for adding inventory */}
+			{/* Mobile FAB — Tạo đơn nhập */}
 			{hasManagePermission && (
 				<button
-					onClick={() => {
-						setActionModalInitialProduct(null);
-						setShowActionModal(true);
-					}}
+					onClick={() => navigate('/purchase-orders', { state: { showCreateForm: true } })}
 					className="md:hidden fixed bottom-6 right-6 z-40 size-14 bg-[#FF6D00] text-white rounded-full flex items-center justify-center shadow-xl shadow-orange-500/30 active:scale-95 transition-all"
+					title="Tạo đơn nhập"
 				>
-					<span className="material-symbols-outlined text-3xl">add</span>
+					<span className="material-symbols-outlined text-3xl">add_shopping_cart</span>
 				</button>
 			)}
 		</div>

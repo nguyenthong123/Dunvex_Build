@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { auth, db } from '../services/firebase';
-import { doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot } from '../services/firebase';
+import { setApiCredentials } from '../services/apiClient';
 
 export interface OwnerState {
 	ownerId: string;
@@ -20,6 +21,8 @@ export interface OwnerState {
 	manualLockSheets?: boolean;
 	manualLockAi?: boolean;
 	settingsData?: any; // Raw settings for direct access
+	userDisplayName?: string;
+	userEmail?: string;
 	systemConfig: {
 		lock_free_orders: boolean;
 		lock_free_debts: boolean;
@@ -37,6 +40,8 @@ export const useOwner = () => {
 		loading: true,
 		isPro: false,
 		subscriptionStatus: 'trial',
+		userDisplayName: '',
+		userEmail: '',
 		systemConfig: {
 			lock_free_orders: false,
 			lock_free_debts: false,
@@ -68,6 +73,9 @@ export const useOwner = () => {
 			const role = userData.role || 'admin';
 			const accessRights = userData.accessRights;
 			const userIsPro = userData.isPro || false;
+
+			const userDisplayName = userData.displayName || auth.currentUser?.displayName || auth.currentUser?.email?.split('@')[0] || 'Nhân viên';
+			const userEmail = auth.currentUser?.email || '';
 
 			// Info from Settings (Optional/Defaults)
 			let isPro = userIsPro;
@@ -115,6 +123,10 @@ export const useOwner = () => {
 				maintenance_mode: false
 			};
 
+			// CRITICAL: Update the global API client to use the Admin's UID for all subsequent data queries.
+			// This ensures that employees fetch from the Admin's database instead of their own empty workspace.
+			setApiCredentials('', ownerId);
+
 			setState({
 				ownerId,
 				ownerEmail,
@@ -132,6 +144,8 @@ export const useOwner = () => {
 				manualLockSheets,
 				manualLockAi,
 				settingsData: settingsData || null,
+				userDisplayName,
+				userEmail,
 				systemConfig
 			});
 		};

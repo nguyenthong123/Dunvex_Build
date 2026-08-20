@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, CheckCircle2, XCircle, Clock, X, AlertTriangle, Coins, Database, ChevronLeft, ChevronRight, Trash2, Gift, TrendingUp, CalendarDays } from 'lucide-react';
 import { db, auth } from '../services/firebase';
-import { collection, query, where, orderBy, onSnapshot, updateDoc, doc, limit, serverTimestamp, setDoc, deleteDoc, getDocs } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, updateDoc, doc, limit, serverTimestamp, setDoc, deleteDoc, getDocs } from '../services/firebase';
 import { useToast } from './shared/Toast';
 
 const NotificationBell = ({ placement = 'down', align = 'right', className = "" }: { placement?: 'up' | 'down', align?: 'left' | 'right', className?: string }) => {

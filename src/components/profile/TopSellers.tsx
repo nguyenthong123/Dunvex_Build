@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../services/firebase';
-import { collection, query, where, getDocs, Timestamp, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, Timestamp, doc, getDoc } from '../../services/firebase';
 import { Trophy, Medal, TrendingUp, Loader2 } from 'lucide-react';
 
 interface TopSellersProps {
@@ -46,7 +46,7 @@ const TopSellers: React.FC<TopSellersProps> = ({ ownerId }) => {
 			const snap = await getDocs(q);
 
 			// Gom nhóm theo email + uid
-			const revenueMap: Record<string, { total: number; count: number; uid: string }> = {};
+			const revenueMap: Record<string, { total: number; count: number; uid: string; displayName?: string }> = {};
 			snap.forEach(doc => {
 				const data = doc.data();
 				const email = (data.createdByEmail || '').toLowerCase().trim();
@@ -54,11 +54,14 @@ const TopSellers: React.FC<TopSellersProps> = ({ ownerId }) => {
 				const key = email || uid || 'unknown';
 				const amount = Number(data.totalAmount) || 0;
 				if (!revenueMap[key]) {
-					revenueMap[key] = { total: 0, count: 0, uid };
+					revenueMap[key] = { total: 0, count: 0, uid, displayName: data.createdByDisplayName };
 				}
 				revenueMap[key].total += amount;
 				revenueMap[key].count += 1;
 				if (!revenueMap[key].uid && uid) revenueMap[key].uid = uid;
+				if (!revenueMap[key].displayName && data.createdByDisplayName) {
+					revenueMap[key].displayName = data.createdByDisplayName;
+				}
 			});
 
 			// Lấy displayName từ profiles (dùng uid làm key)
@@ -81,7 +84,7 @@ const TopSellers: React.FC<TopSellersProps> = ({ ownerId }) => {
 			// Build kết quả
 			const result: SellerStat[] = Object.entries(revenueMap).map(([email, stat]) => ({
 				email,
-				displayName: nameMap[email] || email.split('@')[0],
+				displayName: nameMap[email] || stat.displayName || email.split('@')[0],
 				totalRevenue: stat.total,
 				orderCount: stat.count,
 			}));

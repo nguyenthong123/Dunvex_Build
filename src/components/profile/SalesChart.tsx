@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart3, TrendingUp, TrendingDown } from 'lucide-react';
 import { db } from '../../services/firebase';
-import { collection, query, where, orderBy, getDocs, limit } from 'firebase/firestore';
+import { collection, query, where, orderBy, getDocs, limit } from '../../services/firebase';
 
 interface DailyRevenue {
   date: string;     // YYYY-MM-DD

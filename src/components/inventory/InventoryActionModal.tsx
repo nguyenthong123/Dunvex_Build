@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { updateDoc, doc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { updateDoc, doc, collection, addDoc, serverTimestamp } from '../../services/firebase';
 import { db, auth } from '../../services/firebase';
 import { useToast } from '../shared/Toast';
 
@@ -176,7 +176,9 @@ const InventoryActionModal: React.FC<InventoryActionModalProps> = ({ show, onClo
 									<div key={p.id} onClick={() => handleSelect(p)} className="p-3 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg cursor-pointer flex justify-between items-center">
 										<div>
 											<p className="font-bold text-sm text-slate-900 dark:text-white">{p.name}</p>
-											<p className="text-[10px] text-slate-500 font-bold uppercase">{p.sku || 'N/A'} • Tồn: {p.stock}</p>
+											<p className="text-[10px] text-slate-500 font-bold uppercase">
+												{p.sku || 'N/A'} • Tồn: {p.stock} {p.specification ? `• Quy cách: ${p.specification}` : ''}
+											</p>
 										</div>
 										<span className="material-symbols-outlined text-indigo-500">add_circle</span>
 									</div>
@@ -194,7 +196,9 @@ const InventoryActionModal: React.FC<InventoryActionModalProps> = ({ show, onClo
 								<div key={item.product.id} className="flex items-center gap-4 bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
 									<div className="flex-1">
 										<p className="font-bold text-sm text-slate-900 dark:text-white line-clamp-1">{item.product.name}</p>
-										<p className="text-[10px] text-slate-500 font-bold uppercase">Tồn hiện tại: {item.product.stock}</p>
+										<p className="text-[10px] text-slate-500 font-bold uppercase">
+											Tồn hiện tại: {item.product.stock} {item.product.specification ? `• Quy cách: ${item.product.specification}` : ''}
+										</p>
 									</div>
 									<div className="flex items-center gap-2">
 										<input 

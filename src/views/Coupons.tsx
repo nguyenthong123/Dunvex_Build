@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Tag, Copy, Check, Ticket, Clock, Info, Search, ChevronRight, Gift, Percent, Filter, Plus, Trash2, Edit3, X, Calendar, Truck, DollarSign, RotateCcw } from 'lucide-react';
-import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from '../services/firebase';
 import { db, auth } from '../services/firebase';
 import { useOwner } from '../hooks/useOwner';
 import { useCoupons } from '../hooks/useCoupons';
@@ -21,6 +21,27 @@ const Coupons = () => {
 
 	// CRUD State
 	const [showModal, setShowModal] = useState(false);
+
+	const openModal = () => {
+		setShowModal(true);
+		navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
+	};
+
+	// Track modal state for back button
+	const showModalRef = useRef(showModal);
+	useEffect(() => { showModalRef.current = showModal; }, [showModal]);
+
+	// Handle browser back button — close modal
+	useEffect(() => {
+		const handlePopState = () => {
+			if (showModalRef.current) {
+				setShowModal(false);
+			}
+		};
+		window.addEventListener('popstate', handlePopState);
+		return () => window.removeEventListener('popstate', handlePopState);
+	}, []);
+
 	const [isEditing, setIsEditing] = useState(false);
 	const [currentId, setCurrentId] = useState<string | null>(null);
 	const [formData, setFormData] = useState({
@@ -145,6 +166,7 @@ const Coupons = () => {
 			});
 		}
 		setShowModal(true);
+		navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
 	};
 
 	const handleSave = async (e: React.FormEvent) => {
@@ -429,7 +451,7 @@ const Coupons = () => {
 						{/* Modal Header (Fixed) */}
 						<div className="p-6 md:p-10 pb-0 shrink-0">
 							<button
-								onClick={() => setShowModal(false)}
+								onClick={() => { setShowModal(false); }}
 								className="absolute top-6 right-6 size-10 bg-slate-100 dark:bg-slate-800 text-slate-400 rounded-full flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors z-10"
 							>
 								<X size={20} />

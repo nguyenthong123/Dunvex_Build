@@ -100,11 +100,43 @@ export const maskSensitiveData = (str: string, isAdmin: boolean = false) => {
 	return masked;
 };
 
-/**
- * Optimizes Cloudinary URLs by adding f_auto and q_auto parameters
- */
+export const getRemoteOrigin = () => {
+	if (typeof window !== 'undefined') {
+		const origin = window.location.origin;
+		const isNativeApp = origin.startsWith('capacitor://') || 
+							origin.startsWith('ionic://') || 
+							origin === 'http://localhost' || 
+							origin === 'https://localhost';
+		if (!isNativeApp) {
+			return origin;
+		}
+	}
+	return 'https://dunvex.com';
+};
+
 export const getOptimizedImageUrl = (url: string) => {
 	if (!url) return '';
+
+	// Proxy external images in native apps to bypass CORS restrictions
+	if (url.startsWith('http') && !url.includes('dunvex.com') && !url.includes('localhost') && !url.includes('127.0.0.1')) {
+		const base = getRemoteOrigin();
+		const isNative = typeof window !== 'undefined' && window.location && base !== window.location.origin;
+		if (isNative) {
+			return `${base}/api/image-proxy?url=${encodeURIComponent(url)}`;
+		}
+	}
+
+	if (url.includes('/uploads/')) {
+		const base = getRemoteOrigin();
+		if (url.startsWith('/uploads/')) {
+			return `${base}${url}`;
+		}
+		const idx = url.indexOf('/uploads/');
+		if (idx !== -1) {
+			return `${base}${url.substring(idx)}`;
+		}
+		return url;
+	}
 
 	// Cloudinary optimization
 	if (url.includes('cloudinary.com')) {

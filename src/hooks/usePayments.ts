@@ -13,7 +13,7 @@ interface UsePaymentsOptions {
   maxResults?: number;
 }
 
-export function usePayments({ ownerId, enabled = true, maxResults = 500 }: UsePaymentsOptions) {
+export function usePayments({ ownerId, enabled = true, maxResults = 999999 }: UsePaymentsOptions) {
   const [payments, setPayments] = useState<WithId<any>[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);

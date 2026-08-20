@@ -94,7 +94,7 @@ const InventoryDesktopTable: React.FC<InventoryDesktopTableProps> = ({
 										<td className="py-4 px-6">
 											<div className="flex items-center gap-3">
 												<div className="size-10 rounded-lg bg-slate-50 dark:bg-slate-800 flex items-center justify-center overflow-hidden border border-slate-100 dark:border-slate-700">
-													{product.imageUrl ? <img src={getImageUrl(product.imageUrl)} alt="" className="size-full object-cover" /> : <span className="material-symbols-outlined text-slate-300">image</span>}
+													{product.imageUrl ? <img src={getImageUrl(product.imageUrl)} alt="" className="size-full object-cover"  loading="lazy" /> : <span className="material-symbols-outlined text-slate-300">image</span>}
 												</div>
 												<div>
 													<div className="font-bold text-slate-900 dark:text-white">{product.name}</div>
@@ -188,7 +188,7 @@ const InventoryDesktopTable: React.FC<InventoryDesktopTableProps> = ({
 											<td className="py-4 px-6 text-center" onClick={(e) => e.stopPropagation()}>
 												<div className="size-12 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center overflow-hidden border border-slate-100 dark:border-slate-700 mx-auto">
 													{product.imageUrl ? (
-														<img src={getImageUrl(product.imageUrl)} alt="" className="size-full object-cover" />
+														<img src={getImageUrl(product.imageUrl)} alt="" className="size-full object-cover"  loading="lazy" />
 													) : (
 														<span className="material-symbols-outlined text-slate-300">image</span>
 													)}

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
+import { SUPER_ADMIN_EMAIL } from '../constants';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Check, Zap, Crown, Rocket, ShieldCheck, ArrowLeft, CreditCard, QrCode, Lock, Settings, Mail, X, Save, Download, Database, Activity, Shield } from 'lucide-react';
 import { auth, db } from '../services/firebase';
-import { collection, addDoc, serverTimestamp, query, where, limit, getDocs, getDoc, doc, updateDoc, setDoc, increment, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, limit, getDocs, getDoc, doc, updateDoc, setDoc, increment, onSnapshot } from '../services/firebase';
 import { useEffect } from 'react';
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
@@ -105,7 +106,7 @@ const Pricing = () => {
 			}
 		}, (error) => {
 			// Fallback if permission denied (non-admin users)
-			console.warn('system_config/payment read skipped:', error.code);
+			console.warn('system_config/payment read skipped:', (error as any).code);
 			setNewBankId('ICB');
 			setNewAccountNumber('107882271865');
 			setNewAccountName('NGUYEN BA THONG');
@@ -227,7 +228,7 @@ const Pricing = () => {
 				const promoData = promoDoc.data();
 
 				// Step 2: Security check - must be created by Dunvex Master account
-				if (promoData.ownerEmail !== 'dunvex.green@gmail.com') {
+				if (promoData.ownerEmail !== SUPER_ADMIN_EMAIL) {
 					setPromoError('Mã này không được cấp phép để nâng cấp gói dịch vụ');
 					return;
 				}
@@ -362,12 +363,26 @@ const Pricing = () => {
 									</div>
 
 									<div className="space-y-4 mb-10">
-										{plan.features?.map((feature: string, idx: number) => (
+										{(Array.isArray(plan.features)
+											? plan.features
+											: typeof plan.features === 'object' && plan.features !== null
+												? Object.entries(plan.features).filter(([,v]) => v).map(([k]) => k)
+												: []
+										).map((feature: string, idx: number) => (
 											<div key={idx} className="flex items-center gap-3">
 												<div className="size-6 rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 flex items-center justify-center shrink-0">
 													<Check size={14} />
 												</div>
-												<span className="text-sm font-bold text-slate-600 dark:text-slate-300">{feature}</span>
+												<span className="text-sm font-bold text-slate-600 dark:text-slate-300">{{
+													orders: '📦 Quản lý đơn hàng',
+													debts: '💰 Theo dõi công nợ',
+													sheets: '📊 Bảng tính thông minh',
+													ai_assistant: '🤖 Trợ lý AI',
+													export_excel: '📥 Xuất Excel',
+													import_excel: '📤 Nhập Excel',
+													max_products: '📋 Sản phẩm không giới hạn',
+													max_customers: '👥 Khách hàng không giới hạn',
+												}[feature] || feature}</span>
 											</div>
 										))}
 									</div>

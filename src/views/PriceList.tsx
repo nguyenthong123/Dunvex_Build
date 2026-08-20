@@ -1026,11 +1026,11 @@ const PriceList = () => {
 							<button
 								onClick={handleCopyImage}
 								disabled={priceData.length === 0 || isCopyingImage}
-								className="size-9 md:w-auto bg-emerald-600 text-white md:px-4 md:py-2.5 rounded-xl flex items-center justify-center gap-2 font-bold text-sm shadow-lg shadow-emerald-500/20 hover:bg-emerald-700 transition-all disabled:opacity-50"
+								className="h-9 px-3 md:px-4 bg-emerald-600 text-white rounded-xl flex items-center justify-center gap-1.5 font-bold text-sm shadow-lg shadow-emerald-500/20 hover:bg-emerald-700 transition-all disabled:opacity-50 whitespace-nowrap"
 								title="Sao chép ảnh bảng giá"
 							>
 								{isCopyingImage ? <Loader2 size={16} className="animate-spin" /> : <Copy size={16} />}
-								<span className="hidden md:inline">Copy ảnh</span>
+								<span className="inline">Copy ảnh</span>
 							</button>
 
 							{/* Show Save/Update button if data is unsaved OR if it's an existing list that we want to provide an update option for */}

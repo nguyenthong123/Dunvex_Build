@@ -804,37 +804,45 @@ const PriceList = () => {
 	}, [headers, groupColumn]);
 
 	// Tính toán chiều rộng và định dạng căn lề động cho từng cột dựa trên tiêu đề & nội dung dữ liệu thực tế
-	const columnWidths = React.useMemo(() => {
-		const widths: Record<string, string> = {};
+		const columnWidths = React.useMemo(() => {
+		const result: Record<string, { width: number; align: string }> = {};
+		const PAPER = 1000;
+		const PADDING = 96; // md:p-12 = 48px mỗi bên
+		const STT_W = 48;
+		const IMG_W = hasImages ? 85 : 0;
+		const available = Math.max(360, PAPER - PADDING - STT_W - IMG_W);
+
+		const weights: Record<string, number> = {};
 		displayHeaders.forEach(header => {
 			const hLower = header.toLowerCase();
 			const isPrice = hLower.includes('giá') || hLower.includes('tiền');
-			
-			if (isPrice) {
-				widths[header] = 'w-[120px] min-w-[120px] text-right';
-				return;
-			}
+			const isName = hLower.includes('sản phẩm') || hLower.includes('quy cách') || hLower.includes('mô tả') || hLower.includes('chi tiết') || hLower.includes('tên') || hLower.includes('kích thước');
 
-			// Đo độ dài lớn nhất của dữ liệu trong cột này
 			let maxLen = header.length;
 			priceData.forEach(row => {
 				const val = String(row[header] || '');
-				if (val.length > maxLen) {
-					maxLen = val.length;
-				}
+				if (val.length > maxLen) maxLen = val.length;
 			});
 
-			// Phân loại cột dựa trên độ dài và nội dung để gán độ rộng phù hợp
-			if (maxLen > 30 || hLower.includes('sản phẩm') || hLower.includes('quy cách') || hLower.includes('mô tả') || hLower.includes('chi tiết') || hLower.includes('tên')) {
-				widths[header] = 'w-[320px] min-w-[200px] text-left';
-			} else if (maxLen < 8 || hLower.includes('đơn vị') || hLower.includes('dày') || hLower.includes('stt') || hLower.includes('mã')) {
-				widths[header] = 'w-[75px] min-w-[55px] text-center';
-			} else {
-				widths[header] = 'w-[140px] min-w-[100px] text-left';
-			}
+			let weight: number;
+			if (isPrice) weight = 11;
+			else if (isName) weight = Math.max(12, Math.min(maxLen, 32));
+			else weight = Math.max(7, Math.min(maxLen, 16));
+			weights[header] = weight;
 		});
-		return widths;
-	}, [displayHeaders, priceData]);
+
+		const total = Object.values(weights).reduce((a, b) => a + b, 0) || 1;
+		displayHeaders.forEach(header => {
+			const hLower = header.toLowerCase();
+			const isPrice = hLower.includes('giá') || hLower.includes('tiền');
+			const px = Math.round((weights[header] / total) * available);
+			result[header] = {
+				width: px,
+				align: isPrice ? 'text-right' : (weights[header] <= 8 ? 'text-center' : 'text-left')
+			};
+		});
+		return result;
+	}, [displayHeaders, priceData, hasImages]);
 
 	// Hàm hỗ trợ loại bỏ dấu tiếng Việt để tìm kiếm thông minh hơn
 	const normalizeString = (str: string) => {
@@ -1302,7 +1310,7 @@ const PriceList = () => {
 								{/* Báo giá Body */}
 								<div className="p-4 md:p-12 pt-6">
 									<div className="overflow-x-auto print:overflow-visible -mx-4 px-4 custom-scrollbar">
-										<table className="w-full text-left border-collapse min-w-[700px] md:min-w-full">
+										<table className="w-full text-left border-collapse table-fixed">
 											<thead>
 												<tr className="bg-orange-50/50">
 													<th className="py-5 px-4 text-[11px] font-black text-[#E65100] uppercase tracking-[0.1em] border border-slate-200 text-center w-12">STT</th>
@@ -1312,7 +1320,8 @@ const PriceList = () => {
 													{displayHeaders.map((header, idx) => (
 														<th
 															key={idx}
-															className={`py-5 px-4 text-[12px] font-black text-slate-950 uppercase tracking-[0.05em] border border-slate-200 whitespace-normal break-words ${columnWidths[header] || ''}`}
+															style={{ width: `${columnWidths[header]?.width || 120}px` }}
+															className={`py-5 px-4 text-[12px] font-black text-slate-950 uppercase tracking-[0.05em] border border-slate-200 whitespace-normal break-words ${columnWidths[header]?.align || 'text-left'}`}
 														>
 															{header}
 														</th>
@@ -1397,11 +1406,12 @@ const PriceList = () => {
 															return (
 																<td
 																	key={colIdx}
+																	style={{ width: `${columnWidths[header]?.width || 120}px` }}
 																	className={`py-4 px-4 text-[13px] border border-slate-200 whitespace-normal break-words ${
 																		isProductName 
 																			? 'text-[#E65100] bg-orange-50/10 font-bold' 
 																			: (isPrice ? 'text-slate-900 font-semibold' : 'text-slate-700 font-medium')
-																	} ${columnWidths[header] || ''}`}
+																	} ${columnWidths[header]?.align || 'text-left'}`}
 																>
 																	{displayValue}
 																</td>

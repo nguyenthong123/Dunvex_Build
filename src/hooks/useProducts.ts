@@ -28,6 +28,7 @@ export function useProducts({
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [refreshToken, setRefreshToken] = useState(0);
 
   useEffect(() => {
     if (!ownerId || !enabled) {
@@ -83,7 +84,7 @@ export function useProducts({
       );
       return unsubscribe;
     }
-  }, [ownerId, enabled, isPaginated, page, pageSize, searchKeyword]);
+  }, [ownerId, enabled, isPaginated, page, pageSize, searchKeyword, refreshToken]);
 
   return {
     products,
@@ -91,8 +92,13 @@ export function useProducts({
     totalPages,
     loading,
     error,
-    /** Refresh: tạm set loading để trigger re-render (listener vẫn chạy realtime) */
-    refresh: () => setLoading(true),
+    /** Refresh: buộc re-fetch dữ liệu mới (paginated) / re-subscribe (realtime) */
+    refresh: () => setRefreshToken((t) => t + 1),
+    /** Optimistic: xoá ngay 1 product khỏi UI (không cần chờ server/SSE) */
+    removeLocal: (id: string) => {
+      setProducts((prev) => prev.filter((p) => p.id !== id));
+      setTotalItems((prev) => Math.max(0, prev - 1));
+    },
     /** CRUD helpers */
     create: productService.create,
     update: productService.update,

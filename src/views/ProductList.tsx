@@ -43,7 +43,7 @@ const ProductList = () => {
 	}, [searchTerm]);
 
 	// 🔧 REFACTOR: Data từ hooks — bỏ 3 useState + 3 useEffect onSnapshot
-	const { products, totalItems, totalPages, loading, create: createProduct, update: updateProduct, remove: removeProduct, findBySku } = useProducts({
+	const { products, totalItems, totalPages, loading, create: createProduct, update: updateProduct, remove: removeProduct, removeLocal, refresh, findBySku } = useProducts({
 		ownerId: owner.ownerId,
 		enabled: !owner.loading && !!owner.ownerId,
 		isPaginated: true,
@@ -555,10 +555,14 @@ const ProductList = () => {
 	const handleDeleteProduct = async (id: string, bypassConfirm: boolean = false) => {
 		if (bypassConfirm || window.confirm("Bạn có chắc chắn muốn xóa sản phẩm này không?")) {
 			try {
-				await deleteDoc(doc(db, 'products', id));
+				// 🎯 Optimistic: ẩn sản phẩm ngay trên UI (không cần chờ server/SSE)
+				removeLocal(id);
 				setSelectedIds(prev => prev.filter(item => item !== id));
+				await deleteDoc(doc(db, 'products', id));
 				showToast("Đã xóa sản phẩm", "success");
 			} catch (error) {
+				// Khôi phục danh sách nếu xóa thất bại
+				refresh();
 				showToast("Lỗi khi xóa sản phẩm", "error");
 			}
 		}
@@ -584,9 +588,12 @@ const ProductList = () => {
 			});
 
 			await batch.commit();
+			// 🎯 Optimistic: ẩn ngay các sản phẩm đã xóa khỏi UI
+			selectedIds.forEach(id => removeLocal(id));
 			setSelectedIds([]);
 			showToast(`Đã xóa ${selectedIds.length} sản phẩm thành công`, "success");
 		} catch (error) {
+			refresh();
 			showToast("Lỗi khi xóa hàng loạt sản phẩm", "error");
 		}
 	};

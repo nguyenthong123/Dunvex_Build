@@ -63,20 +63,53 @@ const OrderFormHeader: React.FC<OrderFormHeaderProps> = ({
 		<div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-4 md:p-6 transition-colors duration-300">
 			<div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
 				{/* CUSTOMER SEARCH */}
-				<OrderCustomerPicker
-					selectedCustomer={selectedCustomer}
-					setSelectedCustomer={setSelectedCustomer}
-					searchCustomerQuery={searchCustomerQuery}
-					setSearchCustomerQuery={setSearchCustomerQuery}
-					showCustomerResults={showCustomerResults}
-					setShowCustomerResults={setShowCustomerResults}
-					filteredCustomers={filteredCustomers}
-					debtMap={debtMap}
-					customerSearchRef={customerSearchRef}
-					formatPrice={formatPrice}
-					showToast={showToast}
-					normalizeSmart={normalizeSmart}
-				/>
+				<div className="flex flex-col gap-1">
+					<OrderCustomerPicker
+						selectedCustomer={selectedCustomer}
+						setSelectedCustomer={setSelectedCustomer}
+						searchCustomerQuery={searchCustomerQuery}
+						setSearchCustomerQuery={setSearchCustomerQuery}
+						showCustomerResults={showCustomerResults}
+						setShowCustomerResults={setShowCustomerResults}
+						filteredCustomers={filteredCustomers}
+						debtMap={debtMap}
+						customerSearchRef={customerSearchRef}
+						formatPrice={formatPrice}
+						showToast={showToast}
+						normalizeSmart={normalizeSmart}
+					/>
+					{(() => {
+						if (!selectedCustomer) return null;
+						const customerDebt = debtMap[selectedCustomer.id] || 0;
+						const hasLimit = typeof selectedCustomer.creditLimit === 'number' && selectedCustomer.creditLimit > 0;
+						if (!hasLimit) return null;
+						const isOverLimit = customerDebt >= selectedCustomer.creditLimit;
+
+						return (
+							<div className={`p-3 rounded-xl border text-[11px] font-bold leading-normal flex items-start gap-2 mt-1.5 transition-all ${
+								isOverLimit 
+									? 'bg-rose-50 dark:bg-rose-900/10 border-rose-100 dark:border-rose-900/30 text-rose-600 dark:text-rose-400' 
+									: 'bg-indigo-50/50 dark:bg-indigo-900/5 border-indigo-100/50 dark:border-indigo-950/20 text-indigo-600 dark:text-indigo-400'
+							}`}>
+								<span className="material-symbols-outlined text-[15px] mt-0.5 shrink-0">
+									{isOverLimit ? 'warning' : 'info'}
+								</span>
+								<div>
+									{isOverLimit ? (
+										<span>
+											⚠️ Hạn mức nợ: <strong>{formatPrice(selectedCustomer.creditLimit)}</strong>. 
+											Đang nợ vượt hạn mức: <strong>{formatPrice(customerDebt)}</strong> (Vượt <strong>{formatPrice(customerDebt - selectedCustomer.creditLimit)}</strong>).
+										</span>
+									) : (
+										<span>
+											ℹ️ Công nợ hiện tại: <strong>{formatPrice(customerDebt)}</strong> / Hạn mức: <strong>{formatPrice(selectedCustomer.creditLimit)}</strong> (Còn lại: <strong>{formatPrice(selectedCustomer.creditLimit - customerDebt)}</strong>).
+										</span>
+									)}
+								</div>
+							</div>
+						);
+					})()}
+				</div>
 
 				{/* STATUS SELECT */}
 				<div>

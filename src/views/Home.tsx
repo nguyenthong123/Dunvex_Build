@@ -8,25 +8,115 @@ import { useNavigationConfig } from '../hooks/useNavigationConfig';
 import { Eye, EyeOff, TrendingUp, TrendingDown, AlertTriangle, Wallet, Gift, Trophy, User as UserIcon } from 'lucide-react';
 
 import { useOwner } from '../hooks/useOwner';
-// 🔧 REFACTOR: Dùng hooks mới thay vì Firestore trực tiếp
 import { useProducts } from '../hooks/useProducts';
 import { useOrders } from '../hooks/useOrders';
-import { useCustomers } from '../hooks/useCustomers';
-import { usePayments } from '../hooks/usePayments';
 import QRScanner from '../components/shared/QRScanner';
 import { QrCode } from 'lucide-react';
 import { useToast } from '../components/shared/Toast';
 import TopSellers from '../components/profile/TopSellers';
 import { DashboardSkeleton } from '../components/shared/UISkeleton';
 
+const getLocalDateStr = (d: Date = new Date()): string => {
+	const year = d.getFullYear();
+	const month = String(d.getMonth() + 1).padStart(2, '0');
+	const day = String(d.getDate()).padStart(2, '0');
+	return `${year}-${month}-${day}`;
+};
+
+// Helper functions for parsing order dates robustly (supports ISO string, timestamp object, Date, slash format)
+const parseOrderDateStr = (o: any): string => {
+	if (o.orderDate && typeof o.orderDate === 'string') {
+		const trimmed = o.orderDate.trim();
+		if (trimmed.includes('-')) {
+			return trimmed.split('T')[0];
+		}
+		if (trimmed.includes('/')) {
+			const parts = trimmed.split('/');
+			if (parts.length === 3) {
+				return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+			}
+		}
+	}
+	if (o.createdAt) {
+		if (typeof o.createdAt === 'string') {
+			const trimmed = o.createdAt.trim();
+			if (trimmed.includes('-')) return trimmed.split('T')[0];
+			const d = new Date(trimmed);
+			if (!isNaN(d.getTime())) return getLocalDateStr(d);
+		}
+		if (typeof o.createdAt.toDate === 'function') {
+			return getLocalDateStr(o.createdAt.toDate());
+		}
+		if (o.createdAt.seconds !== undefined) {
+			return getLocalDateStr(new Date(o.createdAt.seconds * 1000));
+		}
+		if (o.createdAt._seconds !== undefined) {
+			return getLocalDateStr(new Date(o.createdAt._seconds * 1000));
+		}
+		if (o.createdAt instanceof Date) {
+			return getLocalDateStr(o.createdAt);
+		}
+		if (typeof o.createdAt === 'number') {
+			const ts = o.createdAt < 1e12 ? o.createdAt * 1000 : o.createdAt;
+			return getLocalDateStr(new Date(ts));
+		}
+	}
+	return '';
+};
+
+const parseOrderDate = (o: any): Date => {
+	if (o.orderDate) {
+		const str = parseOrderDateStr(o);
+		if (str) {
+			const [y, m, d] = str.split('-').map(Number);
+			if (y && m && d) return new Date(y, m - 1, d);
+		}
+		const d = new Date(o.orderDate);
+		if (!isNaN(d.getTime())) return d;
+	}
+	if (o.createdAt) {
+		if (typeof o.createdAt.toDate === 'function') return o.createdAt.toDate();
+		if (o.createdAt.seconds !== undefined) return new Date(o.createdAt.seconds * 1000);
+		if (o.createdAt._seconds !== undefined) return new Date(o.createdAt._seconds * 1000);
+		if (o.createdAt instanceof Date) return o.createdAt;
+		if (typeof o.createdAt === 'string') {
+			const d = new Date(o.createdAt);
+			if (!isNaN(d.getTime())) return d;
+		}
+		if (typeof o.createdAt === 'number') {
+			const ts = o.createdAt < 1e12 ? o.createdAt * 1000 : o.createdAt;
+			return new Date(ts);
+		}
+	}
+	return new Date();
+};
+
+const parseOrderTime = (o: any): number => {
+	if (o.createdAt?.seconds) return o.createdAt.seconds;
+	if (o.createdAt?._seconds) return o.createdAt._seconds;
+	if (typeof o.createdAt?.toDate === 'function') return o.createdAt.toDate().getTime() / 1000;
+	if (typeof o.createdAt === 'string') {
+		const t = new Date(o.createdAt).getTime();
+		if (!isNaN(t)) return t / 1000;
+	}
+	if (typeof o.createdAt === 'number') {
+		return o.createdAt < 1e12 ? o.createdAt : o.createdAt / 1000;
+	}
+	if (o.orderDate) {
+		const t = new Date(o.orderDate).getTime();
+		if (!isNaN(t)) return t / 1000;
+	}
+	return 0;
+};
+
 const Home = () => {
 	const navigate = useNavigate();
 	const owner = useOwner();
 	const isAdmin = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
-	const { showToast } = useToast();
+	const { showToast, showConfirm } = useToast();
 	const { sidebarItems } = useNavigationConfig();
 
-	// 🔧 REFACTOR: Data từ hooks tập trung — KHÔNG còn Firestore queries rải rác
+	// Tải dữ liệu: lấy products và orders cho dashboard
 	const { products, loading: productsLoading } = useProducts({
 		ownerId: owner.ownerId,
 		enabled: !owner.loading && !!owner.ownerId,
@@ -34,53 +124,12 @@ const Home = () => {
 	const { orders } = useOrders({
 		ownerId: owner.ownerId,
 		enabled: !owner.loading && !!owner.ownerId,
-		maxResults: 500,
-	});
-	const { customers } = useCustomers({
-		ownerId: owner.ownerId,
-		enabled: !owner.loading && !!owner.ownerId,
-	});
-	const { payments } = usePayments({
-		ownerId: owner.ownerId,
-		enabled: !owner.loading && !!owner.ownerId,
-		maxResults: 500,
+		maxResults: 9999,
 	});
 
 	const [showProfit, setShowProfit] = useState(false);
 	const [chartFilter, setChartFilter] = useState('7days');
 	const [showScanner, setShowScanner] = useState(false);
-
-	// ─── FIX: Fetch tất cả đơn chốt (không limit 500) để tính tổng doanh số chính xác ───
-	const [allTimeStats, setAllTimeStats] = useState({ revenue: 0, count: 0, loading: true });
-
-	useEffect(() => {
-		if (!owner.ownerId) return;
-		const fetchAll = async () => {
-			try {
-				const q = query(
-					collection(db, 'orders'),
-					where('ownerId', '==', owner.ownerId),
-					where('status', '==', 'Đơn chốt')
-				);
-				const snap = await getDocs(q);
-				const userEmail = auth.currentUser?.email || '';
-				let total = 0;
-				let count = 0;
-				snap.forEach(doc => {
-					const data = doc.data();
-					if (data.createdByEmail === userEmail) {
-						total += Number(data.totalAmount) || 0;
-						count++;
-					}
-				});
-				setAllTimeStats({ revenue: total, count, loading: false });
-			} catch (e) {
-				console.error('Failed to fetch all orders:', e);
-				setAllTimeStats(prev => ({ ...prev, loading: false }));
-			}
-		};
-		fetchAll();
-	}, [owner.ownerId]);
 
 	// Format tiền rút gọn cho số lớn
 	const formatCompactPrice = (price: number) => {
@@ -96,14 +145,22 @@ const Home = () => {
 	// --- Removed redundant notification handlers ---
 
 	const handleLogout = async () => {
-		if (window.confirm("Bạn có chắc chắn muốn đăng xuất?")) {
-			try {
-				await signOut(auth);
-				navigate('/login');
-			} catch (error) {
-				showToast("Lỗi khi đăng xuất", "error");
+		showConfirm(
+			"Đăng xuất",
+			"Bạn có chắc chắn muốn đăng xuất khỏi ứng dụng?",
+			async () => {
+				try {
+					localStorage.removeItem('dunvex_user_session');
+					localStorage.removeItem('dunvex_owner_id');
+					localStorage.removeItem('dunvex_api_key');
+					window.dispatchEvent(new CustomEvent('dunvex_logout'));
+					await signOut(auth);
+					navigate('/login');
+				} catch (error) {
+					showToast("Lỗi khi đăng xuất", "error");
+				}
 			}
-		}
+		);
 	};
 
 	const formatPrice = (price: number) => {
@@ -118,15 +175,18 @@ const Home = () => {
 	// --- CALCULATIONS ---
 
 	// 1. Revenue & Profit Today
-	const today = new Date().toISOString().split('T')[0];
+	const today = getLocalDateStr(new Date());
 	const todayOrders = orders.filter(o => {
-		const d = o.orderDate || (o.createdAt?.seconds ? new Date(o.createdAt.seconds * 1000).toISOString().split('T')[0] : '');
+		const d = parseOrderDateStr(o);
 		return d === today && o.status === 'Đơn chốt';
 	});
 
 	const revenueToday = todayOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
 
 	const profitToday = todayOrders.reduce((sum, o) => {
+		if (typeof o.totalProfit === 'number') {
+			return sum + o.totalProfit;
+		}
 		const itemsProfit = (o.items || []).reduce((pSum: number, item: any) => {
 			const sell = Number(item.price) || 0;
 			const currentProd = products.find(p => p.id === (item.productId || item.id));
@@ -148,12 +208,15 @@ const Home = () => {
 	startOfMonth.setHours(0, 0, 0, 0);
 
 	const thisMonthOrders = orders.filter(o => {
-		const d = o.orderDate ? new Date(o.orderDate) : (o.createdAt?.seconds ? new Date(o.createdAt.seconds * 1000) : new Date());
+		const d = parseOrderDate(o);
 		return d >= startOfMonth && o.status === 'Đơn chốt';
 	});
 
 	const revenueThisMonth = thisMonthOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
 	const profitThisMonth = thisMonthOrders.reduce((sum, o) => {
+		if (typeof o.totalProfit === 'number') {
+			return sum + o.totalProfit;
+		}
 		const itemsProfit = (o.items || []).reduce((pSum: number, item: any) => {
 			const sell = Number(item.price) || 0;
 			const currentProd = products.find(p => p.id === (item.productId || item.id));
@@ -172,10 +235,10 @@ const Home = () => {
 		for (let i = 6; i >= 0; i--) {
 			const d = new Date();
 			d.setDate(d.getDate() - i);
-			const dateStr = d.toISOString().split('T')[0];
+			const dateStr = getLocalDateStr(d);
 
 			const dayRevenue = targetOrders.filter(o => {
-				const od = o.orderDate || (o.createdAt?.seconds ? new Date(o.createdAt.seconds * 1000).toISOString().split('T')[0] : '');
+				const od = parseOrderDateStr(o);
 				return od === dateStr && o.status === 'Đơn chốt';
 			}).reduce((s, o) => s + (o.totalAmount || 0), 0);
 
@@ -194,9 +257,9 @@ const Home = () => {
 	// Calculate Today's Growth (comparison with yesterday)
 	const yesterday = new Date();
 	yesterday.setDate(yesterday.getDate() - 1);
-	const yesterdayStr = yesterday.toISOString().split('T')[0];
+	const yesterdayStr = getLocalDateStr(yesterday);
 	const revenueYesterday = orders.filter(o => {
-		const od = o.orderDate || (o.createdAt?.seconds ? new Date(o.createdAt.seconds * 1000).toISOString().split('T')[0] : '');
+		const od = parseOrderDateStr(o);
 		return od === yesterdayStr && o.status === 'Đơn chốt';
 	}).reduce((s, o) => s + (o.totalAmount || 0), 0);
 
@@ -213,7 +276,7 @@ const Home = () => {
 		for (let d = 1; d <= today; d++) {
 			const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 			const dayRevenue = thisMonthOrders.filter(o => {
-				const od = o.orderDate || (o.createdAt?.seconds ? new Date(o.createdAt.seconds * 1000).toISOString().split('T')[0] : '');
+				const od = parseOrderDateStr(o);
 				return od === dateStr && o.status === 'Đơn chốt';
 			}).reduce((s, o) => s + (o.totalAmount || 0), 0);
 			runningTotal += dayRevenue;
@@ -239,9 +302,7 @@ const Home = () => {
 
 	// 1.4 Recent Customer Sales Data (Display 6 customers with most recent 'Đơn chốt' orders)
 	const getOrderTime = (o: any) => {
-		if (o.createdAt?.seconds) return o.createdAt.seconds;
-		// Fallback for very new orders (optimistic UI) where serverTimestamp is still null
-		return o.orderDate ? new Date(o.orderDate).getTime() / 1000 : (o.createdAt?.seconds || 0);
+		return parseOrderTime(o);
 	};
 
 	const recentClosedOrders = [...orders]
@@ -254,7 +315,7 @@ const Home = () => {
 
 	for (const o of recentClosedOrders) {
 		const customerId = o.customerId || null;
-		const customerName = o.customerBusinessName || o.customerName || 'Khách lẻ';
+		const customerName = o.customerName || o.customerBusinessName || 'Khách lẻ';
 		// We group by ID if available, otherwise by name
 		const groupKey = customerId ? `id:${customerId}` : `name:${customerName}`;
 
@@ -333,13 +394,13 @@ const Home = () => {
 
 
 					<div
-						onClick={() => navigate('/admin')}
+						onClick={() => navigate('/profile')}
 						className="flex items-center gap-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 p-2 rounded-xl transition-all group"
-						title="Quản trị doanh nghiệp"
+						title="Xem hồ sơ cá nhân"
 					>
 						<div className="text-right hidden sm:block">
 							<p className="text-xs font-black leading-none text-slate-900 dark:text-white group-hover:text-[#1A237E] dark:group-hover:text-indigo-400 transition-colors">
-								{auth.currentUser?.displayName || 'Người dùng'}
+								{owner.userDisplayName || auth.currentUser?.displayName || 'Người dùng'}
 							</p>
 							<p className="text-[10px] text-slate-500 dark:text-slate-500 uppercase font-black tracking-widest mt-1 group-hover:text-[#FF6D00] transition-colors">
 								{owner.loading ? '...' :
@@ -453,10 +514,10 @@ const Home = () => {
 						</div>
 
 						{/* Shortcuts */}
-						<div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-200">
-							<h3 className="font-bold text-slate-800 mb-4 flex items-center justify-between">
+						<div className="bg-white dark:bg-slate-900 rounded-[2rem] p-6 shadow-sm border border-slate-200 dark:border-slate-800 transition-colors">
+							<h3 className="font-bold text-slate-800 dark:text-white mb-4 flex items-center justify-between">
 								Phím tắt nhanh
-								<span className="material-symbols-outlined text-slate-300">apps</span>
+								<span className="material-symbols-outlined text-slate-300 dark:text-slate-600">apps</span>
 							</h3>
 							<div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
 								{sidebarItems
@@ -654,10 +715,7 @@ const Home = () => {
 
 const StaffLeaderboard = ({ orders, todayStr, formatPrice }: { orders: any[], todayStr: string, formatPrice: (n: number) => string }) => {
 	const staffSales = orders
-		.filter(o => {
-			const d = o.orderDate || (o.createdAt?.seconds ? new Date(o.createdAt.seconds * 1000).toISOString().split('T')[0] : '');
-			return d === todayStr && o.status === 'Đơn chốt';
-		})
+		.filter(o => parseOrderDateStr(o) === todayStr && o.status === 'Đơn chốt')
 		.reduce((acc: any, o) => {
 			const email = o.createdByEmail || 'unknown';
 			const name = o.createdByEmail?.split('@')[0] || 'Nhân viên';

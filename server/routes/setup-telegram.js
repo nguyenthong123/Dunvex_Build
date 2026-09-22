@@ -33,14 +33,21 @@ async function handler(req, res) {
       }
 
       const isGroup = telegramChatId && telegramChatId.trim().startsWith('-');
-      db.update('api_keys', keyDoc.id, {
+      const updatePayload = {
         telegramBotToken: botToken,
         telegramChatId: isGroup ? '' : (telegramChatId || ''),
         telegramGroupChatId: isGroup ? (telegramChatId || '') : '',
+        notifyNewOrder: req.body.notifyNewOrder !== undefined ? req.body.notifyNewOrder === true : (keyDoc.notifyNewOrder ?? true),
+        notifyEodReport: req.body.notifyEodReport !== undefined ? req.body.notifyEodReport === true : (keyDoc.notifyEodReport ?? true),
+        notifyAttendance: req.body.notifyAttendance !== undefined ? req.body.notifyAttendance === true : (keyDoc.notifyAttendance ?? true),
+        notifySiteCheckin: req.body.notifySiteCheckin !== undefined ? req.body.notifySiteCheckin === true : (keyDoc.notifySiteCheckin ?? true),
+        notifyDebtPayment: req.body.notifyDebtPayment !== undefined ? req.body.notifyDebtPayment === true : (keyDoc.notifyDebtPayment ?? true),
+        notifyLeaveRequest: req.body.notifyLeaveRequest !== undefined ? req.body.notifyLeaveRequest === true : (keyDoc.notifyLeaveRequest ?? true),
         updatedAt: new Date().toISOString()
-      });
+      };
+      db.update('api_keys', keyDoc.id, updatePayload);
 
-      return res.status(200).json({ success: true, message: "Đã kết nối Telegram Bot thành công!" });
+      return res.status(200).json({ success: true, message: "Đã lưu cấu hình kết nối và các luồng thông báo thành công!" });
 
     } else {
       if (keyDoc.telegramBotToken) {
@@ -55,6 +62,7 @@ async function handler(req, res) {
 
       return res.status(200).json({ success: true, message: "Đã ngắt kết nối Telegram Bot." });
     }
+
 
   } catch (error) {
     console.error("Setup telegram error:", error);

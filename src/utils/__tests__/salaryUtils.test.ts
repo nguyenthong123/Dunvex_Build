@@ -69,6 +69,25 @@ describe('calculateDaysWorked', () => {
     ];
     expect(calculateDaysWorked(checkins, [])).toBe(1);
   });
+
+  it('tính công đi thị trường theo tỷ lệ points', () => {
+    const checkins = [
+      { createdAt: ts('2026-08-01') },
+    ];
+    const attendance = [
+      { createdAt: ts('2026-08-01'), type: 'customer' },
+      { createdAt: ts('2026-08-01'), type: 'customer' },
+      { createdAt: ts('2026-08-02'), type: 'customer' },
+      { createdAt: ts('2026-08-02'), type: 'customer' },
+      { createdAt: ts('2026-08-02'), type: 'customer' },
+      { createdAt: ts('2026-08-02'), type: 'customer' },
+      { createdAt: ts('2026-08-02'), type: 'customer' },
+      { createdAt: ts('2026-08-02'), type: 'customer' },
+      { createdAt: ts('2026-08-03'), type: 'checkin' },
+      { createdAt: ts('2026-08-03'), type: 'customer' },
+    ];
+    expect(calculateDaysWorked(checkins, attendance, 5)).toBe(2.6);
+  });
 });
 
 // ─── calculateTotalSalary ───────────────────────────
@@ -125,6 +144,29 @@ describe('calculateSalaryTable', () => {
     expect(c.monthlyWage).toBe(0);
     expect(c.dailyWage).toBe(250_000);
     expect(c.totalSalary).toBe(750_000);
+  });
+
+  it('tính bảng lương với cấu hình points riêng từng nhân viên', () => {
+    const testUsers = [
+      { id: 'u1', displayName: 'Thợ A', email: 'thoa@test.com', monthlyWage: 7_800_000, marketPointsRequired: 1 },
+      { id: 'u2', displayName: 'Sale B', email: 'saleb@test.com', monthlyWage: 7_800_000, marketPointsRequired: 5 },
+    ];
+    const testCheckins: any[] = [];
+    const testAttendance = [
+      { userId: 'u1', createdAt: ts('2026-08-01'), type: 'customer' },
+      { userId: 'u1', createdAt: ts('2026-08-01'), type: 'customer' },
+      { userId: 'u2', createdAt: ts('2026-08-01'), type: 'customer' },
+      { userId: 'u2', createdAt: ts('2026-08-01'), type: 'customer' },
+    ];
+
+    const result = calculateSalaryTable(testUsers, testCheckins, testAttendance);
+    const a = result.find(r => r.userId === 'u1')!;
+    expect(a.daysWorked).toBe(1);
+    expect(a.totalSalary).toBe(300_000);
+
+    const b = result.find(r => r.userId === 'u2')!;
+    expect(b.daysWorked).toBe(0.4);
+    expect(b.totalSalary).toBe(120_000);
   });
 
   it('xử lý nhân viên không có checkin nào', () => {

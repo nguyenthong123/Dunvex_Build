@@ -18,25 +18,32 @@ export interface OrderFilterInput {
     [key: string]: unknown; // cho phép extra fields từ Firebase
 }
 
-/** Export cùng định dạng với OrderList để dùng chung */
+import { smartSearchMatch, calculateSearchScore } from './searchUtils';
+
 export function filterOrders(
     orders: OrderFilterInput[],
     searchTerm: string,
     fromDate: string,
     toDate: string
 ): OrderFilterInput[] {
-    return orders.filter(order => {
-        // Search: match name / business / id / phone
-        let term = searchTerm.toLowerCase();
-        if (term.startsWith('#')) {
-            term = term.slice(1);
-        }
-        const matchesSearch = !term || (
-            (String(order.customerName || '').toLowerCase().includes(term)) ||
-            (String(order.customerBusinessName || '').toLowerCase().includes(term)) ||
-            (String(order.id || '').toLowerCase().includes(term)) ||
-            (String(order.customerPhone || '').includes(term))
-        );
+    const rawTerm = searchTerm ? searchTerm.replace(/^#/, '').trim() : '';
+
+    const filtered = orders.filter(order => {
+        // Collect line item product names
+        const itemNames = Array.isArray(order.items)
+            ? (order.items as any[]).map(i => i.name || '').filter(Boolean)
+            : [];
+
+        const matchesSearch = smartSearchMatch([
+            order.id || '',
+            order.customerName || '',
+            order.customerBusinessName || '',
+            order.customerPhone || '',
+            order.customerAddress || '',
+            order.note || '',
+            order.status || '',
+            ...itemNames
+        ], rawTerm);
 
         // Date: match orderDate or createdAt
         let matchesDate = true;
@@ -49,6 +56,17 @@ export function filterOrders(
 
         return matchesSearch && matchesDate;
     });
+
+    if (rawTerm) {
+        const scored = filtered.map(order => ({
+            order,
+            score: calculateSearchScore(order, rawTerm, { primary: ['id', 'customerName', 'customerBusinessName', 'customerPhone'] })
+        }));
+        scored.sort((a, b) => b.score - a.score);
+        return scored.map(s => s.order);
+    }
+
+    return filtered;
 }
 
 function extractDate(createdAt?: { seconds: number } | Date | string): string {

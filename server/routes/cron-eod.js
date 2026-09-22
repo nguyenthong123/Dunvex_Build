@@ -2,7 +2,6 @@ import * as db from '../db.js';
 import { sendTelegramMessage } from '../telegram-helper.js';
 
 async function handler(req, res) {
-  const geminiApiKey = process.env.GEMINI_API_KEY || "";
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret || req.headers.authorization !== `Bearer ${cronSecret}`) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -85,15 +84,39 @@ async function handler(req, res) {
 
     const allKeys = db.getAll('api_keys') || [];
 
-    for (const keyDoc of allKeys) {
+    // Hỗ trợ n8n EOD workflow: action=list_owners
+    if (req.query?.action === 'list_owners') {
+      const activeOwners = allKeys
+        .filter(k => k.telegramBotToken && k.telegramGroupChatId && k.enabled !== false && k.notifyEodReport !== false)
+        .map(k => {
+          const oId = k.ownerId || k.id;
+          const p = db.get('profiles', oId);
+          const u = db.get('users', oId);
+          const s = db.get('settings', oId);
+          return {
+            ownerId: oId,
+            name: p?.displayName || u?.displayName || u?.name || s?.adminName || s?.name || 'Xưởng',
+            groupChatId: k.telegramGroupChatId
+          };
+        });
+      return res.status(200).json({ success: true, count: activeOwners.length, owners: activeOwners });
+    }
+
+    const targetOwnerId = req.query?.ownerId;
+    const filteredKeys = targetOwnerId
+      ? allKeys.filter(k => (k.ownerId === targetOwnerId || k.id === targetOwnerId))
+      : allKeys;
+
+    for (const keyDoc of filteredKeys) {
       const ownerId = keyDoc.ownerId || keyDoc.id;
       const botToken = keyDoc.telegramBotToken;
-      // 🎯 CHỈ gửi vào nhóm, không gửi riêng
-      const chatId = keyDoc.telegramGroupChatId;
-      if (!chatId) continue; // Bỏ qua nếu không có group chat
+      // 🎯 Ưu tiên gửi vào nhóm Telegram, fallback về chat cá nhân nếu không có nhóm
+      const chatId = keyDoc.telegramGroupChatId || keyDoc.telegramChatId;
       const enabled = keyDoc.enabled !== false;
+      const notifyEod = keyDoc.notifyEodReport !== false;
 
-      if (!botToken || !chatId || !enabled) continue;
+      if (!botToken || !chatId || !enabled || !notifyEod) continue;
+
 
       // 🛑 DEDUPLICATION CHECK: Skip if already successfully sent today
       try {
@@ -113,9 +136,11 @@ async function handler(req, res) {
         console.error('[CRON] Error checking EOD log:', err);
       }
 
-      // Get owner info
+      // Get owner info (Ưu tiên: profiles -> users -> settings)
+      const profileDoc = db.get('profiles', ownerId);
       const userDoc = db.get('users', ownerId);
-      const adminName = userDoc?.displayName || userDoc?.name || "Admin";
+      const settingsDoc = db.get('settings', ownerId);
+      const adminName = profileDoc?.displayName || userDoc?.displayName || userDoc?.name || settingsDoc?.adminName || settingsDoc?.name || "Admin";
 
       // Get all "Đơn chốt" orders for this owner
       const allOrders = db.getAll('orders') || [];
@@ -133,20 +158,23 @@ async function handler(req, res) {
       const revenueByCustomer = {};
       let totalRevenue = 0;
 
-      // Build UID -> displayName map from users collection
+      // Build UID -> displayName map from users and profiles collections
       const allUsers = db.getAll('users') || [];
+      const allProfiles = db.getAll('profiles') || [];
       const userNameMap = {};
       for (const u of allUsers) {
-        if (u.id && u.displayName) userNameMap[u.id] = u.displayName;
+        if (u.id && (u.displayName || u.name)) userNameMap[u.id] = u.displayName || u.name;
+        if (u.uid && (u.displayName || u.name)) userNameMap[u.uid] = u.displayName || u.name;
+      }
+      for (const p of allProfiles) {
+        if (p.id && p.displayName) userNameMap[p.id] = p.displayName;
+        if (p.uid && p.displayName) userNameMap[p.uid] = p.displayName;
       }
 
       ownerOrders.forEach((o) => {
         const amount = Number(o.totalAmount || 0);
-        // Ưu tiên staffName, nếu không có thì lookup displayName từ createdBy UID
-        let staff = o.staffName;
-        if (!staff && o.createdBy) {
-          staff = userNameMap[o.createdBy] || o.createdBy;
-        }
+        // Ưu tiên lookup displayName mới nhất từ createdBy UID nếu có
+        let staff = (o.createdBy && userNameMap[o.createdBy]) ? userNameMap[o.createdBy] : o.staffName;
         if (!staff) staff = "Admin";
         const customer = o.customerName || "Khách vãng lai";
 
@@ -290,7 +318,7 @@ async function handler(req, res) {
         });
       }
 
-      // Gemini AI for greeting/closing
+      // DeepSeek AI for greeting/closing
       const prompt = `Bạn là trợ lý AI (Telegram Bot) của phần mềm Dunvex Build, phục vụ sếp: ${adminName}.
 Nhiệm vụ: Viết 1 LỜI CHÀO mở đầu và 1 LỜI KẾT cho báo cáo cuối ngày.
 
@@ -312,35 +340,35 @@ Ví dụ: 🌙 Chào sếp ${adminName}! Dưới đây là báo cáo cuối ngà
       let greeting = `🌙 Chào sếp ${adminName}! Dưới đây là báo cáo cuối ngày ạ!`;
       let closing = `💪 Chúc sếp nghỉ ngơi thật tốt! 🚀`;
 
+      const deepseekApiKey = process.env.DEEPSEEK_API_KEY || "sk-5ced935df4be41938479954151790443";
       try {
-        const geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiApiKey}`,
-          {
+        if (deepseekApiKey) {
+          const aiRes = await fetch("https://api.deepseek.com/chat/completions", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-          }
-        );
-
-        if (!geminiRes.ok) {
-          console.error("Gemini API error:", geminiRes.status, await geminiRes.text());
-        } else {
-          const data = await geminiRes.json();
-          if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
-            const aiText = data.candidates[0].content.parts[0].text.trim();
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${deepseekApiKey}`
+            },
+            body: JSON.stringify({
+              model: "deepseek-chat",
+              messages: [{ role: "user", content: prompt }],
+              temperature: 0.3
+            })
+          });
+          if (aiRes.ok) {
+            const aiData = await aiRes.json();
+            const aiText = aiData.choices?.[0]?.message?.content?.trim() || "";
             const parts = aiText.split("|||");
             if (parts.length >= 2) {
               greeting = parts[0].trim();
               closing = parts[1].trim();
-            } else {
+            } else if (aiText) {
               greeting = aiText;
             }
-          } else {
-            console.error("Gemini: no candidates in response", JSON.stringify(data).substring(0, 500));
           }
         }
       } catch (e) {
-        console.error("Gemini error:", e);
+        console.warn("DeepSeek greeting generation notice:", e.message);
       }
 
       const reportText = `${greeting}
@@ -379,6 +407,11 @@ ${closing}`;
         } catch (dbErr) {
           console.error('[CRON] Error logging EOD failure to DB:', dbErr);
         }
+      }
+
+      // ⏱️ PHÂN TẢI THÔNG MINH (Pacing Delay): Nghỉ 1s giữa các admin để tránh bị Telegram / DeepSeek Rate Limit khi có nhiều tài khoản
+      if (filteredKeys.length > 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
 

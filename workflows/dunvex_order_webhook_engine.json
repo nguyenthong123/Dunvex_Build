@@ -1,0 +1,109 @@
+{
+  "id": "kCBT4HH8e2U4D6S2",
+  "name": "Dunvex - Webhook Nhận Đơn Từ Web Khác (Chống Rớt Đơn)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dunvex-order",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-order-webhook",
+      "name": "1. Webhook Nhận Đơn Web Ngoài",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [100, 300],
+      "webhookId": "dunvex-order-webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"message\": \"Đơn hàng đã được tiếp nhận và xử lý an toàn vào Dunvex\",\n  \"timestamp\": \"{{ $now.toISO() }}\"\n}",
+        "options": {}
+      },
+      "id": "node-respond-fast",
+      "name": "2. Phản Hồi Ngay 200 OK (Chống Timeout)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [320, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Lấy dữ liệu thô gửi lên\nconst body = $input.first().json.body || $input.first().json;\n\n// 2. Chuẩn hoá Tên Khách Hàng\nlet rawName = (body.customerName || body.name || '').trim().replace(/\\s+/g, ' ');\nconst words = rawName.split(' ');\nif (words.length === 2 && words[0].toLowerCase() === words[1].toLowerCase()) {\n  rawName = words[0];\n}\nconst half = Math.floor(words.length / 2);\nif (words.length >= 2 && words.length % 2 === 0) {\n  if (words.slice(0, half).join(' ').toLowerCase() === words.slice(half).join(' ').toLowerCase()) {\n    rawName = words.slice(0, half).join(' ');\n  }\n}\n\n// 3. Chuẩn hoá Số Điện Thoại\nlet rawPhone = String(body.customerPhone || body.phone || '').trim();\nlet cleanPhone = rawPhone.replace(/\\D/g, '');\nif (cleanPhone.startsWith('84') && cleanPhone.length > 9) {\n  cleanPhone = '0' + cleanPhone.slice(2);\n}\n\n// 4. Chuẩn hoá Danh Sách Sản Phẩm\nlet rawItems = body.items || body.products || body.line_items || [];\nif (typeof rawItems === 'string') {\n  try { rawItems = JSON.parse(rawItems); } catch(e) { rawItems = []; }\n}\nif (!Array.isArray(rawItems) && typeof rawItems === 'object') {\n  rawItems = [rawItems];\n}\n\nconst cleanedItems = rawItems.map((item, idx) => {\n  const parseNum = (val) => {\n    if (typeof val === 'number') return val;\n    if (!val) return 0;\n    const cleaned = String(val).replace(/[^0-9.-]/g, '');\n    return Number(cleaned) || 0;\n  };\n\n  return {\n    productId: item.productId || item.id || '',\n    productName: (item.productName || item.name || item.title || `Sản phẩm ${idx + 1}`).trim(),\n    qty: Math.max(1, parseNum(item.qty || item.quantity || 1)),\n    price: parseNum(item.price || item.unitPrice || 0),\n    unit: item.unit || 'Cái',\n    variant: item.variant || '',\n    imageUrl: item.imageUrl || item.image || ''\n  };\n});\n\nconst shippingFee = Number(String(body.shippingFee || 0).replace(/[^0-9.-]/g, '')) || 0;\nconst paidAmount = Number(String(body.paidAmount || (body.isPaid ? 999999999 : 0)).replace(/[^0-9.-]/g, '')) || 0;\nconst apiKey = body.apiKey || body.dunvexApiKey || '';\n\nreturn [{\n  json: {\n    apiKey,\n    customerName: rawName,\n    customerPhone: cleanPhone || rawPhone,\n    customerEmail: (body.customerEmail || body.email || '').toLowerCase().trim(),\n    customerAddress: body.customerAddress || body.address || '',\n    note: body.note || body.customerNote || 'Đơn hàng tự động từ Website qua n8n',\n    shippingFee,\n    paidAmount,\n    items: cleanedItems,\n    deliveryLocation: body.deliveryLocation || null,\n    rawDeliveryLocation: body.rawDeliveryLocation || ''\n  }\n}];"
+      },
+      "id": "node-clean-payload",
+      "name": "3. Chuẩn Hoá Dữ Liệu Đơn & Khách Hàng",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [320, 420]
+    },
+    {
+      "parameters": {
+        "url": "https://dunvex.com/api/order-webhook",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $json.apiKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  customerName: $json.customerName,\n  customerPhone: $json.customerPhone,\n  customerEmail: $json.customerEmail,\n  customerAddress: $json.customerAddress,\n  note: $json.note,\n  shippingFee: $json.shippingFee,\n  paidAmount: $json.paidAmount,\n  items: $json.items,\n  deliveryLocation: $json.deliveryLocation,\n  rawDeliveryLocation: $json.rawDeliveryLocation\n}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "node-send-to-dunvex",
+      "name": "4. Đẩy Đơn Sang Dunvex (Tự Động Tạo Khách, Ghi Sổ & Bắn Tele Độc Lập Cho Từng Admin)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [560, 420]
+    }
+  ],
+  "connections": {
+    "1. Webhook Nhận Đơn Web Ngoài": {
+      "main": [
+        [
+          {
+            "node": "2. Phản Hồi Ngay 200 OK (Chống Timeout)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "3. Chuẩn Hoá Dữ Liệu Đơn & Khách Hàng",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. Chuẩn Hoá Dữ Liệu Đơn & Khách Hàng": {
+      "main": [
+        [
+          {
+            "node": "4. Đẩy Đơn Sang Dunvex (Tự Động Tạo Khách, Ghi Sổ & Bắn Tele Độc Lập Cho Từng Admin)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

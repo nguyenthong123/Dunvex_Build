@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import MobileNav from './MobileNav';
-import NotificationBell from '../NotificationBell';
-import SystemAlertManager from '../SystemAlertManager';
 import { useScroll } from '../../context/ScrollContext';
 import { useNavigationConfig } from '../../hooks/useNavigationConfig';
 import { useOwner } from '../../hooks/useOwner';
-import { X, AlertTriangle, Share, PlusSquare, Info, AlertCircle, Smartphone } from 'lucide-react';
+import { X, AlertTriangle, Share, PlusSquare, Info, AlertCircle, Smartphone, Trash2, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface MainLayoutProps {
@@ -14,8 +12,10 @@ interface MainLayoutProps {
 }
 
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
+	const navigate = useNavigate();
 	const { isNavVisible, handleScroll } = useScroll();
-	const { subscriptionStatus, subscriptionExpiresAt, manualLockOrders, manualLockDebts, manualLockSheets, manualLockAi } = useOwner();
+	const owner = useOwner();
+	const { subscriptionStatus, subscriptionExpiresAt, manualLockOrders, manualLockDebts, manualLockSheets, manualLockAi } = owner;
 	const allLocked = manualLockOrders && manualLockDebts && manualLockSheets && manualLockAi;
 	const [isSidebarVisible, setIsSidebarVisible] = useState(() => {
 		const saved = localStorage.getItem('sidebar-visible');
@@ -60,7 +60,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 			<div className="hidden lg:block">
 				{isSidebarVisible && <Sidebar onToggle={() => setIsSidebarVisible(false)} />}
 			</div>
-			<SystemAlertManager />
 
 			<main className="flex-1 flex flex-col h-full overflow-hidden bg-white dark:bg-slate-900 relative transition-colors duration-300 print:overflow-visible print:h-auto print:block">
 				{/* ⚠️ SUBSCRIPTION EXPIRED / LOCKED BANNER */}
@@ -77,7 +76,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 								</span>
 							)}
 						</div>
-						<button onClick={() => window.open('https://dunvex.com/upgrade', '_blank')} className="bg-white text-rose-600 px-4 py-1.5 rounded-lg text-xs font-black uppercase hover:bg-rose-50 transition">
+						<button onClick={() => navigate('/pricing')} className="bg-white text-rose-600 px-4 py-1.5 rounded-lg text-xs font-black uppercase hover:bg-rose-50 transition">
 							Gia hạn ngay
 						</button>
 					</div>
@@ -85,8 +84,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 				{/* MOBILE TOP BAR - Premium Glassmorphism */}
 				{!window.location.pathname.includes('/price-list') && (
 					<header
-						className="lg:hidden flex items-center justify-between px-6 h-14 border-b border-slate-100 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl fixed top-0 left-0 right-0 z-[60] shadow-sm print:hidden"
-						style={{ WebkitBackdropFilter: 'blur(20px)' }}
+						className="lg:hidden flex items-center justify-between px-6 border-b border-slate-100 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl fixed top-0 left-0 right-0 z-[60] shadow-sm print:hidden"
+						style={{
+							WebkitBackdropFilter: 'blur(20px)',
+							paddingTop: 'env(safe-area-inset-top, 0px)',
+							height: 'calc(3.5rem + env(safe-area-inset-top, 0px))'
+						}}
 					>
 						<div className="flex items-center gap-2">
 							<div className="size-8 bg-gradient-to-br from-[#FF6D00] to-[#FF9100] rounded-xl flex items-center justify-center shadow-md shadow-orange-500/20">
@@ -97,8 +100,23 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 							</h1>
 						</div>
 
-						<div className="flex items-center gap-2">
-							<NotificationBell />
+						<div className="flex items-center gap-1.5">
+							<button
+								onClick={() => navigate('/trash')}
+								className="size-9 flex items-center justify-center rounded-xl bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition-all"
+								title="Thùng rác"
+							>
+								<Trash2 size={18} />
+							</button>
+							{(!owner.isEmployee || owner.role === 'admin') && (
+								<button
+									onClick={() => navigate('/admin?tab=approvals')}
+									className="size-9 flex items-center justify-center rounded-xl bg-amber-500/10 text-amber-500 hover:bg-amber-500 hover:text-white transition-all"
+									title="Duyệt yêu cầu"
+								>
+									<ShieldCheck size={18} />
+								</button>
+							)}
 							<button
 								onClick={() => setMobileMenuOpen(true)}
 								className="size-9 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500"
@@ -121,7 +139,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
 				<div
 					onScroll={handleScroll}
-					className={`flex-1 overflow-y-auto no-scrollbar lg:pt-0 ${window.location.pathname.includes('/price-list') ? 'pt-0' : 'pt-20'} print:overflow-visible print:h-auto print:block print:pt-0`}
+					className={`flex-1 overflow-y-auto no-scrollbar print:overflow-visible print:h-auto print:block print:pt-0 ${
+						window.location.pathname.includes('/price-list') ? 'pt-0 lg:pt-0' : 'main-content-container'
+					}`}
 				>
 					<div className="min-h-full print:block print:h-auto w-full max-w-[1920px] mx-auto px-4 md:px-6 lg:px-8 2xl:px-12 transition-all">
 					<div className="animate-[fadeIn_0.3s_ease-out] motion-reduce:animate-none" key={window.location.pathname}>

@@ -5,6 +5,29 @@ function now() {
   return new Date().toISOString();
 }
 
+function cleanCustomerName(name) {
+  if (!name || typeof name !== 'string') return '';
+  let str = name.trim().replace(/\s+/g, ' ');
+
+  // Xử lý trường hợp lặp 2 từ giống nhau: "Tèo Tèo" -> "Tèo", "Nam Nam" -> "Nam"
+  const words = str.split(' ');
+  if (words.length === 2 && words[0].toLowerCase() === words[1].toLowerCase()) {
+    return words[0];
+  }
+
+  // Xử lý trường hợp lặp cụm từ chẵn: "Nguyễn Văn A Nguyễn Văn A" -> "Nguyễn Văn A"
+  const half = Math.floor(words.length / 2);
+  if (words.length >= 2 && words.length % 2 === 0) {
+    const firstHalf = words.slice(0, half).join(' ').toLowerCase();
+    const secondHalf = words.slice(half).join(' ').toLowerCase();
+    if (firstHalf === secondHalf) {
+      return words.slice(0, half).join(' ');
+    }
+  }
+
+  return str;
+}
+
 async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -53,30 +76,52 @@ async function handler(req, res) {
     for (const item of body.items) {
       let matched = null;
 
-      if (item.productId) {
-        matched = allProducts.find(p => p.id === item.productId);
+      const pId = item.productId || item.id;
+      const rawName = (item.productName || item.name || '').trim();
+
+      if (pId) {
+        matched = allProducts.find(p => p.id === pId || p.sku === pId);
       }
-      if (!matched && item.productName) {
-        matched = allProducts.find(p =>
-          p.name?.toLowerCase() === item.productName.toLowerCase()
-        );
+      if (!matched && rawName) {
+        const lower = rawName.toLowerCase();
+        matched = allProducts.find(p => (p.name || '').toLowerCase().trim() === lower);
+        if (!matched) {
+          matched = allProducts.find(p => {
+            const pLower = (p.name || '').toLowerCase().trim();
+            return pLower && (pLower.includes(lower) || lower.includes(pLower));
+          });
+        }
       }
 
       if (matched) {
         items.push({
           productId: matched.id,
-          name: matched.name || '',
+          name: matched.name || rawName,
           category: matched.category || matched.order_category || '',
-          qty: Number(item.qty) || 0,
-          price: Number(item.price) || Number(matched.priceSell || 0),
+          qty: Number(item.qty) || 1,
+          price: Number(item.price) > 0 ? Number(item.price) : Number(matched.priceSell || 0),
           buyPrice: Number(matched.priceImport || 0),
-          unit: matched.unit || '',
-          weight: matched.density ? String(matched.density) : '',
+          unit: matched.unit || item.unit || 'Cái',
+          weight: matched.density ? String(matched.density) : (item.weight ? String(item.weight) : ''),
           stock: Number(matched.stock || 0),
-          imageUrl: matched.imageUrl || ''
+          imageUrl: matched.imageUrl || item.imageUrl || ''
+        });
+      } else if (rawName || pId) {
+        // Fallback linh hoạt: Vẫn tiếp nhận sản phẩm web ngoài để không làm rớt đơn của khách
+        items.push({
+          productId: pId || `custom_${Date.now()}`,
+          name: rawName || 'Sản phẩm Web ngoài',
+          category: item.category || 'Khách đặt từ Web',
+          qty: Math.max(1, Number(item.qty) || 1),
+          price: Number(item.price) || 0,
+          buyPrice: 0,
+          unit: item.unit || 'Cái',
+          weight: item.weight ? String(item.weight) : '',
+          stock: 999,
+          imageUrl: item.imageUrl || ''
         });
       } else {
-        notFound.push(item.productId || item.productName || 'unknown');
+        notFound.push(pId || rawName || 'unknown');
       }
     }
 
@@ -84,33 +129,145 @@ async function handler(req, res) {
       return res.status(400).json({ error: "No matching products found", notFound });
     }
 
-    // Tìm hoặc tạo khách hàng
-    const customerName = body.customerName || '';
-    const customerPhone = body.customerPhone || '';
-    const customerEmail = body.customerEmail || '';
+    const ownerUser = db.get('users', ownerId) || {};
+    const ownerEmail = ownerUser.email || keyDoc.createdBy || '';
+
+    // 1. Chuẩn hoá thông tin khách hàng từ web
+    let customerName = cleanCustomerName(body.customerName || body.name || '');
+    const rawCustomerPhone = (body.customerPhone || body.phone || '').trim();
+    const cleanPhone = rawCustomerPhone.replace(/\D/g, '');
+    const customerEmail = (body.customerEmail || body.email || '').toLowerCase().trim();
+    const customerAddress = (body.customerAddress || body.address || '').trim();
+    let customerBusinessName = (body.customerBusinessName || '').trim();
 
     const customers = db.getAll('customers', {
       where: [{ field: 'ownerId', op: '==', value: ownerId }]
     });
-    let customer = customers.find(c => c.name === customerName);
+
+    const isGenericName = (name) => {
+      if (!name) return true;
+      const lower = name.toLowerCase().trim();
+      return ['khách lẻ', 'khách vãng lai', 'khách lẻ mua', 'khách web', 'chưa cập nhật tên', 'khách hàng', 'unknown'].includes(lower);
+    };
+
+    let customer = null;
+
+    // 1. Tìm theo customerId gửi từ web (nếu có và hợp lệ)
+    if (body.customerId) {
+      customer = customers.find(c => c.id === body.customerId);
+    }
+
+    // 2. Tìm theo tên khách hàng hoặc tên doanh nghiệp (Exact match hoặc case-insensitive)
+    if (!customer && customerName && !isGenericName(customerName)) {
+      const lowerName = customerName.toLowerCase().trim();
+      customer = customers.find(c => {
+        const cName = (c.name || '').toLowerCase().trim();
+        const bName = (c.businessName || '').toLowerCase().trim();
+        const cleanCName = cleanCustomerName(c.name || '').toLowerCase().trim();
+        return cName === lowerName || bName === lowerName || cleanCName === lowerName;
+      });
+    }
+
+    // 3. Tìm theo số điện thoại (CHỈ KHỚP NẾU TÊN TƯƠNG ĐỒNG HOẶC KHÁCH CŨ LÀ TÊN CHUNG/VÃNG LAI)
+    // Tuyệt đối không gán đè nếu người mua web có tên mới khác biệt hoàn toàn với tên khách đang giữ SĐT
+    if (!customer && cleanPhone && cleanPhone.length >= 8) {
+      const phoneMatches = customers.filter(c => (c.phone || '').replace(/\D/g, '') === cleanPhone);
+      for (const pMatch of phoneMatches) {
+        const pMatchName = (pMatch.name || '').toLowerCase().trim();
+        const incomingLower = (customerName || '').toLowerCase().trim();
+
+        // Khách cũ mang tên chung (Khách lẻ, Khách vãng lai...) -> Cập nhật tên mới của web
+        if (isGenericName(pMatch.name)) {
+          customer = pMatch;
+          break;
+        }
+
+        // Tên web trùng hoặc chứa nhau (ví dụ "Anh Tuấn" và "Tuấn", hoặc "Nguyễn Văn A")
+        if (incomingLower && (pMatchName === incomingLower || pMatchName.includes(incomingLower) || incomingLower.includes(pMatchName))) {
+          customer = pMatch;
+          break;
+        }
+
+        // Người mua web không nhập tên -> Chấp nhận dùng tên khách cũ theo SĐT
+        if (!customerName) {
+          customer = pMatch;
+          break;
+        }
+      }
+    }
+
+    // 4. Tìm theo Email (tương tự, chỉ nhận nếu tên tương đồng hoặc tài khoản web)
+    if (!customer && customerEmail) {
+      const emailMatches = customers.filter(c => (c.email || '').toLowerCase().trim() === customerEmail);
+      for (const eMatch of emailMatches) {
+        const eMatchName = (eMatch.name || '').toLowerCase().trim();
+        const incomingLower = (customerName || '').toLowerCase().trim();
+
+        if (isGenericName(eMatch.name) || !customerName) {
+          customer = eMatch;
+          break;
+        }
+
+        if (incomingLower && (eMatchName === incomingLower || eMatchName.includes(incomingLower) || incomingLower.includes(eMatchName))) {
+          customer = eMatch;
+          break;
+        }
+      }
+    }
+
     let customerId;
 
     if (customer) {
       customerId = customer.id;
+      // Cập nhật thông tin nếu khách cũ là generic
+      if (customerName && !isGenericName(customerName) && isGenericName(customer.name)) {
+        db.update('customers', customer.id, {
+          name: customerName,
+          phone: rawCustomerPhone || customer.phone || '',
+          email: customerEmail || customer.email || '',
+          address: customerAddress || customer.address || '',
+          updatedAt: now()
+        });
+      } else if (!customerName || isGenericName(customerName)) {
+        customerName = customer.name || 'Khách vãng lai';
+      }
+      customerBusinessName = customer.businessName || customerBusinessName || customerName;
     } else {
+      // TẠO MỚI KHÁCH HÀNG CHUẨN 100% SCHEMA DUNVEX
+      const newCustName = customerName || (rawCustomerPhone ? `Khách ${rawCustomerPhone}` : 'Khách Web');
       const newCust = db.create('customers', {
         ownerId,
-        name: customerName,
-        phone: customerPhone,
+        name: newCustName,
+        businessName: customerBusinessName || newCustName,
+        phone: rawCustomerPhone,
         email: customerEmail,
-        address: body.customerAddress || '',
-        type: 'Khách web',
+        address: customerAddress,
+        type: 'Chủ nhà', // Chuẩn hóa phân loại "Chủ nhà" mặc định
+        route: 'Khách đặt từ Website', // Tuyến bán hàng / Zoning
+        note: 'Nguồn từ Website', // Ghi chú nguồn
+        source: 'web',
+        status: 'Hoạt động',
+        creditLimit: 0,
         debt: 0,
+        totalDebt: 0,
         totalOrders: 0,
+        totalOrdersAmount: 0,
+        totalPaymentsAmount: 0,
+        licenseUrls: [],
+        additionalImages: [],
+        taxName: '',
+        taxCode: '',
+        taxAddress: '',
+        taxPhone: '',
+        ownerEmail: ownerEmail || '',
+        createdByEmail: ownerEmail || 'web@dunvex.com',
+        createdBy: ownerId,
         createdAt: now(),
-        createdBy: ownerId
+        updatedAt: now()
       });
       customerId = newCust.id;
+      customerName = newCust.name;
+      customerBusinessName = newCust.businessName;
     }
 
     // Tính toán
@@ -144,16 +301,33 @@ async function handler(req, res) {
       }
     }
 
+    const paidAmount = body.paidAmount !== undefined ? Number(body.paidAmount) : (body.isPaid ? totalAmount : 0);
+    const debtAmount = Math.max(0, totalAmount - paidAmount);
+
     // Tạo đơn hàng
     const orderData = {
       ownerId,
       customerName,
-      customerPhone,
+      customerBusinessName: customerBusinessName || '',
+      customerPhone: rawCustomerPhone,
       customerAddress: body.customerAddress || '',
       customerId: customerId || '',
       deliveryLocation: deliveryLocation || null,
       rawDeliveryLocation: rawDeliveryLocation || '',
       items: items.map(i => ({
+        productId: i.productId,
+        id: i.productId,
+        name: i.name,
+        category: i.category || '',
+        qty: i.qty,
+        price: i.price,
+        buyPrice: i.buyPrice,
+        unit: i.unit,
+        weight: i.weight,
+        imageUrl: i.imageUrl || ''
+      })),
+      products: items.map(i => ({
+        id: i.productId,
         productId: i.productId,
         name: i.name,
         category: i.category || '',
@@ -166,8 +340,8 @@ async function handler(req, res) {
       })),
       subTotal,
       totalAmount,
-      paidAmount: totalAmount,
-      debtAmount: 0,
+      paidAmount,
+      debtAmount,
       discountValue: 0,
       adjustmentValue: shippingFee,
       totalWeight,
@@ -197,18 +371,28 @@ async function handler(req, res) {
       }
     }
 
-    // Cập nhật công nợ khách hàng
+    // Cập nhật công nợ và thống kê khách hàng
     if (customerId) {
-      const cust = db.getById('customers', customerId);
+      const cust = db.get('customers', customerId);
       if (cust) {
-        const currentDebt = Number(cust.debt || 0);
-        db.update('customers', customerId, { debt: currentDebt + totalAmount, updatedAt: now() });
+        const currentDebt = Number(cust.debt || cust.totalDebt || 0) + debtAmount;
+        const totalOrders = Number(cust.totalOrders || 0) + 1;
+        const totalOrdersAmount = Number(cust.totalOrdersAmount || 0) + totalAmount;
+        const totalPaymentsAmount = Number(cust.totalPaymentsAmount || 0) + paidAmount;
+        db.update('customers', customerId, {
+          debt: currentDebt,
+          totalDebt: currentDebt,
+          totalOrders,
+          totalOrdersAmount,
+          totalPaymentsAmount,
+          updatedAt: now()
+        });
       }
     }
 
     // Telegram notification
-    if (keyDoc.telegramBotToken && keyDoc.telegramChatId) {
-      const chatId = keyDoc.telegramGroupChatId || keyDoc.telegramChatId;
+    const chatId = keyDoc.telegramGroupChatId || keyDoc.telegramChatId;
+    if (keyDoc.telegramBotToken && chatId && keyDoc.notifyNewOrder !== false) {
       try {
         const message = `📦 <b>ĐƠN HÀNG MỚI (CHỐT)</b>\n- Khách hàng: <b>${customerName || 'Khách vãng lai'}</b>\n- Tổng tiền: <b>${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(totalAmount)}</b>\n- Người thao tác: Bot Trợ Lý (Webhook)`;
         await sendTelegramMessage(keyDoc.telegramBotToken, chatId, message);

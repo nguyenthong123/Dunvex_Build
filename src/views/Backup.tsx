@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { useToast } from '../components/shared/Toast';
 import { SUPER_ADMIN_EMAIL } from '../constants';
 import { db, auth } from '../services/firebase';
 import { collection, getDocs, query, where, orderBy, writeBatch, doc } from '../services/firebase';
@@ -179,6 +180,7 @@ export default function Backup() {
     );
   }
 
+  const { showToast, showConfirm } = useToast();
   const [activeTab, setActiveTab] = useState<'backup' | 'restore' | 'sqlite'>('backup');
 
   // Backup state
@@ -313,69 +315,78 @@ export default function Backup() {
       `❗ Hành động này KHÔNG THỂ HOÀN TÁC.\n\n` +
       `Bạn có chắc chắn muốn tiếp tục?`;
 
-    if (!window.confirm(confirmMsg)) return;
+    showConfirm(
+      "Phục hồi dữ liệu",
+      confirmMsg,
+      async () => {
+        setIsRestoring(true);
+        setRestoreResult(null);
 
-    setIsRestoring(true);
-    setRestoreResult(null);
+        try {
+          const reader = new FileReader();
+          const data = await new Promise<any>((resolve, reject) => {
+            reader.onload = (e) => {
+              try { resolve(JSON.parse(e.target?.result as string)); } catch (err) { reject(err); }
+            };
+            reader.onerror = reject;
+            reader.readAsText(restoreFile);
+          });
 
-    try {
-      const reader = new FileReader();
-      const data = await new Promise<any>((resolve, reject) => {
-        reader.onload = (e) => {
-          try { resolve(JSON.parse(e.target?.result as string)); } catch (err) { reject(err); }
-        };
-        reader.onerror = reject;
-        reader.readAsText(restoreFile);
-      });
-
-      const count = await importData(data, (p) => setRestoreProgress(p));
-      setRestoreResult({ success: true, restoredCount: count });
-    } catch (err: any) {
-      setRestoreResult({ success: false, error: err.message });
-    } finally {
-      setIsRestoring(false);
-      setRestoreProgress(null);
-    }
+          const count = await importData(data, (p) => setRestoreProgress(p));
+          setRestoreResult({ success: true, restoredCount: count });
+        } catch (err: any) {
+          setRestoreResult({ success: false, error: err.message });
+        } finally {
+          setIsRestoring(false);
+          setRestoreProgress(null);
+        }
+      }
+    );
   };
 
   const handleUploadSqlite = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!window.confirm('⚠️ XÁC NHẬN CẬP NHẬT CƠ SỞ DỮ LIỆU\\n\\nHành động này sẽ GHI ĐÈ hoàn toàn cơ sở dữ liệu SQLite hiện tại trên server bằng file bạn chọn.\\n\\nBạn có chắc chắn muốn tiếp tục?')) {
-      e.target.value = '';
-      return;
-    }
+    const fileInput = e.target;
 
-    setIsUploadingSqlite(true);
-    try {
-      const idToken = await auth.currentUser?.getIdToken();
-      if (!idToken) {
-        throw new Error('Vui lòng đăng nhập trước!');
+    showConfirm(
+      "Cập nhật cơ sở dữ liệu",
+      "⚠️ XÁC NHẬN CẬP NHẬT CƠ SỞ DỮ LIỆU\n\nHành động này sẽ GHI ĐÈ hoàn toàn cơ sở dữ liệu SQLite hiện tại trên server bằng file bạn chọn.\n\nBạn có chắc chắn muốn tiếp tục?",
+      async () => {
+        setIsUploadingSqlite(true);
+        try {
+          const idToken = await auth.currentUser?.getIdToken();
+          if (!idToken) {
+            throw new Error('Vui lòng đăng nhập trước!');
+          }
+
+          const response = await fetch('/api/db/upload', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${idToken}`,
+              'Content-Type': 'application/x-sqlite3'
+            },
+            body: file
+          });
+
+          if (!response.ok) {
+            const err = await response.json().catch(() => ({ error: 'Không thể tải lên CSDL' }));
+            throw new Error(err.error || 'Lỗi từ server');
+          }
+
+          showToast('Phục hồi & Đồng bộ cơ sở dữ liệu SQLite thành công!', 'success');
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500);
+        } catch (err: any) {
+          showToast('Tải lên CSDL thất bại: ' + err.message, 'error');
+        } finally {
+          setIsUploadingSqlite(false);
+          fileInput.value = '';
+        }
       }
-
-      const response = await fetch('/api/db/upload', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${idToken}`,
-          'Content-Type': 'application/x-sqlite3'
-        },
-        body: file
-      });
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({ error: 'Không thể tải lên CSDL' }));
-        throw new Error(err.error || 'Lỗi từ server');
-      }
-
-      alert('🎉 Phục hồi & Đồng bộ cơ sở dữ liệu SQLite thành công!');
-      window.location.reload();
-    } catch (err: any) {
-      alert('Tải lên CSDL thất bại: ' + err.message);
-    } finally {
-      setIsUploadingSqlite(false);
-      e.target.value = '';
-    }
+    );
   };
 
   // ============================================================

@@ -1,5 +1,6 @@
-import React from 'react';
-import { CreditCard, Crown, Clock, CheckCircle2, Zap, Rocket, Shield, Download, Database, Activity } from 'lucide-react';
+import React, { useState } from 'react';
+import { CreditCard, Crown, Clock, CheckCircle2, Zap, Rocket, Shield, Download, Database, Activity, Bot, RefreshCw, Send, Cloud, ExternalLink, Play } from 'lucide-react';
+import { useToast } from '../shared/Toast';
 
 const VIETNAM_BANKS = [
 	{ id: "VCB", name: "Vietcombank (VCB)" },
@@ -67,6 +68,103 @@ export function NexusConfigTab({
 	onDeleteAddon,
 	onPaymentConfigChange,
 }: NexusConfigTabProps) {
+	const { showToast } = useToast();
+
+	// n8n Super Admin AI Agent State
+	const [nexusAgentUrl, setNexusAgentUrl] = useState(() => {
+		return systemConfig?.nexus_agent_webhook_url || localStorage.getItem('nexus_agent_webhook_url') || 'https://34-133-127-214.nip.io/webhook/nexus-agent';
+	});
+	const [agentChatId, setAgentChatId] = useState(() => {
+		return systemConfig?.nexus_agent_chat_id || localStorage.getItem('nexus_agent_chat_id') || '';
+	});
+	const [isSavingAgent, setIsSavingAgent] = useState(false);
+	const [isTestingAgent, setIsTestingAgent] = useState(false);
+	const [agentTestResponse, setAgentTestResponse] = useState<string | null>(null);
+
+	// Google Drive Backup State
+	const [isBackingUp, setIsBackingUp] = useState(false);
+	const [lastBackupResult, setLastBackupResult] = useState<any>(null);
+
+	const handleSaveAgentConfig = async () => {
+		setIsSavingAgent(true);
+		try {
+			const cleanUrl = nexusAgentUrl.trim();
+			const cleanChatId = agentChatId.trim();
+			localStorage.setItem('nexus_agent_webhook_url', cleanUrl);
+			localStorage.setItem('nexus_agent_chat_id', cleanChatId);
+
+			// Lưu cấu hình Super Admin Telegram vào database
+			await fetch('/api/data/system_config/main', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					nexus_agent_webhook_url: cleanUrl,
+					nexus_agent_chat_id: cleanChatId
+				})
+			});
+
+			showToast("Đã lưu cấu hình Super Admin AI Agent & Telegram thành công!", "success");
+		} catch (err: any) {
+			showToast("Lỗi khi lưu cấu hình: " + err.message, "error");
+		} finally {
+			setIsSavingAgent(false);
+		}
+	};
+
+	const handleTestAgent = async () => {
+		if (!nexusAgentUrl.trim()) {
+			showToast("Vui lòng nhập Webhook URL n8n!", "error");
+			return;
+		}
+		setIsTestingAgent(true);
+		setAgentTestResponse(null);
+		try {
+			const res = await fetch(nexusAgentUrl.trim(), {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					message: 'Kiểm tra trạng thái hệ thống',
+					adminId: agentChatId.trim() || 'super_admin'
+				})
+			});
+			const data = await res.json();
+			if (data.nexusMessage || data.reply || data.success) {
+				const msg = data.nexusMessage || data.reply || "Agent đã phản hồi thành công!";
+				setAgentTestResponse(msg);
+				showToast("Kết nối n8n AI Agent thành công! Đã nhận phản hồi.", "success");
+			} else {
+				setAgentTestResponse(JSON.stringify(data));
+				showToast("Đã gửi lệnh thử tới n8n!", "info");
+			}
+		} catch (err: any) {
+			console.error("Test Agent Error:", err);
+			showToast("Lỗi khi test kết nối n8n: " + err.message, "error");
+		} finally {
+			setIsTestingAgent(false);
+		}
+	};
+
+	const handleTriggerDriveBackup = async () => {
+		setIsBackingUp(true);
+		try {
+			const res = await fetch('/api/backup-gdrive?token=5e2b86a8fdc7e19d7d4c2b9f3a5e1d7d8e6c4b2a9f1d8c7a', {
+				method: 'POST'
+			});
+			const data = await res.json();
+			if (data.success) {
+				setLastBackupResult(data);
+				showToast("Sao lưu lên Google Drive thành công!", "success");
+			} else {
+				showToast("Lỗi sao lưu: " + (data.error || "Không thành công"), "error");
+			}
+		} catch (err: any) {
+			console.error("Drive Backup Error:", err);
+			showToast("Lỗi sao lưu Google Drive: " + err.message, "error");
+		} finally {
+			setIsBackingUp(false);
+		}
+	};
+
 	return (
 		<div className="space-y-6 lg:space-y-8 max-w-5xl">
 			{/* Bank QR Config */}
@@ -215,6 +313,166 @@ export function NexusConfigTab({
 								</div>
 							</div>
 						))}
+					</div>
+				</div>
+			</div>
+
+			{/* n8n Super Admin AI Agent Config */}
+			<div className="bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-2xl">
+				<div className="px-6 lg:px-8 py-5 lg:py-6 border-b border-slate-100 dark:border-slate-800 bg-slate-800/30 flex items-center justify-between">
+					<div className="flex items-center gap-3">
+						<Bot className="text-purple-500" size={20} />
+						<div>
+							<h4 className="text-[10px] lg:text-xs font-black text-slate-900 dark:text-white uppercase tracking-[2px] lg:tracking-[4px]">
+								🤖 Cấu hình n8n AI Agent & Super Admin Telegram
+							</h4>
+							<p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+								Kết nối trợ lý n8n để nhận lệnh đóng/mở quyền hệ thống & tra cứu dữ liệu tự động.
+							</p>
+						</div>
+					</div>
+					<span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800">
+						n8n Automation
+					</span>
+				</div>
+
+				<div className="p-6 lg:p-8 space-y-6">
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<div className="md:col-span-2">
+							<label className="block text-xs font-bold text-slate-500 uppercase mb-2 flex items-center justify-between">
+								<span>n8n Webhook URL (Trợ lý Super Admin)</span>
+								<span className="text-[10px] font-mono text-purple-600 dark:text-purple-400 font-normal">POST method</span>
+							</label>
+							<input 
+								type="text" 
+								className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-mono dark:text-white outline-none focus:border-purple-500" 
+								value={nexusAgentUrl} 
+								onChange={e => setNexusAgentUrl(e.target.value)}
+								placeholder="https://34-133-127-214.nip.io/webhook/nexus-agent"
+							/>
+							<p className="text-[11px] text-slate-400 mt-1.5">
+								URL Webhook từ workflow <strong>Dunvex Nexus - Super Admin AI Agent</strong> trên n8n.
+							</p>
+						</div>
+
+						<div className="md:col-span-2">
+							<label className="block text-xs font-bold text-slate-500 uppercase mb-2">
+								Telegram Super Admin Chat ID (hoặc Group ID nhận thông báo)
+							</label>
+							<input 
+								type="text" 
+								className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-mono dark:text-white outline-none focus:border-purple-500" 
+								value={agentChatId} 
+								onChange={e => setAgentChatId(e.target.value)}
+								placeholder="VD: 6039857921 (Chat ID cá nhân hoặc nhóm riêng của Super Admin)"
+							/>
+							<p className="text-[11px] text-slate-400 mt-1.5">
+								ID nhóm chat hoặc cá nhân Super Admin để nhận báo cáo hệ thống & kết quả AI Agent (không gửi vào nhóm bán hàng của cơ sở).
+							</p>
+						</div>
+					</div>
+
+					{agentTestResponse && (
+						<div className="p-4 rounded-xl bg-purple-50/50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 text-xs text-purple-900 dark:text-purple-200">
+							<p className="font-bold mb-1 flex items-center gap-1.5">
+								<CheckCircle2 size={14} className="text-emerald-500" />
+								Phản hồi từ n8n AI Agent:
+							</p>
+							<pre className="whitespace-pre-wrap font-mono text-[11px] bg-white/50 dark:bg-slate-900/50 p-2.5 rounded-lg mt-1 border border-purple-100 dark:border-purple-900">
+								{agentTestResponse}
+							</pre>
+						</div>
+					)}
+
+					<div className="flex flex-col sm:flex-row gap-3 pt-2">
+						<button 
+							onClick={handleSaveAgentConfig} 
+							disabled={isSavingAgent} 
+							className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+						>
+							{isSavingAgent ? <Clock className="animate-spin" size={16} /> : <CheckCircle2 size={16} />}
+							Lưu Cấu Hình n8n Agent
+						</button>
+
+						<button 
+							onClick={handleTestAgent} 
+							disabled={isTestingAgent || !nexusAgentUrl.trim()} 
+							className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-50 text-slate-800 dark:text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-2"
+						>
+							{isTestingAgent ? <RefreshCw className="animate-spin" size={16} /> : <Play size={16} />}
+							Test Kết Nối (Gửi Lệnh Thử)
+						</button>
+					</div>
+				</div>
+			</div>
+
+			{/* Google Drive Automatic Backup Card */}
+			<div className="bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-2xl">
+				<div className="px-6 lg:px-8 py-5 lg:py-6 border-b border-slate-100 dark:border-slate-800 bg-slate-800/30 flex items-center justify-between">
+					<div className="flex items-center gap-3">
+						<Cloud className="text-blue-500" size={20} />
+						<div>
+							<h4 className="text-[10px] lg:text-xs font-black text-slate-900 dark:text-white uppercase tracking-[2px] lg:tracking-[4px]">
+								☁️ Tự Động Sao Lưu Dữ Liệu Lên Google Drive
+							</h4>
+							<p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+								Đồng bộ CSDL SQLite an toàn lên Google Drive hàng ngày qua n8n.
+							</p>
+						</div>
+					</div>
+					<span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+						🟢 Tự động 17:05 hàng ngày
+					</span>
+				</div>
+
+				<div className="p-6 lg:p-8 space-y-6">
+					<div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
+						<div className="space-y-1 text-xs">
+							<p className="font-bold text-slate-800 dark:text-white">
+								📁 Thư mục lưu trữ: <span className="font-mono text-indigo-600 dark:text-indigo-400 font-semibold">Dunvex Database Backup</span>
+							</p>
+							<p className="text-slate-500 dark:text-slate-400 text-[11px]">
+								Folder ID: <code className="bg-slate-200 dark:bg-slate-700 px-1 py-0.5 rounded font-mono">1kQciC7-VvMdKmt6rpiyspNNkQeThydxg</code>
+							</p>
+							<p className="text-slate-500 dark:text-slate-400 text-[11px]">
+								Định dạng: <span className="font-semibold text-emerald-600">SQLite Online Snapshot (.db.gz)</span> — nén an toàn không gián đoạn giao dịch.
+							</p>
+						</div>
+						<a 
+							href="https://drive.google.com/drive/folders/1kQciC7-VvMdKmt6rpiyspNNkQeThydxg" 
+							target="_blank" 
+							rel="noreferrer"
+							className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 text-blue-600 dark:text-blue-400 font-bold text-xs uppercase tracking-wider border border-blue-200 dark:border-blue-800 transition-colors w-fit"
+						>
+							<ExternalLink size={14} />
+							Mở Thư Mục Drive
+						</a>
+					</div>
+
+					{lastBackupResult && (
+						<div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-900 dark:text-emerald-200">
+							<p className="font-bold mb-1 flex items-center gap-1.5">
+								<CheckCircle2 size={14} className="text-emerald-500" />
+								Sao lưu thành công!
+							</p>
+							<p className="text-[11px] text-emerald-700 dark:text-emerald-300">
+								Tệp: <code className="font-mono font-bold">{lastBackupResult.fileName}</code> — Đã đẩy lên Google Drive và gửi thông báo Telegram.
+							</p>
+						</div>
+					)}
+
+					<div>
+						<button 
+							onClick={handleTriggerDriveBackup} 
+							disabled={isBackingUp} 
+							className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+						>
+							{isBackingUp ? <RefreshCw className="animate-spin" size={16} /> : <Cloud size={16} />}
+							{isBackingUp ? 'Đang Sao Lưu & Tải Lên Google Drive...' : '🚀 Sao Lưu Lên Google Drive Ngay'}
+						</button>
+						<p className="text-[11px] text-slate-400 mt-2">
+							Nhấn để tạo bản sao lưu snapshot SQLite mới nhất ngay lập tức và bắn link vào Telegram nhóm.
+						</p>
 					</div>
 				</div>
 			</div>

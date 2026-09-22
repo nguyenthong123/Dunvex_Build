@@ -119,6 +119,7 @@ const Debts: React.FC = () => {
 		formatPrice,
 		formatDate,
 		getImageUrl,
+		allEntitiesWithDebt,
 		aggregatedData,
 		paginatedData,
 		totalPages,
@@ -222,7 +223,7 @@ const Debts: React.FC = () => {
 			link.click();
 		} catch (error) {
 			console.error("Lỗi tạo hình ảnh:", error);
-			alert("Không thể tạo hình ảnh phiếu công nợ: " + (error instanceof Error ? error.message : String(error)));
+			showToast("Không thể tạo hình ảnh phiếu công nợ: " + (error instanceof Error ? error.message : String(error)), "error");
 		} finally {
 			setIsSavingImage(false);
 		}
@@ -269,9 +270,9 @@ const Debts: React.FC = () => {
 			console.error("Lỗi sao chép hình ảnh:", error);
 			if (generatedUrl) {
 				setCapturedImage(generatedUrl);
-				alert("Sao chép trực tiếp thất bại. Hệ thống đã tự động tạo ảnh phía dưới, bạn hãy NHẤN GIỮ VÀO ẢNH để Sao chép hoặc Lưu lại nhé!");
+				showToast("Sao chép trực tiếp thất bại. Bạn hãy NHẤN GIỮ VÀO ẢNH phía dưới để Sao chép hoặc Lưu lại nhé!", "warning");
 			} else {
-				alert("Không thể tạo hình ảnh phiếu công nợ: " + (error instanceof Error ? error.message : String(error)));
+				showToast("Không thể tạo hình ảnh phiếu công nợ: " + (error instanceof Error ? error.message : String(error)), "error");
 			}
 		} finally {
 			setIsSavingImage(false);
@@ -292,7 +293,7 @@ const Debts: React.FC = () => {
 			setTimeout(() => setShowCopySuccess(false), 2500);
 		} catch (error) {
 			console.error("Lỗi sao chép hình ảnh:", error);
-			alert("Thiết bị hoặc trình duyệt không hỗ trợ sao chép trực tiếp. Bạn vui lòng nhấn giữ hình ảnh để Sao chép!");
+			showToast("Thiết bị hoặc trình duyệt không hỗ trợ sao chép trực tiếp. Bạn vui lòng nhấn giữ hình ảnh để Sao chép!", "warning");
 		}
 	};
 
@@ -441,6 +442,17 @@ const Debts: React.FC = () => {
 						</button>
 						<button
 							onClick={() => {
+								setEditingPaymentId(null);
+								setPaymentData({
+									customerId: '',
+									customerName: '',
+									amount: 0,
+									date: new Date().toISOString().split('T')[0],
+									note: '',
+									paymentMethod: 'Tiền mặt',
+									proofImage: '',
+								});
+								setPaymentCustomerSearchQuery('');
 								setShowPaymentForm(true);
 								navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
 							}}
@@ -550,7 +562,7 @@ const Debts: React.FC = () => {
 											</label>
 											<input
 												type="date"
-												className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#1A237E]/20 dark:focus:ring-indigo-500/20"
+												className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#1A237E]/20 dark:focus:ring-indigo-500/20 outline-none"
 												value={fromDate}
 												onChange={(e) => setFromDate(e.target.value)}
 											/>
@@ -561,7 +573,7 @@ const Debts: React.FC = () => {
 											</label>
 											<input
 												type="date"
-												className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#1A237E]/20 dark:focus:ring-indigo-500/20"
+												className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#1A237E]/20 dark:focus:ring-indigo-500/20 outline-none"
 												value={toDate}
 												onChange={(e) => setToDate(e.target.value)}
 											/>
@@ -597,6 +609,7 @@ const Debts: React.FC = () => {
 							setShowPaymentDetail={setShowPaymentDetail}
 							setEditingPaymentId={setEditingPaymentId}
 							setPaymentData={setPaymentData}
+							setPaymentCustomerSearchQuery={setPaymentCustomerSearchQuery}
 							setShowPaymentForm={(val) => {
 								setShowPaymentForm(val);
 								if (val) navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
@@ -634,6 +647,7 @@ const Debts: React.FC = () => {
 				setPaymentCustomerSearchQuery={setPaymentCustomerSearchQuery}
 				showPaymentCustomerResults={showPaymentCustomerResults}
 				setShowPaymentCustomerResults={setShowPaymentCustomerResults}
+				customers={allEntitiesWithDebt}
 				aggregatedData={aggregatedData}
 				isMatch={isMatch}
 				formatPrice={formatPrice}
@@ -651,7 +665,12 @@ const Debts: React.FC = () => {
 					className="fixed inset-0 z-[150] bg-slate-950/95 backdrop-blur-xl flex flex-col items-center justify-start overflow-hidden print:hidden animate-in fade-in duration-200"
 				>
 					{/* Controls bar */}
-					<div className="w-full flex items-center justify-between p-3 bg-slate-950/80 backdrop-blur-lg border-b border-white/5 z-[160] no-print">
+					<div 
+						className="w-full flex items-center justify-between p-3 bg-slate-950/80 backdrop-blur-lg border-b border-white/5 z-[160] no-print"
+						style={{
+							paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))'
+						}}
+					>
 						<span className="text-white text-xs font-black uppercase tracking-wider pl-2 hidden lg:inline">Chi tiết công nợ khách hàng</span>
 
 						{/* Date Range Filters */}

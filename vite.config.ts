@@ -51,7 +51,7 @@ export default defineConfig({
 				runtimeCaching: [
 					{
 						urlPattern: ({ request }) => request.mode === 'navigate',
-						handler: 'StaleWhileRevalidate',
+						handler: 'NetworkFirst',
 						options: {
 							cacheName: 'pages-cache',
 							expiration: {
@@ -77,6 +77,9 @@ export default defineConfig({
 			}
 		})
 	],
+	esbuild: {
+		drop: ['console', 'debugger']
+	},
 	resolve: {
 		alias: {
 			'@': path.resolve(__dirname, './src'),
@@ -99,11 +102,9 @@ export default defineConfig({
 		}
 	},
 	build: {
-		sourcemap: 'hidden',
+		sourcemap: false,
 		minify: 'esbuild',
-		esbuild: {
-			drop: ['console', 'debugger'],
-		},
+		modulePreload: false,
 		chunkSizeWarningLimit: 1000,
 		rollupOptions: {
 			output: {

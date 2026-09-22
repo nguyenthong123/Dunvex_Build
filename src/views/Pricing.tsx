@@ -1,14 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SUPER_ADMIN_EMAIL } from '../constants';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Check, Zap, Crown, Rocket, ShieldCheck, ArrowLeft, CreditCard, QrCode, Lock, Settings, Mail, X, Save, Download, Database, Activity, Shield } from 'lucide-react';
 import { auth, db } from '../services/firebase';
 import { collection, addDoc, serverTimestamp, query, where, limit, getDocs, getDoc, doc, updateDoc, setDoc, increment, onSnapshot } from '../services/firebase';
-import { useEffect } from 'react';
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
-
-import NotificationBell from '../components/NotificationBell';
 
 const renderIcon = (iconName: string, className: string) => {
 	switch (iconName) {
@@ -304,9 +301,6 @@ const Pricing = () => {
 					{step === 1 ? 'Nâng Cấp Tài Khoản' : 'Thanh Toán'}
 				</h2>
 				<div className="flex items-center gap-3">
-					<div className="bg-[#1A237E] p-1 rounded-xl">
-						<NotificationBell />
-					</div>
 				</div>
 			</header>
 

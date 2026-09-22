@@ -343,7 +343,7 @@ async function handler(req, res) {
         const kf2 = keyDoc2.fields;
         const botToken = kf2.telegramBotToken?.stringValue;
         const chatId = kf2.telegramGroupChatId?.stringValue || kf2.telegramChatId?.stringValue;
-        if (botToken && chatId && kf2.enabled?.booleanValue === true) {
+        if (botToken && chatId && kf2.enabled?.booleanValue === true && kf2.notifyNewOrder?.booleanValue !== false) {
           const message = `\u{1F4E6} <b>\u0110\u01A0N H\xC0NG M\u1EDAI (CH\u1ED0T)</b>
 - Kh\xE1ch h\xE0ng: <b>${customerName || "Kh\xE1ch v\xE3ng lai"}</b>
 - T\u1ED5ng ti\u1EC1n: <b>${new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(totalAmount)}</b>

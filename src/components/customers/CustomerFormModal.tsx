@@ -51,7 +51,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
             <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] transition-colors duration-300">
                 <div className="px-8 py-6 bg-[#1A237E] dark:bg-indigo-900 text-white flex items-center justify-between">
                     <h3 className="text-xl font-black uppercase tracking-tight">{showAddForm ? 'Thêm Khách Hàng' : 'Cập Nhật Hồ Sơ'}</h3>
-                    <button onClick={() => { setShowAddForm(false); setShowEditForm(false); }} className="size-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors">
+                    <button onClick={() => { if (showAddForm) setShowAddForm(false); else if (showEditForm) setShowEditForm(false); }} className="size-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors">
                         <span className="material-symbols-outlined">close</span>
                     </button>
                 </div>
@@ -62,7 +62,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                                 <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Họ và Tên *</label>
                                 <input
                                     type="text" required
-                                    className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
+                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
                                     value={formData.name}
                                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                                 />
@@ -74,7 +74,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                                 <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Số điện thoại</label>
                                 <input
                                     type="tel"
-                                    className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
+                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
                                     value={formData.phone}
                                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                                 />
@@ -83,7 +83,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                                 <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Email khách hàng</label>
                                 <input
                                     type="email"
-                                    className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
+                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
                                     placeholder="VD: customer@example.com"
                                     value={formData.email}
                                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -96,7 +96,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                                 <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Phân loại</label>
                                 <input
                                     list="customer-types"
-                                    className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
+                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
                                     value={formData.type}
                                     placeholder="VD: Chủ nhà, Thợ..."
                                     onChange={(e) => setFormData({ ...formData, type: e.target.value })}
@@ -109,7 +109,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                                 <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Tuyến bán hàng (Zoning)</label>
                                 <input
                                     type="text"
-                                    className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
+                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
                                     placeholder="VD: Tuyến Thứ 2, Khu vực A..."
                                     value={formData.route}
                                     onChange={(e) => setFormData({ ...formData, route: e.target.value })}
@@ -122,7 +122,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                                 <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Nhân viên phụ trách (Email)</label>
                                 <input
                                     type="email"
-                                    className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
+                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
                                     placeholder="Email nhân viên phụ trách..."
                                     value={formData.createdByEmail}
                                     onChange={(e) => setFormData({ ...formData, createdByEmail: e.target.value })}
@@ -132,7 +132,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                                 <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Hạn mức công nợ (VNĐ)</label>
                                 <input
                                     type="number"
-                                    className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-black text-[#FF6D00] focus:ring-2 focus:ring-[#FF6D00]/20"
+                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-2xl py-3 px-4 text-sm font-black text-[#FF6D00] focus:ring-2 focus:ring-[#FF6D00]/20"
                                     placeholder="0"
                                     value={formData.creditLimit === 0 ? '' : formData.creditLimit}
                                     onChange={(e) => setFormData({ ...formData, creditLimit: parseFloat(e.target.value) || 0 })}
@@ -200,7 +200,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                                         <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Tên xuất hóa đơn</label>
                                         <input
                                             type="text"
-                                            className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
+                                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
                                             placeholder="VD: CÔNG TY TNHH DUNVEX DIGITAL"
                                             value={formData.taxName}
                                             onChange={(e) => setFormData({ ...formData, taxName: e.target.value })}
@@ -211,7 +211,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                                             <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Mã số thuế</label>
                                             <input
                                                 type="text"
-                                                className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
+                                                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
                                                 placeholder="VD: 0312345678"
                                                 value={formData.taxCode}
                                                 onChange={(e) => setFormData({ ...formData, taxCode: e.target.value })}
@@ -221,7 +221,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                                             <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">SĐT hóa đơn (nếu có)</label>
                                             <input
                                                 type="text"
-                                                className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
+                                                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
                                                 placeholder="Dùng SĐT chính nếu bỏ trống"
                                                 value={formData.taxPhone}
                                                 onChange={(e) => setFormData({ ...formData, taxPhone: e.target.value })}
@@ -232,7 +232,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                                         <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Địa chỉ xuất hóa đơn</label>
                                         <textarea
                                             rows={2}
-                                            className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
+                                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
                                             placeholder="Địa chỉ ghi trên hóa đơn tài chính..."
                                             value={formData.taxAddress}
                                             onChange={(e) => setFormData({ ...formData, taxAddress: e.target.value })}
@@ -284,7 +284,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                                 <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Vĩ độ (Lat)</label>
                                 <input
                                     type="text"
-                                    className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
+                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
                                     placeholder="VD: 10.762622"
                                     value={formData.lat || ''}
                                     onChange={(e) => {
@@ -302,7 +302,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                                 <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Kinh độ (Lng)</label>
                                 <input
                                     type="text"
-                                    className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
+                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
                                     placeholder="VD: 106.660172"
                                     value={formData.lng || ''}
                                     onChange={(e) => setFormData({ ...formData, lng: e.target.value ? parseFloat(e.target.value) : null })}
@@ -315,7 +315,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                             <div className="flex gap-2">
                                 <textarea
                                     rows={2}
-                                    className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
+                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
                                     value={formData.address}
                                     onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                                 />
@@ -333,7 +333,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                             <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1.5 tracking-widest pl-1">Ghi chú</label>
                             <textarea
                                 rows={3}
-                                className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
+                                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#FF6D00]/20"
                                 value={formData.note}
                                 placeholder="Thông tin thêm về khách hàng..."
                                 onChange={(e) => setFormData({ ...formData, note: e.target.value })}

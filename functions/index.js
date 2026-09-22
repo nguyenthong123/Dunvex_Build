@@ -248,10 +248,8 @@ exports.nexusAutonomousBot = onSchedule("every 1 hours", async (event) => {
 					// Filter incoming money only
 					const incomingTxs = data.data.filter(t => t['Phát sinh']?.startsWith('+')).slice(0, 50); // Last 50 incoming
 					
-					// Initialize Gemini
-					const { GoogleGenerativeAI } = require("@google/generative-ai");
-					const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-					const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash" });
+					// Initialize DeepSeek
+					const deepseekApiKey = process.env.DEEPSEEK_API_KEY || "sk-5ced935df4be41938479954151790443";
 					
 					const prompt = `You are an AI Accountant. 
 Match the following pending Payment Requests with the Incoming Bank Transactions.
@@ -275,9 +273,29 @@ Incoming Bank Transactions:
 ${JSON.stringify(incomingTxs.map(t => ({ id: t['Transaction ID'], date: t['Ngày'], amount: t['Phát sinh'], description: t['Nội dung'] })), null, 2)}
 `;
 
-					const result = await model.generateContent(prompt);
-					let text = result.response.text();
-					text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+					const aiRes = await fetch("https://api.deepseek.com/chat/completions", {
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+							"Authorization": `Bearer ${deepseekApiKey}`
+						},
+						body: JSON.stringify({
+							model: "deepseek-chat",
+							messages: [
+								{ role: "user", content: prompt }
+							],
+							response_format: { type: "json_object" },
+							temperature: 0.1
+						})
+					});
+
+					if (!aiRes.ok) {
+						const errText = await aiRes.text();
+						throw new Error(`DeepSeek API error ${aiRes.status}: ${errText}`);
+					}
+
+					const aiData = await aiRes.json();
+					const text = aiData.choices?.[0]?.message?.content || "{}";
 					const aiResponse = JSON.parse(text);
 
 					if (aiResponse.matches && aiResponse.matches.length > 0) {

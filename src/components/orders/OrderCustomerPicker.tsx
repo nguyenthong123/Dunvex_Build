@@ -60,11 +60,10 @@ export const OrderCustomerPicker: React.FC<OrderCustomerPickerProps> = ({
 						return (
 							<button
 								key={c.id}
-								className={`w-full px-6 py-4 text-left border-b border-slate-50 dark:border-slate-700 last:border-none flex items-center justify-between transition-colors ${isOverLimit ? 'opacity-40 grayscale cursor-not-allowed bg-slate-50/50' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50 group'}`}
+								className="w-full px-6 py-4 text-left border-b border-slate-50 dark:border-slate-700 last:border-none flex items-center justify-between transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50 group"
 								onClick={() => {
 									if (isOverLimit) {
-										showToast(`Khách hàng ${c.name} đã vượt hạn mức nợ (${c.creditLimit.toLocaleString('vi-VN')} đ). Vui lòng thu nợ trước khi lên đơn mới.`, "warning");
-										return;
+										showToast(`Chú ý: Khách hàng ${c.name} đã vượt hạn mức nợ (${c.creditLimit.toLocaleString('vi-VN')} đ).`, "warning");
 									}
 									setSelectedCustomer(c);
 									setSearchCustomerQuery(c.name);

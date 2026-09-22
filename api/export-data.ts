@@ -217,7 +217,18 @@ export default async function handler(req: any, res: any) {
     const endTS = endDate ? new Date(endDate + 'T23:59:59') : null;
 
     // Fetch all collections in parallel
-    const collections = ['products', 'customers', 'orders', 'debts', 'checkins', 'payments'];
+    const collections = [
+      'products',
+      'customers',
+      'orders',
+      'debts',
+      'checkins',
+      'attendance_logs',
+      'payments',
+      'inventory_logs',
+      'supplier_debts',
+      'purchase_orders'
+    ];
     const results: Record<string, any[]> = {};
 
     await Promise.all(collections.map(async (colName) => {
@@ -225,8 +236,14 @@ export default async function handler(req: any, res: any) {
         const docs = await fetchCollection(token, colName, ownerId);
         // Filter by date
         const filtered = filterByDate(docs, startTS, endTS);
-        // Strip technical fields
-        results[colName] = filtered.map(stripTechnicalFields);
+        // Strip technical fields & unused fields
+        results[colName] = filtered.map((item: any) => {
+          const cleaned = stripTechnicalFields(item);
+          if (colName === 'customers') {
+            delete cleaned.businessName;
+          }
+          return cleaned;
+        });
       } catch (err: any) {
         console.error(`Error fetching ${colName}:`, err.message);
         results[colName] = [];
@@ -236,15 +253,64 @@ export default async function handler(req: any, res: any) {
     // Extract order details for chi_tiet_don_hang
     const orderDetails: any[] = [];
     if (results.orders) {
+      const productMapById: Record<string, any> = {};
+      const productMapByName: Record<string, any> = {};
+      if (results.products) {
+        for (const p of results.products) {
+          if (p.id) productMapById[p.id] = p;
+          if (p.name) productMapByName[p.name.trim().toLowerCase()] = p;
+        }
+      }
+
+      const EXCLUDE_PROFIT_KEYWORDS = ['ứng tiền', 'ung tien', 'ưng tiền', 'ứng trước', 'ung truoc', 'tạm ứng', 'tam ung'];
+      const isExcludedFromProfit = (name: string, flag?: boolean) => {
+        if (flag) return true;
+        if (!name) return false;
+        const lower = String(name).toLowerCase();
+        return EXCLUDE_PROFIT_KEYWORDS.some((kw) => lower.includes(kw));
+      };
+
+      const overheadRate = 8.5; // Default overhead rate
+
       for (const order of results.orders) {
         if (order.items && Array.isArray(order.items)) {
           for (const item of order.items) {
+            const rawItem = typeof item === 'object' ? item : { item };
+            const prodId = rawItem.id || rawItem.productId;
+            const prodName = rawItem.name || rawItem.productName || '';
+            const matchedProd = productMapById[prodId] || productMapByName[prodName.trim().toLowerCase()] || {};
+
+            const excluded = isExcludedFromProfit(prodName, rawItem.excludeProfit || matchedProd.excludeProfit);
+            const applyOverhead = rawItem.applyOverheadCost !== undefined 
+              ? Boolean(rawItem.applyOverheadCost) 
+              : Boolean(matchedProd.applyOverheadCost);
+
+            const qty = Number(rawItem.qty || 0);
+            const priceSell = Number(rawItem.price !== undefined ? rawItem.price : (rawItem.priceSell || 0));
+            const buyPrice = Number(rawItem.buyPrice !== undefined && rawItem.buyPrice !== null
+              ? rawItem.buyPrice 
+              : (matchedProd.priceImport || matchedProd.costPrice || matchedProd.buyPrice || 0));
+
+            let unitProfit = 0;
+            let profit = 0;
+
+            if (!excluded) {
+              let effectiveCost = buyPrice;
+              if (applyOverhead && overheadRate > 0) {
+                effectiveCost = buyPrice * (1 + overheadRate / 100);
+              }
+              unitProfit = priceSell - effectiveCost;
+              profit = unitProfit * qty;
+            }
+
             orderDetails.push({
               orderId: order.id,
               orderDate: order.orderDate || (order.createdAt ? new Date(order.createdAt).toLocaleDateString('vi-VN') : ''),
               customerName: order.customerName || '',
-              customerBusiness: order.customerBusinessName || '',
-              ...(typeof item === 'object' ? item : { item }),
+              ...rawItem,
+              buyPrice: Math.round(buyPrice),
+              profit: Math.round(profit),
+              unitProfit: Math.round(unitProfit),
             });
           }
         }
@@ -259,7 +325,11 @@ export default async function handler(req: any, res: any) {
         orders: results.orders || [],
         debts: results.debts || [],
         checkins: results.checkins || [],
+        attendance_logs: results.attendance_logs || [],
         payments: results.payments || [],
+        inventory_logs: results.inventory_logs || [],
+        supplier_debts: results.supplier_debts || [],
+        purchase_orders: results.purchase_orders || [],
         orderDetails,
       },
       counts: {
@@ -268,7 +338,11 @@ export default async function handler(req: any, res: any) {
         orders: results.orders?.length || 0,
         debts: results.debts?.length || 0,
         checkins: results.checkins?.length || 0,
+        attendance_logs: results.attendance_logs?.length || 0,
         payments: results.payments?.length || 0,
+        inventory_logs: results.inventory_logs?.length || 0,
+        supplier_debts: results.supplier_debts?.length || 0,
+        purchase_orders: results.purchase_orders?.length || 0,
       },
     });
   } catch (error: any) {

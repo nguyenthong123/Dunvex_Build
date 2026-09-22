@@ -16,8 +16,9 @@ service cloud.firestore {
     }
     
     function getUserData() {
-      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
-      return userDoc != null ? userDoc.data : null;
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+             ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data
+             : null;
     }
 
     function userOwnerId() {
@@ -42,12 +43,7 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if isAuthed() && (
-        request.auth.uid == userId || 
-        (resource != null && resource.data.ownerId == request.auth.uid) ||
-        (resource != null && userOwnerId() == resource.data.ownerId)
-      );
-      allow write: if isAuthed() && (
+      allow read, write: if isAuthed() && (
         request.auth.uid == userId || 
         (resource != null && resource.data.ownerId == request.auth.uid) ||
         (request.resource != null && request.resource.data.ownerId == request.auth.uid)
@@ -55,9 +51,7 @@ service cloud.firestore {
     }
     
     match /permissions/{docId} {
-      allow read: if isAuthed();
-      allow create: if isAdmin() || allowCreateByOwner();
-      allow update, delete: if isAdmin() || allowByOwner();
+      allow read, create, update, delete: if isAuthed();
     }
 
     match /system_config/{docId} {
@@ -71,7 +65,8 @@ service cloud.firestore {
     }
 
     match /settings/{docId} {
-      allow read, write: if isAuthed() && (request.auth.uid == docId || (userOwnerId() != null && userOwnerId() == docId));
+      allow read: if isAuthed();
+      allow write: if isAuthed() && (request.auth.uid == docId || (userOwnerId() != null && userOwnerId() == docId));
     }
 
     // Business Collections — dùng helpers an toàn với null user doc
@@ -124,10 +119,20 @@ service cloud.firestore {
         resource == null ||
         resource.data.ownerId == request.auth.uid ||
         userOwnerId() == resource.data.ownerId ||
-        resource.data.userEmail == request.auth.token.email
+        resource.data.userEmail == request.auth.token.email ||
+        resource.data.userId == request.auth.uid
       );
-      allow update, delete: if allowByOwner();
-      allow create: if allowCreateByOwner();
+      allow update: if isAuthed() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.userEmail == request.auth.token.email ||
+        allowByOwner()
+      );
+      allow delete: if allowByOwner();
+      allow create: if isAuthed() && (
+        request.resource.data.userId == request.auth.uid ||
+        request.resource.data.userEmail == request.auth.token.email ||
+        allowCreateByOwner()
+      );
     }
     match /price_lists/{docId} {
       allow read, update, delete: if allowByOwner();
@@ -138,10 +143,20 @@ service cloud.firestore {
         resource == null ||
         resource.data.ownerId == request.auth.uid ||
         userOwnerId() == resource.data.ownerId ||
-        resource.data.userEmail == request.auth.token.email
+        resource.data.userEmail == request.auth.token.email ||
+        resource.data.userId == request.auth.uid
       );
-      allow update, delete: if allowByOwner();
-      allow create: if allowCreateByOwner();
+      allow update: if isAuthed() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.userEmail == request.auth.token.email ||
+        allowByOwner()
+      );
+      allow delete: if allowByOwner();
+      allow create: if isAuthed() && (
+        request.resource.data.userId == request.auth.uid ||
+        request.resource.data.userEmail == request.auth.token.email ||
+        allowCreateByOwner()
+      );
     }
     match /field_config/{docId} {
       allow read, update, delete: if allowByOwner();

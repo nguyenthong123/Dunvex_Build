@@ -14,7 +14,8 @@ interface PaymentFormModalProps {
 	setPaymentCustomerSearchQuery: (val: string) => void;
 	showPaymentCustomerResults: boolean;
 	setShowPaymentCustomerResults: (val: boolean) => void;
-	aggregatedData: any[];
+	customers?: any[];
+	aggregatedData?: any[];
 	isMatch: (target: string, query: string) => boolean;
 	formatPrice: (price: number) => string;
 	uploadingPaymentImage: boolean;
@@ -36,7 +37,8 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
 	setPaymentCustomerSearchQuery,
 	showPaymentCustomerResults,
 	setShowPaymentCustomerResults,
-	aggregatedData,
+	customers,
+	aggregatedData = [],
 	isMatch,
 	formatPrice,
 	uploadingPaymentImage,
@@ -44,6 +46,29 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
 	getImageUrl,
 	isSubmitting
 }) => {
+	const customerList = customers || aggregatedData || [];
+
+	// Sync search query when form opens or paymentData customerName changes
+	React.useEffect(() => {
+		if (showPaymentForm && paymentData.customerName) {
+			setPaymentCustomerSearchQuery(paymentData.customerName);
+		}
+	}, [showPaymentForm, editingPaymentId]);
+
+	const filteredCustomers = React.useMemo(() => {
+		const q = (paymentCustomerSearchQuery || '').trim();
+		if (!q) {
+			return customerList.slice(0, 50);
+		}
+		return customerList
+			.filter((c: any) =>
+				isMatch(c.name || '', q) ||
+				(c.phone && isMatch(c.phone, q)) ||
+				(c.address && isMatch(c.address, q))
+			)
+			.slice(0, 50);
+	}, [customerList, paymentCustomerSearchQuery, isMatch]);
+
 	if (!showPaymentForm) return null;
 
 	return (
@@ -66,51 +91,79 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
 							<input
 								type="text"
 								placeholder="Nhập tên khách hoặc tên cơ sở..."
-								className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl pl-12 pr-4 py-4 text-base font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#FF6D00]/20"
-								value={paymentData.customerName || paymentCustomerSearchQuery}
+								className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-2xl pl-12 pr-10 py-4 text-base font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#FF6D00]/20"
+								value={paymentCustomerSearchQuery !== undefined ? paymentCustomerSearchQuery : (paymentData.customerName || '')}
 								onFocus={() => {
 									setShowPaymentCustomerResults(true);
-									if (paymentData.customerName) {
-										setPaymentCustomerSearchQuery('');
-										setPaymentData({ ...paymentData, customerId: '', customerName: '' });
-									}
 								}}
 								onChange={(e) => {
-									setPaymentCustomerSearchQuery(e.target.value);
-									setPaymentData({ ...paymentData, customerId: '', customerName: e.target.value });
+									const val = e.target.value;
+									setPaymentCustomerSearchQuery(val);
+									setPaymentData({ ...paymentData, customerId: '', customerName: val });
+									setShowPaymentCustomerResults(true);
 								}}
 							/>
+							{paymentCustomerSearchQuery && (
+								<button
+									type="button"
+									onClick={() => {
+										setPaymentCustomerSearchQuery('');
+										setPaymentData({ ...paymentData, customerId: '', customerName: '' });
+										setShowPaymentCustomerResults(true);
+									}}
+									className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1"
+								>
+									<X size={16} />
+								</button>
+							)}
 							{showPaymentCustomerResults && (
 								<div className="absolute z-[200] top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden max-h-64 overflow-y-auto custom-scrollbar">
-									{aggregatedData
-										.filter(c => isMatch(c.name || '', paymentCustomerSearchQuery))
-										.slice(0, 50)
-										.map(c => (
-											<div
-												key={c.id}
-												className="px-5 py-4 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors border-b border-slate-50 dark:border-slate-700 last:border-none"
-												onClick={() => {
-													setPaymentData({ ...paymentData, customerId: c.id, customerName: c.name });
-													setPaymentCustomerSearchQuery(c.name);
-													setShowPaymentCustomerResults(false);
-												}}
-											>
-												<div className="flex flex-col">
-													<span className="text-sm font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight">
-														{c.name}
-													</span>
-													<div className="flex items-center gap-3 mt-1">
-														<span className="text-[10px] text-slate-400 font-bold uppercase">{c.phone || '#' + c.id.slice(-6).toUpperCase()}</span>
-														{c.currentDebt > 0 && (
-															<span className="text-[10px] text-rose-500 font-black uppercase">Nợ: {formatPrice(c.currentDebt)}</span>
-														)}
-													</div>
+									{filteredCustomers.map((c: any) => (
+										<div
+											key={c.id}
+											className="px-5 py-4 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors border-b border-slate-50 dark:border-slate-700 last:border-none text-left"
+											onClick={() => {
+												setPaymentData({ ...paymentData, customerId: c.id, customerName: c.name });
+												setPaymentCustomerSearchQuery(c.name);
+												setShowPaymentCustomerResults(false);
+											}}
+										>
+											<div className="flex flex-col">
+												<span className="text-sm font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight">
+													{c.name}
+												</span>
+												<div className="flex items-center gap-3 mt-1">
+													<span className="text-[10px] text-slate-400 font-bold uppercase">{c.phone || '#' + String(c.id).slice(-6).toUpperCase()}</span>
+													{c.currentDebt > 0 && (
+														<span className="text-[10px] text-rose-500 font-black uppercase">Nợ: {formatPrice(c.currentDebt)}</span>
+													)}
 												</div>
 											</div>
-										))}
-									{aggregatedData.filter(c => isMatch(c.name || '', paymentCustomerSearchQuery)).length === 0 && (
-										<div className="px-5 py-8 text-center text-slate-400 text-[10px] font-black uppercase tracking-widest">
+										</div>
+									))}
+									{filteredCustomers.length === 0 && (
+										<div className="px-5 py-6 text-center text-slate-400 text-[10px] font-black uppercase tracking-widest">
 											Không tìm thấy khách hàng
+										</div>
+									)}
+									{paymentCustomerSearchQuery.trim() && !customerList.some((c: any) => (c.name || '').toLowerCase() === paymentCustomerSearchQuery.trim().toLowerCase()) && (
+										<div
+											className="px-5 py-3.5 hover:bg-orange-50 dark:hover:bg-slate-700 cursor-pointer transition-colors border-t border-slate-100 dark:border-slate-700 flex items-center justify-between text-[#FF6D00]"
+											onClick={() => {
+												const guestName = paymentCustomerSearchQuery.trim();
+												setPaymentData({
+													...paymentData,
+													customerId: `guest_${guestName}`,
+													customerName: guestName,
+												});
+												setShowPaymentCustomerResults(false);
+											}}
+										>
+											<div className="flex flex-col text-left">
+												<span className="text-xs font-black uppercase">
+													+ Ghi nhận cho khách vãng lai: "{paymentCustomerSearchQuery.trim()}"
+												</span>
+											</div>
 										</div>
 									)}
 								</div>
@@ -123,7 +176,7 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
 						<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">Ngày thu nợ</label>
 						<input
 							type="date"
-							className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#FF6D00]/20"
+							className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-2xl px-5 py-4 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#FF6D00]/20"
 							value={paymentData.date}
 							onChange={(e) => setPaymentData({ ...paymentData, date: e.target.value })}
 						/>
@@ -134,7 +187,7 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
 							<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">Số tiền thu</label>
 							<input
 								type="number"
-								className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 text-sm font-black text-[#FF6D00] focus:ring-2 focus:ring-[#FF6D00]/20"
+								className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-2xl px-5 py-4 text-sm font-black text-[#FF6D00] focus:ring-2 focus:ring-[#FF6D00]/20"
 								placeholder="0"
 								value={paymentData.amount === 0 ? '' : paymentData.amount}
 								onChange={(e) => setPaymentData({ ...paymentData, amount: parseFloat(e.target.value) || 0 })}
@@ -143,7 +196,7 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
 						<div>
 							<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">Hình thức</label>
 							<select
-								className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#FF6D00]/20 appearance-none"
+								className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-2xl px-5 py-4 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#FF6D00]/20 appearance-none"
 								value={paymentData.paymentMethod}
 								onChange={(e) => setPaymentData({ ...paymentData, paymentMethod: e.target.value })}
 							>
@@ -157,7 +210,7 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
 						<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 ml-1">Ghi chú</label>
 						<textarea
 							rows={3}
-							className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-[#FF6D00]/20 resize-none"
+							className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-2xl px-5 py-4 text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-[#FF6D00]/20 resize-none"
 							placeholder="VD: Thu nợ đơn hàng tháng 10..."
 							value={paymentData.note}
 							onChange={(e) => setPaymentData({ ...paymentData, note: e.target.value })}

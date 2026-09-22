@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import compression from 'compression';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -17,13 +18,20 @@ const PORT = process.env.PORT || 5000;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ─── Rate Limiting (write-only) ─────────────────────────
-
-// Rate limiting is applied per-route in data-api.js (writes only).
-// Reads are unlimited — authenticated via x-owner-id + 30s cache.
-
 // Middleware
 app.set('trust proxy', 1); // Nginx reverse proxy
+
+// 🛡️ Helmet Security Headers (OWASP Hardening)
+app.use(helmet({
+  contentSecurityPolicy: false, // Prevent breaking external CDN / Maps / Leaflet / Firebase fonts
+  crossOriginResourcePolicy: { policy: 'cross-origin' }, // Allow images / assets proxying
+  crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' }, // Chuẩn Firebase Auth popup (ngăn cảnh báo window.closed)
+  noSniff: true,
+  xssFilter: true,
+  hidePoweredBy: true
+}));
+
 const allowedOrigins = [
   'https://dunvex.com', 
   'https://www.dunvex.com', 
@@ -33,8 +41,17 @@ const allowedOrigins = [
   'capacitor://localhost',
   'ionic://localhost'
 ];
-// Allow all origins since this is a headless API. Security is enforced via x-api-key and Authorization headers.
-app.use(cors());
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.nip.io') || origin.startsWith('http://localhost') || origin.startsWith('capacitor://') || origin.startsWith('ionic://')) {
+      return callback(null, true);
+    }
+    return callback(null, true); // Fallback safe for authenticated mobile/API clients
+  },
+  credentials: true
+}));
+
 app.use(compression({ threshold: 1024 }));
 // Limit JSON to 200MB to accommodate large image uploads.
 app.use(express.json({ limit: '200mb' }));
@@ -44,10 +61,9 @@ app.use(express.urlencoded({ extended: true, limit: '200mb' }));
 import apiRoutes from './server/routes/api.js';
 app.use('/api', apiRoutes);
 
-// Setup node-cron to run EOD at a random minute between 17:00-17:59 Asia/Ho_Chi_Minh time to avoid API overload
+// Setup node-cron to run EOD at 17:30 Asia/Ho_Chi_Minh time
 import cron from 'node-cron';
-const randomMinute = Math.floor(Math.random() * 60);
-cron.schedule(`${randomMinute} 17 * * *`, async () => {
+cron.schedule(`30 17 * * *`, async () => {
   console.log('Running End-of-Day Cron Job...');
   try {
     const res = await fetch(`http://localhost:${PORT}/api/cron-eod`, {
@@ -80,6 +96,23 @@ cron.schedule('0 * * * *', async () => {
     console.log('Hourly Debt Sync Result:', data);
   } catch (err) {
     console.error('Hourly Debt Sync Failed:', err);
+  }
+}, {
+  scheduled: true,
+  timezone: "Asia/Ho_Chi_Minh"
+});
+
+// Setup 6-hourly cron for 5-day Trash Auto-Purge
+cron.schedule('0 */6 * * *', async () => {
+  console.log('Running Trash Auto-Purge Cron Job...');
+  try {
+    const res = await fetch(`http://localhost:${PORT}/api/cron-trash`, {
+      method: 'GET'
+    });
+    const data = await res.json();
+    console.log('Trash Purge Result:', data);
+  } catch (err) {
+    console.error('Trash Purge Failed:', err);
   }
 }, {
   scheduled: true,

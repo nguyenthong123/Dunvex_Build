@@ -3,8 +3,8 @@ import OrderLineItems from './OrderLineItems';
 
 interface OrderProductLinesProps {
 	lineItems: any[];
-	updateLineItem: (index: number, field: string, value: any) => void;
-	removeLineItem: (index: number) => void;
+	updateLineItem: (indexOrId: number | string, field: string, value: any) => void;
+	removeLineItem: (indexOrId: number | string) => void;
 	addLineItem: () => void;
 	activeRow: number | null;
 	setActiveRow: (index: number | null) => void;

@@ -5,9 +5,10 @@ import { useSuppliers } from '../hooks/useSuppliers';
 import { useSupplierDebts } from '../hooks/useSupplierDebts';
 import { usePurchaseOrders } from '../hooks/usePurchaseOrders';
 import { useToast } from '../components/shared/Toast';
-import { Search, X, Plus, Trash2, Edit2, ChevronLeft, ChevronRight, Package, FileText, Printer, Image as ImageIcon, Copy, CheckCircle2 } from 'lucide-react';
+import { Search, X, Plus, Trash2, Edit2, ChevronLeft, ChevronRight, Package, FileText, Printer, Image as ImageIcon, Copy, CheckCircle2, Camera, Loader2 } from 'lucide-react';
 import { serverTimestamp, Timestamp, db, getDoc, doc, auth } from '../services/firebase';
 import html2canvas from 'html2canvas-pro';
+import { uploadImageToVPS } from '../utils/vpsUpload';
 
 // ─── Helpers ────────────────────────────────────────────
 const fmt = (n: number) => Number(n || 0).toLocaleString('vi-VN');
@@ -55,7 +56,7 @@ const Pagination = ({ page, total, perPage, onChange }: any) => {
 const SupplierDebts = () => {
 	const owner = useOwner();
 	const navigate = useNavigate();
-	const { showToast } = useToast();
+	const { showToast, showConfirm } = useToast();
 	const { suppliers } = useSuppliers();
 	const { debts, addDebt, removeDebt, updateDebt } = useSupplierDebts();
 	const { purchaseOrders } = usePurchaseOrders();
@@ -209,12 +210,19 @@ const SupplierDebts = () => {
 	const [paymentAmount, setPaymentAmount] = useState('');
 	const [paymentNote, setPaymentNote] = useState('');
 	const [paymentDate, setPaymentDate] = useState('');
+	const [paymentProofImage, setPaymentProofImage] = useState('');
+	const [uploadingPaymentImage, setUploadingPaymentImage] = useState(false);
 
 	// Edit form
 	const [showEditForm, setShowEditForm] = useState(false);
 	const [editingPayment, setEditingPayment] = useState<any>(null);
 	const [editAmount, setEditAmount] = useState('');
 	const [editNote, setEditNote] = useState('');
+	const [editProofImage, setEditProofImage] = useState('');
+	const [uploadingEditImage, setUploadingEditImage] = useState(false);
+
+	// Lightbox / Receipt image view
+	const [receiptModalImage, setReceiptModalImage] = useState<string | null>(null);
 
 	// Handle browser back button — close modals
 	// Track modal state for back button
@@ -383,6 +391,35 @@ const SupplierDebts = () => {
 	}, [payments, completedPOs, historySearchTerm]);
 
 	// ─── Handlers ─────────────────────────────────────────
+	const handlePaymentImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+		const file = e.target.files?.[0];
+		if (!file) return;
+		setUploadingPaymentImage(true);
+		try {
+			const url = await uploadImageToVPS(file);
+			if (url) setPaymentProofImage(url);
+		} catch (error: any) {
+			showToast(`Lỗi tải ảnh: ${error.message}`, 'error');
+		} finally {
+			setUploadingPaymentImage(false);
+		}
+	};
+
+	const handleEditImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+		const file = e.target.files?.[0];
+		if (!file) return;
+		setUploadingEditImage(true);
+		try {
+			const url = await uploadImageToVPS(file);
+			if (url) setEditProofImage(url);
+		} catch (error: any) {
+			showToast(`Lỗi tải ảnh: ${error.message}`, 'error');
+		} finally {
+			setUploadingEditImage(false);
+			if (e.target) e.target.value = '';
+		}
+	};
+
 	const handlePayDebt = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (!selectedSupplier || !paymentAmount) return;
@@ -398,12 +435,13 @@ const SupplierDebts = () => {
 				amount: amountNum,
 				method: 'Chuyển khoản',
 				note: paymentNote || 'Ghi nhận trả nợ',
+				proofImage: paymentProofImage || '',
 				createdBy: owner.ownerId,
 				createdAt: finalCreatedAt
 			});
 			showToast("Thanh toán thành công", "success");
 			setShowPaymentForm(false);
-			setPaymentAmount(''); setPaymentNote(''); setPaymentDate('');
+			setPaymentAmount(''); setPaymentNote(''); setPaymentDate(''); setPaymentProofImage('');
 		} catch (error) { console.error(error); showToast("Lỗi thanh toán", "error"); }
 	};
 
@@ -413,16 +451,29 @@ const SupplierDebts = () => {
 		const amountNum = parseFloat(editAmount.replace(/\D/g, ''));
 		if (isNaN(amountNum) || amountNum <= 0) { showToast("Số tiền không hợp lệ", "error"); return; }
 		try {
-			await updateDebt(editingPayment.id, { amount: amountNum, note: editNote || '' });
+			await updateDebt(editingPayment.id, { 
+				amount: amountNum, 
+				note: editNote || '',
+				proofImage: editProofImage || ''
+			});
 			showToast("Cập nhật thành công", "success");
-			setShowEditForm(false); setEditingPayment(null);
+			setShowEditForm(false); setEditingPayment(null); setEditProofImage('');
 		} catch (error) { console.error(error); showToast("Lỗi cập nhật", "error"); }
 	};
 
 	const handleDeletePayment = async (payment: any) => {
-		if (!window.confirm(`Xoá khoản thanh toán ${fmt(payment.amount)}đ của ${payment.supplierName}?`)) return;
-		try { await removeDebt(payment.id); showToast("Đã xoá", "success"); }
-		catch (error: any) { showToast(`Lỗi: ${error.message || 'Không xác định'}`, "error"); }
+		showConfirm(
+			"Xóa khoản thanh toán",
+			`Bạn có chắc chắn muốn xoá khoản thanh toán ${fmt(payment.amount)}đ của ${payment.supplierName}?`,
+			async () => {
+				try {
+					await removeDebt(payment.id);
+					showToast("Đã xoá", "success");
+				} catch (error: any) {
+					showToast(`Lỗi: ${error.message || 'Không xác định'}`, "error");
+				}
+			}
+		);
 	};
 
 	const handlePrint = () => {
@@ -795,20 +846,20 @@ const SupplierDebts = () => {
 				<div className="mt-4">
 					{/* Summary Cards */}
 					<div className="grid grid-cols-3 gap-3 mb-5">
-						<div className="bg-white border border-slate-200 rounded-2xl p-4 text-center shadow-sm">
-							<div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Tổng nhập hàng</div>
-							<div className="text-xl font-black text-red-600">{fmt(totalPOAll)}đ</div>
-							<div className="text-xs text-slate-400 mt-1">{completedPOs.length} đơn</div>
+						<div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 text-center shadow-sm">
+							<div className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Tổng nhập hàng</div>
+							<div className="text-xl font-black text-red-600 dark:text-red-400">{fmt(totalPOAll)}đ</div>
+							<div className="text-xs text-slate-400 dark:text-slate-500 mt-1">{completedPOs.length} đơn</div>
 						</div>
-						<div className="bg-white border border-slate-200 rounded-2xl p-4 text-center shadow-sm">
-							<div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Đã thanh toán</div>
-							<div className="text-xl font-black text-emerald-600">{fmt(totalPaidAll)}đ</div>
-							<div className="text-xs text-slate-400 mt-1">{payments.length} giao dịch</div>
+						<div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 text-center shadow-sm">
+							<div className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Đã thanh toán</div>
+							<div className="text-xl font-black text-emerald-600 dark:text-emerald-400">{fmt(totalPaidAll)}đ</div>
+							<div className="text-xs text-slate-400 dark:text-slate-500 mt-1">{payments.length} giao dịch</div>
 						</div>
-						<div className="bg-white border border-slate-200 rounded-2xl p-4 text-center shadow-sm">
-							<div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Còn nợ</div>
-							<div className={`text-xl font-black ${totalRemainingAll > 0 ? 'text-[#FF6D00]' : 'text-emerald-600'}`}>{fmt(Math.max(0, totalRemainingAll))}đ</div>
-							<div className="text-xs text-slate-400 mt-1">{filteredSuppliers.length} NCC</div>
+						<div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 text-center shadow-sm">
+							<div className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Còn nợ</div>
+							<div className={`text-xl font-black ${totalRemainingAll > 0 ? 'text-[#FF6D00]' : 'text-emerald-600 dark:text-emerald-400'}`}>{fmt(Math.max(0, totalRemainingAll))}đ</div>
+							<div className="text-xs text-slate-400 dark:text-slate-500 mt-1">{filteredSuppliers.length} NCC</div>
 						</div>
 					</div>
 
@@ -817,7 +868,7 @@ const SupplierDebts = () => {
 						<Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
 						<input type="text" placeholder="Tìm theo tên hoặc số điện thoại..."
 							value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setDebtPage(1); }}
-							className="w-full h-12 pl-12 pr-4 bg-white border border-slate-200 rounded-2xl shadow-sm focus:ring-2 focus:ring-[#FF6D00] outline-none transition-all text-sm" />
+							className="w-full h-12 pl-12 pr-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm focus:ring-2 focus:ring-[#FF6D00] outline-none transition-all text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500" />
 					</div>
 
 					{/* Supplier list */}
@@ -837,11 +888,11 @@ const SupplierDebts = () => {
 								return (
 									<div key={supplier.id}
 										onClick={() => openDetail(supplier, 'po')}
-										className="bg-white border border-slate-200 rounded-2xl p-4 cursor-pointer hover:border-[#FF6D00]/30 hover:shadow-md transition-all">
+										className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 cursor-pointer hover:border-[#FF6D00]/30 hover:shadow-md transition-all">
 										<div className="flex items-center justify-between mb-3">
 											<div>
-												<h3 className="font-bold text-slate-800">{supplier.name}</h3>
-												{supplier.phone && <p className="text-xs text-slate-400 mt-0.5">{supplier.phone}</p>}
+												<h3 className="font-bold text-slate-800 dark:text-white">{supplier.name}</h3>
+												{supplier.phone && <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{supplier.phone}</p>}
 											</div>
 											{remaining > 0 && (
 												<button onClick={(e) => { e.stopPropagation(); setSelectedSupplier(supplier); setShowPaymentForm(true); }}
@@ -891,11 +942,11 @@ const SupplierDebts = () => {
 						<Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
 						<input type="text" placeholder="Tìm theo tên NCC, mã đơn..."
 							value={historySearchTerm} onChange={(e) => { setHistorySearchTerm(e.target.value); setHistoryPage(1); }}
-							className="w-full h-12 pl-12 pr-4 bg-white border border-slate-200 rounded-2xl shadow-sm focus:ring-2 focus:ring-[#FF6D00] outline-none transition-all text-sm" />
+							className="w-full h-12 pl-12 pr-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm focus:ring-2 focus:ring-[#FF6D00] outline-none transition-all text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500" />
 					</div>
 
-					<div className="border border-slate-200 rounded-2xl overflow-hidden bg-white">
-						<div className="bg-slate-50 px-4 py-3 grid grid-cols-[1fr_2fr_1fr_auto] gap-3 text-xs font-black text-slate-400 uppercase tracking-wider">
+					<div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden bg-white dark:bg-slate-900">
+						<div className="bg-slate-50 dark:bg-slate-800 px-4 py-3 grid grid-cols-[1fr_2fr_1fr_auto] gap-3 text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">
 							<span>Thời gian</span>
 							<span>NCC / Diễn giải</span>
 							<span className="text-right">Số tiền</span>
@@ -904,15 +955,26 @@ const SupplierDebts = () => {
 						{historyList.slice((historyPage - 1) * PER_PAGE, historyPage * PER_PAGE).map((item: any) => {
 							const isPO = item.type === 'po';
 							return (
-								<div key={item.id + item.type} className="px-4 py-3 grid grid-cols-[1fr_2fr_1fr_auto] gap-3 items-center border-t border-slate-100 text-sm hover:bg-slate-50 transition">
+								<div key={item.id + item.type} className="px-4 py-3 grid grid-cols-[1fr_2fr_1fr_auto] gap-3 items-center border-t border-slate-100 dark:border-slate-800 text-sm hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
 									<span className="text-xs text-slate-500">{fmtDateTime(item.date)}</span>
 									<div>
-										<div className="font-semibold text-slate-700 truncate">{item.supplierName}</div>
+										<div className="font-semibold text-slate-700 dark:text-slate-350 truncate">{item.supplierName}</div>
 										<div className="flex items-center gap-2">
 											{isPO ? (
-												<span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-bold">📦 Đơn Nhập #{item.poNumber}</span>
+												<span className="text-xs bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full font-bold">📦 Đơn Nhập #{item.poNumber}</span>
 											) : (
-												<span className="text-xs bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-bold">💰 Trả nợ</span>
+												<span className="text-xs bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full font-bold">💰 Trả nợ</span>
+											)}
+											{item.proofImage && (
+												<button
+													type="button"
+													onClick={(e) => { e.stopPropagation(); setReceiptModalImage(item.proofImage); }}
+													className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 bg-blue-50 dark:bg-blue-950/40 dark:text-blue-400 hover:bg-blue-100 px-2 py-0.5 rounded-full transition shadow-sm cursor-pointer"
+													title="Xem lệnh chuyển tiền"
+												>
+													<ImageIcon size={12} />
+													<span>Xem bill</span>
+												</button>
 											)}
 										</div>
 										{item.note && <div className="text-xs text-slate-400 truncate mt-0.5 italic">{item.note}</div>}
@@ -923,7 +985,7 @@ const SupplierDebts = () => {
 									<span className="flex justify-end w-16">
 										{!isPO && (
 											<div className="flex gap-1">
-												<button onClick={() => { setEditingPayment(item); setEditAmount(item.amount.toString()); setEditNote(item.note || ''); setShowEditForm(true); }}
+												<button onClick={() => { setEditingPayment(item); setEditAmount(item.amount.toString()); setEditNote(item.note || ''); setEditProofImage(item.proofImage || ''); setShowEditForm(true); }}
 													className="p-1.5 text-amber-600 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 rounded-lg transition shadow-sm cursor-pointer"><Edit2 size={14} /></button>
 												<button onClick={() => handleDeletePayment(item)}
 													className="p-1.5 text-red-600 bg-red-50 dark:bg-red-950/40 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-lg transition shadow-sm cursor-pointer"><Trash2 size={14} /></button>
@@ -959,7 +1021,13 @@ const SupplierDebts = () => {
 					<div className="fixed inset-0 z-[150] bg-slate-955/95 backdrop-blur-xl flex flex-col items-center justify-start overflow-hidden print:hidden animate-in fade-in duration-200"
 						onClick={() => { setShowDetail(false); setStatementZoom(1); }}>
 						{/* Controls bar */}
-						<div className="w-full flex items-center justify-between p-3 bg-slate-950/80 backdrop-blur-lg border-b border-white/5 z-[160] no-print" onClick={e => e.stopPropagation()}>
+						<div 
+							className="w-full flex items-center justify-between p-3 bg-slate-950/80 backdrop-blur-lg border-b border-white/5 z-[160] no-print" 
+							onClick={e => e.stopPropagation()}
+							style={{
+								paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))'
+							}}
+						>
 							<span className="text-white text-xs font-black uppercase tracking-wider pl-2 hidden lg:inline">Chi tiết công nợ nhà cung cấp</span>
 
 							{/* Date Range Filters */}
@@ -1267,49 +1335,95 @@ const SupplierDebts = () => {
 				return (
 					<div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
 						onClick={() => setShowPaymentForm(false)}>
-						<div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-							<div className="flex items-center justify-between p-4 border-b border-slate-100">
-								<h3 className="font-black text-lg text-slate-800">Thanh Toán Trả Nợ</h3>
+						<div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden border border-slate-100 dark:border-slate-800 transition-colors" onClick={e => e.stopPropagation()}>
+							<div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800">
+								<h3 className="font-black text-lg text-slate-800 dark:text-white">Thanh Toán Trả Nợ</h3>
 								<button onClick={() => setShowPaymentForm(false)}
-									className="p-2 rounded-full hover:bg-red-50 text-slate-400 hover:text-red-500 transition"><X size={20} /></button>
+									className="p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-400 hover:text-red-500 transition"><X size={20} /></button>
 							</div>
 							<div className="p-5">
-								<div className="bg-slate-50 rounded-xl p-4 mb-5">
-									<div className="text-sm text-slate-500">Thanh toán cho:</div>
-									<div className="font-bold text-slate-800">{selectedSupplier.name}</div>
+								<div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 mb-5">
+									<div className="text-sm text-slate-500 dark:text-slate-400">Thanh toán cho:</div>
+									<div className="font-bold text-slate-800 dark:text-white">{selectedSupplier.name}</div>
 									<div className="grid grid-cols-2 gap-3 mt-3">
 										<div>
-											<div className="text-xs text-slate-400">Nhập hàng</div>
-											<div className="font-bold text-red-600">{fmt(poTotal)}đ</div>
+											<div className="text-xs text-slate-400 dark:text-slate-500">Nhập hàng</div>
+											<div className="font-bold text-red-600 dark:text-red-400">{fmt(poTotal)}đ</div>
 										</div>
 										<div>
-											<div className="text-xs text-slate-400">Còn nợ</div>
+											<div className="text-xs text-slate-400 dark:text-slate-500">Còn nợ</div>
 											<div className="font-bold text-[#FF6D00]">{fmt(remaining)}đ</div>
 										</div>
 									</div>
 								</div>
 								<form id="payDebtForm" onSubmit={handlePayDebt} className="space-y-4">
 									<div>
-										<label className="block text-xs font-bold text-slate-400 uppercase mb-2">Số Tiền <span className="text-red-500">*</span></label>
+										<label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase mb-2">Số Tiền <span className="text-red-500">*</span></label>
 										<input type="text" required value={paymentAmount}
 											onChange={(e) => { const v = e.target.value.replace(/\D/g, ''); setPaymentAmount(v ? Number(v).toLocaleString('vi-VN') : ''); }}
-											className="w-full h-12 px-4 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none font-bold text-lg text-right" placeholder="0" />
+											className="w-full h-12 px-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none font-bold text-lg text-right text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500" placeholder="0" />
 									</div>
 									<div>
-										<label className="block text-xs font-bold text-slate-400 uppercase mb-2">Ghi chú</label>
+										<label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase mb-2">Ghi chú</label>
 										<textarea rows={2} value={paymentNote} onChange={(e) => setPaymentNote(e.target.value)}
-											className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none resize-none text-sm" placeholder="Nhập ghi chú..." />
+											className="w-full p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none resize-none text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500" placeholder="Nhập ghi chú..." />
 									</div>
 									<div>
-										<label className="block text-xs font-bold text-slate-400 uppercase mb-2">Ngày thanh toán</label>
+										<label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase mb-2">Ngày thanh toán</label>
 										<input type="datetime-local" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)}
-											className="w-full h-12 px-4 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none font-medium" />
+											className="w-full h-12 px-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none font-medium text-slate-900 dark:text-white" />
+									</div>
+									<div>
+										<label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase mb-2">
+											Lệnh chuyển tiền / Bằng chứng thanh toán
+										</label>
+										<div className="flex gap-3 items-center">
+											<button
+												type="button"
+												onClick={() => document.getElementById('supplier-pay-proof-input')?.click()}
+												disabled={uploadingPaymentImage}
+												className="flex-1 h-14 bg-slate-50 dark:bg-slate-950 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-100 dark:hover:bg-slate-900 transition disabled:opacity-50 text-slate-500 dark:text-slate-400 font-bold text-xs cursor-pointer"
+											>
+												{uploadingPaymentImage ? (
+													<div className="size-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+												) : (
+													<>
+														<Camera size={18} />
+														<span>{paymentProofImage ? 'Đổi ảnh lệnh chuyển' : 'Tải lên / Chụp ảnh lệnh chuyển tiền'}</span>
+													</>
+												)}
+											</button>
+											<input
+												id="supplier-pay-proof-input"
+												type="file"
+												accept="image/*"
+												className="hidden"
+												onChange={handlePaymentImageUpload}
+											/>
+											{paymentProofImage && (
+												<div className="relative size-14 bg-slate-100 dark:bg-slate-800 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-md shrink-0 group">
+													<img 
+														src={paymentProofImage} 
+														alt="Receipt" 
+														className="w-full h-full object-cover cursor-pointer hover:opacity-90"
+														onClick={() => setReceiptModalImage(paymentProofImage)}
+													/>
+													<button
+														type="button"
+														onClick={() => setPaymentProofImage('')}
+														className="absolute top-0.5 right-0.5 size-5 bg-red-500 text-white rounded-full flex items-center justify-center shadow hover:bg-red-600 cursor-pointer"
+													>
+														<X size={12} />
+													</button>
+												</div>
+											)}
+										</div>
 									</div>
 								</form>
 							</div>
-							<div className="p-4 border-t border-slate-100 bg-slate-50 flex gap-3">
+							<div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex gap-3">
 								<button onClick={() => setShowPaymentForm(false)}
-									className="flex-1 py-3 border border-slate-200 bg-white rounded-xl font-bold text-slate-600">Huỷ</button>
+									className="flex-1 py-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl font-bold text-slate-600 dark:text-slate-300">Huỷ</button>
 								<button type="submit" form="payDebtForm"
 									className="flex-1 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold shadow-lg shadow-emerald-500/30 transition">Xác Nhận Trả</button>
 							</div>
@@ -1322,33 +1436,80 @@ const SupplierDebts = () => {
 			{showEditForm && editingPayment && (
 				<div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
 					onClick={() => setShowEditForm(false)}>
-					<div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-						<div className="flex items-center justify-between p-4 border-b border-slate-100">
-							<h3 className="font-black text-lg text-slate-800">Chỉnh Sửa Thanh Toán</h3>
+					<div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden border border-slate-100 dark:border-slate-800 transition-colors" onClick={e => e.stopPropagation()}>
+						<div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800">
+							<h3 className="font-black text-lg text-slate-800 dark:text-white">Chỉnh Sửa Thanh Toán</h3>
 							<button onClick={() => setShowEditForm(false)}
-								className="p-2 rounded-full hover:bg-red-50 text-slate-400 hover:text-red-500 transition"><X size={20} /></button>
+								className="p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-400 hover:text-red-500 transition"><X size={20} /></button>
 						</div>
 						<div className="p-5">
-							<div className="bg-slate-50 rounded-xl p-3 mb-4">
-								<div className="text-sm font-semibold text-slate-700">{editingPayment.supplierName}</div>
+							<div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3 mb-4">
+								<div className="text-sm font-semibold text-slate-700 dark:text-slate-350">{editingPayment.supplierName}</div>
 							</div>
 							<form id="editPaymentForm" onSubmit={handleSaveEdit} className="space-y-4">
 								<div>
-									<label className="block text-xs font-bold text-slate-400 uppercase mb-2">Số Tiền <span className="text-red-500">*</span></label>
+									<label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase mb-2">Số Tiền <span className="text-red-500">*</span></label>
 									<input type="text" required value={editAmount}
 										onChange={(e) => { const v = e.target.value.replace(/\D/g, ''); setEditAmount(v ? Number(v).toLocaleString('vi-VN') : ''); }}
-										className="w-full h-12 px-4 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-lg text-right" placeholder="0" />
+										className="w-full h-12 px-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-lg text-right text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500" placeholder="0" />
 								</div>
 								<div>
-									<label className="block text-xs font-bold text-slate-400 uppercase mb-2">Ghi chú</label>
+									<label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase mb-2">Ghi chú</label>
 									<textarea rows={2} value={editNote} onChange={(e) => setEditNote(e.target.value)}
-										className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none resize-none text-sm" />
+										className="w-full p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none resize-none text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500" />
+								</div>
+								<div>
+									<label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase mb-2">Hình ảnh lệnh chuyển tiền / Hoá đơn</label>
+									<div className="flex items-center gap-3">
+										<button
+											type="button"
+											onClick={() => document.getElementById('supplier-edit-proof-input')?.click()}
+											disabled={uploadingEditImage}
+											className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 flex items-center justify-center gap-2 text-xs font-bold transition disabled:opacity-50 cursor-pointer"
+										>
+											{uploadingEditImage ? (
+												<>
+													<Loader2 size={18} className="animate-spin text-blue-500" />
+													<span>Đang tải ảnh lên...</span>
+												</>
+											) : (
+												<>
+													<Camera size={18} />
+													<span>{editProofImage ? 'Đổi ảnh lệnh chuyển' : 'Tải lên / Chụp ảnh lệnh chuyển tiền'}</span>
+												</>
+											)}
+										</button>
+										<input
+											id="supplier-edit-proof-input"
+											type="file"
+											accept="image/*"
+											className="hidden"
+											onChange={handleEditImageUpload}
+										/>
+										{editProofImage && (
+											<div className="relative size-14 bg-slate-100 dark:bg-slate-800 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-md shrink-0 group">
+												<img 
+													src={editProofImage} 
+													alt="Receipt" 
+													className="w-full h-full object-cover cursor-pointer hover:opacity-90"
+													onClick={() => setReceiptModalImage(editProofImage)}
+												/>
+												<button
+													type="button"
+													onClick={() => setEditProofImage('')}
+													className="absolute top-0.5 right-0.5 size-5 bg-red-500 text-white rounded-full flex items-center justify-center shadow hover:bg-red-600 cursor-pointer"
+												>
+													<X size={12} />
+												</button>
+											</div>
+										)}
+									</div>
 								</div>
 							</form>
 						</div>
-						<div className="p-4 border-t border-slate-100 bg-slate-50 flex gap-3">
+						<div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex gap-3">
 							<button onClick={() => setShowEditForm(false)}
-								className="flex-1 py-3 border border-slate-200 bg-white rounded-xl font-bold text-slate-600">Huỷ</button>
+								className="flex-1 py-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl font-bold text-slate-600 dark:text-slate-350">Huỷ</button>
 							<button type="submit" form="editPaymentForm"
 								className="flex-1 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-500/30 transition">Lưu</button>
 						</div>
@@ -1421,6 +1582,46 @@ const SupplierDebts = () => {
 						<div>
 							<h4 className="text-white font-black text-base uppercase tracking-wider mb-1">Sao chép thành công!</h4>
 							<p className="text-slate-400 text-xs leading-relaxed">Đã sao chép ảnh phiếu công nợ nhà cung cấp vào khay nhớ tạm. Bạn có thể dán (Paste) gửi ngay sang Zalo / Facebook!</p>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* RECEIPT / BILL LIGHTBOX MODAL */}
+			{receiptModalImage && (
+				<div 
+					className="fixed inset-0 z-[250] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-150"
+					onClick={() => setReceiptModalImage(null)}
+				>
+					<div 
+						className="relative max-w-2xl max-h-[90vh] bg-slate-900 rounded-2xl overflow-hidden border border-slate-700 shadow-2xl flex flex-col"
+						onClick={e => e.stopPropagation()}
+					>
+						<div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-950">
+							<span className="text-white text-xs font-bold uppercase tracking-wider">Ảnh Lệnh Chuyển Tiền / Hoá Đơn</span>
+							<div className="flex items-center gap-2">
+								<a 
+									href={receiptModalImage} 
+									target="_blank" 
+									rel="noreferrer" 
+									className="text-xs text-blue-400 hover:text-blue-300 px-2 py-1 bg-slate-800 rounded-lg hover:bg-slate-750 transition"
+								>
+									Mở ảnh gốc
+								</a>
+								<button 
+									onClick={() => setReceiptModalImage(null)}
+									className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+								>
+									<X size={18} />
+								</button>
+							</div>
+						</div>
+						<div className="p-2 overflow-auto flex items-center justify-center bg-black/40">
+							<img 
+								src={receiptModalImage} 
+								alt="Lệnh chuyển tiền" 
+								className="max-h-[75vh] w-auto object-contain rounded-lg shadow-lg"
+							/>
 						</div>
 					</div>
 				</div>

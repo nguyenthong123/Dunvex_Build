@@ -5,6 +5,8 @@
  * Giữ interface tương tự Firebase để dataAccess.ts dễ migrate.
  */
 
+import { getAuth } from 'firebase/auth';
+
 const API_BASE = import.meta.env.VITE_API_URL || '/api/data';
 
 // ─── Auth Headers ───────────────────────────────────────────
@@ -12,7 +14,15 @@ const API_BASE = import.meta.env.VITE_API_URL || '/api/data';
 export function getAuthHeaders() {
   // Lấy từ localStorage (được set khi login)
   const apiKey = localStorage.getItem('dunvex_api_key') || '';
-  const ownerId = localStorage.getItem('dunvex_owner_id') || '';
+  let ownerId = localStorage.getItem('dunvex_owner_id') || '';
+  if (!ownerId) {
+    try {
+      const auth = getAuth();
+      if (auth && auth.currentUser) {
+        ownerId = auth.currentUser.uid;
+      }
+    } catch (e) {}
+  }
   return {
     'Content-Type': 'application/json',
     'x-api-key': apiKey,
@@ -25,12 +35,10 @@ export function setApiCredentials(apiKey: string, ownerId: string) {
   localStorage.setItem('dunvex_owner_id', ownerId);
 }
 
-import { getAuth } from 'firebase/auth';
-
 async function apiFetch<T = any>(url: string, options: RequestInit = {}): Promise<T> {
   let token = '';
+  const auth = getAuth();
   try {
-    const auth = getAuth();
     if (auth && auth.currentUser) {
       token = await auth.currentUser.getIdToken();
     }
@@ -38,20 +46,40 @@ async function apiFetch<T = any>(url: string, options: RequestInit = {}): Promis
     console.warn('Failed to get Firebase token', e);
   }
 
-  const headers: Record<string, string> = {
-    ...getAuthHeaders(),
-    ...(options.headers as any || {}),
+  const buildHeaders = (currToken: string) => {
+    const headers: Record<string, string> = {
+      ...getAuthHeaders(),
+      ...(options.headers as any || {}),
+    };
+    if (currToken) {
+      headers['Authorization'] = `Bearer ${currToken}`;
+    }
+    return headers;
   };
-  
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
 
-  const res = await fetch(url, {
+  let res = await fetch(url, {
     ...options,
     cache: 'no-store',
-    headers
+    headers: buildHeaders(token)
   });
+
+  // 🔄 Tự động refresh token và retry nếu gặp lỗi 401 Unauthorized (token hết hạn)
+  if (res.status === 401 && auth && auth.currentUser) {
+    try {
+      console.warn('[apiClient] Nhận mã 401, đang tự động làm mới Firebase token...');
+      const freshToken = await auth.currentUser.getIdToken(true);
+      if (freshToken) {
+        token = freshToken;
+        res = await fetch(url, {
+          ...options,
+          cache: 'no-store',
+          headers: buildHeaders(freshToken)
+        });
+      }
+    } catch (refreshErr) {
+      console.error('[apiClient] Làm mới token thất bại:', refreshErr);
+    }
+  }
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -161,13 +189,13 @@ export async function getDocument(collection: string, id: string): Promise<ApiDo
     );
     return result.data || null;
   } catch (e: any) {
-    if (e.message?.includes('404')) return null;
-    throw e;
+    return null;
   }
 }
 
 function localInvalidate(collection: string) {
   try {
+    triggerCollectionReload(collection);
     window.dispatchEvent(new CustomEvent('collection_changed', { detail: { collection } }));
   } catch (e) {
     console.warn('Failed to dispatch local collection_changed event', e);
@@ -186,6 +214,20 @@ export async function createDocument(
       body: JSON.stringify(data),
     }
   );
+
+  // Optimistic update: inject the new doc with its newly returned ID into cache
+  const newDoc = { ...data, id: result.id };
+  for (const [key, entry] of listeners.entries()) {
+    if (entry.collection !== collection || !entry.lastData) continue;
+    try {
+      const prev = JSON.parse(entry.lastData);
+      if (!Array.isArray(prev)) continue;
+      const next = [newDoc, ...prev];
+      entry.lastData = JSON.stringify(next);
+      entry.callbacks.forEach(fn => fn(next));
+    } catch (e) {}
+  }
+
   localInvalidate(collection);
   return result.id;
 }
@@ -196,11 +238,42 @@ export async function setDocument(
   id: string,
   data: Record<string, any>
 ): Promise<void> {
-  await apiFetch(`${API_BASE}/${collection}/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  });
-  localInvalidate(collection);
+  const rollbacks: Array<() => void> = [];
+  const newDoc = { ...data, id };
+
+  for (const [key, entry] of listeners.entries()) {
+    if (entry.collection !== collection || !entry.lastData) continue;
+    try {
+      const prev = JSON.parse(entry.lastData);
+      if (!Array.isArray(prev)) continue;
+      
+      const exists = prev.some((d: any) => d.id === id);
+      let next;
+      if (exists) {
+        next = prev.map((d: any) => d.id === id ? newDoc : d);
+      } else {
+        next = [newDoc, ...prev];
+      }
+      
+      entry.lastData = JSON.stringify(next);
+      entry.callbacks.forEach(fn => fn(next));
+      rollbacks.push(() => {
+        entry.lastData = JSON.stringify(prev);
+        entry.callbacks.forEach(fn => fn(prev));
+      });
+    } catch (e) {}
+  }
+
+  try {
+    await apiFetch(`${API_BASE}/${collection}/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+    localInvalidate(collection);
+  } catch (e) {
+    rollbacks.forEach(r => r());
+    throw e;
+  }
 }
 
 /** Update a document */
@@ -209,11 +282,55 @@ export async function updateDocument(
   id: string,
   data: Record<string, any>
 ): Promise<void> {
-  await apiFetch(`${API_BASE}/${collection}/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  });
-  localInvalidate(collection);
+  const rollbacks: Array<() => void> = [];
+
+  for (const [key, entry] of listeners.entries()) {
+    if (entry.collection !== collection || !entry.lastData) continue;
+    try {
+      const prev = JSON.parse(entry.lastData);
+      if (!Array.isArray(prev)) continue;
+      const next = prev.map((d: any) => {
+        if (d.id === id) {
+          return { ...d, ...data };
+        }
+        return d;
+      });
+      entry.lastData = JSON.stringify(next);
+      entry.callbacks.forEach(fn => fn(next));
+      rollbacks.push(() => {
+        entry.lastData = JSON.stringify(prev);
+        entry.callbacks.forEach(fn => fn(prev));
+      });
+    } catch (e) {}
+  }
+
+  // Also update doc listeners if any
+  const docKey = `${collection}:${id}`;
+  const docEntry = docListeners.get(docKey);
+  let docPrev: any = null;
+  if (docEntry && docEntry.lastData) {
+    try {
+      docPrev = JSON.parse(docEntry.lastData);
+      const docNext = { ...docPrev, ...data };
+      docEntry.lastData = JSON.stringify(docNext);
+      docEntry.callbacks.forEach(fn => fn(docNext));
+      rollbacks.push(() => {
+        docEntry.lastData = JSON.stringify(docPrev);
+        docEntry.callbacks.forEach(fn => fn(docPrev));
+      });
+    } catch (e) {}
+  }
+
+  try {
+    await apiFetch(`${API_BASE}/${collection}/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+    localInvalidate(collection);
+  } catch (e) {
+    rollbacks.forEach(r => r());
+    throw e;
+  }
 }
 
 /** Delete a document */
@@ -260,6 +377,23 @@ export async function batchWrite(
     data?: Record<string, any>;
   }>
 ): Promise<void> {
+  // Optimistic updates for listeners
+  for (const op of operations) {
+    if (op.type === 'delete' && op.id) {
+      for (const [key, entry] of listeners.entries()) {
+        if (entry.collection !== op.collection || !entry.lastData) continue;
+        try {
+          const prev = JSON.parse(entry.lastData);
+          if (Array.isArray(prev)) {
+            const next = prev.filter((d: any) => d.id !== op.id);
+            entry.lastData = JSON.stringify(next);
+            entry.callbacks.forEach(fn => fn(next));
+          }
+        } catch (e) {}
+      }
+    }
+  }
+
   await apiFetch(`${API_BASE}/_batch`, {
     method: 'POST',
     body: JSON.stringify({ operations }),
@@ -505,4 +639,30 @@ export function onDocumentSnapshot(
     }
   };
 }
+
+// ─── Trash & Approvals REST API Helpers ─────────────────────
+
+export async function restoreTrashItem(trashId: string): Promise<any> {
+  return apiFetch(`${API_BASE}/trash/${trashId}/restore`, {
+    method: 'POST',
+  });
+}
+
+export async function purgeTrashItem(trashId: string): Promise<any> {
+  return apiFetch(`${API_BASE}/trash/${trashId}/purge`, {
+    method: 'DELETE',
+  });
+}
+
+export async function decideApprovalRequest(
+  collection: string,
+  docId: string,
+  decision: 'approve' | 'reject'
+): Promise<any> {
+  return apiFetch(`${API_BASE}/approvals/${collection}/${docId}/decision`, {
+    method: 'POST',
+    body: JSON.stringify({ decision }),
+  });
+}
+
 

@@ -69,6 +69,7 @@ export const COLLECTIONS = {
   permissions: () => collection(db, 'permissions'),
   aiActions: () => collection(db, 'ai_actions'),
   rebateTiers: () => collection(db, 'rebate_tiers'),
+  customerRebates: () => collection(db, 'customer_rebates'),
   suppliers: () => collection(db, 'suppliers'),
   purchaseOrders: () => collection(db, 'purchase_orders'),
   supplierDebts: () => collection(db, 'supplier_debts'),
@@ -208,11 +209,15 @@ export const orderService = {
     const q = query(
       COLLECTIONS.orders(),
       where('ownerId', '==', ownerId),
-      orderBy('createdAt', 'desc'),
       limit(maxResults),
     );
     return onSnapshot(q, (snap: QuerySnapshot) => {
-      onData(snap.docs.map(withId));
+      const docs = snap.docs.map(withId).sort((a: any, b: any) => {
+        const timeA = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+        const timeB = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+        return timeB - timeA;
+      });
+      onData(docs);
     }, onError);
   },
 
@@ -221,11 +226,14 @@ export const orderService = {
     const q = query(
       COLLECTIONS.orders(),
       where('ownerId', '==', ownerId),
-      orderBy('createdAt', 'desc'),
       limit(maxResults),
     );
     const snap = await getDocs(q);
-    return snap.docs.map(withId);
+    return snap.docs.map(withId).sort((a: any, b: any) => {
+      const timeA = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+      const timeB = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+      return timeB - timeA;
+    });
   },
 
   async getOrdersPaginated(
@@ -375,11 +383,15 @@ export const paymentService = {
     const q = query(
       COLLECTIONS.payments(),
       where('ownerId', '==', ownerId),
-      orderBy('createdAt', 'desc'),
       limit(maxResults),
     );
     return onSnapshot(q, (snap: QuerySnapshot) => {
-      onData(snap.docs.map(withId));
+      const docs = snap.docs.map(withId).sort((a: any, b: any) => {
+        const timeA = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+        const timeB = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+        return timeB - timeA;
+      });
+      onData(docs);
     }, onError);
   },
 
@@ -419,7 +431,7 @@ export const inventoryService = {
     ownerId: string,
     onData: (logs: WithId<DocumentData>[]) => void,
     onError?: (err: Error) => void,
-    maxResults = 999999,
+    maxResults = 200,
   ): Unsubscribe {
     const q = query(
       COLLECTIONS.inventoryLogs(),
@@ -622,6 +634,94 @@ export const rebateTierService = {
 
   async deleteTiers(docId: string): Promise<void> {
     await deleteDoc(doc(COLLECTIONS.rebateTiers(), docId));
+  },
+};
+
+export interface CustomerRebateData {
+  ownerId: string;
+  customerId: string;
+  customerName: string;
+  customerPhone?: string;
+  customerType?: string;
+  rebateAmount: number;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  maxUsage: number; // default 1
+  usedCount: number; // default 0
+  usedOrderIds?: string[];
+  status: 'active' | 'used' | 'expired' | 'disabled';
+  note?: string;
+  createdBy?: string;
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+export const customerRebateService = {
+  listenByOwner(ownerId: string, onData: (rebates: WithId<CustomerRebateData>[]) => void, onError?: (err: Error) => void): Unsubscribe {
+    const q = query(COLLECTIONS.customerRebates(), where('ownerId', '==', ownerId));
+    return onSnapshot(q, (snap: QuerySnapshot) => {
+      onData(snap.docs.map(withId) as WithId<CustomerRebateData>[]);
+    }, onError);
+  },
+
+  async createRebate(ownerId: string, data: Omit<CustomerRebateData, 'ownerId' | 'createdAt' | 'updatedAt'>): Promise<string> {
+    const docRef = await addDoc(COLLECTIONS.customerRebates(), {
+      ...data,
+      ownerId,
+      usedCount: data.usedCount || 0,
+      maxUsage: data.maxUsage || 1,
+      usedOrderIds: data.usedOrderIds || [],
+      status: data.status || 'active',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return docRef.id;
+  },
+
+  async updateRebate(id: string, data: Partial<CustomerRebateData>): Promise<void> {
+    await updateDoc(doc(COLLECTIONS.customerRebates(), id), {
+      ...data,
+      updatedAt: serverTimestamp(),
+    });
+  },
+
+  async deleteRebate(id: string): Promise<void> {
+    await deleteDoc(doc(COLLECTIONS.customerRebates(), id));
+  },
+
+  async useRebate(rebateId: string, orderId: string): Promise<void> {
+    const ref = doc(COLLECTIONS.customerRebates(), rebateId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return;
+    const current = snap.data() as CustomerRebateData;
+    const currentOrders = Array.isArray(current.usedOrderIds) ? current.usedOrderIds : [];
+    if (currentOrders.includes(orderId)) return;
+    const nextCount = (current.usedCount || 0) + 1;
+    const nextStatus = nextCount >= (current.maxUsage || 1) ? 'used' : 'active';
+    await updateDoc(ref, {
+      usedCount: nextCount,
+      usedOrderIds: [...currentOrders, orderId],
+      status: nextStatus,
+      updatedAt: serverTimestamp(),
+    });
+  },
+
+  async refundRebate(rebateId: string, orderId: string): Promise<void> {
+    const ref = doc(COLLECTIONS.customerRebates(), rebateId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return;
+    const current = snap.data() as CustomerRebateData;
+    const currentOrders = Array.isArray(current.usedOrderIds) ? current.usedOrderIds : [];
+    if (!currentOrders.includes(orderId)) return;
+    const nextOrders = currentOrders.filter(id => id !== orderId);
+    const nextCount = Math.max(0, (current.usedCount || 1) - 1);
+    const nextStatus = nextCount >= (current.maxUsage || 1) ? 'used' : 'active';
+    await updateDoc(ref, {
+      usedCount: nextCount,
+      usedOrderIds: nextOrders,
+      status: nextStatus,
+      updatedAt: serverTimestamp(),
+    });
   },
 };
 

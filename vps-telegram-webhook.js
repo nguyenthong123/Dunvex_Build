@@ -1,8 +1,7 @@
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import crypto from "crypto";
 const PROJECT_ID = "dunvex-89461";
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || "";
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || "sk-5ced935df4be41938479954151790443";
 async function getAccessToken() {
   const json = process.env.FIREBASE_SERVICE_ACCOUNT;
   if (!json) throw new Error("Missing FIREBASE_SERVICE_ACCOUNT env");
@@ -101,9 +100,9 @@ async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed. Use POST." });
   }
-  if (!GEMINI_API_KEY) {
-    console.error("GEMINI_API_KEY not configured on server");
-    return res.status(500).json({ error: "GEMINI_API_KEY not configured on server" });
+  if (!DEEPSEEK_API_KEY) {
+    console.error("DEEPSEEK_API_KEY not configured on server");
+    return res.status(500).json({ error: "DEEPSEEK_API_KEY not configured on server" });
   }
   try {
     const ownerId = req.query.ownerId;
@@ -219,64 +218,94 @@ ${suppliersWithDebt.map((s) => `- ${s.name}: \u0110ang n\u1EE3 ${s.debt.toLocale
 50 \u0110\u01A1n h\xE0ng g\u1EA7n nh\u1EA5t (Kh\xE1ch h\xE0ng / Doanh thu / Nh\xE2n vi\xEAn / Ng\xE0y):
 ${ordersData.map((o) => `- ${o.customerName}: ${o.totalAmount.toLocaleString("vi-VN")}\u0111 (Nh\xE2n vi\xEAn: ${o.staffName}, Ng\xE0y: ${new Date(o.date).toLocaleDateString("vi-VN")})`).join("\n") || "Ch\u01B0a c\xF3 \u0111\u01A1n h\xE0ng."}
 ------------------------------------------------`;
-    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({
-      model: "gemini-3.5-flash",
-      systemInstruction: systemPrompt,
-      tools: [{
-        functionDeclarations: [
-          {
-            name: "create_order",
-            description: "T\u1EA1o \u0111\u01A1n h\xE0ng m\u1EDBi cho kh\xE1ch h\xE0ng.",
-            parameters: {
-              type: SchemaType.OBJECT,
-              properties: {
-                customerName: { type: SchemaType.STRING, description: "T\xEAn kh\xE1ch h\xE0ng" },
-                totalAmount: { type: SchemaType.NUMBER, description: "T\u1ED5ng ti\u1EC1n \u0111\u01A1n h\xE0ng (VN\u0110)" }
-              },
-              required: ["customerName", "totalAmount"]
-            }
-          },
-          {
-            name: "update_customer_debt",
-            description: "Th\xEAm ho\u1EB7c tr\u1EEB c\xF4ng n\u1EE3 c\u1EE7a kh\xE1ch h\xE0ng (VD: kh\xE1ch tr\u1EA3 n\u1EE3 th\xEC tr\u1EEB n\u1EE3, kh\xE1ch mua n\u1EE3 th\xEC th\xEAm n\u1EE3).",
-            parameters: {
-              type: SchemaType.OBJECT,
-              properties: {
-                customerName: { type: SchemaType.STRING, description: "T\xEAn kh\xE1ch h\xE0ng" },
-                adjustmentAmount: { type: SchemaType.NUMBER, description: "S\u1ED1 ti\u1EC1n thay \u0111\u1ED5i (s\u1ED1 \xC2M n\u1EBFu kh\xE1ch tr\u1EA3 n\u1EE3 / gi\u1EA3m n\u1EE3, s\u1ED1 D\u01AF\u01A0NG n\u1EBFu kh\xE1ch n\u1EE3 th\xEAm)" }
-              },
-              required: ["customerName", "adjustmentAmount"]
-            }
+    const messages = [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userMessage }
+    ];
+
+    const tools = [
+      {
+        type: "function",
+        function: {
+          name: "create_order",
+          description: "Tạo đơn hàng mới cho khách hàng.",
+          parameters: {
+            type: "object",
+            properties: {
+              customerName: { type: "string", description: "Tên khách hàng" },
+              totalAmount: { type: "number", description: "Tổng tiền đơn hàng (VNĐ)" }
+            },
+            required: ["customerName", "totalAmount"]
           }
-        ]
-      }]
-    });
-    const chat = model.startChat();
-    let result;
+        }
+      },
+      {
+        type: "function",
+        function: {
+          name: "update_customer_debt",
+          description: "Thêm hoặc trừ công nợ của khách hàng (VD: khách trả nợ thì trừ nợ, khách mua nợ thì thêm nợ).",
+          parameters: {
+            type: "object",
+            properties: {
+              customerName: { type: "string", description: "Tên khách hàng" },
+              adjustmentAmount: { type: "number", description: "Số tiền thay đổi (số âm nếu khách trả nợ / giảm nợ, số dương nếu khách nợ thêm)" }
+            },
+            required: ["customerName", "adjustmentAmount"]
+          }
+        }
+      }
+    ];
+
+    let response;
     try {
-      result = await chat.sendMessage(userMessage);
+      response = await fetch("https://api.deepseek.com/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: "deepseek-chat",
+          messages,
+          tools,
+          tool_choice: "auto",
+          temperature: 0.1
+        })
+      });
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`DeepSeek API error ${response.status}: ${errText}`);
+      }
     } catch (e) {
-      console.error("Gemini error:", e);
-      return res.status(500).json({ error: "L\u1ED7i khi g\u1ECDi AI", details: e.message });
+      console.error("DeepSeek API error:", e);
+      return res.status(500).json({ error: "Lỗi khi gọi AI", details: e.message });
     }
-    const call = result.response.functionCalls()?.[0];
-    if (call) {
+
+    const data = await response.json();
+    const choice = data.choices?.[0];
+    const assistantMessage = choice?.message;
+    const toolCalls = assistantMessage?.tool_calls;
+
+    let text = "";
+
+    if (toolCalls && toolCalls.length > 0) {
+      const toolCall = toolCalls[0];
       let funcResult = "";
       try {
-        if (call.name === "create_order") {
-          const { customerName, totalAmount } = call.args;
+        const args = JSON.parse(toolCall.function.arguments || "{}");
+        if (toolCall.function.name === "create_order") {
+          const { customerName, totalAmount } = args;
           await restCreate(token, "orders", {
             ownerId: { stringValue: ownerId },
             customerName: { stringValue: customerName },
             totalAmount: { integerValue: String(totalAmount) },
-            status: { stringValue: "\u0110\u01A1n ch\u1ED1t" },
-            createdAt: { timestampValue: (/* @__PURE__ */ new Date()).toISOString() },
+            status: { stringValue: "Đơn chốt" },
+            createdAt: { timestampValue: new Date().toISOString() },
             createdBy: { stringValue: "Telegram Bot" }
           });
-          funcResult = `T\u1EA1o \u0111\u01A1n h\xE0ng th\xE0nh c\xF4ng cho ${customerName} v\u1EDBi s\u1ED1 ti\u1EC1n ${totalAmount}\u0111`;
-        } else if (call.name === "update_customer_debt") {
-          const { customerName, adjustmentAmount } = call.args;
+          funcResult = `Tạo đơn hàng thành công cho ${customerName} với số tiền ${totalAmount}đ`;
+        } else if (toolCall.function.name === "update_customer_debt") {
+          const { customerName, adjustmentAmount } = args;
           const customers = await runStructuredQuery(token, "customers", [
             { fieldFilter: { field: { fieldPath: "ownerId" }, op: "EQUAL", value: { stringValue: ownerId } } },
             { fieldFilter: { field: { fieldPath: "name" }, op: "EQUAL", value: { stringValue: customerName } } }
@@ -289,26 +318,48 @@ ${ordersData.map((o) => `- ${o.customerName}: ${o.totalAmount.toLocaleString("vi
             await restPatch(token, `customers/${customerId}`, {
               debt: { integerValue: String(newDebt) }
             });
-            funcResult = `\u0110\xE3 c\u1EADp nh\u1EADt c\xF4ng n\u1EE3 cho ${customerName}. N\u1EE3 c\u0169: ${currentDebt}\u0111, N\u1EE3 m\u1EDBi: ${newDebt}\u0111`;
+            funcResult = `Đã cập nhật công nợ cho ${customerName}. Nợ cũ: ${currentDebt}đ, Nợ mới: ${newDebt}đ`;
           } else {
-            funcResult = `Kh\xF4ng t\xECm th\u1EA5y kh\xE1ch h\xE0ng n\xE0o t\xEAn ${customerName}. Y\xEAu c\u1EA7u qu\u1EA3n tr\u1ECB vi\xEAn ki\u1EC3m tra l\u1EA1i t\xEAn.`;
+            funcResult = `Không tìm thấy khách hàng nào tên ${customerName}. Yêu cầu quản trị viên kiểm tra lại tên.`;
           }
         }
       } catch (e) {
-        funcResult = `L\u1ED7i h\u1EC7 th\u1ED1ng khi th\u1EF1c hi\u1EC7n: ${e.message}`;
+        funcResult = `Lỗi hệ thống khi thực hiện: ${e.message}`;
       }
+
+      // Send the tool response back to DeepSeek to get the final conversational response
+      messages.push(assistantMessage);
+      messages.push({
+        role: "tool",
+        tool_call_id: toolCall.id,
+        content: funcResult
+      });
+
       try {
-        result = await chat.sendMessage([{
-          functionResponse: {
-            name: call.name,
-            response: { result: funcResult }
-          }
-        }]);
+        const finalResponse = await fetch("https://api.deepseek.com/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
+          },
+          body: JSON.stringify({
+            model: "deepseek-chat",
+            messages
+          })
+        });
+        if (!finalResponse.ok) {
+          const errText = await finalResponse.text();
+          throw new Error(`DeepSeek final API error: ${errText}`);
+        }
+        const finalData = await finalResponse.json();
+        text = finalData.choices?.[0]?.message?.content || "Không có phản hồi.";
       } catch (e) {
-        console.error("Gemini function response error:", e);
+        console.error("DeepSeek function response send error:", e);
+        text = `Đã thực hiện lệnh: ${funcResult}`;
       }
+    } else {
+      text = assistantMessage?.content || "Xin lỗi, tôi không thể xử lý câu hỏi này lúc này.";
     }
-    const text = result.response.text() || "Xin l\u1ED7i, t\xF4i kh\xF4ng th\u1EC3 x\u1EED l\xFD c\xE2u h\u1ECFi n\xE0y l\xFAc n\xE0y.";
     await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

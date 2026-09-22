@@ -24,8 +24,10 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     this.setState({ errorInfo });
-    // Log lên console (có thể gửi lên service monitoring sau)
-    console.error('🛑 ErrorBoundary caught:', error.message, errorInfo.componentStack?.slice(0, 200));
+    console.error('🛑 [CRITICAL ERROR] ErrorBoundary Caught Exception:');
+    console.error('Error Message:', error.message);
+    console.error('Error Stack:', error.stack);
+    console.error('Component Stack:', errorInfo.componentStack);
   }
 
   handleReset = () => {
@@ -43,25 +45,25 @@ export default class ErrorBoundary extends Component<Props, State> {
 
       return (
         <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 p-6">
-          <div className="max-w-md w-full bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 text-center">
+          <div className="max-w-xl w-full bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 text-center">
             <div className="mx-auto w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-4">
               <AlertTriangle className="w-8 h-8 text-red-500" />
             </div>
             <h2 className="text-xl font-black text-slate-800 dark:text-white mb-2">
               Có lỗi xảy ra 😵
             </h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
               Ứng dụng gặp lỗi không mong muốn. Đừng lo, dữ liệu của anh vẫn an toàn.
             </p>
             {this.state.error && (
-              <details className="mb-4 text-left">
-                <summary className="text-xs text-slate-400 cursor-pointer hover:text-slate-600">
-                  Chi tiết lỗi
-                </summary>
-                <pre className="mt-2 p-3 bg-slate-100 dark:bg-slate-900 rounded-lg text-xs text-red-600 overflow-auto max-h-32">
+              <div className="mb-6 text-left">
+                <p className="text-xs font-bold text-slate-400 mb-1">Chi tiết lỗi & Stack Trace:</p>
+                <pre className="p-3 bg-red-50 dark:bg-slate-900 border border-red-200 dark:border-red-900/50 rounded-lg text-xs text-red-600 dark:text-red-400 overflow-auto max-h-48 font-mono whitespace-pre-wrap">
                   {this.state.error.message}
+                  {this.state.error.stack ? `\n\n${this.state.error.stack}` : ''}
+                  {this.state.errorInfo?.componentStack ? `\n\nComponent Stack:\n${this.state.errorInfo.componentStack}` : ''}
                 </pre>
-              </details>
+              </div>
             )}
             <div className="flex gap-3">
               <button

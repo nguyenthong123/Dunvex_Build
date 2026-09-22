@@ -64,22 +64,21 @@ const TopSellers: React.FC<TopSellersProps> = ({ ownerId }) => {
 				}
 			});
 
-			// Lấy displayName từ profiles (dùng uid làm key)
+			// Lấy displayName nếu chưa có sẵn từ đơn hàng
 			const nameMap: Record<string, string> = {};
-			const uidToKey: Record<string, string> = {};
-			for (const [key, stat] of Object.entries(revenueMap)) {
-				if (stat.uid) uidToKey[stat.uid] = key;
+			const missingUids = Object.entries(revenueMap).filter(([_, stat]) => !stat.displayName && stat.uid);
+			if (missingUids.length > 0) {
+				await Promise.all(
+					missingUids.map(async ([key, stat]) => {
+						try {
+							const userSnap = await getDoc(doc(db, 'users', stat.uid));
+							if (userSnap.exists()) {
+								nameMap[key] = userSnap.data().displayName || userSnap.data().name || key.split('@')[0];
+							}
+						} catch {}
+					})
+				);
 			}
-			await Promise.all(
-				Object.entries(uidToKey).map(async ([uid, key]) => {
-					try {
-						const profileSnap = await getDoc(doc(db, 'profiles', uid));
-						if (profileSnap.exists()) {
-							nameMap[key] = profileSnap.data().displayName || key.split('@')[0];
-						}
-					} catch {}
-				})
-			);
 
 			// Build kết quả
 			const result: SellerStat[] = Object.entries(revenueMap).map(([email, stat]) => ({

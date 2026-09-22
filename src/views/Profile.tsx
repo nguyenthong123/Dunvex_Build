@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Phone, Mail, Save, ArrowLeft, Shield, CheckCircle2, MapPin } from 'lucide-react';
+import { User, Phone, Mail, Save, ArrowLeft, Shield, CheckCircle2, MapPin, Eye, EyeOff } from 'lucide-react';
 import { auth, db } from '../services/firebase';
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit } from '../services/firebase';
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
 import SalesChart from '../components/profile/SalesChart';
+import { updatePassword, EmailAuthProvider, linkWithCredential, updateProfile } from 'firebase/auth';
+import { setDocument, updateDocument } from '../services/apiClient';
 
 const Profile = () => {
     const navigate = useNavigate();
@@ -13,7 +15,11 @@ const Profile = () => {
     const { showToast } = useToast();
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
+    const [newPassword, setNewPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [passwordSaving, setPasswordSaving] = useState(false);
 
+    const [hasPassword, setHasPassword] = useState(false);
     const [profile, setProfile] = useState({
         displayName: '',
         phone: '',
@@ -28,14 +34,35 @@ const Profile = () => {
     const loadProfile = async () => {
         try {
             const uid = auth.currentUser?.uid || '';
+            const email = auth.currentUser?.email || '';
             const docRef = doc(db, 'profiles', uid);
-            const snap = await getDoc(docRef);
+            const userRef = doc(db, 'users', uid);
+            const [snap, userSnap] = await Promise.all([
+                getDoc(docRef).catch(() => null),
+                getDoc(userRef).catch(() => null)
+            ]);
+
+            const savedName = (snap?.exists() ? (snap.data().displayName || snap.data().name) : '') ||
+                              (userSnap?.exists() ? (userSnap.data().displayName || userSnap.data().name) : '') ||
+                              owner.userDisplayName ||
+                              auth.currentUser?.displayName || '';
 
             setProfile({
-                displayName: snap.exists() ? (snap.data().displayName || '') : (auth.currentUser?.displayName || ''),
-                phone: snap.exists() ? (snap.data().phone || '') : '',
-                email: auth.currentUser?.email || '',
+                displayName: savedName,
+                phone: (snap?.exists() ? snap.data().phone : userSnap?.data()?.phone) || '',
+                email: email,
             });
+
+            if (email || uid) {
+                try {
+                    const res = await fetch(`/api/auth/status?uid=${uid}&email=${encodeURIComponent(email)}`);
+                    const data = await res.json();
+                    if (data.hasPassword) {
+                        setHasPassword(true);
+                        setNewPassword('••••••••');
+                    }
+                } catch (err) {}
+            }
         } catch (e) {
             console.error('Load profile error:', e);
         }
@@ -46,12 +73,70 @@ const Profile = () => {
         setSaving(true);
         try {
             const uid = auth.currentUser.uid;
+            const newName = profile.displayName.trim();
+            const newPhone = profile.phone.trim();
+
+            // 1. Update Firebase Auth User Display Name
+            if (auth.currentUser) {
+                await updateProfile(auth.currentUser, { displayName: newName }).catch((err) => console.warn('updateProfile warn:', err));
+            }
+
+            // 2. Update Firestore 'profiles' collection
             await setDoc(doc(db, 'profiles', uid), {
-                displayName: profile.displayName.trim(),
-                phone: profile.phone.trim(),
+                displayName: newName,
+                name: newName,
+                phone: newPhone,
                 email: auth.currentUser.email || '',
                 updatedAt: serverTimestamp(),
             }, { merge: true });
+
+            // 3. Update Firestore 'users' collection
+            await setDoc(doc(db, 'users', uid), {
+                displayName: newName,
+                name: newName,
+                phone: newPhone,
+                updatedAt: serverTimestamp(),
+            }, { merge: true }).catch(() => {});
+
+            // 4. Update Backend SQLite DB (profiles & users tables) on VPS via apiClient (handles auth)
+            try {
+                await setDocument('profiles', uid, {
+                    id: uid,
+                    displayName: newName,
+                    name: newName,
+                    phone: newPhone,
+                    email: auth.currentUser.email || '',
+                    updatedAt: new Date().toISOString(),
+                });
+                await updateDocument('users', uid, {
+                    displayName: newName,
+                    name: newName,
+                    phone: newPhone,
+                    updatedAt: new Date().toISOString(),
+                });
+            } catch (err) {
+                console.warn('Backend SQLite sync notice:', err);
+            }
+
+            // 5. Update backend /api/auth/update-profile via Admin SDK
+            try {
+                await fetch('/api/auth/update-profile', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ uid, displayName: newName, phone: newPhone })
+                });
+            } catch (err) {
+                console.warn('update-profile API notice:', err);
+            }
+
+            // 6. Update local session & dispatch event for immediate UI reactivity
+            try {
+                const sessionStr = localStorage.getItem('dunvex_user_session');
+                const sessionObj = sessionStr ? JSON.parse(sessionStr) : {};
+                sessionObj.displayName = newName;
+                localStorage.setItem('dunvex_user_session', JSON.stringify(sessionObj));
+                window.dispatchEvent(new CustomEvent('dunvex_profile_updated', { detail: { displayName: newName, phone: newPhone } }));
+            } catch (e) {}
 
             setSaved(true);
             showToast('✅ Đã lưu thông tin cá nhân!', 'success');
@@ -60,6 +145,54 @@ const Profile = () => {
             showToast('❌ Lỗi: ' + (e.message || 'Không lưu được'), 'error');
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleSetPassword = async () => {
+        if (!auth.currentUser) {
+            showToast('❌ Bạn chưa đăng nhập!', 'error');
+            return;
+        }
+        if (newPassword === '••••••••') {
+            showToast('💡 Mật khẩu của bạn đã được lưu sẵn. Vui lòng nhập mật khẩu mới nếu muốn thay đổi!', 'info');
+            return;
+        }
+        if (!newPassword || newPassword.length < 6) {
+            showToast('❌ Mật khẩu phải có ít nhất 6 ký tự!', 'error');
+            return;
+        }
+        setPasswordSaving(true);
+        try {
+            const user = auth.currentUser;
+            const email = user.email || '';
+            if (!email) {
+                showToast('❌ Tài khoản của bạn không có Email để đặt mật khẩu!', 'error');
+                return;
+            }
+
+            // Mã hóa scrypt & lưu trực tiếp vào CSDL SQLite (dunvex.db) trên máy chủ VPS
+            const res = await fetch('/api/auth/set-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    uid: user.uid,
+                    email: email,
+                    password: newPassword
+                })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                showToast('✅ Đã mã hóa và lưu mật khẩu mới vào CSDL SQLite thành công!', 'success');
+                setHasPassword(true);
+                setNewPassword('••••••••');
+            } else {
+                throw new Error(data.error || 'Lưu mật khẩu thất bại');
+            }
+        } catch (e: any) {
+            console.error('Set password error:', e);
+            showToast('❌ Lỗi: ' + (e?.message || 'Không thiết lập được mật khẩu'), 'error');
+        } finally {
+            setPasswordSaving(false);
         }
     };
 
@@ -184,6 +317,57 @@ const Profile = () => {
                     <p className="text-xs text-indigo-700 dark:text-indigo-300 font-medium">
                         💡 <b>Lưu ý:</b> Khi bạn lưu số điện thoại tại đây, tất cả đơn hàng bạn tạo sẽ hiển thị SĐT của bạn thay vì SĐT chung của cửa hàng. Khách hàng sẽ liên hệ trực tiếp với bạn!
                     </p>
+                </div>
+
+                {/* 🔒 Thiết lập mật khẩu PWA */}
+                <div className="mt-6 p-5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl">
+                    <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight mb-2">
+                        Thiết lập mật khẩu đăng nhập PWA
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 leading-relaxed">
+                        Đặt mật khẩu để bạn có thể đăng nhập bằng Email trực tiếp trên ứng dụng màn hình chính (PWA) mà không cần qua Google.
+                    </p>
+                    <div className="space-y-3">
+                        {hasPassword && (
+                            <div className="px-3.5 py-2.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl flex items-center gap-2 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                                <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
+                                <span>Tài khoản đã có mật khẩu mã hóa trên CSDL VPS</span>
+                            </div>
+                        )}
+                        <div className="relative">
+                            <input
+                                id="new-password"
+                                name="password"
+                                type={showPassword ? "text" : "password"}
+                                value={newPassword}
+                                onFocus={() => {
+                                    if (newPassword === '••••••••') {
+                                        setNewPassword('');
+                                    }
+                                }}
+                                onChange={(e) => setNewPassword(e.target.value)}
+                                placeholder={hasPassword ? "Nhập mật khẩu mới để thay đổi" : "Nhập mật khẩu mới (tối thiểu 6 ký tự)"}
+                                autoComplete="current-password"
+                                className="w-full px-4 py-3 pr-11 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-mono"
+                                disabled={passwordSaving}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors p-1.5 rounded-lg focus:outline-none"
+                                title={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                            >
+                                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </button>
+                        </div>
+                        <button
+                            onClick={handleSetPassword}
+                            disabled={passwordSaving || !newPassword}
+                            className="w-full py-3 bg-slate-800 hover:bg-slate-900 dark:bg-indigo-600 dark:hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                            {passwordSaving ? 'Đang lưu...' : hasPassword ? 'Cập nhật mật khẩu mới' : 'Đặt mật khẩu'}
+                        </button>
+                    </div>
                 </div>
 
                 {/* 📱 PWA Pin App Card */}

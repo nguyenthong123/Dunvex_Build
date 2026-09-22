@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, googleProvider, db, doc, getDoc, setDoc, deleteDoc, serverTimestamp } from '../services/firebase';
-import { signInWithPopup, signInWithRedirect, getRedirectResult, setPersistence, browserLocalPersistence, signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
+import { signInWithPopup, signInWithRedirect, getRedirectResult, setPersistence, browserLocalPersistence, signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithCredential, sendPasswordResetEmail, signInWithCustomToken } from 'firebase/auth';
 import { setApiCredentials } from '../services/apiClient';
 import {
 	Building2,
@@ -10,22 +10,34 @@ import {
 	ChevronRight,
 	LogIn,
 	HelpCircle,
-	Lock
+	Lock,
+	Eye,
+	EyeOff
 } from 'lucide-react';
 import { useToast } from '../components/shared/Toast';
 
 const Login = () => {
 	const navigate = useNavigate();
+	const isProcessingRef = useRef(false);
 	const [isLoggingIn, setIsLoggingIn] = useState(false);
 	const [loginStatus, setLoginStatus] = useState('');
 	const [isEmailLogin, setIsEmailLogin] = useState(false);
 	const [email, setEmail] = useState('');
 	const [password, setPassword] = useState('');
+	const [showPassword, setShowPassword] = useState(false);
 	const [isRegistering, setIsRegistering] = useState(false);
 	const { showToast } = useToast();
 
 	// Tách logic xử lý User vào một hàm dùng chung
 	const processUserLogin = async (user: any) => {
+		if (isProcessingRef.current) return;
+		isProcessingRef.current = true;
+		const sessionObj = {
+			uid: user.uid,
+			email: user.email,
+			displayName: user.displayName || user.email?.split('@')[0]
+		};
+
 		try {
 			setLoginStatus('Đang đồng bộ dữ liệu hệ thống...');
 			const userRef = doc(db, 'users', user.uid);
@@ -63,22 +75,28 @@ const Login = () => {
 			if (inviteSnap && inviteRef) {
 				setLoginStatus('Phát hiện lời mời tham gia...');
 				const inviteData = inviteSnap.data();
+				if (inviteData?.ownerId) {
+					setApiCredentials('', inviteData.ownerId);
+				}
 				await setDoc(userRef, {
 					uid: user.uid,
 					displayName: user.displayName || user.email?.split('@')[0] || 'User',
 					email: user.email,
 					photoURL: user.photoURL || `https://ui-avatars.com/api/?name=${user.email}&background=random`,
 					role: inviteData.role || 'sale',
+					marketPointsRequired: inviteData.marketPointsRequired || 1,
 					ownerId: inviteData.ownerId,
 					ownerEmail: inviteData.ownerEmail,
 					lastLogin: serverTimestamp(),
-					createdAt: userSnap.exists() && userSnap.data()?.ownerId !== user.uid 
-						? userSnap.data().createdAt 
-						: new Date().toISOString()
 				}, { merge: true });
-				await deleteDoc(inviteRef);
+				try {
+					await deleteDoc(inviteRef);
+				} catch (e) {
+					console.warn("Could not delete invite permission doc:", e);
+				}
 			} else if (!userSnap.exists()) {
 				setLoginStatus('Khởi tạo tài khoản Admin mới...');
+				setApiCredentials('', user.uid);
 				await setDoc(userRef, {
 					uid: user.uid,
 					displayName: user.displayName || user.email?.split('@')[0] || 'Admin',
@@ -92,36 +110,38 @@ const Login = () => {
 			} else {
 				setLoginStatus('Cập nhật thông tin đăng nhập...');
 				const userData = userSnap.data();
+				const effectiveOwnerId = userData?.ownerId || user.uid;
+				setApiCredentials('', effectiveOwnerId);
 				if (userData?.ownerId && userData.ownerId !== user.uid) {
 					console.log("Logged in as employee of:", userData.ownerId);
-					setApiCredentials('', userData.ownerId);
 				}
 				await setDoc(userRef, {
 					lastLogin: serverTimestamp()
 				}, { merge: true });
 			}
 			setLoginStatus('Thành công! Đang vào hệ thống...');
-			navigate('/');
-			setTimeout(() => {
-				if (window.location.pathname.includes('/login')) {
-					window.location.href = '/';
-				}
-			}, 500);
+			localStorage.setItem('dunvex_user_session', JSON.stringify(sessionObj));
+			window.dispatchEvent(new CustomEvent('dunvex_login', { detail: sessionObj }));
+			navigate('/', { replace: true });
 		} catch (err: any) {
 			console.error("processUserLogin error:", err);
 			setLoginStatus('Đăng nhập thành công (Cảnh báo: Lỗi đồng bộ DB)');
-			navigate('/');
+			localStorage.setItem('dunvex_user_session', JSON.stringify(sessionObj));
+			window.dispatchEvent(new CustomEvent('dunvex_login', { detail: sessionObj }));
+			navigate('/', { replace: true });
+		} finally {
+			isProcessingRef.current = false;
 		}
 	};
 
 	// Kiểm tra kết quả redirect khi component mount
 	useEffect(() => {
 		let isMounted = true;
+		console.log('[DEBUG Login.tsx] useEffect mount - checking redirect result');
 		const checkRedirectResult = async () => {
 			try {
-				await setPersistence(auth, browserLocalPersistence);
 				const result = await getRedirectResult(auth);
-				if (result?.user && isMounted) {
+				if (result?.user && isMounted && !isProcessingRef.current) {
 					setIsLoggingIn(true);
 					await processUserLogin(result.user);
 				}
@@ -132,7 +152,7 @@ const Login = () => {
 		checkRedirectResult();
 
 		const unsubscribe = auth.onIdTokenChanged((user) => {
-			if (user && !isLoggingIn && isMounted) {
+			if (user && !isProcessingRef.current && isMounted) {
 				setIsLoggingIn(true);
 				processUserLogin(user);
 			}
@@ -142,7 +162,7 @@ const Login = () => {
 			isMounted = false;
 			unsubscribe();
 		};
-	}, [isLoggingIn]);
+	}, []);
 
 	const handleGoogleLogin = async () => {
 		try {
@@ -184,8 +204,9 @@ const Login = () => {
 				}
 			}
 		} catch (error: any) {
+			isProcessingRef.current = false;
 			setIsLoggingIn(false);
-			showToast(`Lỗi đăng nhập: ${error.code}`, "error");
+			showToast(`Lỗi đăng nhập: ${error.code || error.message}`, "error");
 			setLoginStatus('');
 		}
 	};
@@ -202,25 +223,67 @@ const Login = () => {
 		}
 		try {
 			setIsLoggingIn(true);
+
 			if (isRegistering) {
-				setLoginStatus('Đang tạo tài khoản mới...');
-				const result = await createUserWithEmailAndPassword(auth, email, password);
-				if (result.user) await processUserLogin(result.user);
-			} else {
-				setLoginStatus('Đang đăng nhập bằng Email...');
-				const result = await signInWithEmailAndPassword(auth, email, password);
-				if (result.user) await processUserLogin(result.user);
+				setLoginStatus('Đang tạo tài khoản & mã hóa mật khẩu vào CSDL VPS...');
+				const regRes = await fetch('/api/auth/set-password', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ email: email.trim(), password })
+				});
+				const regData = await regRes.json();
+				if (!regRes.ok || regData.error) {
+					throw new Error(regData.error || 'Tạo tài khoản thất bại');
+				}
+			}
+
+			// Xác thực trực tiếp qua CSDL SQLite trên máy chủ VPS
+			setLoginStatus('Đang xác thực mật khẩu qua CSDL máy chủ VPS...');
+			const response = await fetch('/api/auth/login', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ email: email.trim(), password })
+			});
+
+			const data = await response.json();
+			if (!response.ok || data.error) {
+				throw new Error(data.error || 'Email hoặc mật khẩu không chính xác');
+			}
+
+			if (data.customToken) {
+				setLoginStatus('Đăng nhập thành công! Đang vào hệ thống...');
+				const userCred = await signInWithCustomToken(auth, data.customToken);
+				if (userCred.user) {
+					await processUserLogin(userCred.user);
+					return;
+				}
+			} else if (data.user) {
+				setLoginStatus('Đăng nhập thành công!');
+				await processUserLogin(data.user);
+				return;
 			}
 		} catch (error: any) {
 			setIsLoggingIn(false);
 			setLoginStatus('');
-			if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-				showToast("Email hoặc mật khẩu không chính xác", "error");
-			} else if (error.code === 'auth/email-already-in-use') {
-				showToast("Email này đã được sử dụng", "error");
-			} else {
-				showToast(`Lỗi: ${error.message || error.code}`, "error");
-			}
+			showToast(error.message || "Email hoặc mật khẩu không chính xác", "error");
+		}
+	};
+
+	const handleForgotPassword = async () => {
+		if (!email) {
+			showToast("Vui lòng nhập Email vào ô trống phía trên trước để khôi phục mật khẩu", "error");
+			return;
+		}
+		try {
+			setIsLoggingIn(true);
+			setLoginStatus('Đang gửi email đặt lại mật khẩu...');
+			await sendPasswordResetEmail(auth, email);
+			showToast("Đã gửi email khôi phục mật khẩu. Vui lòng kiểm tra hộp thư (hoặc hòm thư Spam/Quảng cáo).", "success");
+		} catch (error: any) {
+			showToast(`Lỗi: ${error.message || error.code}`, "error");
+		} finally {
+			setIsLoggingIn(false);
+			setLoginStatus('');
 		}
 	};
 
@@ -335,14 +398,36 @@ const Login = () => {
 											className="w-full h-14 px-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
 											disabled={isLoggingIn}
 										/>
-										<input
-											type="password"
-											placeholder="Nhập mật khẩu (tối thiểu 6 ký tự)"
-											value={password}
-											onChange={(e) => setPassword(e.target.value)}
-											className="w-full h-14 px-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-											disabled={isLoggingIn}
-										/>
+										<div className="relative">
+											<input
+												type={showPassword ? "text" : "password"}
+												placeholder="Nhập mật khẩu (tối thiểu 6 ký tự)"
+												value={password}
+												onChange={(e) => setPassword(e.target.value)}
+												className="w-full h-14 px-4 pr-12 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+												disabled={isLoggingIn}
+											/>
+											<button
+												type="button"
+												onClick={() => setShowPassword(!showPassword)}
+												className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-lg focus:outline-none transition-colors"
+												title={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+											>
+												{showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+											</button>
+										</div>
+										{!isRegistering && (
+											<div className="flex justify-end px-1">
+												<button
+													type="button"
+													onClick={handleForgotPassword}
+													disabled={isLoggingIn}
+													className="text-xs font-bold text-[#1A237E] dark:text-indigo-400 hover:underline focus:outline-none"
+												>
+													Quên mật khẩu?
+												</button>
+											</div>
+										)}
 									</div>
 									<div className="flex gap-3">
 										<button

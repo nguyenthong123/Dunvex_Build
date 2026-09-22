@@ -10,6 +10,7 @@ interface DebtHistoryTableProps {
 	setShowPaymentDetail: (val: boolean) => void;
 	setEditingPaymentId: (val: string | null) => void;
 	setPaymentData: (val: any) => void;
+	setPaymentCustomerSearchQuery?: (val: string) => void;
 	setShowPaymentForm: (val: boolean) => void;
 	handleDeletePayment: (id: string) => void;
 	historyTotalPages: number;
@@ -29,6 +30,7 @@ export const DebtHistoryTable: React.FC<DebtHistoryTableProps> = ({
 	setShowPaymentDetail,
 	setEditingPaymentId,
 	setPaymentData,
+	setPaymentCustomerSearchQuery,
 	setShowPaymentForm,
 	handleDeletePayment,
 	historyTotalPages,
@@ -89,16 +91,18 @@ export const DebtHistoryTable: React.FC<DebtHistoryTableProps> = ({
 										</button>
 										<button
 											onClick={() => {
+												const custName = pay.displayCustomerName || pay.customerName || '';
 												setEditingPaymentId(pay.id);
 												setPaymentData({
 													customerId: pay.customerId,
-													customerName: pay.customerName,
+													customerName: custName,
 													amount: pay.amount,
 													date: pay.date || (pay.createdAt?.seconds ? new Date(pay.createdAt.seconds * 1000).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]),
 													note: pay.note || '',
 													paymentMethod: pay.paymentMethod || 'Tiền mặt',
 													proofImage: pay.proofImage || ''
 												});
+												setPaymentCustomerSearchQuery?.(custName);
 												setShowPaymentForm(true);
 											}}
 											className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
@@ -157,16 +161,18 @@ export const DebtHistoryTable: React.FC<DebtHistoryTableProps> = ({
 								</button>
 								<button
 									onClick={() => {
+										const custName = pay.displayCustomerName || pay.customerName || '';
 										setEditingPaymentId(pay.id);
 										setPaymentData({
 											customerId: pay.customerId,
-											customerName: pay.customerName,
+											customerName: custName,
 											amount: pay.amount,
 											date: pay.date || (pay.createdAt?.seconds ? new Date(pay.createdAt.seconds * 1000).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]),
 											note: pay.note || '',
 											paymentMethod: pay.paymentMethod || 'Tiền mặt',
 											proofImage: pay.proofImage || ''
 										});
+										setPaymentCustomerSearchQuery?.(custName);
 										setShowPaymentForm(true);
 									}}
 									className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-slate-500 text-[10px] font-black uppercase transition-colors"

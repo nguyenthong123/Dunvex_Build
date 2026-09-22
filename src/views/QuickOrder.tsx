@@ -148,6 +148,12 @@ const QuickOrder = () => {
 					couponCode={form.couponCode}
 					setCouponCode={form.setCouponCode}
 					handleApplyCoupon={form.handleApplyCoupon}
+					appliedCoupon={form.appliedCoupon}
+					availableCoupons={form.availableCoupons}
+					handleSelectCoupon={form.handleSelectCoupon}
+					handleRemoveCoupon={form.handleRemoveCoupon}
+					appliedRebate={form.appliedRebate}
+					handleRemoveRebate={form.handleRemoveRebate}
 					shippingFee={form.shippingFee}
 					setShippingFee={form.setShippingFee as any}
 					discountAmt={form.discountAmt}

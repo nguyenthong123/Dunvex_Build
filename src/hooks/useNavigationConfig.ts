@@ -17,7 +17,7 @@ export interface NavItem {
  * Hook trung tâm quản lý cấu hình điều hướng và các nút động theo ngữ cảnh.
  * Giúp mã nguồn sạch hơn và đảm bảo tính nhất quán trên toàn hệ thống.
  */
-export const useNavigationConfig = () => {
+export function useNavigationConfig() {
 	const location = useLocation();
 	const path = location.pathname;
 	const owner = useOwner();
@@ -123,6 +123,14 @@ export const useNavigationConfig = () => {
 			};
 		}
 
+		if (path === '/leaves') {
+			return {
+				icon: 'add',
+				label: 'Đăng ký nghỉ',
+				path: 'event:open-leave-create'
+			};
+		}
+
 
 
 		if (path === '/settings') {
@@ -187,6 +195,7 @@ export const useNavigationConfig = () => {
 		{ icon: 'workspace_premium', label: 'Dịch vụ', path: '/services' },                                          // 10
 		{ icon: 'admin_panel_settings', label: 'Quản trị', path: '/admin', permissionKey: 'admin' },          // 11
 		{ icon: 'settings', label: 'Cài đặt', path: '/settings' },                                            // 12
+		{ icon: 'delete', label: 'Thùng rác', path: '/trash' },                                               // 13
 		{ icon: 'security', label: 'Nexus Control', path: '/nexus-control', permissionKey: 'nexus_control' }, // 14
 		{ icon: 'cloud_download', label: 'Sao lưu & PH', path: '/backup', permissionKey: 'nexus_control' },                                     // 14.5
 		{ icon: 'person', label: 'Hồ sơ', path: '/profile' },                                              // 15

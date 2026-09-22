@@ -1,5 +1,6 @@
 import React from 'react';
 import InventoryActionButtons from './InventoryActionButtons';
+import { ApprovalBadge } from '../shared/ApprovalBadge';
 
 interface InventoryMobileGridProps {
 	activeTab: string;
@@ -73,9 +74,14 @@ const InventoryMobileGrid: React.FC<InventoryMobileGridProps> = ({
 								</div>
 							</div>
 							<div className="flex items-center justify-between pt-4 border-t border-slate-50 dark:border-slate-800">
-								<span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${product.status === 'Kinh doanh' ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-500'}`}>
-									{product.status || 'Kinh doanh'}
-								</span>
+								<div>
+									<ApprovalBadge status={product.approvalStatus} />
+									{(!product.approvalStatus || product.approvalStatus === 'approved') && (
+										<span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${product.status === 'Kinh doanh' ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-500'}`}>
+											{product.status || 'Kinh doanh'}
+										</span>
+									)}
+								</div>
 								<InventoryActionButtons 
 									product={product}
 									handleDeleteProduct={handleDeleteProduct}
@@ -114,12 +120,12 @@ const InventoryMobileGrid: React.FC<InventoryMobileGridProps> = ({
 								</div>
 
 								<div className="grid grid-cols-2 gap-2 mb-4">
-									<div className="bg-slate-50/50 dark:bg-slate-800/30 p-2 rounded-lg text-center">
-										<p className="text-[8px] font-black text-slate-400 uppercase mb-0.5">Tổng nhập</p>
+									<div className="bg-slate-50/50 dark:bg-slate-800/30 p-2 rounded-lg text-center" title="Số lượng nhập từ các biến động kho gần đây">
+										<p className="text-[8px] font-black text-slate-400 uppercase mb-0.5">Nhập gần đây</p>
 										<p className="text-xs font-bold text-slate-600 dark:text-slate-400">{product.skuImport}</p>
 									</div>
-									<div className="bg-slate-50/50 dark:bg-slate-800/30 p-2 rounded-lg text-center">
-										<p className="text-[8px] font-black text-slate-400 uppercase mb-0.5">Tổng xuất</p>
+									<div className="bg-slate-50/50 dark:bg-slate-800/30 p-2 rounded-lg text-center" title="Số lượng xuất từ các biến động kho gần đây">
+										<p className="text-[8px] font-black text-slate-400 uppercase mb-0.5">Xuất gần đây</p>
 										<p className="text-xs font-bold text-orange-600">{product.skuExport}</p>
 									</div>
 								</div>

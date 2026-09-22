@@ -14,9 +14,9 @@ async function handler(req, res) {
   }
 
   try {
-    const { ownerId, message } = req.body || {};
-    if (!ownerId || !message) {
-      return res.status(400).json({ error: "Missing ownerId or message" });
+    const { ownerId, message, eventType = 'generic', data = {} } = req.body || {};
+    if (!ownerId) {
+      return res.status(400).json({ error: "Missing ownerId" });
     }
 
     const apiKeys = db.getAll('api_keys');
@@ -26,8 +26,7 @@ async function handler(req, res) {
     }
 
     const botToken = keyDoc.telegramBotToken;
-    // 🎯 CHỈ gửi vào nhóm, không gửi riêng
-    const chatId = keyDoc.telegramGroupChatId;
+    const chatId = keyDoc.telegramGroupChatId || keyDoc.telegramChatId;
 
     if (!botToken || keyDoc.enabled !== true) {
       return res.status(403).json({ error: "Invalid or disabled bot token" });
@@ -36,14 +35,60 @@ async function handler(req, res) {
       return res.status(400).json({ error: "Chưa cấu hình Telegram Group Chat ID" });
     }
 
-    try {
-      await sendTelegramMessage(botToken, chatId, message);
-    } catch (teleErr) {
-      console.error("Failed to send Telegram message:", teleErr.message);
-      return res.status(500).json({ error: "Failed to send Telegram message", details: teleErr.message });
+    // ── KIỂM TRA CÔNG TẮC BẬT/TẮT TỪNG LOẠI THÔNG BÁO ──
+    if (eventType === 'order' && keyDoc.notifyNewOrder === false) {
+      return res.status(200).json({ success: true, skipped: true, reason: "Đã tắt thông báo đơn hàng" });
+    }
+    if (eventType === 'attendance' && keyDoc.notifyAttendance === false) {
+      return res.status(200).json({ success: true, skipped: true, reason: "Đã tắt thông báo chấm công" });
+    }
+    if (eventType === 'site_checkin' && keyDoc.notifySiteCheckin === false) {
+      return res.status(200).json({ success: true, skipped: true, reason: "Đã tắt thông báo checkin công trình" });
+    }
+    if (eventType === 'debt_payment' && keyDoc.notifyDebtPayment === false) {
+      return res.status(200).json({ success: true, skipped: true, reason: "Đã tắt thông báo thu nợ" });
+    }
+    if (eventType === 'leave_request' && keyDoc.notifyLeaveRequest === false) {
+      return res.status(200).json({ success: true, skipped: true, reason: "Đã tắt thông báo nghỉ phép" });
+    }
+    if (eventType === 'eod_report' && keyDoc.notifyEodReport === false) {
+      return res.status(200).json({ success: true, skipped: true, reason: "Đã tắt thông báo báo cáo cuối ngày" });
     }
 
-    return res.status(200).json({ success: true });
+    // ── ĐIỀU PHỐI QUA N8N ALERT HUB (CHUẨN N8N ENGINE) ──
+    let n8nSuccess = false;
+    try {
+      const n8nWebhookUrl = process.env.N8N_ALERT_HUB_URL || "https://34-133-127-214.nip.io/webhook/dunvex-events";
+      const n8nRes = await fetch(n8nWebhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ownerId,
+          eventType,
+          botToken,
+          chatId,
+          message,
+          data
+        }),
+        signal: AbortSignal.timeout(5000)
+      });
+      if (n8nRes.ok) {
+        n8nSuccess = true;
+      }
+    } catch (n8nErr) {
+      console.warn('[n8n Webhook] Fetch error:', n8nErr.message);
+    }
+
+    // Dự phòng nếu n8n gián đoạn
+    if (!n8nSuccess && message) {
+      try {
+        await sendTelegramMessage(botToken, chatId, message);
+      } catch (teleErr) {
+        console.error("Failed to send Telegram message fallback:", teleErr.message);
+      }
+    }
+
+    return res.status(200).json({ success: true, n8nDispatched: n8nSuccess });
 
   } catch (error) {
     console.error("Telegram Notify error:", error);
@@ -52,3 +97,4 @@ async function handler(req, res) {
 }
 
 export { handler as default };
+

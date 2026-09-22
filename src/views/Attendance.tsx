@@ -9,12 +9,27 @@ import {
 import { useOwner } from '../hooks/useOwner';
 import {
 	Clock, MapPin, CheckCircle, AlertCircle, Calendar,
-	Smartphone, ArrowLeft, LogOut, Coffee, FileText, Send, X
+	Smartphone, ArrowLeft, LogOut, Coffee, FileText, Send, X, Building, ChevronDown
 } from 'lucide-react';
 import { useToast } from '../components/shared/Toast';
 import LeaveCalendar from '../components/shared/LeaveCalendar';
 import MonthlyAttendanceCalendar from '../components/shared/MonthlyAttendanceCalendar';
 import { createAdminNotification, createUserNotification } from '../utils/notifications';
+import { useCustomers } from '../hooks/useCustomers';
+import { notifyAttendanceEvent, notifySiteCheckinEvent, notifyLeaveRequestEvent } from '../utils/telegramNotify';
+
+
+const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+	const R = 6371e3; // meters
+	const φ1 = lat1 * Math.PI / 180;
+	const φ2 = lat2 * Math.PI / 180;
+	const Δφ = (lat2 - lat1) * Math.PI / 180;
+	const Δλ = (lon2 - lon1) * Math.PI / 180;
+	const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+		Math.cos(φ1) * Math.cos(φ2) *
+		Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+	return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
 
 const Attendance = () => {
 	const navigate = useNavigate();
@@ -23,7 +38,7 @@ const Attendance = () => {
 	const { showToast } = useToast();
 
 	const [companySettings, setCompanySettings] = useState<any>(null);
-	const [todayLog, setTodayLog] = useState<any>(null);
+	const [todayLogs, setTodayLogs] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [location, setLocation] = useState<{ lat: number, lng: number } | null>(null);
 	const [distance, setDistance] = useState<number | null>(null);
@@ -31,6 +46,102 @@ const Attendance = () => {
 	const [deviceId, setDeviceId] = useState('');
 	const [showRequestModal, setShowRequestModal] = useState(false);
 	const [requestData, setRequestData] = useState({ type: 'leave', note: '', selectedDates: [] as string[] });
+
+	// GPS Attendance based on Customer / Project coordinates
+	const [attendanceType, setAttendanceType] = useState<'store' | 'customer'>('store');
+	const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
+	const [customerQuery, setCustomerQuery] = useState('');
+	const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+	const dropdownRef = React.useRef<HTMLDivElement>(null);
+
+	const todayOfficeLog = todayLogs.find(l => l.type === 'store' || !l.type);
+	const activeCustomerLog = todayLogs.find(l => l.type === 'customer' && !l.checkOutAt);
+	const hasAnyCheckInToday = todayLogs.some(l => l.type === 'store' || !l.type || l.type === 'customer');
+	const todayLog = attendanceType === 'customer' ? activeCustomerLog : todayOfficeLog;
+
+	useEffect(() => {
+		const handleClickOutside = (event: MouseEvent) => {
+			if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+				setIsDropdownOpen(false);
+			}
+		};
+		document.addEventListener('mousedown', handleClickOutside);
+		return () => document.removeEventListener('mousedown', handleClickOutside);
+	}, []);
+
+	const { customers: rawCustomers } = useCustomers({
+		ownerId: owner.ownerId || '',
+		enabled: !owner.loading && !!owner.ownerId
+	});
+
+	const removeAccents = (str: string) => {
+		return str
+			.normalize('NFD')
+			.replace(/[\u0300-\u036f]/g, '')
+			.replace(/đ/g, 'd')
+			.replace(/Đ/g, 'D');
+	};
+
+	const customersWithGps = React.useMemo(() => {
+		return rawCustomers.filter((c: any) => typeof c.lat === 'number' && typeof c.lng === 'number');
+	}, [rawCustomers]);
+
+	const distanceToSelectedCustomer = React.useMemo(() => {
+		if (location && selectedCustomer && typeof selectedCustomer.lat === 'number' && typeof selectedCustomer.lng === 'number') {
+			return getDistance(location.lat, location.lng, selectedCustomer.lat, selectedCustomer.lng);
+		}
+		return null;
+	}, [location, selectedCustomer]);
+
+	const sortedCustomers = React.useMemo(() => {
+		if (!location || customersWithGps.length === 0) return [];
+		return customersWithGps
+			.map((c: any) => {
+				const d = getDistance(location.lat, location.lng, c.lat, c.lng);
+				return { ...c, distance: d };
+			})
+			.sort((a: any, b: any) => a.distance - b.distance);
+	}, [location, customersWithGps]);
+
+	const filteredSortedCustomers = React.useMemo(() => {
+		if (!customerQuery) return sortedCustomers;
+		const query = removeAccents(customerQuery).toLowerCase();
+		return sortedCustomers.filter((c: any) => 
+			removeAccents(c.name || '').toLowerCase().includes(query) ||
+			(c.phone && c.phone.includes(query))
+		);
+	}, [sortedCustomers, customerQuery]);
+
+	useEffect(() => {
+		if (filteredSortedCustomers.length > 0 && !selectedCustomer) {
+			setSelectedCustomer(filteredSortedCustomers[0]);
+		}
+	}, [filteredSortedCustomers, selectedCustomer]);
+
+	useEffect(() => {
+		if (filteredSortedCustomers.length > 0 && !todayLog) {
+			const stillExists = filteredSortedCustomers.some(c => c.id === selectedCustomer?.id);
+			if (!stillExists) {
+				setSelectedCustomer(filteredSortedCustomers[0]);
+			}
+		}
+	}, [filteredSortedCustomers, selectedCustomer, todayLog]);
+
+	useEffect(() => {
+		if (todayLog) {
+			if (todayLog.type === 'customer') {
+				if (todayLog.customerId && rawCustomers.length > 0) {
+					const matched = rawCustomers.find(c => c.id === todayLog.customerId);
+					if (matched) {
+						setSelectedCustomer(matched);
+					}
+				}
+				setAttendanceType('customer');
+			} else {
+				setAttendanceType('store');
+			}
+		}
+	}, [todayLog, rawCustomers]);
 
 	// Initialize Device ID
 	useEffect(() => {
@@ -63,11 +174,8 @@ const Attendance = () => {
 		);
 
 		const unsubscribe = onSnapshot(q, (snap) => {
-			if (!snap.empty) {
-				setTodayLog({ id: snap.docs[0].id, ...snap.docs[0].data() });
-			} else {
-				setTodayLog(null);
-			}
+			const logs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+			setTodayLogs(logs);
 			setLoading(false);
 		});
 
@@ -95,22 +203,39 @@ const Attendance = () => {
 		}
 	}, [location, companySettings]);
 
-	const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-		const R = 6371e3; // meters
-		const φ1 = lat1 * Math.PI / 180;
-		const φ2 = lat2 * Math.PI / 180;
-		const Δφ = (lat2 - lat1) * Math.PI / 180;
-		const Δλ = (lon2 - lon1) * Math.PI / 180;
-		const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-			Math.cos(φ1) * Math.cos(φ2) *
-			Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-		return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-	};
+	const hasCompanyGps = companySettings && typeof companySettings.lat === 'number' && typeof companySettings.lng === 'number';
+	const effectiveStoreDistance = hasCompanyGps ? distance : 0;
+	const activeDistance = attendanceType === 'customer' ? distanceToSelectedCustomer : effectiveStoreDistance;
+	const activeAllowedRadius = attendanceType === 'customer' ? 100 : (companySettings?.geofenceRadius || 500);
+
+	const isWithinRange = activeDistance !== null && activeDistance <= activeAllowedRadius;
+	const isWithinCheckOutRange = attendanceType === 'customer'
+		? (distanceToSelectedCustomer !== null && distanceToSelectedCustomer <= 100)
+		: ((distance !== null ? distance : 0) <= ((companySettings?.geofenceRadius || 500) * 1.5));
 
 	const handleCheckIn = async () => {
-		if (!location || !distance || !owner.ownerId || !auth.currentUser) return;
-		if (distance > (companySettings.geofenceRadius || 500)) {
-			showToast(`Bạn ở quá xa văn phòng (${Math.round(distance)}m).`, "warning");
+		if (!auth.currentUser) {
+			showToast("Vui lòng đăng nhập lại để thực hiện chấm công", "warning");
+			return;
+		}
+		if (!owner.ownerId) {
+			showToast("Đang tải dữ liệu doanh nghiệp... Vui lòng thử lại sau vài giây", "warning");
+			return;
+		}
+		if (!location) {
+			showToast("Vui lòng bật định vị GPS trên thiết bị di động để chấm công!", "warning");
+			return;
+		}
+		if (attendanceType === 'customer' && !selectedCustomer) {
+			showToast("Vui lòng chọn khách hàng / công trình để chấm công", "warning");
+			return;
+		}
+		if (activeDistance === null) {
+			showToast("Đang xác định vị trí khoảng cách GPS, vui lòng bấm lại sau 2 giây", "warning");
+			return;
+		}
+		if (hasCompanyGps && activeDistance > activeAllowedRadius) {
+			showToast(`Bạn ở quá xa địa điểm chấm công (${Math.round(activeDistance)}m). Bán kính cho phép: ${activeAllowedRadius}m`, "warning");
 			return;
 		}
 
@@ -119,16 +244,15 @@ const Attendance = () => {
 			const today = new Date().toISOString().split('T')[0];
 			const now = new Date();
 
-			// Simple status check
 			let status = 'on-time';
-			if (companySettings.workStart) {
+			if (companySettings?.workStart) {
 				const [h, m] = companySettings.workStart.split(':').map(Number);
 				const workStart = new Date();
 				workStart.setHours(h, m, 0);
 				if (now > workStart) status = 'late';
 			}
 
-			await addDoc(collection(db, 'attendance_logs'), {
+			const logData: any = {
 				ownerId: owner.ownerId,
 				userId: auth.currentUser.uid,
 				userName: auth.currentUser.displayName || auth.currentUser.email,
@@ -139,30 +263,90 @@ const Attendance = () => {
 				deviceId: deviceId,
 				deviceInfo: navigator.userAgent,
 				status: status,
+				type: attendanceType,
 				createdAt: serverTimestamp()
-			});
+			};
+
+			if (attendanceType === 'customer' && selectedCustomer) {
+				logData.customerId = selectedCustomer.id;
+				logData.customerName = selectedCustomer.name;
+				logData.checkInDistance = Math.round(activeDistance || 0);
+			} else {
+				logData.checkInDistance = Math.round(activeDistance || 0);
+			}
+
+			await addDoc(collection(db, 'attendance_logs'), logData);
+
+			// Gửi thông báo Telegram & n8n
+			if (attendanceType === 'customer') {
+				notifySiteCheckinEvent(owner.ownerId, {
+					userName: auth.currentUser.displayName || auth.currentUser.email || 'Nhân viên',
+					customerName: selectedCustomer?.name,
+					distance: Math.round(activeDistance),
+					location: location,
+					note: `Check-in tại công trình / khách hàng: ${selectedCustomer?.name}`
+				}).catch(() => {});
+			} else {
+				notifyAttendanceEvent(owner.ownerId, {
+					userName: auth.currentUser.displayName || auth.currentUser.email || 'Nhân viên',
+					userEmail: auth.currentUser.email || '',
+					action: 'checkin',
+					distance: Math.round(activeDistance),
+					location: location,
+					status: status
+				}).catch(() => {});
+			}
 
 			showToast("Chấm công VÀO thành công!", "success");
-		} catch (error) {
-			showToast("Lỗi khi chấm công: " + error, "error");
+		} catch (error: any) {
+			showToast(error.message || "Lỗi khi chấm công", "error");
 		} finally {
 			setChecking(false);
 		}
 	};
 
 	const handleCheckOut = async () => {
-		if (!todayLog || !location) return;
+		if (!todayLog) {
+			showToast("Không tìm thấy ca làm việc hôm nay để ra ca", "warning");
+			return;
+		}
+		if (!location) {
+			showToast("Vui lòng bật định vị GPS trên thiết bị di động để thực hiện ra ca!", "warning");
+			return;
+		}
 
 		setChecking(true);
 		try {
-			await updateDoc(doc(db, 'attendance_logs', todayLog.id), {
+			const updateData: any = {
 				checkOutAt: serverTimestamp(),
 				checkOutLocation: location,
 				updatedAt: serverTimestamp()
-			});
+			};
+
+			let activeDist = distance !== null ? Math.round(distance) : undefined;
+			if (todayLog.type === 'customer' && selectedCustomer) {
+				const dist = getDistance(location.lat, location.lng, selectedCustomer.lat, selectedCustomer.lng);
+				activeDist = Math.round(dist);
+				updateData.checkOutDistance = activeDist;
+			} else if (distance !== null) {
+				updateData.checkOutDistance = activeDist;
+			}
+
+			await updateDoc(doc(db, 'attendance_logs', todayLog.id), updateData);
+
+			// Gửi thông báo Telegram & n8n khi ra ca
+			notifyAttendanceEvent(owner.ownerId, {
+				userName: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
+				userEmail: auth.currentUser?.email || '',
+				action: 'checkout',
+				distance: activeDist,
+				location: location,
+				status: 'Đã hoàn thành ca làm việc'
+			}).catch(() => {});
+
 			showToast("Chấm công RA thành công!", "success");
-		} catch (error) {
-			showToast("Lỗi khi chấm công: " + error, "error");
+		} catch (error: any) {
+			showToast(error.message || "Lỗi khi chấm công", "error");
 		} finally {
 			setChecking(false);
 		}
@@ -193,6 +377,15 @@ const Attendance = () => {
 				status: 'pending',
 				createdAt: serverTimestamp()
 			});
+
+			// Gửi thông báo Telegram & n8n
+			notifyLeaveRequestEvent(owner.ownerId, {
+				userName,
+				userEmail,
+				requestType: requestData.type as 'leave' | 'late',
+				dates: requestData.type === 'leave' ? requestData.selectedDates : today,
+				note: requestData.note
+			}).catch(() => {});
 
 			// Gửi thông báo cho admin
 			const leaveLabel = requestData.type === 'leave' ? 'NGHỈ PHÉP' : 'ĐI MUỘN';
@@ -225,6 +418,7 @@ const Attendance = () => {
 		}
 	};
 
+
 	// Handle URL Actions
 	useEffect(() => {
 		const params = new URLSearchParams(search);
@@ -239,9 +433,6 @@ const Attendance = () => {
 	}, [search, loading, todayLog, checking]);
 
 	if (loading) return <div className="p-10 text-center font-bold">ĐANG TẢI...</div>;
-
-	const isWithinRange = distance !== null && distance <= (companySettings?.geofenceRadius || 500);
-	const isWithinCheckOutRange = distance !== null && distance <= ((companySettings?.geofenceRadius || 500) * 1.5);
 
 	return (
 		<div className="flex flex-col h-full bg-[#f8f9fb] dark:bg-slate-950 transition-colors duration-300">
@@ -284,18 +475,114 @@ const Attendance = () => {
 						</div>
 					</div>
 
+					{/* Attendance Type Selector */}
+					<div className="bg-slate-100 dark:bg-slate-800 rounded-2xl p-1.5 grid grid-cols-2 gap-2">
+						<button
+							onClick={() => setAttendanceType('store')}
+							className={`py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all ${
+								attendanceType === 'store'
+									? 'bg-white text-[#1A237E] dark:bg-slate-700 dark:text-white shadow-sm'
+									: 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+							}`}
+						>
+							🏢 Tại cửa hàng / VP
+						</button>
+						<button
+							onClick={() => setAttendanceType('customer')}
+							className={`py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all ${
+								attendanceType === 'customer'
+									? 'bg-white text-[#1A237E] dark:bg-slate-700 dark:text-white shadow-sm'
+									: 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+							}`}
+						>
+							🏗️ Tại Công trình / Khách
+						</button>
+					</div>
+
+					{attendanceType === 'customer' && (
+						<div className="bg-white dark:bg-slate-900 rounded-[2.5rem] p-6 border border-slate-100 dark:border-slate-800 shadow-sm space-y-4">
+							<div className="relative" ref={dropdownRef}>
+								<label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest block mb-2 ml-1">Chọn Khách hàng / Công trình</label>
+								
+								<button
+									type="button"
+									disabled={!!todayLog}
+									onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+									className="w-full h-14 px-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-bold text-slate-900 dark:text-white flex items-center justify-between outline-none focus:ring-2 focus:ring-indigo-500/20 disabled:opacity-75"
+								>
+									<span className="truncate">
+										{selectedCustomer 
+											? `${selectedCustomer.name} (${selectedCustomer.distance !== undefined ? `${Math.round(selectedCustomer.distance)}m` : 'Đang tính...'})`
+											: 'Chọn Khách hàng / Công trình'
+										}
+									</span>
+									<ChevronDown size={20} className="text-slate-400 shrink-0 ml-2" />
+								</button>
+
+								{isDropdownOpen && !todayLog && (
+									<div className="absolute top-24 left-0 right-0 z-50 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl overflow-hidden flex flex-col">
+										<div className="p-2 border-b border-slate-100 dark:border-slate-700">
+											<input
+												type="text"
+												placeholder="🔍 Nhập tên hoặc SĐT để tìm..."
+												value={customerQuery}
+												onChange={(e) => setCustomerQuery(e.target.value)}
+												className="w-full h-10 px-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-950 dark:text-white outline-none placeholder-slate-400 dark:placeholder-slate-500 focus:border-indigo-500"
+											/>
+										</div>
+										<div className="overflow-y-auto max-h-48">
+											{filteredSortedCustomers.length > 0 ? (
+												filteredSortedCustomers.map((c: any) => (
+													<button
+														key={c.id}
+														type="button"
+														onClick={() => {
+															setSelectedCustomer(c);
+															setIsDropdownOpen(false);
+														}}
+														className={`w-full px-4 py-3 text-left text-xs font-bold transition-colors flex items-center justify-between border-b border-slate-50 dark:border-slate-700 last:border-b-0 ${
+															selectedCustomer?.id === c.id
+																? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400'
+																: 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-750'
+														}`}
+													>
+														<span className="truncate mr-2">{c.name}</span>
+														<span className="text-[10px] text-slate-400 dark:text-slate-500 shrink-0">
+															{c.distance !== undefined ? `${Math.round(c.distance)}m` : 'Đang tính...'}
+														</span>
+													</button>
+												))
+											) : (
+												<div className="p-4 text-center text-xs text-slate-400 font-bold">
+													Không tìm thấy công trình phù hợp.
+												</div>
+											)}
+										</div>
+									</div>
+								)}
+							</div>
+						</div>
+					)}
+
 					{/* Location Tracking */}
 					<div className={`rounded-[2.5rem] p-6 border transition-all duration-500 ${isWithinRange ? 'bg-emerald-50/50 border-emerald-200 dark:bg-emerald-900/10 dark:border-emerald-800/50' : 'bg-rose-50/50 border-rose-200 dark:bg-rose-900/10 dark:border-rose-800/50'}`}>
 						<div className="flex items-center gap-4">
 							<div className={`p-3 rounded-2xl ${isWithinRange ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
-								<MapPin size={24} />
+								{attendanceType === 'customer' ? <Building size={24} /> : <MapPin size={24} />}
 							</div>
 							<div className="flex-1">
 								<p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Vị trí của bạn</p>
 								<h4 className={`text-sm font-black ${isWithinRange ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
-									{isWithinRange ? 'Đã vào khu vực văn phòng' : 'Ngoài khu vực văn phòng'}
+									{isWithinRange 
+										? (attendanceType === 'customer' ? 'Phạm vi chấm công hợp lệ (<=100m)' : 'Đã vào khu vực văn phòng') 
+										: (attendanceType === 'customer' ? 'Ngoài phạm vi công trình (>100m)' : 'Ngoài khu vực văn phòng')}
 								</h4>
-								<p className="text-[10px] font-bold text-slate-500 mt-1">Khoảng cách: {distance !== null ? `${Math.round(distance)}m` : 'Đang định vị...'}</p>
+								<p className="text-[10px] font-bold text-slate-500 mt-1">
+									{attendanceType === 'customer' && selectedCustomer
+										? `Khoảng cách tới ${selectedCustomer.name}: ${activeDistance !== null ? `${Math.round(activeDistance)}m` : 'Đang định vị...'}`
+										: `Khoảng cách tới văn phòng: ${activeDistance !== null ? `${Math.round(activeDistance)}m` : 'Đang định vị...'}`
+									}
+								</p>
 							</div>
 							{isWithinRange ? <CheckCircle size={24} className="text-emerald-500" /> : <AlertCircle size={24} className="text-rose-500 animate-pulse" />}
 						</div>
@@ -303,7 +590,17 @@ const Attendance = () => {
 
 					{/* Action Buttons */}
 					<div className="space-y-4">
-						{!todayLog ? (
+						{attendanceType === 'customer' && todayOfficeLog ? (
+							<div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 text-center">
+								<p className="text-emerald-600 font-black uppercase text-sm mb-1">Đã chấm công tại cửa hàng / VP hôm nay</p>
+								<p className="text-xs text-slate-400 font-bold">Hẹn gặp lại bạn vào ngày mai!</p>
+							</div>
+						) : attendanceType === 'store' && todayLogs.some(l => l.type === 'customer') ? (
+							<div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 text-center">
+								<p className="text-emerald-600 font-black uppercase text-sm mb-1">Đã chấm công đi thị trường hôm nay</p>
+								<p className="text-xs text-slate-400 font-bold">Vui lòng sử dụng tab thị trường để chấm công tiếp.</p>
+							</div>
+						) : !todayLog ? (
 							<button
 								onClick={handleCheckIn}
 								disabled={!isWithinRange || checking}
@@ -332,6 +629,35 @@ const Attendance = () => {
 						>
 							<Coffee size={18} /> Đăng ký nghỉ / Đi muộn
 						</button>
+
+						{/* List of customer check-ins today */}
+						{(() => {
+							const todayCustomerLogs = todayLogs.filter(l => l.type === 'customer');
+							if (attendanceType === 'customer' && todayCustomerLogs.length > 0) {
+								return (
+									<div className="bg-white dark:bg-slate-900 rounded-[2rem] p-5 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3 mt-4">
+										<h4 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest block ml-1">Các điểm đã đi hôm nay ({todayCustomerLogs.length})</h4>
+										<div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+											{todayCustomerLogs.map((log, index) => (
+												<div key={index} className="flex justify-between items-center bg-slate-50 dark:bg-slate-800/50 px-4 py-3 rounded-xl border border-slate-150/20">
+													<div className="flex-1 min-w-0 pr-2">
+														<p className="text-xs font-black text-slate-800 dark:text-white truncate">{log.customerName || 'Công trình'}</p>
+														<p className="text-[9px] text-slate-400 font-semibold mt-0.5">
+															Vào: {log.checkInAt ? (log.checkInAt.toDate ? log.checkInAt.toDate() : new Date(log.checkInAt.seconds * 1000)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+															{log.checkOutAt && ` - Ra: ${(log.checkOutAt.toDate ? log.checkOutAt.toDate() : new Date(log.checkOutAt.seconds * 1000)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+														</p>
+													</div>
+													<span className={`text-[9px] font-black px-2 py-0.5 rounded ${log.checkOutAt ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400' : 'bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400 animate-pulse'}`}>
+														{log.checkOutAt ? 'Đã hoàn thành' : 'Đang ở điểm'}
+													</span>
+												</div>
+											))}
+										</div>
+									</div>
+								);
+							}
+							return null;
+						})()}
 					</div>
 
 					{/* Request Modal */}

@@ -47,20 +47,8 @@ export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
                         <h2 className="text-lg md:text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight truncate">Khách Hàng</h2>
                     </div>
                     <div className="flex items-center gap-2 md:gap-4 flex-shrink-0 ml-auto">
-                        {/* Route & Search on Desktop */}
+                        {/* Search on Desktop */}
                         <div className="hidden lg:flex items-center gap-2">
-                            <div className="relative">
-                                <select
-                                    className="pl-4 pr-10 py-2.5 bg-indigo-50 dark:bg-slate-800 border-none rounded-xl text-xs font-black uppercase text-indigo-600 dark:text-indigo-400 focus:ring-2 focus:ring-indigo-500/30 appearance-none transition-all cursor-pointer"
-                                    value={selectedRoute}
-                                    onChange={(e) => setSelectedRoute(e.target.value)}
-                                >
-                                    <option value="All">Tốt cả Tuyến</option>
-                                    {salesRoutes.map(r => <option key={r} value={r}>{r}</option>)}
-                                </select>
-                                <span className="material-symbols-outlined absolute right-3 top-2 text-indigo-300 pointer-events-none text-lg">expand_more</span>
-                            </div>
-
                             <div className="relative">
                                 <span className="material-symbols-outlined absolute left-3 top-2.5 text-gray-400 dark:text-gray-500">search</span>
                                 <input
@@ -87,13 +75,6 @@ export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
                         >
                             <span className="material-symbols-outlined">file_upload</span>
                             <span className="hidden sm:inline">Nhập Excel</span>
-                        </button>
-                        <button
-                            onClick={() => setShowMap(true)}
-                            className="size-10 rounded-xl bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center text-[#FF6D00] hover:bg-[#FF6D00] hover:text-white transition-all shadow-lg shadow-orange-500/10"
-                            title="Xem bản đồ"
-                        >
-                            <span className="material-symbols-outlined">map</span>
                         </button>
                         <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
                         <button

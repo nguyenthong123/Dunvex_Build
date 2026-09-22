@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 // 🔧 REFACTOR: Chỉ giữ Firestore write ops — read ops đã chuyển qua hooks
@@ -6,6 +6,7 @@ import { doc, getDoc, getDocs, writeBatch, increment, collection, query, where, 
 // 🔧 REFACTOR: Dùng hooks mới thay vì onSnapshot trực tiếp
 import { useOrders } from '../hooks/useOrders';
 import { useProducts } from '../hooks/useProducts';
+import { customerRebateService } from '../services/dataAccess';
 import { sendTelegramNotification } from '../utils/telegramNotify';
 import { filterOrders, formatPrice, formatCompactPrice } from '../utils/orderFilter';
 import OrderTicket from '../components/OrderTicket';
@@ -42,7 +43,7 @@ const OrderList = () => {
 		enabled: !owner.loading && !!owner.ownerId,
 		maxResults: 9999,
 	});
-	const isAdmin = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
+	const isAdmin = !owner.loading && (owner.role?.toLowerCase() === 'admin' || !owner.isEmployee);
 	const [searchTerm, setSearchTerm] = useState(() => sessionStorage.getItem('orders_searchTerm') || '');
 	const [showDetail, setShowDetail] = useState(false);
 	const [selectedOrder, setSelectedOrder] = useState<any>(null);
@@ -74,12 +75,14 @@ const OrderList = () => {
 		}
 	}, [search, navigate]);
 
-	const filteredOrders = filterOrders(
-		orders as any,
-		searchTerm,
-		fromDate,
-		toDate
-	);
+	const filteredOrders = useMemo(() => {
+		return filterOrders(
+			orders as any,
+			searchTerm,
+			fromDate,
+			toDate
+		);
+	}, [orders, searchTerm, fromDate, toDate]);
 
 	const isInitialMount = useRef(true);
 	useEffect(() => {
@@ -198,9 +201,9 @@ const OrderList = () => {
 				const missingSkus: string[] = [];
 				const stockDeletions: any[] = [];
 				
-				for (const item of order?.products || []) {
+				for (const item of (order?.products || order?.items || [])) {
 					let remainingQty = Number(item.qty) || 0;
-					const sourceProduct = allProducts.find(p => p.id === item.id);
+					const sourceProduct = allProducts.find(p => p.id === (item.productId || item.id));
 					const cleanSku = normalizeText(sourceProduct?.sku || item.sku);
 					
 					let stockCandidates: any[] = [];
@@ -300,10 +303,26 @@ const OrderList = () => {
 				});
 				
 				await batch.commit();
+
+				// Cập nhật trừ lượt chiết khấu nếu đơn có áp dụng chiết khấu trả sau
+				if (newStatus === 'Đơn chốt' && order?.status !== 'Đơn chốt' && order?.rebateId) {
+					try {
+						await customerRebateService.useRebate(order.rebateId, id);
+					} catch (err) {
+						console.error("Lỗi trừ lượt chiết khấu:", err);
+					}
+				}
+
 				showToast("Đã chốt đơn và xuất kho thành công", "success");
 
 				if (newStatus === 'Đơn chốt') {
-					sendTelegramNotification(owner.ownerId, `📦 <b>ĐƠN HÀNG MỚI (CHỐT)</b>\n- Khách hàng: <b>${order?.customerName}</b>\n- Tổng tiền: <b>${formatPrice(order?.totalAmount || 0)}</b>\n- Người thao tác: ${auth.currentUser?.displayName || 'Admin'}`);
+					sendTelegramNotification(owner.ownerId, `📦 <b>ĐƠN HÀNG MỚI (CHỐT)</b>\n- Khách hàng: <b>${order?.customerName}</b>\n- Tổng tiền: <b>${formatPrice(order?.totalAmount || 0)}</b>\n- Người thao tác: ${auth.currentUser?.displayName || 'Admin'}`, 'order', {
+						customerName: order?.customerName,
+						totalAmount: order?.totalAmount,
+						status: 'Đơn chốt',
+						actorName: auth.currentUser?.displayName || 'Admin',
+						orderId: id
+					});
 				}
 				return;
 			}
@@ -345,11 +364,28 @@ const OrderList = () => {
 			});
 
 			await batch.commit();
+
+			// Hoàn lại lượt chiết khấu nếu đơn chốt chuyển sang trạng thái khác (hủy, nháp...)
+			if (order?.status === 'Đơn chốt' && newStatus !== 'Đơn chốt' && order?.rebateId) {
+				try {
+					await customerRebateService.refundRebate(order.rebateId, id);
+				} catch (err) {
+					console.error("Lỗi hoàn lại chiết khấu:", err);
+				}
+			}
+
 			showToast("Đã cập nhật trạng thái", "success");
 
 			if (newStatus === 'Đã hủy') {
-				sendTelegramNotification(owner.ownerId, `❌ <b>ĐƠN HÀNG ĐÃ HỦY</b>\n- Khách hàng: <b>${order?.customerName}</b>\n- Tổng tiền: <b>${formatPrice(order?.totalAmount || 0)}</b>\n- Người thao tác: ${auth.currentUser?.displayName || 'Admin'}`);
+				sendTelegramNotification(owner.ownerId, `❌ <b>ĐƠN HÀNG ĐÃ HỦY</b>\n- Khách hàng: <b>${order?.customerName}</b>\n- Tổng tiền: <b>${formatPrice(order?.totalAmount || 0)}</b>\n- Người thao tác: ${auth.currentUser?.displayName || 'Admin'}`, 'order', {
+					customerName: order?.customerName,
+					totalAmount: order?.totalAmount,
+					status: 'Đã hủy',
+					actorName: auth.currentUser?.displayName || 'Admin',
+					orderId: id
+				});
 			}
+
 		} catch (error) {
 			console.error("Lỗi cập nhật trạng thái:", error);
 			showToast("Lỗi khi cập nhật trạng thái", "error");
@@ -418,6 +454,15 @@ const OrderList = () => {
 						createdBy: auth.currentUser?.uid || '',
 						createdAt: serverTimestamp()
 					});
+				}
+
+				// 2.8 Hoàn lại lượt chiết khấu nếu đơn chốt bị xóa
+				if (order?.status === 'Đơn chốt' && order?.rebateId) {
+					try {
+						await customerRebateService.refundRebate(order.rebateId, id);
+					} catch (err) {
+						console.error("Lỗi hoàn lại chiết khấu khi xóa đơn:", err);
+					}
 				}
 
 				// 3. Log Audit
@@ -539,11 +584,11 @@ const OrderList = () => {
 					<div className="flex flex-wrap items-center gap-3">
 						<div>
 							<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">Từ ngày</label>
-							<input type="date" className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-3 py-2.5 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#1A237E]/20" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+							<input type="date" className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#1A237E]/20" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
 						</div>
 						<div>
 							<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">Đến ngày</label>
-							<input type="date" className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-3 py-2.5 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#1A237E]/20" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+							<input type="date" className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#1A237E]/20" value={toDate} onChange={(e) => setToDate(e.target.value)} />
 						</div>
 						{(fromDate || toDate) && (
 							<button
@@ -589,11 +634,11 @@ const OrderList = () => {
 					</div>
 				)}
 
-{/* Stats Cards */}
-				<div className="grid grid-cols-3 gap-2 mb-8">
+				{/* Stats Cards */}
+				<div className={`grid ${isAdmin ? 'grid-cols-3' : 'grid-cols-2'} gap-2 mb-8`}>
 					<StatCard icon="receipt_long" label="Tổng đơn chốt" value={totalConfirmedCount.toString()} color="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400" />
 					<StatCard icon="payments" label="Doanh thu" value={formatCompactPrice(totalRevenue)} color="bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400" />
-					<StatCard icon="trending_up" label="Lợi nhuận" value={formatCompactPrice(totalProfit)} color="bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400" />
+					{isAdmin && <StatCard icon="trending_up" label="Lợi nhuận" value={formatCompactPrice(totalProfit)} color="bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400" />}
 				</div>
 
 				{/* Desktop Table */}
@@ -651,7 +696,12 @@ const OrderList = () => {
 												{(order.customerBusinessName || order.customerName || 'K')[0].toUpperCase()}
 											</div>
 											<div>
-												<div className="font-black text-slate-800 dark:text-slate-200">{order.customerBusinessName || order.customerName || 'Khách vãng lai'}</div>
+												<div className="font-black text-slate-800 dark:text-slate-200">
+													{order.customerName || order.customerBusinessName || 'Khách vãng lai'}
+													{order.customerBusinessName && order.customerBusinessName !== order.customerName && (
+														<span className="text-xs font-normal text-slate-500 ml-1.5">({order.customerBusinessName})</span>
+													)}
+												</div>
 												<div className="text-[10px] text-slate-500 dark:text-slate-500 font-bold">{order.customerPhone || '---'}</div>
 											</div>
 										</div>
@@ -726,7 +776,12 @@ const OrderList = () => {
 									</div>
 									<div>
 										<div className="flex items-center gap-2">
-											<div className="font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight line-clamp-2 break-words">{order.customerBusinessName || order.customerName || 'Khách vãng lai'}</div>
+											<div className="font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight line-clamp-2 break-words">
+												{order.customerName || order.customerBusinessName || 'Khách vãng lai'}
+												{order.customerBusinessName && order.customerBusinessName !== order.customerName && (
+													<span className="text-xs font-semibold text-slate-500 lowercase ml-1.5">({order.customerBusinessName})</span>
+												)}
+											</div>
 										</div>
 										<div className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">#{order.id.slice(0, 8).toUpperCase()}</div>
 									</div>

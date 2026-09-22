@@ -42,18 +42,16 @@
 	</script>
 	<!-- 🔄 Force cleanup old service workers (một lần duy nhất) -->
 	<script>
-		if ('serviceWorker' in navigator && !localStorage.getItem('sw_cleaned_v14')) {
-			localStorage.setItem('sw_cleaned_v14', '1');
+		if ('serviceWorker' in navigator && !localStorage.getItem('sw_cleaned_v16')) {
+			localStorage.setItem('sw_cleaned_v16', '1');
 			navigator.serviceWorker.getRegistrations().then(function(regs) {
 				regs.forEach(function(reg) { reg.unregister(); });
-				// Xóa toàn bộ cache storage
+				// Xóa toàn bộ cache storage mà không ép reload gây văng đăng nhập
 				if ('caches' in window) {
 					caches.keys().then(function(names) {
 						names.forEach(function(name) { caches.delete(name); });
 					});
 				}
-				// Reload trang sạch
-				setTimeout(function() { location.reload(); }, 300);
 			});
 		}
 	</script>

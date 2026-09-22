@@ -88,7 +88,7 @@ const renderAddonIcon = (iconName: string, className: string) => {
 
 const NexusControl = () => {
 	const navigate = useNavigate();
-	const { showToast } = useToast();
+	const { showToast, showConfirm } = useToast();
 	const [activeTab, setActiveTab] = useState('requests');
 
 	const {
@@ -129,173 +129,205 @@ const NexusControl = () => {
 		return null;
 	};
 
-	const handleUpdatePlan = async (ownerId: string, newPlan: string) => {
-		if (!window.confirm(`Xác nhận hành động: ${newPlan === 'cancel_payment' ? 'HUỶ ĐĂNG KÝ VÀ KHÓA' : newPlan}?`)) return;
-		try {
-			if (newPlan === 'cancel_payment') {
-				const expireDate = new Date();
-				expireDate.setDate(expireDate.getDate() - 2); // Explicitly expired
-
-				await setDoc(doc(db, 'settings', ownerId), {
-					planId: 'free',
-					isPro: false,
-					subscriptionStatus: 'expired',
-					subscriptionExpiresAt: expireDate,
-					manualLockOrders: true,
-					manualLockDebts: true,
-					manualLockSheets: true,
-					manualLockAi: true
-				}, { merge: true });
-
-				await addDoc(collection(db, 'notifications'), {
-					userId: ownerId,
-					title: '⛔ HỦY TRUY CẬP (CHƯA NHẬN ĐƯỢC THANH TOÁN)',
-					body: 'Admin đã kiểm tra đối soát nhưng chưa nhận được lệnh chuyển khoản từ bạn. Hệ thống đã tiến hành thu hồi gói cước và thiết lập khóa tính năng. Vui lòng thanh toán lại hoặc liên hệ hỗ trợ.',
-					type: 'alert',
-					priority: 'high',
-					read: false,
-					createdAt: serverTimestamp()
-				});
-
-				showToast("Đã hủy đăng ký, thiết lập khóa và gửi thông báo cho khách!", "success");
-				return;
-			}
-
-			const isPro = newPlan !== 'free' && newPlan !== 'test_expire';
-			const expireDate = new Date();
-
-			if (newPlan === 'premium_monthly') {
-				expireDate.setMonth(expireDate.getMonth() + 1);
-			} else if (newPlan === 'premium_yearly') {
-				expireDate.setFullYear(expireDate.getFullYear() + 1);
-			} else if (newPlan === 'test_expire') {
-				// Hết hạn → khoá ngay, không cho dùng
-				expireDate.setDate(expireDate.getDate() - 1);
-				await setDoc(doc(db, 'settings', ownerId), {
-					planId: newPlan,
-					isPro: false,
-					subscriptionStatus: 'expired',
-					paymentConfirmedAt: serverTimestamp(),
-					subscriptionExpiresAt: expireDate,
-					manualLockOrders: true,
-					manualLockDebts: true,
-					manualLockSheets: true,
-					manualLockAi: true,
-					graceUntil: null
-				}, { merge: true });
-				await addDoc(collection(db, 'notifications'), {
-					userId: ownerId,
-					title: '🔒 TÀI KHOẢN BỊ KHOÁ',
-					body: 'Admin đã thiết lập trạng thái hết hạn cho tài khoản.',
-					type: 'lock',
-					priority: 'high',
-					read: false,
-					createdAt: serverTimestamp()
-				});
-				showToast("Đã khoá tài khoản (TEST HẾT HẠN).", "success");
-				return;
-			} else {
-				// Free plan policy: 60 days
-				expireDate.setDate(expireDate.getDate() + 60);
-			}
-
-			await setDoc(doc(db, 'settings', ownerId), {
-				planId: newPlan,
-				isPro: isPro,
-				subscriptionStatus: isPro ? 'active' : 'trial',
-				paymentConfirmedAt: serverTimestamp(),
-				subscriptionExpiresAt: expireDate
-			}, { merge: true });
-			showToast("Cập nhật gói thành công. Số ngày còn lại đã được đồng bộ!", "success");
-		} catch (error) {
-			console.error("Plan Update Error:", error);
-			showToast("Lỗi khi cập nhật gói", "error");
+	const handleUpdatePlan = (ownerId: string, newPlan: string) => {
+		let planLabel = newPlan;
+		if (newPlan === 'cancel_payment') planLabel = 'HUỶ ĐĂNG KÝ VÀ KHÓA';
+		else if (newPlan === 'test_expire') planLabel = 'TEST HẾT HẠN';
+		else if (newPlan === 'free') planLabel = 'FREE (30d)';
+		else {
+			const addon = addons.find(a => a.id === newPlan);
+			if (addon) planLabel = addon.name;
 		}
+
+		showConfirm(
+			"Xác nhận thay đổi gói",
+			`Bạn có chắc chắn muốn thay đổi gói cước thành: ${planLabel}?`,
+			async () => {
+				try {
+					if (newPlan === 'cancel_payment') {
+						const expireDate = new Date();
+						expireDate.setDate(expireDate.getDate() - 2); // Explicitly expired
+
+						await setDoc(doc(db, 'settings', ownerId), {
+							planId: 'free',
+							isPro: false,
+							subscriptionStatus: 'expired',
+							subscriptionExpiresAt: expireDate,
+							manualLockOrders: true,
+							manualLockDebts: true,
+							manualLockSheets: true,
+							manualLockAi: true
+						}, { merge: true });
+
+						await addDoc(collection(db, 'notifications'), {
+							userId: ownerId,
+							title: '⛔ HỦY TRUY CẬP (CHƯA NHẬN ĐƯỢC THANH TOÁN)',
+							body: 'Admin đã kiểm tra đối soát nhưng chưa nhận được lệnh chuyển khoản từ bạn. Hệ thống đã tiến hành thu hồi gói cước và thiết lập khóa tính năng. Vui lòng thanh toán lại hoặc liên hệ hỗ trợ.',
+							type: 'alert',
+							priority: 'high',
+							read: false,
+							createdAt: serverTimestamp()
+						});
+
+						showToast("Đã hủy đăng ký, thiết lập khóa và gửi thông báo cho khách!", "success");
+						return;
+					}
+
+					const isPro = newPlan !== 'free' && newPlan !== 'test_expire';
+					const expireDate = new Date();
+
+					if (newPlan === 'test_expire') {
+						// Hết hạn → khoá ngay, không cho dùng
+						expireDate.setDate(expireDate.getDate() - 1);
+						await setDoc(doc(db, 'settings', ownerId), {
+							planId: newPlan,
+							isPro: false,
+							subscriptionStatus: 'expired',
+							paymentConfirmedAt: serverTimestamp(),
+							subscriptionExpiresAt: expireDate,
+							manualLockOrders: true,
+							manualLockDebts: true,
+							manualLockSheets: true,
+							manualLockAi: true,
+							graceUntil: null
+						}, { merge: true });
+						await addDoc(collection(db, 'notifications'), {
+							userId: ownerId,
+							title: '🔒 TÀI KHOẢN BỊ KHOÁ',
+							body: 'Admin đã thiết lập trạng thái hết hạn cho tài khoản.',
+							type: 'lock',
+							priority: 'high',
+							read: false,
+							createdAt: serverTimestamp()
+						});
+						showToast("Đã khoá tài khoản (TEST HẾT HẠN).", "success");
+						return;
+					}
+
+					let durDays = 60; // default for free
+					if (newPlan === 'premium_monthly') {
+						durDays = 30;
+					} else if (newPlan === 'premium_yearly') {
+						durDays = 365;
+					} else if (newPlan !== 'free') {
+						// Tìm gói tương ứng trong danh sách addons
+						const addon = addons.find(a => a.id === newPlan);
+						if (addon) {
+							durDays = Number(addon.durationDays) || (Number(addon.durationMonths) * 30) || 30;
+						} else {
+							durDays = 30;
+						}
+					}
+
+					expireDate.setDate(expireDate.getDate() + durDays);
+
+					await setDoc(doc(db, 'settings', ownerId), {
+						planId: newPlan,
+						isPro: isPro,
+						subscriptionStatus: isPro ? 'active' : 'trial',
+						paymentConfirmedAt: serverTimestamp(),
+						subscriptionExpiresAt: expireDate,
+						// Tự động mở khoá toàn bộ tính năng khi cập nhật gói mới thành công
+						manualLockOrders: false,
+						manualLockDebts: false,
+						manualLockSheets: false,
+						manualLockAi: false,
+						graceUntil: null
+					}, { merge: true });
+					showToast("Cập nhật gói thành công. Số ngày còn lại đã được đồng bộ!", "success");
+				} catch (error) {
+					console.error("Plan Update Error:", error);
+					showToast("Lỗi khi cập nhật gói", "error");
+				}
+			}
+		);
 	};
 
 	const handleApprovePayment = async (request: any, autoApprove: boolean = false) => {
-		if (!autoApprove && !window.confirm(`Xác nhận thanh toán ${request.amount.toLocaleString()}đ cho ${request.userEmail}?`)) return;
+		const proceed = async () => {
+			try {
+				await updateDoc(doc(db, 'payment_requests', request.id), {
+					status: 'approved',
+					handledAt: serverTimestamp(),
+					handledBy: auth.currentUser?.email
+				});
 
-		try {
-			await updateDoc(doc(db, 'payment_requests', request.id), {
-				status: 'approved',
-				handledAt: serverTimestamp(),
-				handledBy: auth.currentUser?.email
-			});
+				const planId = request.planId;
 
-			const planId = request.planId;
+				if (planId && planId.startsWith('addon_export')) {
+					const currentMonth = new Date().toISOString().slice(0, 7);
+					const { setDoc, increment } = await import('../services/firebase');
+					await setDoc(doc(db, 'usage_limits', `${request.ownerId}_${currentMonth}`), {
+						extraExportLimit: increment(5)
+					}, { merge: true });
+				} else if (planId === 'addon_ai_assistant') {
+					await setDoc(doc(db, 'settings', request.ownerId), {
+						hasAIAssistant: true
+					}, { merge: true });
+				} else {
+					const expireDate = new Date();
+					// Đọc durationDays từ gói trong subscription_packages
+					let durDays = 30; // mặc định 30 ngày
+					try {
+						const planSnap = await getDoc(doc(db, 'subscription_packages', request.planId));
+						if (planSnap.exists() && planSnap.data().durationDays) {
+							durDays = Number(planSnap.data().durationDays);
+						} else {
+							// Fallback cũ nếu gói không có durationDays
+							const isYearly = planId === 'premium_yearly' || planId === 'addon_yearly';
+							durDays = isYearly ? 365 : 30;
+						}
+					} catch (e) { /* fallback */ }
+					expireDate.setDate(expireDate.getDate() + durDays);
 
-			if (planId && planId.startsWith('addon_export')) {
-				const currentMonth = new Date().toISOString().slice(0, 7);
-				const { setDoc, increment } = await import('../services/firebase');
-				await setDoc(doc(db, 'usage_limits', `${request.ownerId}_${currentMonth}`), {
-					extraExportLimit: increment(5)
-				}, { merge: true });
-			} else if (planId === 'addon_ai_assistant') {
-				await setDoc(doc(db, 'settings', request.ownerId), {
-					hasAIAssistant: true
-				}, { merge: true });
-			} else {
-				const expireDate = new Date();
-				// Đọc durationDays từ gói trong subscription_packages
-				let durDays = 30; // mặc định 30 ngày
-				try {
-					const planSnap = await getDoc(doc(db, 'subscription_packages', request.planId));
-					if (planSnap.exists() && planSnap.data().durationDays) {
-						durDays = Number(planSnap.data().durationDays);
-					} else {
-						// Fallback cũ nếu gói không có durationDays
-						const isYearly = planId === 'premium_yearly' || planId === 'addon_yearly';
-						durDays = isYearly ? 365 : 30;
-					}
-				} catch (e) { /* fallback */ }
-				expireDate.setDate(expireDate.getDate() + durDays);
+					await setDoc(doc(db, 'settings', request.ownerId), {
+						subscriptionStatus: 'active',
+						isPro: true,
+						planId: request.planId,
+						paymentConfirmedAt: serverTimestamp(),
+						subscriptionExpiresAt: expireDate,
+						// Auto-unlock features upon approval
+						manualLockOrders: false,
+						manualLockDebts: false,
+						manualLockSheets: false,
+						manualLockAi: false
+					}, { merge: true });
+				}
 
-				await setDoc(doc(db, 'settings', request.ownerId), {
-					subscriptionStatus: 'active',
-					isPro: true,
-					planId: request.planId,
-					paymentConfirmedAt: serverTimestamp(),
-					subscriptionExpiresAt: expireDate,
-					// Auto-unlock features upon approval
-					manualLockOrders: false,
-					manualLockDebts: false,
-					manualLockSheets: false,
-					manualLockAi: false
-				}, { merge: true });
+				// Notify User
+				await addDoc(collection(db, 'notifications'), {
+					userId: request.ownerId,
+					title: '✨ GIA HẠN THÀNH CÔNG',
+					body: `Hệ thống đã nhận được xác nhận thanh toán. Gói ${request.planName || request.planId} đã được kích hoạt thành công.`,
+					type: 'success',
+					priority: 'high',
+					read: false,
+					createdAt: serverTimestamp()
+				});
+
+				// 📢 Thông báo cho admin về gói đăng ký mới
+				await createAdminNotification(request.ownerId, {
+					title: `💰 GÓI MỚI: ${request.planName || request.planId}`,
+					body: `${request.userEmail} vừa đăng ký gói ${request.planName || request.planId} — ${request.amount.toLocaleString('vi-VN')}đ. Đã được duyệt & kích hoạt.`,
+					type: 'subscription',
+					priority: 'high'
+				});
+
+				showToast("Đã duyệt thanh toán và kích hoạt tài khoản!", "success");
+			} catch (error) {
+				console.error("Approve Payment Error:", error);
+				showToast("Lỗi khi duyệt thanh toán.", "error");
 			}
+		};
 
-			// Notify User
-			await addDoc(collection(db, 'notifications'), {
-				userId: request.ownerId,
-				title: '✨ GIA HẠN THÀNH CÔNG',
-				body: `Hệ thống đã nhận được xác nhận thanh toán. Gói ${request.planName || request.planId} đã được kích hoạt thành công.`,
-				type: 'success',
-				priority: 'high',
-				read: false,
-				createdAt: serverTimestamp()
-			});
-
-			// 📢 Thông báo cho admin về gói đăng ký mới
-			await createAdminNotification(request.ownerId, {
-				title: `💰 GÓI MỚI: ${request.planName || request.planId}`,
-				body: `${request.userEmail} vừa đăng ký gói ${request.planName || request.planId} — ${request.amount.toLocaleString('vi-VN')}đ. Đã được duyệt & kích hoạt.`,
-				type: 'subscription',
-				priority: 'high'
-			});
-
-			// 📢 Thông báo cho admin về gói đăng ký mới
-			await createAdminNotification(request.ownerId, {
-				title: `💰 GÓI MỚI: ${request.planName || request.planId}`,
-				body: `${request.userEmail} vừa đăng ký gói ${request.planName || request.planId} — ${request.amount.toLocaleString('vi-VN')}đ. Đã được duyệt & kích hoạt.`,
-				type: 'subscription',
-				priority: 'high'
-			});
-
-			showToast("Đã duyệt thanh toán và kích hoạt tài khoản!", "success");
-		} catch (error) {
-			console.error("Approve Payment Error:", error);
-			showToast("Lỗi khi duyệt thanh toán.", "error");
+		if (autoApprove) {
+			await proceed();
+		} else {
+			showConfirm(
+				"Duyệt thanh toán",
+				`Xác nhận phê duyệt thanh toán ${request.amount.toLocaleString()}đ cho tài khoản ${request.userEmail}?`,
+				proceed
+			);
 		}
 	};
 
@@ -401,14 +433,19 @@ const NexusControl = () => {
 	};
 
 	const handleDeleteAddon = async (id: string) => {
-		if (!window.confirm("Chắc chắn xóa gói dịch vụ này?")) return;
-		try {
-			const { deleteDoc } = await import('../services/firebase');
-			await deleteDoc(doc(db, 'subscription_packages', id));
-			showToast("Đã xóa gói dịch vụ", "info");
-		} catch (error) {
-			showToast("Lỗi khi xóa gói dịch vụ", "error");
-		}
+		showConfirm(
+			"Xóa gói dịch vụ",
+			"Bạn có chắc chắn muốn xóa gói dịch vụ này? Hành động này không thể hoàn tác.",
+			async () => {
+				try {
+					const { deleteDoc } = await import('../services/firebase');
+					await deleteDoc(doc(db, 'subscription_packages', id));
+					showToast("Đã xóa gói dịch vụ", "info");
+				} catch (error) {
+					showToast("Lỗi khi xóa gói dịch vụ", "error");
+				}
+			}
+		);
 	};
 
 	const toggleUserLock = async (ownerId: string, field: string, currentVal: boolean) => {

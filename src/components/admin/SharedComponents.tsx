@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { Globe, Plus, Trash2 } from 'lucide-react';
 
-export const TabItem = ({ active, onClick, icon, label }: any) => (
+export const TabItem = ({ active, onClick, icon, label, badge }: any) => (
 	<button
 		onClick={onClick}
 		className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 whitespace-nowrap min-w-fit ${active
@@ -11,6 +11,11 @@ export const TabItem = ({ active, onClick, icon, label }: any) => (
 	>
 		{icon}
 		<span className="text-[10px] md:text-xs font-bold uppercase tracking-widest">{label}</span>
+		{badge !== undefined && badge > 0 && (
+			<span className="px-1.5 py-0.5 text-[9px] font-black rounded-full bg-rose-500 text-white animate-pulse">
+				{badge}
+			</span>
+		)}
 	</button>
 );
 

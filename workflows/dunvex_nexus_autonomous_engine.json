@@ -1,0 +1,262 @@
+{
+  "name": "Dunvex Nexus - Tự Động Đối Soát Thanh Toán & Quét Hết Hạn (Auto-Pilot)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 3
+            }
+          ]
+        }
+      },
+      "id": "node-schedule-cron",
+      "name": "1. Lịch Tự Động Quét (Mỗi 3 Phút)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [100, 300]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nexus-bank-webhook",
+        "options": {}
+      },
+      "id": "node-bank-webhook",
+      "name": "1.1. Webhook Biến Động Ngân Hàng Tức Thì",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [100, 500],
+      "webhookId": "nexus-bank-webhook"
+    },
+    {
+      "parameters": {
+        "url": "https://dunvex.com/api/payment-requests/pending?token=dunvex-nexus-2026",
+        "method": "GET",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "node-get-pending-requests",
+      "name": "2. Lấy Yêu Cầu Thanh Toán Chờ Duyệt",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [360, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://dunvex.com/api/bank-transactions/recent?token=dunvex-nexus-2026",
+        "method": "GET",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "node-get-bank-transactions",
+      "name": "3. Lấy Biến Động Ngân Hàng Mới Nhất",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [580, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const pendingData = $('2. Lấy Yêu Cầu Thanh Toán Chờ Duyệt').first().json;\nconst bankData = $input.first().json;\n\nconst pending = (pendingData.requests || []).filter(r => r.transferCode && r.status === 'pending' && Number(r.amount) > 0);\nconst transactions = bankData.transactions || [];\n\nfunction normalize(str) {\n  return (str || '').toUpperCase().replace(/\\s+/g, '').replace(/[^A-Z0-9]/g, '');\n}\n\nconst matchedList = [];\n\nfor (const req of pending) {\n  const reqCode = normalize(req.transferCode);\n  for (const tx of transactions) {\n    const txContent = normalize(tx.content || tx.description || '');\n    if (!reqCode || !txContent.includes(reqCode)) continue;\n\n    const expAmount = Number(req.amount);\n    const actAmount = Number(tx.amount);\n    const diff = Math.abs(expAmount - actAmount);\n    const tolerance = Math.max(expAmount * 0.05, 10000);\n\n    if (diff <= tolerance) {\n      matchedList.push({\n        requestId: req.id,\n        ownerId: req.ownerId,\n        userEmail: req.userEmail,\n        planId: req.planId,\n        planName: req.planName || req.planId,\n        amount: expAmount,\n        matchedAmount: actAmount,\n        transferCode: req.transferCode,\n        durationDays: req.durationDays || null,\n        durationMonths: req.durationMonths || null,\n        matchConfidence: 'n8n_nexus_autopilot'\n      });\n      break;\n    }\n  }\n}\n\nreturn matchedList.map(item => ({ json: item }));"
+      },
+      "id": "node-matcher",
+      "name": "4. So Khớp Lệnh Chuyển Tiền & Cú Pháp",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://dunvex.com/api/confirm-transfer",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer dunvex-nexus-2026"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"token\": \"dunvex-nexus-2026\",\n  \"requestId\": \"{{ $json.requestId }}\",\n  \"ownerId\": \"{{ $json.ownerId }}\",\n  \"userEmail\": \"{{ $json.userEmail }}\",\n  \"planId\": \"{{ $json.planId }}\",\n  \"planName\": \"{{ $json.planName }}\",\n  \"amount\": {{ $json.amount }},\n  \"matchedAmount\": {{ $json.matchedAmount }},\n  \"transferCode\": \"{{ $json.transferCode }}\",\n  \"durationDays\": {{ $json.durationDays }},\n  \"durationMonths\": {{ $json.durationMonths }},\n  \"matchConfidence\": \"n8n_nexus_autopilot\"\n}",
+        "options": {}
+      },
+      "id": "node-auto-unlock",
+      "name": "5. Tự Động Xác Nhận & Mở Khoá Tất Cả Nút Tính Năng",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1020, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://dunvex.com/api/data/settings",
+        "method": "GET",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "dunvex_b0b177d643677fb0a676bd3001881112"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "node-get-settings-all",
+      "name": "6. Quét Toàn Bộ Tài Khoản & Ngày Hết Hạn",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [580, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const res = $input.first().json;\nconst allSettings = res.data || (Array.isArray(res) ? res : []);\nconst now = new Date();\n\nconst toLock = [];\n\nfor (const s of allSettings) {\n  if (!s.id) continue;\n  \n  let expireDate = null;\n  if (s.subscriptionExpiresAt) {\n    expireDate = new Date(s.subscriptionExpiresAt);\n  }\n\n  // Nếu có ngày hết hạn và ngày hết hạn nhỏ hơn hiện tại (đã quá hạn)\n  if (expireDate && !isNaN(expireDate.getTime()) && expireDate < now) {\n    // Kiểm tra xem hiện tại có đang mở nút nào không, nếu chưa khoá thì đưa vào danh sách đóng nút\n    const isCurrentlyUnlocked = !s.manualLockOrders || !s.manualLockDebts || !s.manualLockSheets || s.isPro === true;\n    if (isCurrentlyUnlocked) {\n      toLock.push({\n        ownerId: s.id,\n        planId: s.planId || 'free',\n        expireDate: expireDate.toISOString(),\n        daysExpired: Math.floor((now.getTime() - expireDate.getTime()) / (1000 * 60 * 60 * 24))\n      });\n    }\n  }\n}\n\nreturn toLock.map(item => ({ json: item }));"
+      },
+      "id": "node-check-expiry",
+      "name": "7. Lọc Tài Khoản Quá Hạn Cần Đóng Nút",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 500]
+    },
+    {
+      "parameters": {
+        "url": "=https://dunvex.com/api/data/settings/{{ $json.ownerId }}",
+        "method": "PATCH",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "dunvex_b0b177d643677fb0a676bd3001881112"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"isPro\": false,\n  \"subscriptionStatus\": \"expired\",\n  \"manualLockOrders\": true,\n  \"manualLockDebts\": true,\n  \"manualLockSheets\": true,\n  \"manualLockAi\": true\n}",
+        "options": {}
+      },
+      "id": "node-lock-expired",
+      "name": "8. Tự Động Đóng Nút Tính Năng (Lock Features)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1020, 500]
+    }
+  ],
+  "connections": {
+    "1. Lịch Tự Động Quét (Mỗi 3 Phút)": {
+      "main": [
+        [
+          {
+            "node": "2. Lấy Yêu Cầu Thanh Toán Chờ Duyệt",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "6. Quét Toàn Bộ Tài Khoản & Ngày Hết Hạn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1.1. Webhook Biến Động Ngân Hàng Tức Thì": {
+      "main": [
+        [
+          {
+            "node": "2. Lấy Yêu Cầu Thanh Toán Chờ Duyệt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Lấy Yêu Cầu Thanh Toán Chờ Duyệt": {
+      "main": [
+        [
+          {
+            "node": "3. Lấy Biến Động Ngân Hàng Mới Nhất",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. Lấy Biến Động Ngân Hàng Mới Nhất": {
+      "main": [
+        [
+          {
+            "node": "4. So Khớp Lệnh Chuyển Tiền & Cú Pháp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4. So Khớp Lệnh Chuyển Tiền & Cú Pháp": {
+      "main": [
+        [
+          {
+            "node": "5. Tự Động Xác Nhận & Mở Khoá Tất Cả Nút Tính Năng",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6. Quét Toàn Bộ Tài Khoản & Ngày Hết Hạn": {
+      "main": [
+        [
+          {
+            "node": "7. Lọc Tài Khoản Quá Hạn Cần Đóng Nút",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "7. Lọc Tài Khoản Quá Hạn Cần Đóng Nút": {
+      "main": [
+        [
+          {
+            "node": "8. Tự Động Đóng Nút Tính Năng (Lock Features)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

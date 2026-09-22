@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { smartSearchMatch, calculateSearchScore } from '../utils/searchUtils';
 import { auth, db } from '../services/firebase';
 // 🔧 REFACTOR: Chỉ giữ Firestore write ops (addDoc, updateDoc, deleteDoc, batch...)
 // Read ops đã chuyển qua hooks: useProducts, useOrders, useInventoryLogs
@@ -26,7 +27,7 @@ const ProductList = () => {
 	const navigate = useNavigate();
 	const location = useLocation();
 	const owner = useOwner();
-	const { showToast } = useToast();
+	const { showToast, showConfirm } = useToast();
 
 	// 🔧 REFACTOR: Data từ hooks — bỏ 3 useState + 3 useEffect onSnapshot
 	const [searchTerm, setSearchTerm] = useState('');
@@ -58,7 +59,7 @@ const ProductList = () => {
 	const { orders } = useOrders({
 		ownerId: owner.ownerId,
 		enabled: !owner.loading && !!owner.ownerId,
-		maxResults: 1000,
+		maxResults: 50,
 	});
 
 	const [showAddForm, setShowAddForm] = useState(false);
@@ -276,6 +277,7 @@ const ProductList = () => {
 			showToast(`Lỗi upload: ${error.message}`, "error");
 		} finally {
 			setUploading(false);
+			if (e.target) e.target.value = '';
 		}
 	};
 
@@ -296,12 +298,12 @@ const ProductList = () => {
 		const logs = inventoryLogs.filter(l => targetIds.includes(l.productId));
 
 		const totalImport = logs
-			.filter(l => l.type === 'init' || (l.type === 'audit' && l.diffType === 'increase'))
-			.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+			.filter(l => l.type === 'init' || l.type === 'import' || (l.type === 'audit' && l.diffType === 'increase'))
+			.reduce((sum, l) => sum + (Number(l.qty ?? l.change) || 0), 0);
 
 		const totalExport = logs
 			.filter(l => {
-				const isOutType = l.type === 'out' || (l.type === 'audit' && l.diffType === 'decrease');
+				const isOutType = l.type === 'out' || l.type === 'export' || (l.type === 'audit' && l.diffType === 'decrease');
 				if (!isOutType) return false;
 
 				// If it's an order (type 'out'), verify status
@@ -312,7 +314,7 @@ const ProductList = () => {
 
 				return true;
 			})
-			.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+			.reduce((sum, l) => sum + (Number(l.qty ?? l.change) || 0), 0);
 
 		return { import: totalImport, export: totalExport };
 	};
@@ -332,12 +334,12 @@ const ProductList = () => {
 		products.forEach(p => {
 			const logs = inventoryLogs.filter(l => l.productId === p.id);
 			const totalImport = logs
-				.filter(l => l.type === 'init' || (l.type === 'audit' && l.diffType === 'increase'))
-				.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+				.filter(l => l.type === 'init' || l.type === 'import' || (l.type === 'audit' && l.diffType === 'increase'))
+				.reduce((sum, l) => sum + (Number(l.qty ?? l.change) || 0), 0);
 
 			const totalExport = logs
 				.filter(l => {
-					const isOutType = l.type === 'out' || (l.type === 'audit' && l.diffType === 'decrease');
+					const isOutType = l.type === 'out' || l.type === 'export' || (l.type === 'audit' && l.diffType === 'decrease');
 					if (!isOutType) return false;
 
 					// If it's an order (type 'out'), verify status
@@ -349,7 +351,7 @@ const ProductList = () => {
 
 					return true; // Keep audit/manual decreases
 				})
-				.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+				.reduce((sum, l) => sum + (Number(l.qty ?? l.change) || 0), 0);
 
 			productStats[p.id] = { import: totalImport, export: totalExport };
 		});
@@ -553,7 +555,7 @@ const ProductList = () => {
 	};
 
 	const handleDeleteProduct = async (id: string, bypassConfirm: boolean = false) => {
-		if (bypassConfirm || window.confirm("Bạn có chắc chắn muốn xóa sản phẩm này không?")) {
+		const proceed = async () => {
 			try {
 				// 🎯 Optimistic: ẩn sản phẩm ngay trên UI (không cần chờ server/SSE)
 				removeLocal(id);
@@ -565,37 +567,51 @@ const ProductList = () => {
 				refresh();
 				showToast("Lỗi khi xóa sản phẩm", "error");
 			}
+		};
+
+		if (bypassConfirm) {
+			await proceed();
+		} else {
+			showConfirm(
+				"Xóa sản phẩm",
+				"Bạn có chắc chắn muốn xóa sản phẩm này không?",
+				proceed
+			);
 		}
 	};
 
 	const handleBulkDelete = async () => {
-		if (!window.confirm(`Bạn có chắc chắn muốn xóa ${selectedIds.length} sản phẩm đã chọn không?`)) return;
+		showConfirm(
+			"Xóa hàng loạt sản phẩm",
+			`Bạn có chắc chắn muốn xóa ${selectedIds.length} sản phẩm đã chọn không?`,
+			async () => {
+				try {
+					const batch = writeBatch(db);
+					selectedIds.forEach(id => {
+						batch.delete(doc(db, 'products', id));
+					});
 
-		try {
-			const batch = writeBatch(db);
-			selectedIds.forEach(id => {
-				batch.delete(doc(db, 'products', id));
-			});
+					// Log Bulk Delete
+					await addDoc(collection(db, 'audit_logs'), {
+						action: 'Xóa hàng loạt sản phẩm',
+						user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
+						userId: auth.currentUser?.uid || "",
+						ownerId: owner.ownerId,
+						details: `Đã xóa ${selectedIds.length} sản phẩm`,
+						createdAt: serverTimestamp()
+					});
 
-			// Log Bulk Delete
-			await addDoc(collection(db, 'audit_logs'), {
-				action: 'Xóa hàng loạt sản phẩm',
-				user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
-				userId: auth.currentUser?.uid || "",
-				ownerId: owner.ownerId,
-				details: `Đã xóa ${selectedIds.length} sản phẩm`,
-				createdAt: serverTimestamp()
-			});
-
-			await batch.commit();
-			// 🎯 Optimistic: ẩn ngay các sản phẩm đã xóa khỏi UI
-			selectedIds.forEach(id => removeLocal(id));
-			setSelectedIds([]);
-			showToast(`Đã xóa ${selectedIds.length} sản phẩm thành công`, "success");
-		} catch (error) {
-			refresh();
-			showToast("Lỗi khi xóa hàng loạt sản phẩm", "error");
-		}
+					await batch.commit();
+					// 🎯 Optimistic: ẩn ngay các sản phẩm đã xóa khỏi UI
+					selectedIds.forEach(id => removeLocal(id));
+					setSelectedIds([]);
+					showToast(`Đã xóa ${selectedIds.length} sản phẩm thành công`, "success");
+				} catch (error) {
+					refresh();
+					showToast("Lỗi khi xóa hàng loạt sản phẩm", "error");
+				}
+			}
+		);
 	};
 
 	const toggleSelectAll = () => {
@@ -743,7 +759,21 @@ const ProductList = () => {
 			return (Number(product.stock) || 0) <= 10;
 		}
 
-		return true;
+		return smartSearchMatch([
+			product.name || '',
+			product.sku || '',
+			product.serialNumber || '',
+			product.category || '',
+			product.specification || '',
+			product.packaging || '',
+			product.density || '',
+			product.note || ''
+		], debouncedSearchTerm);
+	}).sort((a, b) => {
+		const scoreA = calculateSearchScore(a, debouncedSearchTerm);
+		const scoreB = calculateSearchScore(b, debouncedSearchTerm);
+		if (scoreA !== scoreB) return scoreB - scoreA;
+		return (a.name || '').localeCompare(b.name || '');
 	});
 
 	const paginatedProducts = filteredProducts;
@@ -854,7 +884,7 @@ const ProductList = () => {
 	const getImageUrl = (url: string) => getOptimizedImageUrl(url);
 
 	const hasViewPermission = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee || (owner.accessRights?.inventory_view ?? true);
-	const hasManagePermission = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
+	const hasManagePermission = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee || (owner.accessRights?.inventory_manage ?? owner.accessRights?.products_manage ?? true);
 
 	if (owner.loading) return null;
 

@@ -1,0 +1,304 @@
+{
+  "name": "DUNVEX MASTER ALL-IN-ONE ENGINE",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dunvex-events",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-events-webhook",
+      "name": "1.1 [Alerts Hub] Webhook Nhận Sự Kiện Realtime",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [100, 200],
+      "webhookId": "dunvex-events-webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"message\": \"Sự kiện Dunvex đã được tiếp nhận và xử lý an toàn!\",\n  \"timestamp\": \"{{ $now.toISO() }}\"\n}",
+        "options": {}
+      },
+      "id": "node-events-respond",
+      "name": "1.2 Phản Hồi 200 OK (Chống Treo/Timeout)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [340, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst eventType = body.eventType || body.type || 'generic';\nconst botToken = (body.botToken || '').trim();\nconst chatId = (body.chatId || body.telegramGroupChatId || body.telegramChatId || '').trim();\nconst data = body.data || body;\nconst rawMsg = body.message || '';\n\nif (!botToken || !chatId) return [];\n\nconst nowStr = new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });\nfunction formatCurrency(val) {\n  const n = Number(String(val || 0).replace(/[^0-9.-]/g, '')) || 0;\n  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n);\n}\n\nlet formattedText = '';\n\n// 1. Chuyển vào Thùng rác (Xoá mềm)\nif (eventType === 'trash_moved') {\n  const typeLabel = data.collection === 'orders' ? 'Đơn hàng' : (data.collection === 'customers' ? 'Khách hàng' : (data.collection === 'products' ? 'Sản phẩm' : (data.collection || 'Dữ liệu')));\n  formattedText = `🗑️ <b>ĐÃ CHUYỂN VÀO THÙNG RÁC</b>\\n\\n` +\n    `📁 <b>Loại dữ liệu:</b> <b>${typeLabel}</b>\\n` +\n    `🏷️ <b>Tên / Mã:</b> <b>${data.title || data.docId || 'Chi tiết'}</b>\\n` +\n    `👤 <b>Người xoá:</b> <b>${data.deletedBy || data.userName || 'Nhân viên'}</b>\\n` +\n    `🕒 <b>Thời gian:</b> ${data.time || nowStr}\\n\\n` +\n    `⏳ <i>Dữ liệu sẽ tự động bị xoá vĩnh viễn sau 5 ngày nếu không được khôi phục.</i>`;\n\n// 2. Khôi phục từ Thùng rác (Restore)\n} else if (eventType === 'trash_restore') {\n  const typeLabel = data.collection === 'orders' ? 'Đơn hàng' : (data.collection === 'customers' ? 'Khách hàng' : (data.collection === 'products' ? 'Sản phẩm' : (data.collection || 'Dữ liệu')));\n  formattedText = `♻️ <b>KHÔI PHỤC DỮ LIỆU TỪ THÙNG RÁC</b>\\n\\n` +\n    `📁 <b>Loại dữ liệu:</b> <b>${typeLabel}</b>\\n` +\n    `🏷️ <b>Tên / Mã:</b> <b>${data.title || data.docId || 'Chi tiết'}</b>\\n` +\n    `👤 <b>Người khôi phục:</b> <b>${data.restoredBy || data.userName || 'Admin'}</b>\\n` +\n    `🕒 <b>Thời gian:</b> ${data.time || nowStr}\\n\\n` +\n    `✅ <i>Dữ liệu đã được khôi phục và đưa trở lại hoạt động bình thường.</i>`;\n\n// 3. Tự động xoá vĩnh viễn thùng rác quá 5 ngày\n} else if (eventType === 'trash_auto_purge') {\n  let listItems = '';\n  if (Array.isArray(data.items) && data.items.length > 0) {\n    listItems = data.items.slice(0, 10).map(it => `  • [${it.collection}] <b>${it.title || it.id}</b>`).join('\\n');\n    if (data.items.length > 10) listItems += `\\n  <i>... và ${data.items.length - 10} mục khác</i>`;\n  }\n  formattedText = `🔥 <b>TỰ ĐỘNG XOÁ VĨNH VIỄN THÙNG RÁC (> 5 NGÀY)</b>\\n\\n` +\n    `🗑️ <b>Số lượng đã xoá:</b> <b>${data.purgedCount || 0} bản ghi</b>\\n` +\n    (listItems ? `\\n📋 <b>Chi tiết dữ liệu hết hạn:</b>\\n${listItems}\\n\\n` : '\\n') +\n    `🕒 <b>Thời gian thực hiện:</b> ${nowStr}\\n` +\n    `🛡️ <i>Hệ thống tự động dọn dẹp định kỳ để bảo vệ bộ nhớ.</i>`;\n\n// 4. Chấm công\n} else if (eventType === 'attendance') {\n  const actionStr = data.action === 'checkout' ? '🚪 RA CA (CHECK-OUT)' : '🏢 VÀO CA (CHECK-IN)';\n  const icon = data.action === 'checkout' ? '👋' : '⏰';\n  formattedText = `${icon} <b>THÔNG BÁO CHẤM CÔNG - ${actionStr}</b>\\n\\n` +\n    `👤 <b>Nhân viên:</b> <b>${data.userName || 'Nhân viên'}</b>\\n` +\n    `📧 <b>Email:</b> <code>${data.userEmail || '---'}</code>\\n` +\n    `🕒 <b>Thời gian:</b> ${data.time || nowStr}\\n` +\n    (data.distance != null ? `📏 <b>Khoảng cách:</b> <b>${data.distance} mét</b> ${data.distance > 200 ? '⚠️' : '✅'}\\n` : '') +\n    (data.location ? `📍 <b>Tọa độ:</b> <code>${data.location.lat?.toFixed(5)}, ${data.location.lng?.toFixed(5)}</code>\\n` : '') +\n    (data.status ? `📊 <b>Trạng thái:</b> ${data.status === 'Đúng giờ' ? '🟢 Đúng giờ' : '🟡 ' + data.status}\\n` : '') +\n    `⚡ <i>Ghi nhận tự động từ Dunvex Build.</i>`;\n\n// 5. Đi công trình / giao hàng\n} else if (eventType === 'site_checkin') {\n  formattedText = `📍 <b>CHECK-IN CÔNG TRÌNH / GIAO HÀNG</b>\\n\\n` +\n    `👤 <b>Nhân viên:</b> <b>${data.userName || 'Nhân viên'}</b>\\n` +\n    `🏗️ <b>Khách hàng/Công trình:</b> <b>${data.customerName || data.siteName || 'Công trình'}</b>\\n` +\n    `🕒 <b>Thời gian:</b> ${data.time || nowStr}\\n` +\n    (data.distance != null ? `📏 <b>Khoảng cách:</b> <b>${data.distance} mét</b>\\n` : '') +\n    (data.location ? `🗺️ <b>GPS:</b> <a href=\"https://www.google.com/maps/search/?api=1&query=${data.location.lat},${data.location.lng}\">Xem bản đồ</a>\\n` : '') +\n    (data.imageUrl ? `📸 <b>Ảnh hiện trường:</b> <a href=\"${data.imageUrl}\">Xem ảnh</a>\\n` : '') +\n    (data.note ? `📝 <b>Ghi chú:</b> <i>${data.note}</i>\\n` : '');\n\n// 6. Thu nợ\n} else if (eventType === 'debt_payment') {\n  formattedText = `💰 <b>THU NỢ KHÁCH HÀNG</b>\\n\\n` +\n    `👤 <b>Khách hàng:</b> <b>${data.customerName || 'Khách hàng'}</b>\\n` +\n    `💵 <b>Số tiền:</b> <b>${formatCurrency(data.amount)}</b>\\n` +\n    `💳 <b>Hình thức:</b> ${data.paymentMethod || 'Tiền mặt / Chuyển khoản'}\\n` +\n    (data.remainingDebt != null ? `📉 <b>Dư nợ còn lại:</b> <b>${formatCurrency(data.remainingDebt)}</b>\\n` : '') +\n    `👨‍💼 <b>Người thu:</b> ${data.collectorName || data.user || 'Nhân viên'}\\n` +\n    `🕒 <b>Thời gian:</b> ${data.time || nowStr}`;\n\n// 7. Đơn nghỉ phép\n} else if (eventType === 'leave_request') {\n  const reqType = data.requestType === 'leave' ? '🏖️ NGHỈ PHÉP' : '⏰ XIN ĐI MUỘN';\n  formattedText = `📝 <b>ĐƠN ĐĂNG KÝ ${reqType}</b>\\n\\n` +\n    `👤 <b>Nhân viên:</b> <b>${data.userName || 'Nhân viên'}</b>\\n` +\n    `📅 <b>Ngày:</b> <b>${Array.isArray(data.dates) ? data.dates.join(', ') : (data.dates || data.date || 'Hôm nay')}</b>\\n` +\n    `💬 <b>Lý do:</b> <i>${data.note || data.reason || 'Bận việc riêng'}</i>\\n` +\n    `🕒 <b>Thời gian:</b> ${data.time || nowStr}`;\n\n// 8. Đơn hàng\n} else if (eventType === 'order') {\n  formattedText = `🛒 <b>CẬP NHẬT ĐƠN HÀNG</b>\\n\\n` +\n    `👤 <b>Khách hàng:</b> <b>${data.customerName || 'Khách hàng'}</b>\\n` +\n    `💰 <b>Tổng tiền:</b> <b>${formatCurrency(data.totalAmount || data.amount)}</b>\\n` +\n    `📦 <b>Trạng thái:</b> <b>${data.status || 'Đơn chốt'}</b>\\n` +\n    `🕒 <b>Thời gian:</b> ${data.time || nowStr}`;\n} else {\n  formattedText = rawMsg || `🔔 <b>THÔNG BÁO DUNVEX</b>\\n\\n${JSON.stringify(data)}`;\n}\n\nreturn [{\n  json: {\n    botToken,\n    chatId,\n    text: formattedText\n  }\n}];"
+      },
+      "id": "node-events-format",
+      "name": "1.3 Định Dạng Thông Báo HTML Chuẩn",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [340, 260]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dunvex-order",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-order-webhook",
+      "name": "2.1 [Nhận Đơn] Webhook Web Ngoài",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [100, 500],
+      "webhookId": "dunvex-order-webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"message\": \"Đơn hàng đã được n8n tiếp nhận an toàn!\",\n  \"timestamp\": \"{{ $now.toISO() }}\"\n}",
+        "options": {}
+      },
+      "id": "node-order-respond",
+      "name": "2.2 Phản Hồi 200 OK Cho Web Ngoài",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [340, 420]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nlet rawName = (body.customerName || body.name || '').trim().replace(/\\s+/g, ' ');\nlet rawPhone = String(body.customerPhone || body.phone || '').trim().replace(/\\D/g, '');\nif (rawPhone.startsWith('84') && rawPhone.length > 9) rawPhone = '0' + rawPhone.slice(2);\n\nlet rawItems = body.items || body.products || body.line_items || [];\nif (typeof rawItems === 'string') { try { rawItems = JSON.parse(rawItems); } catch(e) { rawItems = []; } }\nif (!Array.isArray(rawItems) && typeof rawItems === 'object') rawItems = [rawItems];\n\nconst cleanedItems = rawItems.map((item, idx) => ({\n  productId: item.productId || item.id || '',\n  productName: (item.productName || item.name || item.title || `Sản phẩm ${idx + 1}`).trim(),\n  qty: Math.max(1, Number(String(item.qty || item.quantity || 1).replace(/[^0-9.-]/g, '')) || 1),\n  price: Number(String(item.price || item.unitPrice || 0).replace(/[^0-9.-]/g, '')) || 0,\n  unit: item.unit || 'Cái',\n  variant: item.variant || '',\n  imageUrl: item.imageUrl || item.image || ''\n}));\n\nreturn [{\n  json: {\n    apiKey: body.apiKey || body.dunvexApiKey || '',\n    customerName: rawName || 'Khách hàng mới',\n    customerPhone: rawPhone,\n    customerEmail: (body.customerEmail || body.email || '').toLowerCase().trim(),\n    customerAddress: body.customerAddress || body.address || '',\n    note: body.note || body.customerNote || 'Đơn hàng tự động qua n8n',\n    shippingFee: Number(String(body.shippingFee || 0).replace(/[^0-9.-]/g, '')) || 0,\n    paidAmount: Number(String(body.paidAmount || 0).replace(/[^0-9.-]/g, '')) || 0,\n    items: cleanedItems,\n    deliveryLocation: body.deliveryLocation || null,\n    rawDeliveryLocation: body.rawDeliveryLocation || ''\n  }\n}];"
+      },
+      "id": "node-order-clean",
+      "name": "2.3 Chuẩn Hóa Khách Hàng & Giỏ Hàng",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [340, 560]
+    },
+    {
+      "parameters": {
+        "url": "https://dunvex.com/api/order-webhook",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $json.apiKey }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}"
+      },
+      "id": "node-order-push-dunvex",
+      "name": "2.4 Đẩy Đơn Sang Dunvex API (Tự Bắn Tele Cho Chủ)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [580, 560]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "cronExpression", "expression": "30 17 * * *" }
+          ]
+        }
+      },
+      "id": "node-eod-cron",
+      "name": "3.1 [Báo Cáo EOD] Tự Động 17h30 Hàng Ngày",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [100, 800]
+    },
+    {
+      "parameters": {
+        "url": "https://dunvex.com/api/cron-eod",
+        "method": "GET",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer dunvex-eod-secret" }
+          ]
+        }
+      },
+      "id": "node-eod-fetch",
+      "name": "3.2 Tạo Báo Cáo Tổng Kết Ngày & Gửi Tele",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [340, 800]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "cronExpression", "expression": "0 2 * * *" }
+          ]
+        }
+      },
+      "id": "node-backup-cron",
+      "name": "4.1 [Backup GDrive] Tự Động 02h00 Sáng",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [100, 1000]
+    },
+    {
+      "parameters": {
+        "url": "https://dunvex.com/api/backup-gdrive",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "dunvex_b0b177d643677fb0a676bd3001881112" }
+          ]
+        }
+      },
+      "id": "node-backup-run",
+      "name": "4.2 Sao Lưu Dữ Liệu SQLite & Báo Cáo Tele",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [340, 1000]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nexus-agent",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-ai-webhook",
+      "name": "5.1 [AI Super Admin] Webhook Nhận Lệnh",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [100, 1200],
+      "webhookId": "nexus-agent-webhook"
+    },
+    {
+      "parameters": {
+        "url": "https://dunvex.com/api/data/system_config/main",
+        "method": "GET",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "dunvex_b0b177d643677fb0a676bd3001881112" }
+          ]
+        }
+      },
+      "id": "node-ai-status",
+      "name": "5.2 Đọc Cấu Hình & Trạng Thái Hệ Thống",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [340, 1200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $('5.1 [AI Super Admin] Webhook Nhận Lệnh').first().json;\nconst body = input.body || input;\nconst command = (body.message || body.command || '').toLowerCase();\nconst currentConfig = $input.first().json.data || $input.first().json || {};\n\nlet updatePayload = {};\nlet reply = '';\n\nif (command.includes('bảo trì')) {\n  const enable = !command.includes('tắt') && !command.includes('mở');\n  updatePayload = { maintenance_mode: enable };\n  reply = enable ? '⛔ ĐÃ BẬT BẢO TRÌ TOÀN TRANG!' : '✅ ĐÃ TẮT BẢO TRÌ!';\n} else if (command.includes('khoá tạo đơn')) {\n  updatePayload = { lock_free_orders: true };\n  reply = '🔒 ĐÃ KHOÁ TẠO ĐƠN CHO TÀI KHOẢN FREE!';\n} else if (command.includes('mở tạo đơn')) {\n  updatePayload = { lock_free_orders: false };\n  reply = '🔓 ĐÃ MỞ TẠO ĐƠN CHO TÀI KHOẢN FREE!';\n} else {\n  reply = `📊 TRẠNG THÁI NEXUS CONTROL:\\n` +\n    `• Bảo trì: ${currentConfig.maintenance_mode ? '🔴 BẬT' : '🟢 TẮT'}\\n` +\n    `• Khoá đơn Free: ${currentConfig.lock_free_orders ? '🔒 KHOÁ' : '🟢 MỞ'}\\n` +\n    `• Khoá nợ Free: ${currentConfig.lock_free_debts ? '🔒 KHOÁ' : '🟢 MỞ'}`;\n}\n\nreturn [{\n  json: {\n    updatePayload,\n    reply,\n    shouldUpdate: Object.keys(updatePayload).length > 0\n  }\n}];"
+      },
+      "id": "node-ai-logic",
+      "name": "5.3 AI Phân Tích & Ra Quyết Định",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [580, 1200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"nexusMessage\": \"{{ $json.reply }}\",\n  \"updated\": {{ $json.shouldUpdate }},\n  \"timestamp\": \"{{ $now.toISO() }}\"\n}",
+        "options": {}
+      },
+      "id": "node-ai-respond",
+      "name": "5.4 Trả Lời Cho Admin",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [820, 1200]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.telegram.org/bot{{ $json.botToken }}/sendMessage",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  chat_id: $json.chatId,\n  text: $json.text,\n  parse_mode: 'HTML'\n}) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "node-telegram-sender",
+      "name": "⭐ BẮN THÔNG BÁO TELEGRAM (Unified Hub)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 260],
+      "continueOnFail": true
+    }
+  ],
+  "connections": {
+    "1.1 [Alerts Hub] Webhook Nhận Sự Kiện Realtime": {
+      "main": [
+        [
+          { "node": "1.2 Phản Hồi 200 OK (Chống Treo/Timeout)", "type": "main", "index": 0 },
+          { "node": "1.3 Định Dạng Thông Báo HTML Chuẩn", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "1.3 Định Dạng Thông Báo HTML Chuẩn": {
+      "main": [
+        [
+          { "node": "⭐ BẮN THÔNG BÁO TELEGRAM (Unified Hub)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "2.1 [Nhận Đơn] Webhook Web Ngoài": {
+      "main": [
+        [
+          { "node": "2.2 Phản Hồi 200 OK Cho Web Ngoài", "type": "main", "index": 0 },
+          { "node": "2.3 Chuẩn Hóa Khách Hàng & Giỏ Hàng", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "2.3 Chuẩn Hóa Khách Hàng & Giỏ Hàng": {
+      "main": [
+        [
+          { "node": "2.4 Đẩy Đơn Sang Dunvex API (Tự Bắn Tele Cho Chủ)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "3.1 [Báo Cáo EOD] Tự Động 17h30 Hàng Ngày": {
+      "main": [
+        [
+          { "node": "3.2 Tạo Báo Cáo Tổng Kết Ngày & Gửi Tele", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "4.1 [Backup GDrive] Tự Động 02h00 Sáng": {
+      "main": [
+        [
+          { "node": "4.2 Sao Lưu Dữ Liệu SQLite & Báo Cáo Tele", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "5.1 [AI Super Admin] Webhook Nhận Lệnh": {
+      "main": [
+        [
+          { "node": "5.2 Đọc Cấu Hình & Trạng Thái Hệ Thống", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "5.2 Đọc Cấu Hình & Trạng Thái Hệ Thống": {
+      "main": [
+        [
+          { "node": "5.3 AI Phân Tích & Ra Quyết Định", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "5.3 AI Phân Tích & Ra Quyết Định": {
+      "main": [
+        [
+          { "node": "5.4 Trả Lời Cho Admin", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  }
+}

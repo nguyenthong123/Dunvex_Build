@@ -47,8 +47,14 @@ const InventoryActionModal: React.FC<InventoryActionModalProps> = ({ show, onClo
 	};
 
 	const handleQuantityChange = (id: string, rawValue: string) => {
-		// Chỉ cho phép số, không cho ký tự đặc biệt. Giữ giá trị thô để nhập liệu tự nhiên
-		const clean = rawValue.replace(/[^0-9]/g, '');
+		// Thay thế dấu phẩy thành dấu chấm để xử lý số thập phân
+		let clean = rawValue.replace(/,/g, '.');
+		// Chỉ giữ lại số và tối đa một dấu chấm
+		clean = clean.replace(/[^0-9.]/g, '');
+		const parts = clean.split('.');
+		if (parts.length > 2) {
+			clean = parts[0] + '.' + parts.slice(1).join('');
+		}
 		setSelectedItems(selectedItems.map(i => i.product.id === id ? { ...i, quantity: clean } : i));
 	};
 
@@ -75,9 +81,9 @@ const InventoryActionModal: React.FC<InventoryActionModalProps> = ({ show, onClo
 				if (typeof item.product.stock !== 'number') {
 					throw new Error(`Sản phẩm "${item.product.name || '?'}" không có số lượng tồn kho`);
 				}
-				const qty = parseInt(item.quantity, 10);
-				if (!qty || qty <= 0) {
-					showToast(`Vui lòng nhập số lượng cho "${item.product.name || '?'}"`, 'warning');
+				const qty = parseFloat(item.quantity);
+				if (isNaN(qty) || qty <= 0) {
+					showToast(`Vui lòng nhập số lượng hợp lệ cho "${item.product.name || '?'}"`, 'warning');
 					setLoading(false);
 					return;
 				}
@@ -90,10 +96,10 @@ const InventoryActionModal: React.FC<InventoryActionModalProps> = ({ show, onClo
 
 			// Write ONE inventory_log per product (matching flat structure used by stats calculator)
 			for (const item of selectedItems) {
-				const qty = parseInt(item.quantity, 10) || 0;
+				const qty = parseFloat(item.quantity) || 0;
 				const newStock = type === 'import'
-					? Number(item.product.stock) + qty
-					: Number(item.product.stock) - qty;
+					? Number((Number(item.product.stock) + qty).toFixed(3))
+					: Number((Number(item.product.stock) - qty).toFixed(3));
 
 				const logEntry = {
 					productId: item.product.id,
@@ -120,10 +126,6 @@ const InventoryActionModal: React.FC<InventoryActionModalProps> = ({ show, onClo
 			setSelectedItems([]);
 			setNote('');
 
-			// Auto-reload sau 0.8s để hiển thị số liệu mới
-			setTimeout(() => {
-				window.location.reload();
-			}, 800);
 		} catch (error: any) {
 			console.error('[InventoryAction] Error:', error);
 			showToast('Lỗi khi lưu: ' + (error?.message || 'Không xác định'), 'error');
@@ -203,8 +205,7 @@ const InventoryActionModal: React.FC<InventoryActionModalProps> = ({ show, onClo
 									<div className="flex items-center gap-2">
 										<input 
 											type="text"
-											inputMode="numeric"
-											pattern="[0-9]*"
+											inputMode="decimal"
 											value={item.quantity}
 											onChange={(e) => handleQuantityChange(item.product.id, e.target.value)}
 											className="w-20 text-center bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg py-1.5 font-black text-indigo-600 dark:text-indigo-400 outline-none focus:border-indigo-500"

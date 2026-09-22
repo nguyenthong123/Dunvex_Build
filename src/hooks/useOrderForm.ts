@@ -1,39 +1,48 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { smartSearchMatch, calculateSearchScore } from '../utils/searchUtils';
+import { calculateCouponDiscount } from '../utils/couponUtils';
+import { findValidCustomerRebate } from '../utils/rebateUtils';
 import { shouldExcludeFromProfit } from '../utils/profitUtils';
 import { db, auth } from '../services/firebase';
 import { collection, query, onSnapshot, doc, getDoc, serverTimestamp, where, getDocs, limit, Timestamp, runTransaction, increment } from '../services/firebase';
+import { customerRebateService } from '../services/dataAccess';
 import { useProducts } from './useProducts';
 import { useCustomers } from './useCustomers';
-import { usePayments } from './usePayments';
 import { sendTelegramNotification } from '../utils/telegramNotify';
 
 interface UseOrderFormParams {
 	owner: any;
-	showToast: (msg: string, type: 'success' | 'warning' | 'error') => void;
+	showToast: (msg: string, type?: 'success' | 'warning' | 'error' | 'info') => void;
 	editId?: string;
 	location: any;
 }
 
-export function useOrderForm({ owner, showToast, editId, location }: UseOrderFormParams) {
-	// ── Normalization Helpers ──
-	const normalizeText = (text: any) => text ? String(text).normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase() : '';
-	const removeAccents = (str: any) => String(str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D');
-	const normalizeSmart = (text: any) => removeAccents(normalizeText(text));
-	const vibrate = (pattern: number | number[]) => {
-		if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) {
-			window.navigator.vibrate(pattern);
-		}
-	};
-	const isMatch = (target: string, query: string) => {
-		const t = normalizeText(target);
-		const q = normalizeText(query);
-		return t.includes(q) || removeAccents(t).includes(removeAccents(q));
-	};
+// ── Top-level Stable Normalization Helpers (không tạo lại mỗi render) ──
+const normalizeText = (text: any) => text ? String(text).normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase() : '';
+const removeAccents = (str: any) => String(str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D');
+const normalizeSmart = (text: any) => removeAccents(normalizeText(text));
+const parseVNQty = (val: any): number => {
+	if (typeof val === 'number') return isNaN(val) ? 0 : val;
+	if (!val) return 0;
+	const cleaned = String(val).replace(/[^0-9,.-]/g, '').replace(',', '.');
+	const parsed = parseFloat(cleaned);
+	return isNaN(parsed) ? 0 : parsed;
+};
+const vibrate = (pattern: number | number[]) => {
+	if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) {
+		window.navigator.vibrate(pattern);
+	}
+};
+const isMatch = (target: string, query: string) => {
+	const t = normalizeText(target);
+	const q = normalizeText(query);
+	return t.includes(q) || removeAccents(t).includes(removeAccents(q));
+};
 
-	// ── Data Hooks (products, customers, payments) ──
+export function useOrderForm({ owner, showToast, editId, location }: UseOrderFormParams) {
+	// ── Data Hooks (products, customers) ──
 	const { products: hookProducts } = useProducts({ ownerId: owner.ownerId, enabled: !owner.loading && !!owner.ownerId });
 	const { customers: hookCustomers } = useCustomers({ ownerId: owner.ownerId, enabled: !owner.loading && !!owner.ownerId });
-	const { payments: hookPayments } = usePayments({ ownerId: owner.ownerId, enabled: !owner.loading && !!owner.ownerId });
 
 	// ── Core Data State ──
 	const [products, setProducts] = useState<any[]>([]);
@@ -41,12 +50,42 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 	const [loading, setLoading] = useState(true);
 	const [fetchingOrder, setFetchingOrder] = useState(false);
 	const [originalOrder, setOriginalOrder] = useState<any>(null);
-	const [allOrders, setAllOrders] = useState<any[]>([]);
-	const [allPayments, setAllPayments] = useState<any[]>([]);
+	const hasFetchedOrderRef = useRef<string | null>(null);
 
-	useEffect(() => { setProducts(hookProducts); }, [hookProducts]);
-	useEffect(() => { setCustomers(hookCustomers); }, [hookCustomers]);
-	useEffect(() => { setAllPayments(hookPayments); }, [hookPayments]);
+	useEffect(() => {
+		setProducts(hookProducts.filter(p => !p.approvalStatus || p.approvalStatus === 'approved'));
+		setLoading(false);
+	}, [hookProducts]);
+	useEffect(() => {
+		setCustomers(hookCustomers.filter(c => !c.approvalStatus || c.approvalStatus === 'approved'));
+	}, [hookCustomers]);
+
+	// ── SKU Stock Map (Tra cứu O(1) giải phóng CPU, không bị duyệt lặp O(N^2)) ──
+	const skuStockMap = useMemo(() => {
+		const map = new Map<string, number>();
+		products.forEach(p => {
+			if (!p.linkedProductId) {
+				const cleanSku = normalizeText(p.sku);
+				if (cleanSku) {
+					map.set(cleanSku, (map.get(cleanSku) || 0) + (Number(p.stock) || 0));
+				}
+			}
+		});
+		return map;
+	}, [products]);
+
+	const getEffectiveStock = (prod: any) => {
+		if (!prod) return 0;
+		if (prod.linkedProductId) {
+			const linked = products.find(p => p.id === prod.linkedProductId);
+			return linked?.stock || 0;
+		}
+		const cleanSku = normalizeText(prod.sku);
+		if (cleanSku && skuStockMap.has(cleanSku)) {
+			return skuStockMap.get(cleanSku) || 0;
+		}
+		return Number(prod.stock) || 0;
+	};
 
 	// ── Form State ──
 	const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
@@ -60,7 +99,7 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 
 	// ── Line Items State ──
 	const [lineItems, setLineItems] = useState<any[]>([
-		{ id: crypto.randomUUID(), category: '', productId: '', name: '', serialNumber: '', qty: '', price: 0, buyPrice: 0, unit: '', packaging: '', density: '', maxStock: 0 }
+		{ rowId: crypto.randomUUID(), id: crypto.randomUUID(), category: '', productId: '', name: '', serialNumber: '', qty: '', price: 0, buyPrice: 0, unit: '', packaging: '', density: '', maxStock: 0 }
 	]);
 	const [overheadRate, setOverheadRate] = useState(8.5);
 
@@ -79,6 +118,229 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 	const [shippingFee, setShippingFee] = useState(0);
 	const [discountAmt, setDiscountAmt] = useState(0);
 	const [couponCode, setCouponCode] = useState('');
+	const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
+	const [availableCoupons, setAvailableCoupons] = useState<any[]>([]);
+	const [availableRebates, setAvailableRebates] = useState<any[]>([]);
+	const [appliedRebate, setAppliedRebate] = useState<any>(null);
+	const userManuallyClearedCoupon = useRef(false);
+	const userManuallyClearedRebate = useRef(false);
+
+	// Load active coupons for store
+	useEffect(() => {
+		if (owner.loading || !owner.ownerId) return;
+		const q = query(
+			collection(db, 'coupons'),
+			where('ownerId', '==', owner.ownerId),
+			where('status', '==', 'active')
+		);
+		const unsub = onSnapshot(q, (snap) => {
+			const today = new Date().toISOString().split('T')[0];
+			const active = snap.docs
+				.map(d => ({ id: d.id, ...d.data() }))
+				.filter((c: any) => !c.expiry || c.expiry >= today);
+			setAvailableCoupons(active);
+		}, (err) => console.error("Error fetching coupons:", err));
+		return () => unsub();
+	}, [owner.loading, owner.ownerId]);
+
+	// Load active customer rebates for store
+	useEffect(() => {
+		if (owner.loading || !owner.ownerId) return;
+		const unsub = customerRebateService.listenByOwner(
+			owner.ownerId,
+			(data) => {
+				setAvailableRebates(data);
+			},
+			(err) => console.error("Error fetching customer rebates:", err)
+		);
+		return () => unsub();
+	}, [owner.loading, owner.ownerId]);
+
+	// Prefill coupon from URL search param if present (e.g., /quick-order?coupon=WJDKSAJZ)
+	useEffect(() => {
+		if (!location?.search || availableCoupons.length === 0) return;
+		const params = new URLSearchParams(location.search);
+		const codeParam = params.get('coupon');
+		if (codeParam && !appliedCoupon) {
+			const found = availableCoupons.find((c: any) => c.code?.toUpperCase() === codeParam.toUpperCase().trim());
+			if (found) {
+				setAppliedCoupon(found);
+				setCouponCode(found.code);
+			}
+		}
+	}, [location?.search, availableCoupons, appliedCoupon]);
+
+	// ── Helper: getEffectiveCost ──
+	function getEffectiveCost(item: any) {
+		const buyPrice = Number(item.buyPrice) || 0;
+		const product = products.find(p => p.id === item.productId);
+		const hasOverhead = product?.applyOverheadCost === true;
+		if (hasOverhead && overheadRate > 0) {
+			return buyPrice * (1 + overheadRate / 100);
+		}
+		return buyPrice;
+	}
+
+	// ── Derived Values ──
+	const subTotal = useMemo(() => {
+		return lineItems.reduce((sum, item) => sum + (Number(item.price) || 0) * parseVNQty(item.qty), 0);
+	}, [lineItems]);
+
+	const finalTotal = useMemo(() => {
+		return subTotal + Number(shippingFee) - Number(discountAmt);
+	}, [subTotal, shippingFee, discountAmt]);
+
+	const totalWeight = useMemo(() => {
+		return lineItems.reduce((sum, item) => {
+			const unit = item.unit?.toLowerCase();
+			const density = parseVNQty(item.density);
+			const qty = parseVNQty(item.qty);
+			if (unit === 'kg') return sum + qty;
+			return sum + (qty * density);
+		}, 0);
+	}, [lineItems]);
+
+	const totalCostActual = useMemo(() => {
+		return lineItems.reduce((sum, item) => {
+			const qty = parseVNQty(item.qty);
+			const cost = getEffectiveCost(item);
+			return sum + (qty * cost);
+		}, 0);
+	}, [lineItems, products, overheadRate]);
+
+	const profitItems = useMemo(() => {
+		return lineItems.filter(item => {
+			const prod = products.find(p => p.id === item.productId);
+			return !shouldExcludeFromProfit(prod?.name || '', prod?.excludeProfit);
+		});
+	}, [lineItems, products]);
+
+	const profitSubTotal = useMemo(() => {
+		return profitItems.reduce((sum, item) => sum + (Number(item.price) || 0) * parseVNQty(item.qty), 0);
+	}, [profitItems]);
+
+	const profitCostTotal = useMemo(() => {
+		return profitItems.reduce((sum, item) => {
+			const qty = parseVNQty(item.qty);
+			const cost = getEffectiveCost(item);
+			return sum + (qty * cost);
+		}, 0);
+	}, [profitItems, products, overheadRate]);
+
+	const totalProfitActual = useMemo(() => {
+		return profitSubTotal - profitCostTotal - Number(discountAmt);
+	}, [profitSubTotal, profitCostTotal, discountAmt]);
+
+	const hasOverheadItems = useMemo(() => {
+		return lineItems.some(item => {
+			if (!item.productId) return false;
+			const prod = products.find(p => p.id === item.productId);
+			return prod?.applyOverheadCost === true && overheadRate > 0;
+		});
+	}, [lineItems, products, overheadRate]);
+
+	// Tự động tính toán tổng chiết khấu (Chiết khấu SP / Coupon + Chiết khấu trả sau của khách hàng)
+	useEffect(() => {
+		let couponDisc = 0;
+		if (appliedCoupon) {
+			const res = calculateCouponDiscount(appliedCoupon, lineItems, subTotal, shippingFee);
+			couponDisc = res.totalDiscount;
+		} else if (!userManuallyClearedCoupon.current && availableCoupons.length > 0 && lineItems.some(i => i.productId && Number(i.qty) > 0)) {
+			let bestCoupon: any = null;
+			let maxDiscount = 0;
+
+			for (const c of availableCoupons) {
+				const res = calculateCouponDiscount(c, lineItems, subTotal, shippingFee);
+				if (res.totalDiscount > maxDiscount) {
+					maxDiscount = res.totalDiscount;
+					bestCoupon = c;
+				}
+			}
+
+			if (bestCoupon && maxDiscount > 0) {
+				setAppliedCoupon(bestCoupon);
+				setCouponCode(bestCoupon.code || '');
+				couponDisc = maxDiscount;
+				showToast(`✨ Tự động áp dụng chiết khấu sản phẩm [${bestCoupon.code}]: -${maxDiscount.toLocaleString('vi-VN')}đ`, "success");
+			}
+		}
+
+		let rebateDisc = 0;
+		if (appliedRebate) {
+			rebateDisc = Number(appliedRebate.rebateAmount) || 0;
+		}
+
+		const totalDisc = couponDisc + rebateDisc;
+		setDiscountAmt(totalDisc);
+	}, [appliedCoupon, appliedRebate, availableCoupons, lineItems, subTotal, shippingFee, showToast]);
+
+	const handleSelectCoupon = (coupon: any) => {
+		userManuallyClearedCoupon.current = false;
+		setAppliedCoupon(coupon);
+		setCouponCode(coupon.code || '');
+		const res = calculateCouponDiscount(coupon, lineItems, subTotal, shippingFee);
+		const rebDisc = appliedRebate ? (Number(appliedRebate.rebateAmount) || 0) : 0;
+		setDiscountAmt(res.totalDiscount + rebDisc);
+		showToast(`Đã áp dụng: ${coupon.title || coupon.code} (-${res.totalDiscount.toLocaleString('vi-VN')}đ)`, "success");
+	};
+
+	const handleRemoveCoupon = () => {
+		userManuallyClearedCoupon.current = true;
+		setAppliedCoupon(null);
+		setCouponCode('');
+		const rebDisc = appliedRebate ? (Number(appliedRebate.rebateAmount) || 0) : 0;
+		setDiscountAmt(rebDisc);
+		showToast("Đã gỡ mã giảm giá", "info");
+	};
+
+	// ── Tự động nhận diện & áp dụng Chiết khấu trả sau theo Khách hàng ──
+	useEffect(() => {
+		if (userManuallyClearedRebate.current) return;
+		const custId = selectedCustomer?.id;
+		const custName = selectedCustomer?.name || searchCustomerQuery;
+		if (!custId && !custName) {
+			if (appliedRebate) {
+				setAppliedRebate(null);
+			}
+			return;
+		}
+
+		const dateToCheck = orderDate || new Date().toISOString().split('T')[0];
+		const validRebate = findValidCustomerRebate(availableRebates, custId, custName, dateToCheck);
+
+		if (validRebate && (!appliedRebate || appliedRebate.id !== validRebate.id)) {
+			setAppliedRebate(validRebate);
+			const rebDisc = Number(validRebate.rebateAmount) || 0;
+			showToast(`✨ Áp dụng chiết khấu trả sau của [${validRebate.customerName}]: -${rebDisc.toLocaleString('vi-VN')}đ (Thời hạn: ${validRebate.startDate || '...'} → ${validRebate.endDate || '...'})`, "success");
+		} else if (!validRebate && appliedRebate) {
+			setAppliedRebate(null);
+		}
+	}, [selectedCustomer, searchCustomerQuery, orderDate, availableRebates, appliedRebate]);
+
+	const handleSelectRebate = (rebate: any) => {
+		userManuallyClearedRebate.current = false;
+		setAppliedRebate(rebate);
+		const rebDisc = Number(rebate.rebateAmount) || 0;
+		let couponDisc = 0;
+		if (appliedCoupon) {
+			const res = calculateCouponDiscount(appliedCoupon, lineItems, subTotal, shippingFee);
+			couponDisc = res.totalDiscount;
+		}
+		setDiscountAmt(couponDisc + rebDisc);
+		showToast(`Đã áp dụng chiết khấu của ${rebate.customerName}: -${rebDisc.toLocaleString('vi-VN')}đ`, "success");
+	};
+
+	const handleRemoveRebate = () => {
+		userManuallyClearedRebate.current = true;
+		setAppliedRebate(null);
+		let couponDisc = 0;
+		if (appliedCoupon) {
+			const res = calculateCouponDiscount(appliedCoupon, lineItems, subTotal, shippingFee);
+			couponDisc = res.totalDiscount;
+		}
+		setDiscountAmt(couponDisc);
+		showToast("Đã gỡ chiết khấu trả sau của khách hàng", "info");
+	};
 
 	// ── Dropdown State ──
 	const customerSearchRef = useRef<HTMLDivElement>(null);
@@ -111,43 +373,47 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 		return () => document.removeEventListener('mousedown', handleClickOutside);
 	}, []);
 
-	// ── Fetch Orders (Snapshot) ──
+	// Reset fetched ref khi editId thay đổi hoặc trở về tạo đơn mới
 	useEffect(() => {
-		if (owner.loading || !owner.ownerId) return;
-		const qOrders = query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId), where('status', '==', 'Đơn chốt'));
-		const unsubOrders = onSnapshot(qOrders, (snap) => {
-			setAllOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-		});
-		setLoading(false);
-		return () => { unsubOrders(); };
-	}, [owner.loading, owner.ownerId, owner.role, owner.isEmployee]);
+		if (!editId) {
+			hasFetchedOrderRef.current = null;
+			setOriginalOrder(null);
+		}
+	}, [editId]);
 
-	// ── Fetch Order for Editing ──
+	// ── Fetch Order for Editing (Chạy ngay khi có editId & ownerId, không chờ customers/products) ──
 	useEffect(() => {
-		if (editId && owner.ownerId && customers.length > 0 && products.length > 0) {
-			const fetchOrder = async () => {
-				setFetchingOrder(true);
-				try {
-					const orderRef = doc(db, 'orders', editId);
-					const orderSnap = await getDoc(orderRef);
-					if (orderSnap.exists()) {
-						const data = orderSnap.data();
-						setOriginalOrder(data);
+		if (!editId || !owner.ownerId) return;
+		if (hasFetchedOrderRef.current === editId) return;
 
-						setLineItems((data.items || []).map((item: any) => {
-							const currentProduct = products.find(p => p.id === (item.id || item.productId));
+		const fetchOrder = async () => {
+			setFetchingOrder(true);
+			try {
+				const orderRef = doc(db, 'orders', editId);
+				const orderSnap = await getDoc(orderRef);
+				if (orderSnap.exists()) {
+					hasFetchedOrderRef.current = editId;
+					const data = orderSnap.data();
+					setOriginalOrder(data);
+
+					const rawItems = Array.isArray(data.items) ? data.items : (Array.isArray((data as any).products) ? (data as any).products : []);
+					if (rawItems.length > 0) {
+						setLineItems(rawItems.map((item: any) => {
+							const currentProduct = products.find(p => p.id === (item.productId || item.id));
 							
 							const historicalBuyPrice = item.buyPrice !== undefined && item.buyPrice !== null 
 								? Number(item.buyPrice) 
 								: Number(currentProduct?.priceImport || 0);
 
+							const newRowId = crypto.randomUUID();
 							return {
-								id: Math.random(),
+								rowId: newRowId,
+								id: newRowId,
 								productId: item.productId || item.id || currentProduct?.id || '',
 								sku: item.sku || currentProduct?.sku || '',
 								name: item.name || currentProduct?.name || 'Sản phẩm đã xóa',
 								category: item.category || currentProduct?.category || '',
-								qty: item.qty || 0,
+								qty: item.qty != null ? item.qty : '',
 								price: item.price !== undefined ? Number(item.price) : 0,
 								buyPrice: historicalBuyPrice,
 								unit: item.unit || currentProduct?.unit || '',
@@ -156,104 +422,126 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 								specification: item.specification || currentProduct?.specification || '',
 								serialNumber: item.serialNumber || '',
 								imageUrl: item.imageUrl || currentProduct?.imageUrl || '',
-								maxStock: currentProduct ? (Number(currentProduct.stock) || 0) : 0
+								maxStock: currentProduct ? (Number(currentProduct.stock) || 0) : 0,
+								validated: true
 							};
 						}));
+					}
 
-						const formattedDate = (data.orderDate || new Date().toISOString()).split('T')[0];
-						setOrderDate(formattedDate);
-						setOrderStatus(data.status || 'Đơn chốt');
-						setOrderNote(data.note || '');
-						setShippingFee(data.adjustmentValue || 0);
-						setDiscountAmt(data.discountValue || 0);
+					const formattedDate = (data.orderDate || new Date().toISOString()).split('T')[0];
+					setOrderDate(formattedDate);
+					setOrderStatus(data.status || 'Đơn chốt');
+					setOrderNote(data.note || '');
+					setShippingFee(data.adjustmentValue || 0);
+					setDiscountAmt(data.discountValue || 0);
 
-						setDeliveryLocation(data.rawDeliveryLocation || '');
-						if (data.deliveryLocation && typeof data.deliveryLocation === 'object' && data.deliveryLocation.lat && data.deliveryLocation.lng) {
-							setParsedLocation({ lat: Number(data.deliveryLocation.lat), lng: Number(data.deliveryLocation.lng) });
-						} else {
-							setParsedLocation(null);
-						}
+					setDeliveryLocation(data.rawDeliveryLocation || '');
+					if (data.deliveryLocation && typeof data.deliveryLocation === 'object' && data.deliveryLocation.lat && data.deliveryLocation.lng) {
+						setParsedLocation({ lat: Number(data.deliveryLocation.lat), lng: Number(data.deliveryLocation.lng) });
+					} else {
+						setParsedLocation(null);
+					}
 
-						const foundCust = customers.find(c => c.id === data.customerId);
-						if (foundCust) {
-							setSelectedCustomer(foundCust);
-							setSearchCustomerQuery(foundCust.name);
-						} else {
-							setSearchCustomerQuery(data.customerName || '');
+					const foundCust = customers.find(c => c.id === data.customerId);
+					if (foundCust) {
+						setSelectedCustomer(foundCust);
+						setSearchCustomerQuery(foundCust.name || '');
+					} else if (data.customerId || data.customerName) {
+						setSelectedCustomer({
+							id: data.customerId || '',
+							name: data.customerName || '',
+							phone: data.customerPhone || '',
+							businessName: data.customerBusinessName || data.customerName || '',
+							address: data.customerAddress || ''
+						});
+						setSearchCustomerQuery(data.customerName || '');
+					}
+				}
+			} catch (err) {
+				console.error("fetchOrder error:", err);
+			} finally {
+				setFetchingOrder(false);
+			}
+		};
+		fetchOrder();
+	}, [editId, owner.ownerId]);
+
+	// Khi danh sách khách hàng load xong, bổ sung thông tin chi tiết cho selectedCustomer nếu đang dùng fallback
+	useEffect(() => {
+		if (selectedCustomer?.id && customers.length > 0 && !selectedCustomer.creditLimit) {
+			const realCust = customers.find(c => c.id === selectedCustomer.id);
+			if (realCust) {
+				setSelectedCustomer(realCust);
+			}
+		}
+	}, [customers, selectedCustomer?.id]);
+
+	// Khi danh sách sản phẩm load xong, đồng bộ maxStock & name cho các mặt hàng vừa fetch từ đơn cũ
+	useEffect(() => {
+		if (products.length > 0) {
+			setLineItems(prev => {
+				let changed = false;
+				const updated = prev.map(item => {
+					if (!item.productId) return item;
+					const prod = products.find(p => p.id === item.productId);
+					if (prod) {
+						const currentMax = Number(prod.stock) || 0;
+						if (item.maxStock !== currentMax || (item.name === 'Sản phẩm đã xóa' && prod.name)) {
+							changed = true;
+							return {
+								...item,
+								name: item.name === 'Sản phẩm đã xóa' ? prod.name : item.name,
+								maxStock: currentMax,
+								sku: item.sku || prod.sku || '',
+								unit: item.unit || prod.unit || '',
+								category: item.category || prod.category || ''
+							};
 						}
 					}
-				} catch (err) {
-					// Silent fail
-				} finally {
-					setFetchingOrder(false);
-				}
-			};
-			fetchOrder();
+					return item;
+				});
+				return changed ? updated : prev;
+			});
 		}
-	}, [editId, owner.ownerId, customers.length, products.length]);
+	}, [products]);
 
-	// ── Debt Map ──
+	// ── Debt Map (Đọc trực tiếp từ danh sách khách hàng, không tải hàng ngàn đơn cũ gây lag) ──
 	const debtMap = useMemo(() => {
 		const map: Record<string, number> = {};
-		allOrders.forEach(o => {
-			if (o.customerId && o.status === 'Đơn chốt') {
-				map[o.customerId] = (map[o.customerId] || 0) + (o.totalAmount || 0);
-			}
-		});
-		allPayments.forEach(p => {
-			if (p.customerId) {
-				map[p.customerId] = (map[p.customerId] || 0) - (p.amount || 0);
+		customers.forEach(c => {
+			if (c.id) {
+				map[c.id] = Number(c.debt ?? c.totalDebt ?? 0);
 			}
 		});
 		return map;
-	}, [allOrders, allPayments]);
+	}, [customers]);
 
-	// ── Smart Packaging Sync ──
+	// ── Smart Packaging Sync (An toàn, cập nhật packaging mà KHÔNG BAO GIỜ chạm vào qty của người dùng) ──
 	useEffect(() => {
 		if (loading || products.length === 0 || fetchingOrder) return;
 		
-		const syncPackaging = () => {
+		setLineItems(prev => {
 			let hasLocalChange = false;
-			const updatedItems = lineItems.map(item => {
+			const updated = prev.map(item => {
 				if (!item.name && !item.productId) return item;
-				
-				const parseVNNumber = (val: any) => {
-					if (typeof val === 'number') return val;
-					if (!val) return 0;
-					const cleaned = String(val).replace(/[^0-9,.-]/g, '').replace(',', '.');
-					return parseFloat(cleaned) || 0;
-				};
-				const currentPkg = parseVNNumber(item.packaging);
-				
-				const candidates = products.filter(p => 
+				if (item.validated && item.packaging) return item;
+
+				const matchedProd = products.find(p => 
 					p.id === item.productId || 
 					(p.sku && item.sku && normalizeText(p.sku) === normalizeText(item.sku)) ||
 					(normalizeSmart(p.name) === normalizeSmart(item.name))
 				);
-				
-				const bestMatch = candidates.find(p => normalizeSmart(p.category) === normalizeSmart(item.category)) || candidates[0];
-				
-				if (bestMatch && bestMatch.packaging) {
-					const masterPkg = parseVNNumber(bestMatch.packaging);
-					if (masterPkg > 0 && Math.abs(masterPkg - currentPkg) > 0.001) {
-						hasLocalChange = true;
-						return { ...item, packaging: bestMatch.packaging, validated: true };
-					} else if (masterPkg > 0 && !item.validated) {
-						hasLocalChange = true;
-						return { ...item, validated: true };
-					}
+
+				if (matchedProd && matchedProd.packaging && item.packaging !== matchedProd.packaging) {
+					hasLocalChange = true;
+					return { ...item, packaging: matchedProd.packaging, validated: true };
 				}
 				return item;
 			});
 
-			if (hasLocalChange) {
-				setLineItems(updatedItems);
-			}
-		};
-
-		const timer = setTimeout(syncPackaging, 1000);
-		return () => clearTimeout(timer);
-	}, [lineItems.length, products, loading, fetchingOrder]);
+			return hasLocalChange ? updated : prev;
+		});
+	}, [products, loading, fetchingOrder]);
 
 	// ── Prefill Data (from location.state) ──
 	useEffect(() => {
@@ -370,9 +658,11 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 						});
 					}
 
+					const newRowId = crypto.randomUUID();
 					if (foundProd) {
 						return {
-							id: Math.random(),
+							rowId: newRowId,
+							id: newRowId,
 							productId: foundProd.id,
 							name: foundProd.name,
 							sku: foundProd.sku || '',
@@ -390,7 +680,8 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 					}
 
 					return {
-						id: Math.random(),
+						rowId: newRowId,
+						id: newRowId,
 						productId: p.productId || '',
 						name: p.name,
 						qty: p.quantity || 1,
@@ -412,69 +703,54 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 		}
 	}, [location.state, products.length, customers.length, loading, fetchingOrder]);
 
-	// ── Helper: getEffectiveStock ──
-	const getEffectiveStock = (prod: any) => {
-		if (!prod) return 0;
-		if (prod.linkedProductId) {
-			const linked = products.find(p => p.id === prod.linkedProductId);
-			return linked?.stock || 0;
-		}
-		const cleanSku = normalizeText(prod.sku);
-		if (cleanSku) {
-			const skuMasterProducts = products.filter(p =>
-				normalizeText(p.sku) === cleanSku &&
-				!p.linkedProductId
-			);
-			const totalStock = skuMasterProducts.reduce((sum, p) => sum + (Number(p.stock) || 0), 0);
-			return totalStock;
-		}
-		return prod.stock || 0;
-	};
-
-	// ── Helper: getEffectiveCost ──
-	const getEffectiveCost = (item: any) => {
-		const buyPrice = Number(item.buyPrice) || 0;
-		const product = products.find(p => p.id === item.productId);
-		const hasOverhead = product?.applyOverheadCost === true;
-		if (hasOverhead && overheadRate > 0) {
-			return buyPrice * (1 + overheadRate / 100);
-		}
-		return buyPrice;
-	};
-
-	// ── Line Item Actions ──
+	// ── Line Item Actions (Cập nhật bất biến, bảo toàn số lượng chính xác tuyệt đối) ──
 	const addLineItem = () => {
-		setLineItems([...lineItems, { id: crypto.randomUUID(), category: '', productId: '', sku: '', name: '', imageUrl: '', serialNumber: '', qty: '', price: 0, buyPrice: 0, unit: '', packaging: '', density: '', maxStock: 0 }]);
+		const newRowId = crypto.randomUUID();
+		setLineItems(prev => [
+			...prev,
+			{ rowId: newRowId, id: newRowId, category: '', productId: '', sku: '', name: '', imageUrl: '', serialNumber: '', qty: '', price: 0, buyPrice: 0, unit: '', packaging: '', density: '', maxStock: 0 }
+		]);
 	};
 
-	const removeLineItem = (index: number) => {
-		if (lineItems.length > 1) {
-			setLineItems(lineItems.filter((_, i) => i !== index));
-		}
+	const removeLineItem = (indexOrId: number | string) => {
+		setLineItems(prev => {
+			if (prev.length <= 1) return prev;
+			return prev.filter((item, i) => {
+				if (typeof indexOrId === 'number') return i !== indexOrId;
+				return (item.rowId ? item.rowId !== indexOrId : item.id !== indexOrId);
+			});
+		});
 	};
 
-	const updateLineItem = (index: number, field: string, value: any) => {
-		const newItems = [...lineItems];
-		newItems[index][field] = value;
+	const updateLineItem = (indexOrId: number | string, field: string, value: any) => {
+		setLineItems(prev => prev.map((item, i) => {
+			const isTarget = typeof indexOrId === 'number'
+				? i === indexOrId
+				: ((item.rowId && item.rowId === indexOrId) || item.id === indexOrId);
+			if (!isTarget) return item;
 
-		if (field === 'productId') {
-			const prod = products.find(p => p.id === value);
-			if (prod) {
-				newItems[index].name = prod.name;
-				newItems[index].sku = prod.sku || '';
-				newItems[index].serialNumber = prod.serialNumber || '';
-				newItems[index].price = prod.priceSell;
-				newItems[index].buyPrice = prod.priceImport || 0;
-				newItems[index].unit = prod.unit;
-				newItems[index].category = prod.category;
-				newItems[index].packaging = prod.packaging;
-				newItems[index].specification = prod.specification || '';
-				newItems[index].density = prod.density;
-				newItems[index].imageUrl = prod.imageUrl || '';
-				newItems[index].maxStock = getEffectiveStock(prod);
+			const updated = { ...item, [field]: value };
+
+			if (field === 'productId') {
+				const prod = products.find(p => p.id === value);
+				if (prod) {
+					updated.name = prod.name;
+					updated.sku = prod.sku || '';
+					updated.serialNumber = prod.serialNumber || '';
+					updated.price = prod.priceSell;
+					updated.buyPrice = prod.priceImport || 0;
+					updated.unit = prod.unit;
+					updated.category = prod.category;
+					updated.packaging = prod.packaging;
+					updated.specification = prod.specification || '';
+					updated.density = prod.density;
+					updated.imageUrl = prod.imageUrl || '';
+					updated.maxStock = getEffectiveStock(prod);
+					updated.validated = true;
+				}
 			}
-		}
-		setLineItems(newItems);
+			return updated;
+		}));
 	};
 
 	// ── QR Scan Handler ──
@@ -482,14 +758,37 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 		const product = products.find(p => p.id === productId);
 		if (product) {
 			vibrate(50);
-			const emptyIdx = lineItems.findIndex(item => !item.productId);
-			if (emptyIdx !== -1) {
-				updateLineItem(emptyIdx, 'productId', product.id);
-			} else {
-				setLineItems([
-					...lineItems,
+			setLineItems(prev => {
+				const emptyIdx = prev.findIndex(item => !item.productId);
+				if (emptyIdx !== -1) {
+					return prev.map((item, i) => {
+						if (i !== emptyIdx) return item;
+						return {
+							...item,
+							category: product.category || '',
+							productId: product.id,
+							sku: product.sku || '',
+							name: product.name,
+							qty: item.qty || 1,
+							price: product.priceSell,
+							buyPrice: product.priceImport || 0,
+							unit: product.unit,
+							packaging: product.packaging,
+							density: product.density,
+							imageUrl: product.imageUrl || '',
+							serialNumber: product.serialNumber || '',
+							maxStock: getEffectiveStock(product),
+							validated: true
+						};
+					});
+				}
+
+				const newRowId = crypto.randomUUID();
+				return [
+					...prev,
 					{
-						id: crypto.randomUUID(),
+						rowId: newRowId,
+						id: newRowId,
 						category: product.category || '',
 						productId: product.id,
 						sku: product.sku || '',
@@ -502,10 +801,11 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 						density: product.density,
 						imageUrl: product.imageUrl || '',
 						serialNumber: product.serialNumber || '',
-						maxStock: getEffectiveStock(product)
+						maxStock: getEffectiveStock(product),
+						validated: true
 					}
-				]);
-			}
+				];
+			});
 		} else {
 			showToast(`Không tìm thấy sản phẩm với mã ID: ${productId}`, "warning");
 		}
@@ -532,7 +832,8 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 				return;
 			}
 
-			const coupon = querySnapshot.docs[0].data();
+			const couponSnap = querySnapshot.docs[0];
+			const coupon = { id: couponSnap.id, ...couponSnap.data() };
 
 			if (coupon.status !== 'active') {
 				showToast("Mã giảm giá này hiện không khả dụng", "warning");
@@ -550,19 +851,20 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 				return;
 			}
 
-			let discount = 0;
-			const discountVal = parseFloat(coupon.discount) || 0;
+			const res = calculateCouponDiscount(coupon, lineItems, subTotal, shippingFee);
 
-			if (coupon.type === 'percentage') {
-				discount = subTotal * (discountVal / 100);
-			} else if (coupon.type === 'fixed') {
-				discount = discountVal;
-			} else if (coupon.type === 'shipping') {
-				discount = Number(shippingFee);
+			if (coupon.scope === 'product' && res.appliedCount === 0) {
+				showToast(`Mã "${coupon.code}" áp dụng cho sản phẩm khác, đơn hàng hiện chưa có sản phẩm được chiết khấu`, "warning");
 			}
 
-			setDiscountAmt(discount);
-			showToast(`Đã áp dụng: ${coupon.title}`, "success");
+			setAppliedCoupon(coupon);
+			setDiscountAmt(res.totalDiscount);
+
+			if (coupon.scope === 'product') {
+				showToast(`Đã áp dụng: ${coupon.title} (${res.appliedCount} sản phẩm khớp chiết khấu -${res.totalDiscount.toLocaleString('vi-VN')}đ)`, "success");
+			} else {
+				showToast(`Đã áp dụng: ${coupon.title} (-${res.totalDiscount.toLocaleString('vi-VN')}đ)`, "success");
+			}
 
 		} catch (error) {
 			showToast("Lỗi khi áp dụng mã: " + error, "error");
@@ -571,7 +873,7 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 
 	// ── Confirm Order Handler ── (the big one)
 	const handleConfirmOrder = async () => {
-		const validItems = lineItems.filter(item => item.productId && Number(item.qty) > 0);
+		const validItems = lineItems.filter(item => item.productId && parseVNQty(item.qty) > 0);
 		if (validItems.length === 0) {
 			showToast("Vui lòng thêm sản phẩm vào đơn hàng", "warning");
 			return;
@@ -581,9 +883,13 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 		try {
 			const processedItems: any[] = [];
 			const stockDeletions: any[] = [];
+			// Tracking tồn kho ảo giữa các dòng trong cùng 1 đơn hàng tránh trừ trùng
+			const virtualStock = new Map<string, number>();
+			products.forEach(p => virtualStock.set(p.id, Number(p.stock) || 0));
 
 			validItems.forEach(item => {
-				let remainingQty = Number(item.qty);
+				const itemQty = parseVNQty(item.qty);
+				let remainingQty = itemQty;
 
 				const sourceProduct = products.find(p => p.id === item.productId);
 				const cleanSku = normalizeText(sourceProduct?.sku);
@@ -607,7 +913,7 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 
 				for (const cand of stockCandidates) {
 					if (remainingQty <= 0) break;
-					const available = Number(cand.stock) || 0;
+					const available = virtualStock.get(cand.id) ?? (Number(cand.stock) || 0);
 					if (available <= 0) continue;
 
 					const take = Math.min(remainingQty, available);
@@ -618,6 +924,7 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 						productName: cand.name,
 						buyPrice: cand.priceImport || 0
 					});
+					virtualStock.set(cand.id, available - take);
 					remainingQty -= take;
 				}
 
@@ -637,11 +944,13 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 
 				processedItems.push({
 					id: item.productId,
+					productId: item.productId,
+					rowId: item.rowId || crypto.randomUUID(),
 					sku: item.sku || '',
 					name: item.name || sourceProduct?.name || 'Sản phẩm đã xóa',
 					price: item.price !== undefined ? Number(item.price) : 0,
 					buyPrice: exactBuyPrice,
-					qty: Number(item.qty) || 0,
+					qty: itemQty,
 					unit: item.unit || '',
 					category: item.category || '',
 					density: item.density || '',
@@ -716,6 +1025,9 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 				note: orderNote,
 				status: orderStatus,
 				couponCode: couponCode || null,
+				rebateId: appliedRebate?.id || null,
+				rebateAmount: appliedRebate ? (Number(appliedRebate.rebateAmount) || 0) : 0,
+				rebateCustomerName: appliedRebate?.customerName || null,
 				ownerId: owner.ownerId,
 				ownerEmail: owner.ownerEmail,
 				createdBy: auth.currentUser?.uid || '',
@@ -793,20 +1105,55 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 							createdBy: auth.currentUser?.uid || '',
 							createdAt: serverTimestamp()
 						});
+						transaction.update(doc(db, 'customers', oldCustomerId), {
+							debt: increment(-oldTotal),
+							totalDebt: increment(-oldTotal),
+							totalOrdersAmount: increment(-oldTotal),
+							updatedAt: serverTimestamp()
+						});
 					}
-					if (diffDebt !== 0 || customerChanged) {
+					if (customerChanged) {
+						if (custExists && orderData.customerId && newTotal > 0) {
+							const debtRef = doc(collection(db, 'debts'));
+							transaction.set(debtRef, {
+								customerId: orderData.customerId,
+								customerName: orderData.customerName,
+								type: 'debt_increase',
+								amount: newTotal,
+								orderId: editId,
+								note: `Đổi khách từ ${originalOrder?.customerName || '?'}`,
+								ownerId: owner.ownerId || '',
+								createdBy: auth.currentUser?.uid || '',
+								createdAt: serverTimestamp()
+							});
+							transaction.update(doc(db, 'customers', orderData.customerId), {
+								debt: increment(newTotal),
+								totalDebt: increment(newTotal),
+								totalOrdersAmount: increment(newTotal),
+								updatedAt: serverTimestamp()
+							});
+						}
+					} else if (diffDebt !== 0) {
 						const debtRef = doc(collection(db, 'debts'));
 						transaction.set(debtRef, {
 							customerId: orderData.customerId,
 							customerName: orderData.customerName,
-							type: (customerChanged || diffDebt > 0) ? 'debt_increase' : 'payment',
-							amount: customerChanged ? newTotal : Math.abs(diffDebt),
+							type: diffDebt > 0 ? 'debt_increase' : 'payment',
+							amount: Math.abs(diffDebt),
 							orderId: editId,
-							note: customerChanged ? `Đổi khách từ ${originalOrder?.customerName || '?'}` : (diffDebt > 0 ? `Cập nhật đơn hàng tăng nợ` : `Cập nhật đơn hàng giảm nợ`),
+							note: diffDebt > 0 ? `Cập nhật đơn hàng tăng nợ` : `Cập nhật đơn hàng giảm nợ`,
 							ownerId: owner.ownerId || '',
 							createdBy: auth.currentUser?.uid || '',
 							createdAt: serverTimestamp()
 						});
+						if (custExists && orderData.customerId) {
+							transaction.update(doc(db, 'customers', orderData.customerId), {
+								debt: increment(diffDebt),
+								totalDebt: increment(diffDebt),
+								totalOrdersAmount: increment(diffDebt),
+								updatedAt: serverTimestamp()
+							});
+						}
 					}
 					const existingLogsQ = query(
 						collection(db, 'inventory_logs'),
@@ -867,8 +1214,14 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 					sendTelegramNotification(owner.ownerId, `✏️ <b>ĐƠN HÀNG ĐÃ SỬA</b>
 - Khách hàng: <b>${orderData.customerName}</b>
 - Tổng tiền: <b>${finalTotal.toLocaleString('vi-VN')} đ</b>
-- Nhân viên: ${owner.userDisplayName || auth.currentUser?.displayName || 'Admin'}`);
+- Nhân viên: ${owner.userDisplayName || auth.currentUser?.displayName || 'Admin'}`, 'order', {
+						customerName: orderData.customerName,
+						totalAmount: finalTotal,
+						status: 'Đã sửa đơn',
+						actorName: owner.userDisplayName || auth.currentUser?.displayName || 'Admin'
+					});
 				}
+
 			} else {
 				orderData.createdAt = Timestamp.now();
 				let newOrderId = '';
@@ -917,6 +1270,12 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 							ownerId: owner.ownerId || '',
 							createdBy: auth.currentUser?.uid || '',
 							createdAt: serverTimestamp()
+						});
+						transaction.update(doc(db, 'customers', orderData.customerId), {
+							debt: increment(Number(finalTotal || 0)),
+							totalDebt: increment(Number(finalTotal || 0)),
+							totalOrdersAmount: increment(Number(finalTotal || 0)),
+							updatedAt: serverTimestamp()
 						});
 					}
 
@@ -971,6 +1330,25 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 						}
 					}
 
+					// Trừ 1 lượt chiết khấu trả sau của khách hàng CHỈ KHI trạng thái là Đơn chốt
+					if (orderStatus === 'Đơn chốt' && appliedRebate?.id) {
+						const rebateRef = doc(db, 'customer_rebates', appliedRebate.id);
+						const rebateSnap = await transaction.get(rebateRef);
+						if (rebateSnap.exists()) {
+							const rData = rebateSnap.data();
+							const curUsed = Number(rData.usedCount) || 0;
+							const maxU = Number(rData.maxUsage) || 1;
+							const curOrders = Array.isArray(rData.usedOrderIds) ? rData.usedOrderIds : [];
+							const nextUsed = curUsed + 1;
+							transaction.update(rebateRef, {
+								usedCount: nextUsed,
+								usedOrderIds: [...curOrders, newOrderRef.id],
+								status: nextUsed >= maxU ? 'used' : 'active',
+								updatedAt: serverTimestamp()
+							});
+						}
+					}
+
 					const logRef = doc(collection(db, 'audit_logs'));
 					transaction.set(logRef, {
 						action: 'Lên đơn hàng mới',
@@ -986,8 +1364,14 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 					sendTelegramNotification(owner.ownerId, `📦 <b>ĐƠN HÀNG MỚI (CHỐT)</b>
 - Khách hàng: <b>${orderData.customerName}</b>
 - Tổng tiền: <b>${finalTotal.toLocaleString('vi-VN')} đ</b>
-- Nhân viên lên đơn: ${owner.userDisplayName || auth.currentUser?.displayName || 'Admin'}`);
+- Nhân viên lên đơn: ${owner.userDisplayName || auth.currentUser?.displayName || 'Admin'}`, 'order', {
+						customerName: orderData.customerName,
+						totalAmount: finalTotal,
+						status: 'Đơn chốt mới',
+						actorName: owner.userDisplayName || auth.currentUser?.displayName || 'Admin'
+					});
 				}
+
 			}
 			vibrate([100, 50, 100]);
 			setShowSuccessModal(true);
@@ -1012,68 +1396,49 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 		});
 	};
 
-	// ── Derived Values ──
-	const subTotal = lineItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 0), 0);
-	const finalTotal = subTotal + Number(shippingFee) - Number(discountAmt);
+	// ── Filtered Customers (useMemo + pre-scored sort để phản hồi tức thì, không gây lag) ──
+	const filteredCustomers = useMemo(() => {
+		const q = searchCustomerQuery?.trim() || '';
+		if (!q) return customers.slice(0, 40);
 
-	const totalWeight = lineItems.reduce((sum, item) => {
-		const unit = item.unit?.toLowerCase();
-		const parseVNNumber = (val: any) => {
-			if (typeof val === 'number') return val;
-			if (!val) return 0;
-			const cleaned = String(val).replace(/[^0-9,.-]/g, '').replace(',', '.');
-			return parseFloat(cleaned) || 0;
-		};
-		const density = parseVNNumber(item.density);
-		const qty = Number(item.qty) || 0;
-		if (unit === 'kg') return sum + qty;
-		return sum + (qty * density);
-	}, 0);
+		const matches = customers.filter(c =>
+			smartSearchMatch([
+				c.name || '',
+				c.businessName || '',
+				c.phone || '',
+				c.address || '',
+				c.taxCode || '',
+				c.route || '',
+				c.note || ''
+			], q)
+		);
 
-	const totalCostActual = lineItems.reduce((sum, item) => {
-		const qty = Number(item.qty) || 0;
-		const cost = getEffectiveCost(item);
-		return sum + (qty * cost);
-	}, 0);
+		const scored = matches.map(c => ({
+			item: c,
+			score: calculateSearchScore(c, q, { primary: ['name', 'businessName', 'phone'] })
+		}));
+		scored.sort((a, b) => {
+			if (a.score !== b.score) return b.score - a.score;
+			return (a.item.name || '').localeCompare(b.item.name || '');
+		});
+		return scored.slice(0, 40).map(s => s.item);
+	}, [customers, searchCustomerQuery]);
 
-	const profitItems = lineItems.filter(item => {
-		const prod = products.find(p => p.id === item.productId);
-		return !shouldExcludeFromProfit(prod?.name || '', prod?.excludeProfit);
-	});
-	const profitSubTotal = profitItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 0), 0);
-	const profitCostTotal = profitItems.reduce((sum, item) => {
-		const qty = Number(item.qty) || 0;
-		const cost = getEffectiveCost(item);
-		return sum + (qty * cost);
-	}, 0);
-	const totalProfitActual = profitSubTotal - profitCostTotal - Number(discountAmt);
-
-	const hasOverheadItems = lineItems.some(item => {
-		if (!item.productId) return false;
-		const prod = products.find(p => p.id === item.productId);
-		return prod?.applyOverheadCost === true && overheadRate > 0;
-	});
-
-	// ── Filtered Customers ──
-	const filteredCustomers = customers.filter(c =>
-		isMatch(c.name || '', searchCustomerQuery) ||
-		isMatch(c.name || '', searchCustomerQuery) ||
-		isMatch(c.phone || '', searchCustomerQuery)
-	);
-
-	// ── Categories ──
-	const categories = Array.from(new Map([
-		'Tôn lợp', 'Xà gồ', 'Sắt hộp', 'Phụ kiện', 'Inox',
-		...products.map(p => p.category)
-	].filter(Boolean).map(cat => [normalizeText(cat), cat])).values()).sort((a: any, b: any) => String(a).localeCompare(String(b)));
+	// ── Categories (useMemo để không parse lại từ đầu mỗi khi re-render) ──
+	const categories = useMemo(() => {
+		return Array.from(new Map([
+			'Tôn lợp', 'Xà gồ', 'Sắt hộp', 'Phụ kiện', 'Inox',
+			...products.map(p => p.category)
+		].filter(Boolean).map(cat => [normalizeText(cat), cat])).values()).sort((a: any, b: any) => String(a).localeCompare(String(b)));
+	}, [products]);
 
 	// ── Return ──
 	return {
 		// Data
 		products,
 		customers,
-		allPayments,
-		allOrders,
+		allPayments: [] as any[],
+		allOrders: [] as any[],
 		loading,
 		fetchingOrder,
 		originalOrder,
@@ -1096,6 +1461,16 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 		shippingFee, setShippingFee,
 		discountAmt, setDiscountAmt,
 		couponCode, setCouponCode,
+		appliedCoupon,
+		availableCoupons,
+		handleSelectCoupon,
+		handleRemoveCoupon,
+
+		// Customer Rebate state
+		appliedRebate,
+		availableRebates,
+		handleSelectRebate,
+		handleRemoveRebate,
 
 		// Dropdown state
 		activeRow, setActiveRow,

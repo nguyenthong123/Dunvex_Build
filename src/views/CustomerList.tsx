@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { smartSearchMatch, calculateSearchScore } from '../utils/searchUtils';
 import { auth, db } from '../services/firebase';
 import { collection, query, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, where, getDocs, writeBatch } from '../services/firebase';
 import BulkImport from '../components/shared/BulkImport';
@@ -22,7 +23,7 @@ const CustomerList = () => {
 	const navigate = useNavigate();
 	const owner = useOwner();
 	const { isNavVisible } = useScroll();
-	const { showToast } = useToast();
+	const { showToast, showConfirm } = useToast();
 
 	const getImageUrl = (url: string) => getOptimizedImageUrl(url);
 
@@ -230,6 +231,7 @@ const CustomerList = () => {
 		} finally {
 			setUploadingLicense(false);
 			setUploadingImages(false);
+			if (e.target) e.target.value = '';
 		}
 	};
 
@@ -468,7 +470,7 @@ const CustomerList = () => {
 	};
 
 	const handleDeleteCustomer = async (id: string, bypassConfirm = false) => {
-		if (bypassConfirm || window.confirm("Bạn có chắc chắn muốn xóa khách hàng này không? (Lịch sử thu nợ liên quan cũng sẽ được dọn dẹp)")) {
+		const proceed = async () => {
 			try {
 				const customer = customers.find(c => c.id === id);
 				const customerName = customer?.name || 'Khách hàng';
@@ -506,6 +508,16 @@ const CustomerList = () => {
 			} catch (error) {
 				showToast("Lỗi khi xóa khách hàng", "error");
 			}
+		};
+
+		if (bypassConfirm) {
+			await proceed();
+		} else {
+			showConfirm(
+				"Xóa khách hàng",
+				"Bạn có chắc chắn muốn xóa khách hàng này không? (Lịch sử thu nợ liên quan cũng sẽ được dọn dẹp)",
+				proceed
+			);
 		}
 	};
 
@@ -535,6 +547,10 @@ const CustomerList = () => {
 	};
 
 	const openEdit = (customer: any) => {
+		const wasShowingDetail = showDetailRef.current;
+		if (wasShowingDetail) {
+			setShowDetail(false);
+		}
 		setSelectedCustomer(customer);
 		setFormData({
 			name: customer.name || '',
@@ -559,7 +575,11 @@ const CustomerList = () => {
 		});
 		setShowTaxInfo(!!(customer.taxName || customer.taxCode || customer.taxAddress || customer.taxPhone));
 		setShowEditForm(true);
-		navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
+		if (wasShowingDetail) {
+			navigate(window.location.pathname + window.location.search, { state: { modalOpen: true }, replace: true });
+		} else {
+			navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
+		}
 	};
 
 	const openDetail = (customer: any) => {
@@ -571,7 +591,21 @@ const CustomerList = () => {
 
 	const filteredCustomers = customers.filter(c => {
 		const matchesRoute = selectedRoute === 'All' || c.route === selectedRoute;
-		return matchesRoute;
+		const matchesSearch = smartSearchMatch([
+			c.name || '',
+			c.businessName || '',
+			c.phone || '',
+			c.address || '',
+			c.taxCode || '',
+			c.route || '',
+			c.note || ''
+		], debouncedSearchTerm);
+		return matchesRoute && matchesSearch;
+	}).sort((a, b) => {
+		const scoreA = calculateSearchScore(a, debouncedSearchTerm, { primary: ['name', 'businessName', 'phone'] });
+		const scoreB = calculateSearchScore(b, debouncedSearchTerm, { primary: ['name', 'businessName', 'phone'] });
+		if (scoreA !== scoreB) return scoreB - scoreA;
+		return (a.name || '').localeCompare(b.name || '');
 	});
 
 	const paginatedCustomers = filteredCustomers;
@@ -743,6 +777,7 @@ const CustomerList = () => {
 				openEdit={openEdit}
 				handleDeleteCustomer={handleDeleteCustomer}
 				showToast={showToast as any}
+				getImageUrl={getImageUrl}
 			/>
 
 			{showMap && <CustomerMap customers={customers} onClose={() => window.history.back()} />}

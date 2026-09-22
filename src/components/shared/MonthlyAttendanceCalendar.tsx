@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
-import { collection, query, where, getDocs } from '../../services/firebase';
+import { collection, query, where, getDocs, onSnapshot } from '../../services/firebase';
 import { db } from '../../services/firebase';
 
 const DAY_NAMES = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
@@ -22,7 +22,7 @@ const isSameDay = (a: Date, b: Date): boolean =>
 
 const MonthlyAttendanceCalendar: React.FC<MonthlyAttendanceCalendarProps> = ({ ownerId, userId }) => {
 	const [viewDate, setViewDate] = useState(() => new Date());
-	const [attendanceDates, setAttendanceDates] = useState<Set<string>>(new Set());
+	const [attendanceMap, setAttendanceMap] = useState<Record<string, { count: number; type: string }>>({});
 	const [leaveDates, setLeaveDates] = useState<Set<string>>(new Set());
 	const [loading, setLoading] = useState(false);
 
@@ -35,45 +35,94 @@ const MonthlyAttendanceCalendar: React.FC<MonthlyAttendanceCalendarProps> = ({ o
 	useEffect(() => {
 		if (!ownerId || !userId) return;
 
-		const fetchAttendance = async () => {
-			setLoading(true);
-			try {
-				const start = new Date(year, month, 1);
-				const end = new Date(year, month + 1, 0);
-				
-				const startStr = start.toISOString().split('T')[0];
-				// To include the whole last day
-				end.setDate(end.getDate() + 1);
-				const endStr = end.toISOString().split('T')[0];
+		setLoading(true);
+		
+		const startStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+		const nextMonth = new Date(year, month + 1, 1);
+		const endStr = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}-01`;
 
-				const q = query(
-					collection(db, 'attendance_logs'),
-					where('ownerId', '==', ownerId),
-					where('userId', '==', userId)
-				);
+		const qLogs = query(
+			collection(db, 'attendance_logs'),
+			where('ownerId', '==', ownerId),
+			where('userId', '==', userId)
+		);
 
-				const snap = await getDocs(q);
-				const attendance = new Set<string>();
-				const leaves = new Set<string>();
-				
-				snap.docs.forEach(d => {
-					const data = d.data();
-					if (data.type === 'request' && Array.isArray(data.dates)) {
-						data.dates.forEach((date: string) => leaves.add(date));
-					} else if (data.date && data.date >= startStr && data.date < endStr && data.type !== 'request') {
-						attendance.add(data.date);
+		const qCheckins = query(
+			collection(db, 'checkins'),
+			where('ownerId', '==', ownerId),
+			where('userId', '==', userId)
+		);
+
+		let logsData: any[] = [];
+		let checkinsData: any[] = [];
+
+		const updateCalendar = (logs: any[], checkins: any[]) => {
+			const attendance: Record<string, { count: number; type: string }> = {};
+			const leaves = new Set<string>();
+
+			logs.forEach(data => {
+				if (data.type === 'request' && Array.isArray(data.dates)) {
+					data.dates.forEach((date: string) => leaves.add(date));
+				} else if (data.date && data.date >= startStr && data.date < endStr && data.type !== 'request') {
+					const dateStr = data.date;
+					const isCustomer = data.type === 'customer';
+					if (!attendance[dateStr]) {
+						attendance[dateStr] = { count: 0, type: data.type || 'store' };
 					}
-				});
-				setAttendanceDates(attendance);
-				setLeaveDates(leaves);
-			} catch (e) {
-				console.error('Failed to fetch attendance history:', e);
-			} finally {
-				setLoading(false);
-			}
+					if (isCustomer) {
+						attendance[dateStr].count += 1;
+						attendance[dateStr].type = 'customer';
+					} else {
+						attendance[dateStr].type = 'store';
+					}
+				}
+			});
+
+			checkins.forEach(data => {
+				let dateStr = '';
+				if (data.createdAt) {
+					if (typeof data.createdAt === 'string') {
+						dateStr = data.createdAt.split('T')[0];
+					} else if (data.createdAt.toDate) {
+						dateStr = data.createdAt.toDate().toISOString().split('T')[0];
+					} else if (data.createdAt.seconds) {
+						dateStr = new Date(data.createdAt.seconds * 1000).toISOString().split('T')[0];
+					}
+				}
+				if (dateStr && dateStr >= startStr && dateStr < endStr) {
+					if (!attendance[dateStr]) {
+						attendance[dateStr] = { count: 0, type: 'customer' };
+					}
+					attendance[dateStr].count += 1;
+					attendance[dateStr].type = 'customer';
+				}
+			});
+
+			setAttendanceMap(attendance);
+			setLeaveDates(leaves);
+			setLoading(false);
 		};
 
-		fetchAttendance();
+		const unsubLogs = onSnapshot(qLogs, (snap) => {
+			logsData = snap.docs.map(d => d.data());
+			updateCalendar(logsData, checkinsData);
+		}, (err) => {
+			console.error('Logs listener error:', err);
+			setLoading(false);
+		});
+
+		const unsubCheckins = onSnapshot(qCheckins, (snap) => {
+			checkinsData = snap.docs.map(d => d.data());
+			updateCalendar(logsData, checkinsData);
+		}, (err) => {
+			console.error('Checkins listener error:', err);
+			setLoading(false);
+		});
+
+		return () => {
+			unsubLogs();
+			unsubCheckins();
+		};
 	}, [ownerId, userId, year, month]);
 
 	// Build calendar grid
@@ -181,7 +230,7 @@ const MonthlyAttendanceCalendar: React.FC<MonthlyAttendanceCalendarProps> = ({ o
 						const d = String(cell.date.getDate()).padStart(2, '0');
 						const dateStr = `${y}-${m}-${d}`;
 
-						const isCheckedIn = attendanceDates.has(dateStr);
+						const attInfo = attendanceMap[dateStr];
 						const isLeave = leaveDates.has(dateStr);
 						const sunday = cell.date.getDay() === 0;
 						const notCurrent = !cell.currentMonth;
@@ -198,8 +247,14 @@ const MonthlyAttendanceCalendar: React.FC<MonthlyAttendanceCalendarProps> = ({ o
 								`}
 							>
 								{cell.date.getDate()}
-								{isCheckedIn && (
-									<span className="absolute bottom-1 w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+								{attInfo && (
+									attInfo.type === 'customer' ? (
+										<span className="absolute bottom-0.5 min-w-[12px] h-[12px] flex items-center justify-center text-[8px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 rounded-full px-0.5 scale-90 border border-emerald-200 dark:border-emerald-800">
+											{attInfo.count}
+										</span>
+									) : (
+										<span className="absolute bottom-1 w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+									)
 								)}
 							</div>
 						);
@@ -215,6 +270,10 @@ const MonthlyAttendanceCalendar: React.FC<MonthlyAttendanceCalendarProps> = ({ o
 						<span className="w-2 h-2 bg-rose-100 dark:bg-rose-900/50 ring-1 ring-rose-300 rounded-full"></span>
 						Xin nghỉ
 					</div>
+				</div>
+
+				<div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800 text-[9px] text-slate-400 font-mono break-all text-center">
+					LOGS: {Object.keys(attendanceMap).length} | {Object.keys(attendanceMap).join(', ')}
 				</div>
 			</div>
 		</div>

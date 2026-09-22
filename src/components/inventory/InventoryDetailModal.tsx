@@ -42,13 +42,105 @@ const InventoryDetailModal: React.FC<InventoryDetailModalProps> = ({
 		}
 	}, [show]);
 
+	const parseDate = (d: any): Date | null => {
+		if (!d) return null;
+		if (d instanceof Date) return isNaN(d.getTime()) ? null : d;
+		if (typeof d?.toDate === 'function') {
+			const res = d.toDate();
+			return res instanceof Date && !isNaN(res.getTime()) ? res : null;
+		}
+		if (typeof d?.toMillis === 'function') {
+			const ms = d.toMillis();
+			return typeof ms === 'number' && !isNaN(ms) ? new Date(ms) : null;
+		}
+		if (typeof d === 'object' && typeof d.seconds === 'number') {
+			return new Date(d.seconds * 1000);
+		}
+		const parsed = new Date(d);
+		return isNaN(parsed.getTime()) ? null : parsed;
+	};
+
+	const formatDateTime = (d: any) => {
+		const date = parseDate(d);
+		if (!date) return '---';
+		return date.toLocaleString('vi-VN', {
+			hour: '2-digit',
+			minute: '2-digit',
+			day: '2-digit',
+			month: '2-digit',
+			year: 'numeric'
+		});
+	};
+
+	const getLogTypeInfo = (log: any) => {
+		const type = log?.type;
+		const isOut = type === 'out' || type === 'export' || (type === 'audit' && log?.diffType === 'decrease');
+		if (type === 'out') {
+			return {
+				icon: 'shopping_cart',
+				label: 'Bán hàng (Đơn hàng)',
+				color: 'text-blue-600 dark:text-blue-400',
+				bg: 'bg-blue-50 dark:bg-blue-900/20',
+				isOut: true
+			};
+		}
+		if (type === 'export') {
+			return {
+				icon: 'remove_circle',
+				label: 'Xuất kho nội bộ',
+				color: 'text-amber-600 dark:text-amber-400',
+				bg: 'bg-amber-50 dark:bg-amber-900/20',
+				isOut: true
+			};
+		}
+		if (type === 'import' || type === 'in') {
+			return {
+				icon: 'add_circle',
+				label: 'Nhập kho',
+				color: 'text-emerald-600 dark:text-emerald-400',
+				bg: 'bg-emerald-50 dark:bg-emerald-900/20',
+				isOut: false
+			};
+		}
+		if (type === 'init') {
+			return {
+				icon: 'inventory_2',
+				label: 'Tồn đầu kỳ',
+				color: 'text-indigo-600 dark:text-indigo-400',
+				bg: 'bg-indigo-50 dark:bg-indigo-900/20',
+				isOut: false
+			};
+		}
+		if (type === 'audit') {
+			const isInc = log?.diffType === 'increase';
+			return {
+				icon: 'tune',
+				label: isInc ? 'Kiểm kho (Tăng)' : 'Kiểm kho (Giảm)',
+				color: isInc ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400',
+				bg: isInc ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-rose-50 dark:bg-rose-900/20',
+				isOut: !isInc
+			};
+		}
+		return {
+			icon: isOut ? 'remove_circle' : 'add_circle',
+			label: log?.action || type || 'Biến động',
+			color: isOut ? 'text-rose-600 dark:text-rose-400' : 'text-slate-500',
+			bg: 'bg-slate-50 dark:bg-slate-800',
+			isOut
+		};
+	};
+
 	// Inventory-specific: stock logs for this product (Must be declared before early return to obey Rules of Hooks)
 	const stockLogs = useMemo(() => {
 		if (context !== 'inventory' || !inventoryLogs.length || !selectedProduct) return [];
 		return inventoryLogs
 			.filter((l: any) => l.productId === selectedProduct.id)
-			.sort((a: any, b: any) => new Date(b.timestamp || b.createdAt || 0).getTime() - new Date(a.timestamp || a.createdAt || 0).getTime())
-			.slice(0, 15);
+			.sort((a: any, b: any) => {
+				const timeA = parseDate(a.timestamp || a.createdAt)?.getTime() || 0;
+				const timeB = parseDate(b.timestamp || b.createdAt)?.getTime() || 0;
+				return timeB - timeA;
+			})
+			.slice(0, 20);
 	}, [inventoryLogs, selectedProduct?.id, context]);
 
 	if (!show || !selectedProduct) return null;
@@ -63,24 +155,15 @@ const InventoryDetailModal: React.FC<InventoryDetailModalProps> = ({
 
 	const title = context === 'inventory' ? 'Chi tiết tồn kho' : 'Chi tiết sản phẩm';
 
-	const formatDate = (d: any) => {
-		if (!d) return '';
-		return new Date(d).toLocaleDateString('vi-VN');
-	};
-
-	const getLogTypeInfo = (type: string) => {
-		switch (type) {
-			case 'import': return { icon: 'add_circle', label: 'Nhập kho', color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/20' };
-			case 'export': return { icon: 'remove_circle', label: 'Xuất kho', color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-900/20' };
-			case 'adjust': return { icon: 'tune', label: 'Điều chỉnh', color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/20' };
-			default: return { icon: 'swap_horiz', label: type || 'Thay đổi', color: 'text-slate-500', bg: 'bg-slate-50 dark:bg-slate-800' };
-		}
-	};
-
 	return (
 		<div className="fixed inset-0 z-[160] bg-white dark:bg-slate-950 flex flex-col animate-in fade-in duration-200">
 			{/* Header */}
-			<div className="flex-none flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950">
+			<div 
+				className="flex-none flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950"
+				style={{
+					paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))'
+				}}
+			>
 				<button onClick={onClose} className="p-2 -ml-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors">
 					<span className="material-symbols-outlined text-2xl">arrow_back</span>
 				</button>
@@ -265,7 +348,9 @@ const InventoryDetailModal: React.FC<InventoryDetailModalProps> = ({
 							</h3>
 							<div className="bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
 								{stockLogs.map((log: any, i: number) => {
-									const typeInfo = getLogTypeInfo(log.type);
+									const typeInfo = getLogTypeInfo(log);
+									const isDecrease = typeInfo.isOut;
+									const qtyNum = Math.abs(Number(log.qty ?? log.change) || 0);
 									return (
 										<div key={log.id || i} className={`flex items-center gap-3 px-4 py-3 ${i < stockLogs.length - 1 ? 'border-b border-slate-100 dark:border-slate-800' : ''}`}>
 											<div className={`size-8 rounded-lg ${typeInfo.bg} flex items-center justify-center shrink-0`}>
@@ -274,13 +359,13 @@ const InventoryDetailModal: React.FC<InventoryDetailModalProps> = ({
 											<div className="flex-1 min-w-0">
 												<div className="flex items-center justify-between">
 													<span className="text-xs font-bold text-slate-700 dark:text-slate-300">{typeInfo.label}</span>
-													<span className={`text-xs font-black ${log.qty > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-														{log.qty > 0 ? '+' : ''}{log.qty || 0} {selectedProduct.unit}
+													<span className={`text-xs font-black ${isDecrease ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+														{isDecrease ? '-' : '+'}{qtyNum} {selectedProduct.unit}
 													</span>
 												</div>
 												<div className="flex items-center justify-between mt-0.5">
-													<span className="text-[9px] text-slate-400">{log.note || log.reason || ''}</span>
-													<span className="text-[9px] text-slate-400">{formatDate(log.timestamp || log.createdAt)}</span>
+													<span className="text-[9px] text-slate-400 truncate mr-2">{log.note || log.reason || ''}</span>
+													<span className="text-[9px] text-slate-400 shrink-0">{formatDateTime(log.timestamp || log.createdAt)}</span>
 												</div>
 											</div>
 										</div>

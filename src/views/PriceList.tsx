@@ -23,7 +23,7 @@ const PriceList = () => {
 	const navigate = useNavigate();
 	const location = useLocation();
 	const owner = useOwner();
-	const { showToast } = useToast();
+	const { showToast, showConfirm } = useToast();
 	const [loading, setLoading] = useState(true);
 	const [importing, setImporting] = useState(false);
 	const [companyInfo, setCompanyInfo] = useState<any>(null);
@@ -380,21 +380,25 @@ const PriceList = () => {
 	const handleDeleteList = async (e: React.MouseEvent, id: string) => {
 		e.stopPropagation();
 		if (!owner.ownerId) return;
-		if (!window.confirm("Bạn có chắc chắn muốn xóa bản báo giá này?")) return;
+		showConfirm(
+			"Xóa bản báo giá",
+			"Bạn có chắc chắn muốn xóa bản báo giá này?",
+			async () => {
+				try {
+					// If it's the legacy doc, the doc ID is actually the ownerId
+					const targetId = id === 'legacy' ? owner.ownerId : id;
+					await deleteDoc(doc(db, 'price_lists', targetId));
 
-		try {
-			// If it's the legacy doc, the doc ID is actually the ownerId
-			const targetId = id === 'legacy' ? owner.ownerId : id;
-			await deleteDoc(doc(db, 'price_lists', targetId));
-
-			// Force update local state for the virtual 'legacy' item
-			if (id === 'legacy') {
-				setPriceLists(prev => prev.filter(l => l.id !== 'legacy'));
+					// Force update local state for the virtual 'legacy' item
+					if (id === 'legacy') {
+						setPriceLists(prev => prev.filter(l => l.id !== 'legacy'));
+					}
+				} catch (error) {
+					console.error("Error deleting price list:", error);
+					showToast("Không thể xóa bản báo giá này. Vui lòng thử lại sau.", "error");
+				}
 			}
-		} catch (error) {
-			console.error("Error deleting price list:", error);
-			showToast("Không thể xóa bản báo giá này. Vui lòng thử lại sau.", "error");
-		}
+		);
 	};
 
 	const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1057,7 +1061,7 @@ const PriceList = () => {
 						<div className="hidden lg:flex items-center gap-2">
 							{uniqueGroups.length > 0 && (
 								<select
-									className="px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border-none rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white outline-none cursor-pointer font-medium"
+									className="px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white outline-none cursor-pointer font-medium"
 									value={selectedGroup}
 									onChange={(e) => setSelectedGroup(e.target.value)}
 								>
@@ -1072,7 +1076,7 @@ const PriceList = () => {
 								<input
 									type="text"
 									placeholder="Tìm kiếm sản phẩm..."
-									className="pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border-none rounded-xl text-sm w-64 focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white"
+									className="pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl text-sm w-64 focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white"
 									value={searchTerm}
 									onChange={(e) => setSearchTerm(e.target.value)}
 								/>

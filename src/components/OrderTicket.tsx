@@ -60,7 +60,12 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose, products }) =
 	return (
 		<div className="fixed inset-0 z-100 bg-slate-900/95 print:hidden">
 			{/* CONTROLS - Fixed at the top, responsive and single-row on mobile */}
-			<div className="fixed top-0 left-0 right-0 md:top-4 md:left-1/2 md:right-auto md:-translate-x-1/2 flex items-center justify-between gap-3 p-3 md:py-2.5 md:px-5 bg-slate-955/80 md:bg-slate-900/80 backdrop-blur-lg border-b border-white/5 md:border md:border-white/10 md:rounded-full z-110 no-print w-full md:w-[calc(100%-2rem)] md:max-w-[1000px]">
+			<div 
+				className="fixed top-0 left-0 right-0 md:top-4 md:left-1/2 md:right-auto md:-translate-x-1/2 flex items-center justify-between gap-3 p-3 md:py-2.5 md:px-5 bg-slate-955/80 md:bg-slate-900/80 backdrop-blur-lg border-b border-white/5 md:border md:border-white/10 md:rounded-full z-110 no-print w-full md:w-[calc(100%-2rem)] md:max-w-[1000px]"
+				style={{
+					paddingTop: screenWidth < 768 ? 'calc(0.75rem + env(safe-area-inset-top, 0px))' : undefined
+				}}
+			>
 				{/* Layout Mode Toggle */}
 				<div className="flex bg-white/10 backdrop-blur-md rounded-full p-1 border border-white/20 shrink-0">
 					<button
@@ -134,7 +139,12 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose, products }) =
 			</div>
 
 			{/* SCROLLABLE WRAPPER FOR TICKET CONTENT */}
-			<div className="w-full h-full overflow-y-auto pt-20 pb-28 md:pt-24 md:pb-10 flex flex-col items-center custom-scrollbar">
+			<div 
+				className="w-full h-full overflow-y-auto pb-28 md:pb-10 flex flex-col items-center custom-scrollbar"
+				style={{
+					paddingTop: screenWidth < 768 ? 'calc(5rem + env(safe-area-inset-top, 0px))' : '6rem'
+				}}
+			>
 				{/* Wrapper for scaling, responsive size based on selected design mode */}
 				<div
 				style={{

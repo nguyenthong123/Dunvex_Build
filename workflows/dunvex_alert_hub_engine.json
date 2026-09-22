@@ -1,0 +1,98 @@
+{
+  "id": "dunvexAlertHub2026",
+  "name": "Dunvex - Bộ Điều Phối Thông Báo Toàn Diện (Alerts Hub: Chấm Công, Công Trình, Công Nợ, Nghỉ Phép, Đơn Hàng)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dunvex-events",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-events-webhook",
+      "name": "1. Webhook Nhận Event Dunvex",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [100, 300],
+      "webhookId": "dunvex-events-webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"message\": \"Sự kiện đã được n8n Alert Hub tiếp nhận và chuyển tiếp an toàn!\",\n  \"timestamp\": \"{{ $now.toISO() }}\"\n}",
+        "options": {}
+      },
+      "id": "node-events-respond-fast",
+      "name": "2. Phản Hồi Ngay 200 OK (Chống Treo)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [320, 180]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Lấy dữ liệu payload từ Webhook\nconst body = $input.first().json.body || $input.first().json;\n\nconst eventType = body.eventType || body.type || 'generic';\nconst botToken = (body.botToken || '').trim();\nconst chatId = (body.chatId || body.telegramGroupChatId || body.telegramChatId || '').trim();\nconst data = body.data || body;\nconst rawMsg = body.message || '';\n\nif (!botToken || !chatId) {\n  // Không có bot token hoặc chat ID của admin này -> Bỏ qua an toàn, không gửi nhầm\n  return [];\n}\n\nconst nowStr = new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });\n\nfunction formatCurrency(val) {\n  const n = Number(String(val || 0).replace(/[^0-9.-]/g, '')) || 0;\n  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n);\n}\n\nlet formattedText = '';\n\nif (rawMsg && !data.customFormat) {\n  formattedText = rawMsg;\n} else if (eventType === 'attendance') {\n  const actionStr = data.action === 'checkout' ? '🚪 RA CA (CHECK-OUT)' : '🏢 VÀO CA (CHECK-IN)';\n  const icon = data.action === 'checkout' ? '👋' : '⏰';\n  formattedText = `${icon} <b>THÔNG BÁO CHẤM CÔNG - ${actionStr}</b>\\n\\n` +\n    `👤 <b>Nhân viên:</b> <b>${data.userName || 'Nhân viên'}</b>\\n` +\n    `📧 <b>Email:</b> <code>${data.userEmail || '---'}</code>\\n` +\n    `🕒 <b>Thời gian:</b> ${data.time || nowStr}\\n` +\n    (data.distance != null ? `📏 <b>Khoảng cách tới xưởng:</b> <b>${data.distance} mét</b> ${data.distance > 200 ? '⚠️ (Ngoài bán kính chuẩn)' : '✅'}\\n` : '') +\n    (data.location ? `📍 <b>Tọa độ:</b> <code>${data.location.lat?.toFixed(5)}, ${data.location.lng?.toFixed(5)}</code>\\n` : '') +\n    (data.status ? `📊 <b>Trạng thái:</b> ${data.status === 'Đúng giờ' ? '🟢 Đúng giờ' : '🟡 ' + data.status}\\n` : '') +\n    `⚡ <i>Ghi nhận tự động từ ứng dụng Dunvex Build.</i>`;\n} else if (eventType === 'site_checkin') {\n  formattedText = `📍 <b>CHECK-IN TẠI CÔNG TRÌNH / GIAO HÀNG</b>\\n\\n` +\n    `👤 <b>Nhân viên:</b> <b>${data.userName || 'Nhân viên'}</b>\\n` +\n    `🏗️ <b>Khách hàng / Công trình:</b> <b>${data.customerName || data.siteName || 'Công trình'}</b>\\n` +\n    `🕒 <b>Thời gian:</b> ${data.time || nowStr}\\n` +\n    (data.distance != null ? `📏 <b>Khoảng cách:</b> <b>${data.distance} mét</b>\\n` : '') +\n    (data.location ? `🗺️ <b>Vị trí GPS:</b> <a href=\"https://www.google.com/maps/search/?api=1&query=${data.location.lat},${data.location.lng}\">Xem bản đồ vệ tinh</a>\\n` : '') +\n    (data.imageUrl ? `📸 <b>Ảnh hiện trường:</b> <a href=\"${data.imageUrl}\">Xem ảnh chụp tại chỗ</a>\\n` : '') +\n    (data.note ? `📝 <b>Ghi chú:</b> <i>${data.note}</i>\\n` : '') +\n    `🚚 <i>Được định vị chính xác qua GPS di động.</i>`;\n} else if (eventType === 'debt_payment') {\n  formattedText = `💰 <b>GHI NHẬN THU NỢ KHÁCH HÀNG</b>\\n\\n` +\n    `👤 <b>Khách hàng:</b> <b>${data.customerName || 'Khách hàng'}</b>\\n` +\n    `💵 <b>Số tiền thu:</b> <b>${formatCurrency(data.amount)}</b>\\n` +\n    `💳 <b>Hình thức:</b> ${data.paymentMethod || 'Tiền mặt / Chuyển khoản'}\\n` +\n    (data.remainingDebt != null ? `📉 <b>Dư nợ sau khi thu:</b> <b>${formatCurrency(data.remainingDebt)}</b>\\n` : '') +\n    `👨‍💼 <b>Người thu:</b> ${data.collectorName || data.user || 'Nhân viên'}\\n` +\n    `🕒 <b>Thời gian:</b> ${data.time || nowStr}\\n` +\n    (data.note ? `📝 <b>Nội dung:</b> <i>${data.note}</i>\\n` : '') +\n    `📑 <i>Phiếu thu đã được ghi sổ tự động và đối soát vào CSDL.</i>`;\n} else if (eventType === 'leave_request') {\n  const reqType = data.requestType === 'leave' ? '🏖️ NGHỈ PHÉP' : '⏰ XIN ĐI MUỘN';\n  formattedText = `📝 <b>ĐƠN ĐĂNG KÝ ${reqType}</b>\\n\\n` +\n    `👤 <b>Nhân viên:</b> <b>${data.userName || 'Nhân viên'}</b>\\n` +\n    `📧 <b>Email:</b> <code>${data.userEmail || '---'}</code>\\n` +\n    `📅 <b>Ngày đăng ký:</b> <b>${Array.isArray(data.dates) ? data.dates.join(', ') : (data.dates || data.date || 'Hôm nay')}</b>\\n` +\n    `💬 <b>Lý do:</b> <i>${data.note || data.reason || 'Bận việc gia đình'}</i>\\n` +\n    `🕒 <b>Thời gian gửi:</b> ${data.time || nowStr}\\n` +\n    `🔔 <i>Vui lòng vào mục Quản lý nghỉ phép để xét duyệt cho nhân viên.</i>`;\n} else if (eventType === 'order') {\n  formattedText = `🛒 <b>CẬP NHẬT ĐƠN HÀNG DUNVEX</b>\\n\\n` +\n    `👤 <b>Khách hàng:</b> <b>${data.customerName || 'Khách hàng'}</b>\\n` +\n    `💰 <b>Tổng tiền:</b> <b>${formatCurrency(data.totalAmount || data.amount)}</b>\\n` +\n    `📦 <b>Trạng thái:</b> <b>${data.status || 'Đơn chốt'}</b>\\n` +\n    `👨‍💼 <b>Thao tác bởi:</b> ${data.actorName || data.user || 'Admin'}\\n` +\n    `🕒 <b>Thời gian:</b> ${data.time || nowStr}`;\n} else {\n  formattedText = `🔔 <b>THÔNG BÁO HỆ THỐNG DUNVEX</b>\\n\\n${rawMsg || JSON.stringify(data)}`;\n}\n\nreturn [{\n  json: {\n    botToken,\n    chatId,\n    text: formattedText,\n    eventType\n  }\n}];"
+      },
+      "id": "node-format-payload",
+      "name": "3. Phân Loại & Soạn Mẫu Tin Nhắn (HTML)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [320, 400]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.telegram.org/bot{{ $json.botToken }}/sendMessage",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  chat_id: $json.chatId,\n  text: $json.text,\n  parse_mode: 'HTML',\n  disable_web_page_preview: false\n}) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "node-send-to-tele-group",
+      "name": "4. Bắn Thông Báo Đến Group Telegram Xưởng",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [620, 400],
+      "continueOnFail": true
+    }
+  ],
+  "connections": {
+    "1. Webhook Nhận Event Dunvex": {
+      "main": [
+        [
+          {
+            "node": "2. Phản Hồi Ngay 200 OK (Chống Treo)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "3. Phân Loại & Soạn Mẫu Tin Nhắn (HTML)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. Phân Loại & Soạn Mẫu Tin Nhắn (HTML)": {
+      "main": [
+        [
+          {
+            "node": "4. Bắn Thông Báo Đến Group Telegram Xưởng",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

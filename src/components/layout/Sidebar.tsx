@@ -2,10 +2,9 @@ import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth } from '../../services/firebase';
 import { useNavigationConfig } from '../../hooks/useNavigationConfig';
-import { Moon, Sun, LogOut } from 'lucide-react';
+import { Moon, Sun, LogOut, User } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
-
-import NotificationBell from '../NotificationBell';
+import { useOwner } from '../../hooks/useOwner';
 
 interface SidebarProps {
 	onToggle?: () => void;
@@ -15,6 +14,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onToggle }) => {
 	const navigate = useNavigate();
 	const { sidebarItems, currentPath } = useNavigationConfig();
 	const { theme, toggleTheme } = useTheme();
+	const owner = useOwner();
 
 	const handleLogout = () => {
 		navigate('/settings?action=logout');
@@ -23,40 +23,40 @@ const Sidebar: React.FC<SidebarProps> = ({ onToggle }) => {
 	const menuItems = sidebarItems;
 
 	return (
-		<aside className="hidden lg:flex flex-col h-screen bg-gradient-to-b from-[#1A237E] to-[#0D1240] dark:from-slate-900 dark:to-slate-950 text-white transition-all duration-300 z-40 lg:w-64 flex-shrink-0 border-r border-white/5 relative">
-			{/* Toggle Button Inside Sidebar */}
-			<button
-				onClick={onToggle}
-				className="absolute -right-3 top-20 z-50 size-6 bg-[#FF6D00] text-white rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
-				title="Ẩn Menu"
-			>
-				<span className="material-symbols-outlined text-xs">chevron_left</span>
-			</button>
-
-			<div className="h-20 flex items-center justify-center lg:justify-start lg:px-6 border-b border-white/10">
-				<div
-					className="size-10 bg-[#FF6D00] rounded-xl flex items-center justify-center shrink-0 shadow-lg cursor-pointer hover:scale-105 transition-transform"
-					onClick={() => navigate('/')}
-				>
-					<span className="material-symbols-outlined text-white text-2xl font-bold">architecture</span>
+		<aside className="w-20 lg:w-72 bg-[#1A237E] dark:bg-slate-900 h-full flex flex-col justify-between shrink-0 shadow-2xl relative z-40 transition-colors duration-300">
+			{/* Logo section */}
+			<div className="p-4 lg:p-6 flex items-center justify-between">
+				<div className="flex items-center gap-3">
+					<div className="size-10 bg-[#FF6D00] rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/30 shrink-0">
+						<span className="material-symbols-outlined text-white text-2xl font-bold">architecture</span>
+					</div>
+					<div className="hidden lg:block">
+						<h1 className="text-xl font-black tracking-tight text-white uppercase flex items-center gap-1">
+							Dunvex<span className="text-[#FF6D00]">Build</span>
+						</h1>
+						<p className="text-[10px] text-white/50 font-bold uppercase tracking-wider">Hệ thống sản xuất & bán hàng</p>
+					</div>
 				</div>
-				<div className="ml-3 hidden lg:flex flex-col">
-					<h1 className="text-base font-black leading-none uppercase tracking-tighter">Dunvex<span className="text-[#FF6D00]">Build</span></h1>
-					<p className="text-white/60 text-[10px] mt-1 uppercase font-bold tracking-widest">Management System</p>
-				</div>
+				{onToggle && (
+					<button
+						onClick={onToggle}
+						className="hidden lg:flex size-8 rounded-lg bg-white/10 text-white/70 hover:text-white hover:bg-white/20 items-center justify-center transition-colors"
+						title="Ẩn menu"
+					>
+						<span className="material-symbols-outlined text-lg">chevron_left</span>
+					</button>
+				)}
 			</div>
 
-			<div className="flex-1 overflow-y-auto py-6 flex flex-col gap-2 px-3 custom-scrollbar">
+			{/* Navigation links */}
+			<div className="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto no-scrollbar">
 				{menuItems.map((item) => {
-					// Check exact path match or if it's a sub-route (e.g. /products vs /products/new)
-					// The simplest check for active state:
 					const isActive = currentPath === item.path || (item.path !== '/' && currentPath.startsWith(item.path));
-
 					return (
 						<button
 							key={item.path}
 							onClick={() => navigate(item.path)}
-							className={`flex items-center gap-3 px-3 py-3 rounded-xl transition-all group text-left relative overflow-hidden ${isActive
+							className={`w-full flex items-center gap-4 px-3.5 py-3 rounded-xl transition-all duration-200 group relative ${isActive
 								? 'bg-[#FF6D00] text-white shadow-lg shadow-orange-500/30 font-bold'
 								: 'text-white/70 hover:bg-white/10 hover:text-white'
 								}`}
@@ -75,9 +75,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onToggle }) => {
 			</div>
 
 			<div className="p-4 border-t border-white/10 space-y-2">
-				{/* Notifications & Theme */}
+				{/* Theme Toggle */}
 				<div className="flex items-center gap-2">
-					<NotificationBell placement="up" align="left" />
 					<button
 						onClick={toggleTheme}
 						className="flex-1 flex items-center gap-3 px-3 py-3 rounded-xl text-white/70 hover:bg-white/10 hover:text-white transition-all group overflow-hidden"
@@ -92,26 +91,35 @@ const Sidebar: React.FC<SidebarProps> = ({ onToggle }) => {
 					</button>
 				</div>
 
-				{/* User Profile / Logout */}
-				<div
-					className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 cursor-pointer group"
-					onClick={handleLogout}
-					title="Đăng xuất"
-				>
-					<div className="relative">
-						<img
-							className="rounded-full size-10 shrink-0 border-2 border-[#FF6D00] object-cover group-hover:border-white transition-colors"
-							src={auth.currentUser?.photoURL || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=100"}
-							alt="User"
-						/>
-						<div className="absolute -bottom-1 -right-1 bg-slate-900 rounded-full p-1 border-2 border-[#1A237E]">
-							<LogOut size={10} className="text-white" />
+				{/* User Profile & Logout */}
+				<div className="flex items-center justify-between p-2 rounded-xl bg-white/5">
+					<div
+						className="flex items-center gap-3 cursor-pointer group flex-1 min-w-0"
+						onClick={() => navigate('/profile')}
+						title="Xem hồ sơ cá nhân"
+					>
+						<div className="relative">
+							<img
+								className="rounded-full size-10 shrink-0 border-2 border-[#FF6D00] object-cover group-hover:border-white transition-colors"
+								src={auth.currentUser?.photoURL || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=100"}
+								alt="User"
+							/>
+							<div className="absolute -bottom-1 -right-1 bg-indigo-600 rounded-full p-1 border border-white">
+								<User size={8} className="text-white" />
+							</div>
+						</div>
+						<div className="hidden lg:flex flex-col overflow-hidden">
+							<p className="text-sm font-black truncate leading-none uppercase tracking-tight text-white group-hover:text-[#FF6D00] transition-colors">{owner.userDisplayName || auth.currentUser?.displayName || 'Admin'}</p>
+							<span className="text-[10px] text-white/50 truncate uppercase font-bold mt-1 text-left">Hồ sơ cá nhân</span>
 						</div>
 					</div>
-					<div className="hidden lg:flex flex-col overflow-hidden">
-						<p className="text-sm font-black truncate leading-none uppercase tracking-tight">{auth.currentUser?.displayName || 'Admin'}</p>
-						<button className="text-[10px] text-white/50 truncate uppercase font-bold mt-1 text-left group-hover:text-[#FF6D00] transition-colors">Đăng xuất</button>
-					</div>
+					<button
+						onClick={handleLogout}
+						className="p-2 rounded-xl hover:bg-white/10 text-white/70 hover:text-[#FF6D00] transition-all ml-2"
+						title="Đăng xuất"
+					>
+						<LogOut size={20} />
+					</button>
 				</div>
 			</div>
 		</aside>

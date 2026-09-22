@@ -3,15 +3,38 @@ import { getAuth } from 'firebase/auth';
 
 const UPLOAD_URL = import.meta.env.VITE_UPLOAD_URL || '/api/upload';
 
-// Helper to compress image before uploading
-async function compressImage(file: File, maxWidth = 1200, maxHeight = 1200, quality = 0.85): Promise<string> {
+// Helper to compress image before uploading (Optimized for iOS / Android low-memory devices)
+async function compressImage(file: File, maxWidth = 1200, maxHeight = 1200, quality = 0.8): Promise<string> {
   return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        let width = img.width;
-        let height = img.height;
+    // Use ObjectURL instead of reading entire 15MB file into string memory
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+
+    const cleanup = () => {
+      try {
+        URL.revokeObjectURL(objectUrl);
+      } catch (e) {
+        // ignore
+      }
+      img.onload = null;
+      img.onerror = null;
+      img.src = '';
+    };
+
+    img.onload = () => {
+      try {
+        let width = img.naturalWidth || img.width;
+        let height = img.naturalHeight || img.height;
+
+        if (!width || !height) {
+          cleanup();
+          // Fallback: read directly as DataURL if dimensions not readable
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = (err) => reject(err);
+          reader.readAsDataURL(file);
+          return;
+        }
 
         if (width > height) {
           if (width > maxWidth) {
@@ -29,23 +52,44 @@ async function compressImage(file: File, maxWidth = 1200, maxHeight = 1200, qual
         canvas.width = width;
         canvas.height = height;
 
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { alpha: false });
         if (!ctx) {
-          resolve(e.target?.result as string);
+          cleanup();
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = (err) => reject(err);
+          reader.readAsDataURL(file);
           return;
         }
 
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
+
         const dataUrl = canvas.toDataURL('image/jpeg', quality);
+
+        // Immediate release of backing buffer to avoid WebKit jetsam OOM crash
+        canvas.width = 0;
+        canvas.height = 0;
+        cleanup();
+
         resolve(dataUrl);
-      };
-      img.onerror = () => {
-        resolve(e.target?.result as string);
-      };
-      img.src = e.target?.result as string;
+      } catch (err) {
+        cleanup();
+        reject(err);
+      }
     };
-    reader.onerror = (err) => reject(err);
-    reader.readAsDataURL(file);
+
+    img.onerror = () => {
+      cleanup();
+      // Fallback
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(file);
+    };
+
+    img.src = objectUrl;
   });
 }
 

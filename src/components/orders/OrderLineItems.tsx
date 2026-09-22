@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ChevronDown, CheckCircle, Package, Trash2, Plus, QrCode } from 'lucide-react';
+import { smartSearchMatch, calculateSearchScore, normalizeText as searchNormalizeText } from '../../utils/searchUtils';
 
 interface OrderLineItemsProps {
     lineItems: any[];
-    updateLineItem: (index: number, field: string, value: any) => void;
-    removeLineItem: (index: number) => void;
+    updateLineItem: (indexOrId: number | string, field: string, value: any) => void;
+    removeLineItem: (indexOrId: number | string) => void;
     addLineItem: () => void;
     activeRow: number | null;
     setActiveRow: (index: number | null) => void;
@@ -32,6 +33,46 @@ const OrderLineItems: React.FC<OrderLineItemsProps> = ({
     getEffectiveStock, copyToClipboard, setShowScanner,
     normalizeText, isMatch
 }) => {
+    // Memoize kết quả tìm kiếm sản phẩm cho dòng đang mở dropdown, tránh tính toán lại liên tục
+    const activeItem = activeRow !== null && activeRow < lineItems.length ? lineItems[activeRow] : null;
+    const activeCategory = activeItem ? searchNormalizeText(activeItem.category) : '';
+
+    const searchMatches = useMemo(() => {
+        if (activeRow === null || activeField !== 'productId') return [];
+        const q = lineSearchQuery?.trim() || '';
+        const hasSearch = q.length > 0;
+
+        const matches = products.filter(p => {
+            const isCatMatch = !hasSearch ? (!activeCategory || searchNormalizeText(p.category) === activeCategory) : true;
+            if (!isCatMatch) return false;
+            if (!hasSearch) return true;
+            return smartSearchMatch([
+                p.name || '',
+                p.sku || '',
+                p.serialNumber || '',
+                p.category || '',
+                p.specification || '',
+                p.packaging || '',
+                p.density || '',
+                p.note || ''
+            ], q);
+        });
+
+        if (hasSearch) {
+            const scored = matches.map(p => ({
+                item: p,
+                score: calculateSearchScore(p, q)
+            }));
+            scored.sort((a, b) => {
+                if (a.score !== b.score) return b.score - a.score;
+                return (a.item.name || '').localeCompare(b.item.name || '');
+            });
+            return scored.slice(0, 40).map(s => s.item);
+        }
+
+        return matches.slice(0, 50);
+    }, [products, lineSearchQuery, activeRow, activeField, activeCategory]);
+
     return (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm transition-colors duration-300 relative z-10">
             <div className="px-6 py-4 border-b border-slate-50 dark:border-slate-800 flex items-center justify-between">
@@ -49,8 +90,11 @@ const OrderLineItems: React.FC<OrderLineItemsProps> = ({
 
                 {/* LIST OF ITEMS */}
                 <div className="space-y-6 md:space-y-0">
-                    {lineItems.map((item, index) => (
-                        <div key={index} className="group relative bg-[#fcfdfe] dark:bg-slate-800/30 md:bg-transparent rounded-2xl md:rounded-none p-4 md:p-0 border border-slate-100 dark:border-slate-800/50 md:border-t-0 md:border-x-0 md:border-b md:border-slate-100 md:dark:border-slate-800 md:grid md:grid-cols-[110px_1.5fr_80px_1.2fr_40px] lg:grid-cols-[130px_1fr_90px_1.2fr_40px] gap-3 lg:gap-4 md:items-start md:py-3.5 hover:bg-slate-50/40 dark:hover:bg-slate-800/10 transition-all">
+                    {lineItems.map((item, index) => {
+                        const lineKey = item.rowId || item.id || index;
+                        const rowKey = item.rowId || item.id || `line-${index}`;
+                        return (
+                        <div key={rowKey} className="group relative bg-[#fcfdfe] dark:bg-slate-800/30 md:bg-transparent rounded-2xl md:rounded-none p-4 md:p-0 border border-slate-100 dark:border-slate-800/50 md:border-t-0 md:border-x-0 md:border-b md:border-slate-100 md:dark:border-slate-800 md:grid md:grid-cols-[110px_1.5fr_80px_1.2fr_40px] lg:grid-cols-[130px_1fr_90px_1.2fr_40px] gap-3 lg:gap-4 md:items-start md:py-3.5 hover:bg-slate-50/40 dark:hover:bg-slate-800/10 transition-all">
                                     {/* SELECTION AREA (CATEGORY & PRODUCT) */}
                                     <div className="grid grid-cols-1 md:contents gap-4">
                                         {/* CATEGORY SELECT */}
@@ -86,7 +130,7 @@ const OrderLineItems: React.FC<OrderLineItemsProps> = ({
                                                 <div
                                                     className="px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer text-xs font-bold text-slate-400 border-b border-slate-50 dark:border-slate-700"
                                                     onClick={() => {
-                                                        updateLineItem(index, 'category', '');
+                                                        updateLineItem(lineKey, 'category', '');
                                                         setActiveRow(null);
                                                         setActiveField(null);
                                                     }}
@@ -100,9 +144,9 @@ const OrderLineItems: React.FC<OrderLineItemsProps> = ({
                                                             key={cat}
                                                             className="px-5 py-4 hover:bg-[#1A237E]/5 dark:hover:bg-indigo-500/10 hover:text-[#1A237E] cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between transition-colors"
                                                             onClick={() => {
-                                                                 updateLineItem(index, 'category', cat);
-                                                                 setActiveRow(null);
-                                                                 setActiveField(null);
+                                                                updateLineItem(lineKey, 'category', cat);
+                                                                setActiveRow(null);
+                                                                setActiveField(null);
                                                             }}
                                                         >
                                                             {cat}
@@ -146,11 +190,16 @@ const OrderLineItems: React.FC<OrderLineItemsProps> = ({
                                         <ChevronDown size={14} className="text-slate-300 shrink-0 hidden lg:block ml-1" />
                                     </div>
 
-                                    {item.specification && (
-                                        <div className="mt-1.5 pl-1 select-none">
-                                            <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-1.5 py-0.5 rounded-md leading-none max-w-[200px] truncate" title={`Quy cách: ${item.specification}`}>
-                                                QC: {item.specification}
-                                            </span>
+                                    {item.productId && (
+                                        <div className="mt-1.5 pl-1 flex items-center gap-1">
+                                            <span className="text-[9px] font-black text-indigo-500 dark:text-indigo-400 shrink-0 select-none">QC:</span>
+                                            <input
+                                                type="text"
+                                                placeholder="Nhập quy cách..."
+                                                className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-300 bg-indigo-50/30 dark:bg-slate-800 border border-indigo-100/30 dark:border-slate-700 rounded px-1.5 py-0.5 w-full focus:ring-1 focus:ring-indigo-500/30 focus:bg-indigo-50 dark:focus:bg-indigo-900/20 placeholder:text-slate-300 dark:placeholder:text-slate-500 outline-none"
+                                                value={item.specification || ''}
+                                                onChange={(e) => updateLineItem(lineKey, 'specification', e.target.value)}
+                                            />
                                         </div>
                                     )}
 
@@ -167,73 +216,52 @@ const OrderLineItems: React.FC<OrderLineItemsProps> = ({
                                                 />
                                             </div>
                                             <div className="max-h-80 overflow-y-auto py-2 overscroll-contain custom-scrollbar border-b border-slate-50 dark:border-slate-700/50">
-                                                {(() => {
-                                                     const normalizedSearch = normalizeText(lineSearchQuery);
-                                                     const currentCategory = normalizeText(item.category);
-
-                                                     const matches = products.filter(p => {
-                                                          const isCatMatch = !item.category || normalizeText(p.category) === currentCategory;
-                                                          const isProductMatch = isMatch(p.name || '', lineSearchQuery) ||
-                                                              isMatch(p.sku || '', lineSearchQuery) ||
-                                                              isMatch(p.serialNumber || '', lineSearchQuery) ||
-                                                              isMatch(p.category || '', lineSearchQuery) ||
-                                                              isMatch(p.note || '', lineSearchQuery) ||
-                                                              isMatch(p.specification || '', lineSearchQuery) ||
-                                                              isMatch(p.packaging || '', lineSearchQuery) ||
-                                                              isMatch(p.density || '', lineSearchQuery);
-                                                          return isCatMatch && isProductMatch;
-                                                      });
-
-                                                      return matches
-                                                          .sort((a, b) => {
-                                                              const aStarts = normalizeText(a.name).startsWith(normalizedSearch);
-                                                              const bStarts = normalizeText(b.name).startsWith(normalizedSearch);
-                                                              if (aStarts && !bStarts) return -1;
-                                                              if (!aStarts && bStarts) return 1;
-                                                              return a.name.localeCompare(b.name);
-                                                          })
-                                                          .slice(0, 50)
-                                                          .map(p => {
-                                                            const effStock = getEffectiveStock(p);
-                                                            return (
-                                                                <div
-                                                                    key={p.id}
-                                                                    className={`px-5 py-4 hover:bg-[#1A237E]/5 dark:hover:bg-indigo-500/10 cursor-pointer border-b border-slate-50 dark:border-slate-700/50 last:border-none transition-all flex items-center justify-between group/prod`}
-                                                                    onClick={() => {
-                                                                        updateLineItem(index, 'productId', p.id);
-                                                                        setActiveRow(null);
-                                                                        setActiveField(null);
-                                                                    }}
-                                                                >
-                                                                    <div className="flex flex-col gap-1 max-w-[70%]">
-                                                                        <span className="text-xs font-black text-slate-800 dark:text-slate-200 group-hover/prod:text-[#1A237E] dark:group-hover/prod:text-indigo-400 transition-colors uppercase leading-tight line-clamp-2">{p.name}</span>
-                                                                        {p.serialNumber && (
-                                                                            <span className="text-[9px] font-black text-[#B48C00] uppercase leading-none">
-                                                                                SN: {p.serialNumber}
-                                                                            </span>
-                                                                        )}
-                                                                        {p.specification && (
-                                                                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 leading-tight line-clamp-2">
-                                                                                QC: {p.specification}
-                                                                            </span>
-                                                                        )}
-                                                                        <div className="flex items-center gap-2">
-                                                                            <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded text-[9px] font-black text-slate-500 uppercase">
-                                                                                {p.sku || 'N/A'}
-                                                                            </span>
-                                                                            <span className="text-[9px] font-bold text-slate-400">{p.unit}</span>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="text-right">
-                                                                        <div className="text-xs font-black text-[#f27121] mb-0.5">{p.priceSell.toLocaleString('vi-VN')} đ</div>
-                                                                        <div className={`text-[9px] font-black uppercase tracking-widest ${effStock > 0 ? 'text-green-500' : 'text-rose-500'}`}>
-                                                                            {effStock > 0 ? `TỒN: ${effStock}` : 'HẾT HÀNG'}
-                                                                        </div>
+                                                {searchMatches.length === 0 ? (
+                                                    <div className="px-5 py-6 text-center text-xs font-semibold text-slate-400">
+                                                        Không tìm thấy sản phẩm phù hợp
+                                                    </div>
+                                                ) : (
+                                                    searchMatches.map(p => {
+                                                        const effStock = getEffectiveStock(p);
+                                                        return (
+                                                            <div
+                                                                key={p.id}
+                                                                className={`px-5 py-4 hover:bg-[#1A237E]/5 dark:hover:bg-indigo-500/10 cursor-pointer border-b border-slate-50 dark:border-slate-700/50 last:border-none transition-all flex items-center justify-between group/prod`}
+                                                                onClick={() => {
+                                                                    updateLineItem(lineKey, 'productId', p.id);
+                                                                    setActiveRow(null);
+                                                                    setActiveField(null);
+                                                                }}
+                                                            >
+                                                                <div className="flex flex-col gap-1 max-w-[70%]">
+                                                                    <span className="text-xs font-black text-slate-800 dark:text-slate-200 group-hover/prod:text-[#1A237E] dark:group-hover/prod:text-indigo-400 transition-colors uppercase leading-tight line-clamp-2">{p.name}</span>
+                                                                    {p.serialNumber && (
+                                                                        <span className="text-[9px] font-black text-[#B48C00] uppercase leading-none">
+                                                                            SN: {p.serialNumber}
+                                                                        </span>
+                                                                    )}
+                                                                    {p.specification && (
+                                                                        <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 leading-tight line-clamp-2">
+                                                                            QC: {p.specification}
+                                                                        </span>
+                                                                    )}
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded text-[9px] font-black text-slate-500 uppercase">
+                                                                            {p.sku || 'N/A'}
+                                                                        </span>
+                                                                        <span className="text-[9px] font-bold text-slate-400">{p.unit}</span>
                                                                     </div>
                                                                 </div>
-                                                            );
-                                                        });
-                                                })()}
+                                                                <div className="text-right">
+                                                                    <div className="text-xs font-black text-[#f27121] mb-0.5">{p.priceSell.toLocaleString('vi-VN')} đ</div>
+                                                                    <div className={`text-[9px] font-black uppercase tracking-widest ${effStock > 0 ? 'text-green-500' : 'text-rose-500'}`}>
+                                                                        {effStock > 0 ? `TỒN: ${effStock}` : 'HẾT HÀNG'}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })
+                                                )}
                                             </div>
                                         </div>
                                     )}
@@ -252,7 +280,7 @@ const OrderLineItems: React.FC<OrderLineItemsProps> = ({
                                             step="any"
                                             className="w-full h-10 px-2 text-center bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-semibold text-slate-900 dark:text-white focus:ring-1 focus:ring-[#f27121]/30 focus:border-[#f27121] transition-all outline-none"
                                             value={item.qty}
-                                            onChange={(e) => updateLineItem(index, 'qty', e.target.value)}
+                                            onChange={(e) => updateLineItem(lineKey, 'qty', e.target.value)}
                                             placeholder="0"
                                         />
                                     </div>
@@ -265,7 +293,7 @@ const OrderLineItems: React.FC<OrderLineItemsProps> = ({
                                             type="number"
                                             className="w-full h-10 px-2 text-center bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-semibold text-slate-900 dark:text-white focus:ring-1 focus:ring-[#1A237E]/30 focus:border-[#1A237E] transition-all outline-none"
                                             value={item.price === 0 ? '' : item.price}
-                                            onChange={(e) => updateLineItem(index, 'price', e.target.value === '' ? 0 : Number(e.target.value))}
+                                            onChange={(e) => updateLineItem(lineKey, 'price', e.target.value === '' ? 0 : Number(e.target.value))}
                                             placeholder="Giá"
                                         />
                                     </div>
@@ -276,12 +304,16 @@ const OrderLineItems: React.FC<OrderLineItemsProps> = ({
                                             Kiện: {(() => {
                                                 const pkg = parseFloat(item.packaging) || 0;
                                                 if (pkg <= 0) return '0';
-                                                return (Number(item.qty) / pkg).toLocaleString('vi-VN', { maximumFractionDigits: 2 });
+                                                const numericQty = parseFloat(String(item.qty || 0).replace(',', '.'));
+                                                return (numericQty / pkg).toLocaleString('vi-VN', { maximumFractionDigits: 2 });
                                             })()}
                                             {item.aiValidated && <Package size={10} className="text-slate-400" />}
                                         </span>
                                         <span className="text-[10px] font-black text-[#f27121] tabular-nums">
-                                            = {(Number(item.price) * Number(item.qty || 0)).toLocaleString('vi-VN')} đ
+                                            = {(() => {
+                                                const numericQty = parseFloat(String(item.qty || 0).replace(',', '.')) || 0;
+                                                return (Number(item.price) * numericQty).toLocaleString('vi-VN');
+                                            })()} đ
                                         </span>
                                     </div>
                                 </div>
@@ -295,7 +327,8 @@ const OrderLineItems: React.FC<OrderLineItemsProps> = ({
                                         Kiện: {(() => {
                                             const pkg = parseFloat(item.packaging) || 0;
                                             if (pkg <= 0) return '0';
-                                            return (Number(item.qty) / pkg).toLocaleString('vi-VN', { maximumFractionDigits: 2 });
+                                            const numericQty = parseFloat(String(item.qty || 0).replace(',', '.'));
+                                            return (numericQty / pkg).toLocaleString('vi-VN', { maximumFractionDigits: 2 });
                                         })()} KIỆN
                                         {item.aiValidated && (
                                             <Package size={8} className="text-slate-400" />
@@ -303,14 +336,17 @@ const OrderLineItems: React.FC<OrderLineItemsProps> = ({
                                     </span>
                                 </div>
                                 <span className="text-base font-black text-[#f27121] tabular-nums">
-                                    {(Number(item.price) * Number(item.qty || 0)).toLocaleString('vi-VN')} đ
+                                    {(() => {
+                                        const numericQty = parseFloat(String(item.qty || 0).replace(',', '.')) || 0;
+                                        return (Number(item.price) * numericQty).toLocaleString('vi-VN');
+                                    })()} đ
                                 </span>
                             </div>
 
                             {/* REMOVE BUTTON */}
                             <div className="absolute top-2 right-2 md:static md:flex md:justify-end">
                                 <button
-                                    onClick={() => removeLineItem(index)}
+                                    onClick={() => removeLineItem(lineKey)}
                                     className="size-9 md:size-10 rounded-xl flex items-center justify-center text-rose-500 bg-rose-50 dark:bg-rose-900/20 md:bg-transparent md:text-slate-200 md:dark:text-slate-700 md:hover:bg-rose-50 md:dark:hover:bg-rose-900/20 md:hover:text-rose-500 transition-all active:scale-90"
                                     title="Xóa dòng"
                                 >
@@ -318,7 +354,8 @@ const OrderLineItems: React.FC<OrderLineItemsProps> = ({
                                 </button>
                             </div>
                         </div>
-                    ))}
+                    );
+                })}
                 </div>
 
                 {/* ADD BUTTONS */}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { ImageLightboxModal, LightboxImage } from '../shared/ImageLightboxModal';
 
 export interface CustomerDetailModalProps {
     showDetail: boolean;
@@ -9,6 +10,7 @@ export interface CustomerDetailModalProps {
     openEdit: (c: any) => void;
     handleDeleteCustomer: (id: string, bypassConfirm?: boolean) => void;
     showToast: (msg: string, type: string) => void;
+    getImageUrl: (url: string) => string;
 }
 
 export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
@@ -19,13 +21,24 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
     setShowTaxDetail,
     openEdit,
     handleDeleteCustomer,
-    showToast
+    showToast,
+    getImageUrl
 }) => {
     const [confirmDelete, setConfirmDelete] = useState(false);
+    const [lightboxState, setLightboxState] = useState<{
+        isOpen: boolean;
+        images: LightboxImage[];
+        currentIndex: number;
+    }>({
+        isOpen: false,
+        images: [],
+        currentIndex: 0
+    });
 
     useEffect(() => {
         if (!showDetail) {
             setConfirmDelete(false);
+            setLightboxState(prev => ({ ...prev, isOpen: false }));
         }
     }, [showDetail]);
 
@@ -34,7 +47,12 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
     return (
         <div className="fixed inset-0 z-[160] bg-white dark:bg-slate-950 flex flex-col animate-in fade-in duration-200">
             {/* Header */}
-            <div className="flex-none flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950">
+            <div 
+                className="flex-none flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950"
+                style={{
+                    paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))'
+                }}
+            >
                 <button onClick={() => setShowDetail(false)} className="p-2 -ml-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors">
                     <span className="material-symbols-outlined text-2xl">arrow_back</span>
                 </button>
@@ -178,6 +196,113 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                             <span className="text-[10px] font-medium text-slate-300 dark:text-slate-600">{selectedCustomer.createdAt?.seconds ? new Date(selectedCustomer.createdAt.seconds * 1000).toLocaleDateString('vi-VN') : ''}</span>
                         </div>
                     </div>
+
+                    {/* Giấy phép / Giấy tờ & Hình ảnh bổ sung */}
+                    {(() => {
+                        const gpkdList: LightboxImage[] = (
+                            selectedCustomer.licenseUrls && selectedCustomer.licenseUrls.length > 0
+                                ? selectedCustomer.licenseUrls
+                                : selectedCustomer.licenseUrl
+                                    ? [selectedCustomer.licenseUrl]
+                                    : []
+                        ).map((url: string, idx: number, arr: string[]) => ({
+                            url: getImageUrl(url),
+                            title: `Giấy phép kinh doanh / GPKD / Giấy tờ (${idx + 1}/${arr.length})`
+                        }));
+
+                        const additionalList: LightboxImage[] = (selectedCustomer.additionalImages || []).map((url: string, idx: number, arr: string[]) => ({
+                            url: getImageUrl(url),
+                            title: `Hình ảnh bổ sung (${idx + 1}/${arr.length})`
+                        }));
+
+                        if (gpkdList.length === 0 && additionalList.length === 0) return null;
+
+                        return (
+                            <div className="mt-6 border-t border-slate-100 dark:border-slate-800 pt-6 space-y-6">
+                                {/* GPKD / Giấy tờ */}
+                                {gpkdList.length > 0 && (
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between pl-1">
+                                            <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                                                Giấy phép kinh doanh / GPKD / Giấy tờ
+                                            </p>
+                                            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500">
+                                                ({gpkdList.length} ảnh • Chạm để phóng to)
+                                            </span>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {gpkdList.map((item, idx) => (
+                                                <div 
+                                                    key={idx} 
+                                                    onClick={() => setLightboxState({ isOpen: true, images: gpkdList, currentIndex: idx })}
+                                                    className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm relative group bg-slate-50 dark:bg-slate-900/50 aspect-[4/3] flex items-center justify-center cursor-pointer transition-all hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-md"
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    onKeyDown={(e) => { 
+                                                        if (e.key === 'Enter' || e.key === ' ') {
+                                                            e.preventDefault();
+                                                            setLightboxState({ isOpen: true, images: gpkdList, currentIndex: idx });
+                                                        }
+                                                    }}
+                                                >
+                                                    <img 
+                                                        src={item.url} 
+                                                        alt={`GPKD ${idx + 1}`} 
+                                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                                                        loading="lazy"
+                                                    />
+                                                    <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-black uppercase tracking-wider gap-1.5 backdrop-blur-[2px]">
+                                                        <span className="material-symbols-outlined text-lg">zoom_in</span> Phóng to ảnh
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Ảnh bổ sung */}
+                                {additionalList.length > 0 && (
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between pl-1">
+                                            <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                                                Hình ảnh bổ sung
+                                            </p>
+                                            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500">
+                                                ({additionalList.length} ảnh • Chạm để phóng to)
+                                            </span>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {additionalList.map((item, idx) => (
+                                                <div 
+                                                    key={idx} 
+                                                    onClick={() => setLightboxState({ isOpen: true, images: additionalList, currentIndex: idx })}
+                                                    className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm relative group bg-slate-50 dark:bg-slate-900/50 aspect-[4/3] flex items-center justify-center cursor-pointer transition-all hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-md"
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    onKeyDown={(e) => { 
+                                                        if (e.key === 'Enter' || e.key === ' ') {
+                                                            e.preventDefault();
+                                                            setLightboxState({ isOpen: true, images: additionalList, currentIndex: idx });
+                                                        }
+                                                    }}
+                                                >
+                                                    <img 
+                                                        src={item.url} 
+                                                        alt={`Ảnh bổ sung ${idx + 1}`} 
+                                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                                                        loading="lazy"
+                                                    />
+                                                    <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-black uppercase tracking-wider gap-1.5 backdrop-blur-[2px]">
+                                                        <span className="material-symbols-outlined text-lg">zoom_in</span> Phóng to ảnh
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
                 </div>
             </div>
 
@@ -206,7 +331,7 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                     </div>
                 ) : (
                     <>
-                        <button onClick={() => { setShowDetail(false); openEdit(selectedCustomer); }} className="flex-1 bg-[#1A237E] hover:bg-[#283593] text-white py-3 rounded-2xl font-black text-xs uppercase tracking-wider active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 shadow-sm">
+                        <button onClick={() => openEdit(selectedCustomer)} className="flex-1 bg-[#1A237E] hover:bg-[#283593] text-white py-3 rounded-2xl font-black text-xs uppercase tracking-wider active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 shadow-sm">
                             <span className="material-symbols-outlined text-base">edit</span> Chỉnh sửa
                         </button>
                         <button onClick={() => setConfirmDelete(true)} className="bg-white dark:bg-slate-800 text-rose-500 border border-rose-100 dark:border-rose-900/30 py-3 px-4 rounded-2xl font-black text-xs uppercase tracking-wider hover:bg-rose-50 dark:hover:bg-rose-900/20 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5">
@@ -220,6 +345,14 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                     </>
                 )}
             </div>
+
+            {/* In-app Image Zoom / Lightbox Modal */}
+            <ImageLightboxModal
+                isOpen={lightboxState.isOpen}
+                onClose={() => setLightboxState(prev => ({ ...prev, isOpen: false }))}
+                images={lightboxState.images}
+                initialIndex={lightboxState.currentIndex}
+            />
         </div>
     );
 };

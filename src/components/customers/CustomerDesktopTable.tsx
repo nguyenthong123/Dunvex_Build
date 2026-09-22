@@ -1,4 +1,5 @@
 import React from 'react';
+import { ApprovalBadge } from '../shared/ApprovalBadge';
 
 export const TableSkeleton = () => (
     <>
@@ -104,9 +105,12 @@ export const CustomerDesktopTable: React.FC<CustomerDesktopTableProps> = ({
                                 )}
                             </td>
                             <td className="py-4 px-6 text-center">
-                                <span className="px-2 py-0.5 text-[10px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded uppercase">
-                                    {customer.status}
-                                </span>
+                                <ApprovalBadge status={customer.approvalStatus} />
+                                {(!customer.approvalStatus || customer.approvalStatus === 'approved') && (
+                                    <span className="px-2 py-0.5 text-[10px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded uppercase">
+                                        {customer.status || 'Hoạt động'}
+                                    </span>
+                                )}
                             </td>
                             <td className="py-4 px-6 text-right">
                                 <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>

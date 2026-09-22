@@ -1,5 +1,6 @@
 import React from 'react';
 import InventoryActionButtons from './InventoryActionButtons';
+import { ApprovalBadge } from '../shared/ApprovalBadge';
 
 interface InventoryDesktopTableProps {
 	activeTab: string;
@@ -19,6 +20,8 @@ interface InventoryDesktopTableProps {
 	expandedSkus: Set<string>;
 	setExpandedSkus: React.Dispatch<React.SetStateAction<Set<string>>>;
 	getProductInventoryStats: (id: string) => { import: number; export: number };
+	sortBy?: string;
+	onSort?: (column: 'name' | 'stock') => void;
 }
 
 const InventoryDesktopTable: React.FC<InventoryDesktopTableProps> = ({
@@ -38,7 +41,9 @@ const InventoryDesktopTable: React.FC<InventoryDesktopTableProps> = ({
 	copyToClipboard,
 	expandedSkus,
 	setExpandedSkus,
-	getProductInventoryStats
+	getProductInventoryStats,
+	sortBy,
+	onSort
 }) => {
 	const allSelected = paginatedProducts.length > 0 && paginatedProducts.every(p => selectedIds.includes(p.id));
 
@@ -118,9 +123,12 @@ const InventoryDesktopTable: React.FC<InventoryDesktopTableProps> = ({
 											<div className={`text-sm font-black ${product.stock <= 5 ? 'text-rose-500' : 'text-slate-600 dark:text-slate-300'}`}>{product.stock} {product.unit}</div>
 										</td>
 										<td className="py-4 px-6 text-center">
-											<span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${product.status === 'Kinh doanh' ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-500'}`}>
-												{product.status || 'Kinh doanh'}
-											</span>
+											<ApprovalBadge status={product.approvalStatus} />
+											{(!product.approvalStatus || product.approvalStatus === 'approved') && (
+												<span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${product.status === 'Kinh doanh' ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-500'}`}>
+													{product.status || 'Kinh doanh'}
+												</span>
+											)}
 										</td>
 										<td className="py-4 px-6 text-right">
 											<InventoryActionButtons 
@@ -148,10 +156,36 @@ const InventoryDesktopTable: React.FC<InventoryDesktopTableProps> = ({
 									/>
 								</th>
 								<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Hình ảnh</th>
-								<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Tên sản phẩm (Gộp)</th>
-								<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Nhập kho</th>
-								<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Xuất kho</th>
-								<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Còn lại</th>
+								<th 
+									className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest cursor-pointer select-none hover:text-blue-600 transition-colors"
+									onClick={() => onSort?.('name')}
+									title="Bấm để sắp xếp theo tên"
+								>
+									<div className="flex items-center gap-1">
+										<span>Tên sản phẩm (Gộp)</span>
+										<span className="material-symbols-outlined text-sm text-slate-400">
+											{sortBy === 'name_asc' ? 'arrow_upward' : sortBy === 'name_desc' ? 'arrow_downward' : 'unfold_more'}
+										</span>
+									</div>
+								</th>
+								<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center" title="Tổng số lượng nhập từ các biến động kho gần nhất">
+									Nhập gần đây
+								</th>
+								<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center" title="Tổng số lượng xuất từ các biến động kho gần đây">
+									Xuất gần đây
+								</th>
+								<th 
+									className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center cursor-pointer select-none hover:text-blue-600 transition-colors"
+									onClick={() => onSort?.('stock')}
+									title="Bấm để sắp xếp theo số lượng tồn kho thực tế"
+								>
+									<div className="flex items-center justify-center gap-1">
+										<span>Tồn thực tế</span>
+										<span className="material-symbols-outlined text-sm text-slate-400">
+											{sortBy === 'stock_asc' ? 'arrow_upward' : sortBy === 'stock_desc' ? 'arrow_downward' : 'unfold_more'}
+										</span>
+									</div>
+								</th>
 								<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-right">Hành động</th>
 							</tr>
 						</thead>

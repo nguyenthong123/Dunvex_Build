@@ -27,6 +27,14 @@ export const AttendanceAdmin = ({ logs, fieldLogs, companyInfo, setCompanyInfo, 
 	const aggregatedData = useMemo(() => {
 		const data: any = {};
 
+		const getSeconds = (time: any) => {
+			if (!time) return null;
+			if (time.seconds !== undefined) return time.seconds;
+			if (typeof time === 'string') return Math.floor(new Date(time).getTime() / 1000);
+			if (time.toDate) return Math.floor(time.toDate().getTime() / 1000);
+			return null;
+		};
+
 		// 1. Process Office Logs & Requests
 		logs.forEach(log => {
 			const key = `${log.userEmail}_${log.date}`;
@@ -44,6 +52,30 @@ export const AttendanceAdmin = ({ logs, fieldLogs, companyInfo, setCompanyInfo, 
 
 			if (log.type === 'request') {
 				data[key].requests.push(log);
+			} else if (log.type === 'customer') {
+				const checkInSec = getSeconds(log.checkInAt);
+				const checkOutSec = getSeconds(log.checkOutAt);
+
+				if (checkInSec !== null) {
+					const tObj = { seconds: checkInSec };
+					if (!data[key].fieldFirst || checkInSec < getSeconds(data[key].fieldFirst)) {
+						data[key].fieldFirst = tObj;
+					}
+					if (!data[key].fieldLast || checkInSec > getSeconds(data[key].fieldLast)) {
+						data[key].fieldLast = tObj;
+					}
+				}
+
+				if (checkOutSec !== null) {
+					const tObj = { seconds: checkOutSec };
+					if (!data[key].fieldFirst || checkOutSec < getSeconds(data[key].fieldFirst)) {
+						data[key].fieldFirst = tObj;
+					}
+					if (!data[key].fieldLast || checkOutSec > getSeconds(data[key].fieldLast)) {
+						data[key].fieldLast = tObj;
+					}
+				}
+				data[key].status = 'field-trip';
 			} else {
 				if (log.checkInAt) data[key].officeIn = log.checkInAt;
 				if (log.checkOutAt) data[key].officeOut = log.checkOutAt;
@@ -53,23 +85,35 @@ export const AttendanceAdmin = ({ logs, fieldLogs, companyInfo, setCompanyInfo, 
 
 		// 2. Process Field Checkins
 		fieldLogs.forEach(f => {
-			const date = f.createdAt?.seconds ? new Date(f.createdAt.seconds * 1000).toISOString().split('T')[0] : '';
+			let date = '';
+			const sec = getSeconds(f.createdAt);
+			if (sec !== null) {
+				date = new Date(sec * 1000).toISOString().split('T')[0];
+			}
 			if (!date) return;
 			const key = `${f.userEmail}_${date}`;
+			const timestampObj = { seconds: sec };
 
-			if (!data[key]) data[key] = {
-				userName: f.userName || f.userEmail,
-				userEmail: f.userEmail,
-				date: date,
-				officeIn: null,
-				officeOut: null,
-				fieldFirst: f.createdAt,
-				fieldLast: f.createdAt,
-				requests: [],
-				status: 'field-trip'
-			}; else {
-				if (!data[key].fieldFirst || f.createdAt.seconds < data[key].fieldFirst.seconds) data[key].fieldFirst = f.createdAt;
-				if (!data[key].fieldLast || f.createdAt.seconds > data[key].fieldLast.seconds) data[key].fieldLast = f.createdAt;
+			if (!data[key]) {
+				data[key] = {
+					userName: f.userName || f.userEmail,
+					userEmail: f.userEmail,
+					date: date,
+					officeIn: null,
+					officeOut: null,
+					fieldFirst: timestampObj,
+					fieldLast: timestampObj,
+					requests: [],
+					status: 'field-trip'
+				};
+			} else {
+				if (!data[key].fieldFirst || sec < getSeconds(data[key].fieldFirst)) {
+					data[key].fieldFirst = timestampObj;
+				}
+				if (!data[key].fieldLast || sec > getSeconds(data[key].fieldLast)) {
+					data[key].fieldLast = timestampObj;
+				}
+				data[key].status = 'field-trip';
 			}
 		});
 

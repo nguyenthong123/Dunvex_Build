@@ -62,22 +62,6 @@ export const getTicketImageFilename = (layoutMode: 'a4' | 'receipt', order: any)
 };
 
 export const groupOrderItems = (items: any[]) => {
-	if (!items) return [];
-	const grouped: any[] = [];
-	items.forEach((item) => {
-		const existing = grouped.find(g => 
-			g.productId === item.productId && 
-			g.price === item.price && 
-			g.specification === item.specification && 
-			g.unit === item.unit &&
-			g.serialNumber === item.serialNumber &&
-			g.name === item.name
-		);
-		if (existing) {
-			existing.qty = (Number(existing.qty) || 0) + (Number(item.qty) || 0);
-		} else {
-			grouped.push({ ...item });
-		}
-	});
-	return grouped;
+	if (!items || !Array.isArray(items)) return [];
+	return items;
 };

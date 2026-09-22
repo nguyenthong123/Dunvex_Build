@@ -17,6 +17,10 @@ import {
   Timestamp,
 } from '../services/firebase';
 
+import { useToast } from '../components/shared/Toast';
+import { notifyDebtPaymentEvent } from '../utils/telegramNotify';
+
+
 export interface PaymentData {
   customerId: string;
   customerName: string;
@@ -44,6 +48,7 @@ export function useDebtPayments({
   showToast,
   setHistoryCurrentPage,
 }: UseDebtPaymentsParams) {
+  const { showConfirm } = useToast();
   // ── Modal visibility ─────────────────────────────────────
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [showPaymentCustomerResults, setShowPaymentCustomerResults] = useState(false);
@@ -128,24 +133,39 @@ export function useDebtPayments({
   // ── Record / Edit payment ────────────────────────────────
   const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!paymentData.customerId || !paymentData.amount) {
-      showToast('Vui lòng nhập đầy đủ thông tin', 'warning');
+    const custName = (paymentData.customerName || '').trim();
+    if (!custName || !paymentData.amount) {
+      showToast('Vui lòng nhập đầy đủ thông tin khách hàng và số tiền', 'warning');
       return;
     }
+
+    let resolvedCustomerId = paymentData.customerId;
+    if (!resolvedCustomerId) {
+      const matchedCust = customers.find(
+        (c) => (c.name || '').trim().toLowerCase() === custName.toLowerCase(),
+      );
+      resolvedCustomerId = matchedCust ? matchedCust.id : `guest_${custName}`;
+    }
+
+    const finalPaymentData = {
+      ...paymentData,
+      customerId: resolvedCustomerId,
+      customerName: custName,
+    };
 
     setIsSubmitting(true);
     try {
       const batch = writeBatch(db);
       const diffAmount = editingPaymentId
-        ? Number(paymentData.amount) -
+        ? Number(finalPaymentData.amount) -
           (Number(payments.find((p) => p.id === editingPaymentId)?.amount) || 0)
-        : Number(paymentData.amount);
+        : Number(finalPaymentData.amount);
 
       let newPaymentId = editingPaymentId;
 
       if (editingPaymentId) {
         batch.update(doc(db, 'payments', editingPaymentId), {
-          ...paymentData,
+          ...finalPaymentData,
           updatedAt: Timestamp.now(),
         });
 
@@ -206,10 +226,20 @@ export function useDebtPayments({
 
       await batch.commit();
 
+      // Gửi thông báo Telegram & n8n
+      notifyDebtPaymentEvent(ownerId, {
+        customerName: paymentData.customerName,
+        amount: Number(paymentData.amount || 0),
+        paymentMethod: paymentData.paymentMethod || 'Tiền mặt',
+        collectorName: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
+        note: paymentData.note
+      }).catch(() => {});
+
       showToast(
         editingPaymentId ? 'Cập nhật phiếu thu thành công' : 'Ghi nhận thu nợ thành công',
         'success',
       );
+
       setShowPaymentForm(false);
       setEditingPaymentId(null);
       setHistoryCurrentPage(1);
@@ -231,43 +261,28 @@ export function useDebtPayments({
 
   // ── Delete payment ───────────────────────────────────────
   const handleDeletePayment = async (id: string) => {
-    if (
-      !window.confirm(
-        'Bạn có chắc chắn muốn xóa phiếu thu này? Hành động này sẽ cập nhật lại dư nợ của khách hàng.',
-      )
-    )
-      return;
-    try {
-      const paymentToDelete = payments.find((p) => p.id === id);
-      const targetCustomerId = paymentToDelete?.customerId;
-      const customerExists =
-        targetCustomerId && customers.some((c) => c.id === targetCustomerId);
+    showConfirm(
+      'Xóa phiếu thu',
+      'Bạn có chắc chắn muốn xóa phiếu thu này? Hành động này sẽ cập nhật lại dư nợ của khách hàng.',
+      async () => {
+        try {
+          const paymentToDelete = payments.find((p) => p.id === id);
+          const targetCustomerId = paymentToDelete?.customerId;
+          const customerExists =
+            targetCustomerId && customers.some((c) => c.id === targetCustomerId);
 
-      if (
-        paymentToDelete &&
-        customerExists &&
-        !String(targetCustomerId).startsWith('guest_')
-      ) {
-        const batch = writeBatch(db);
-        batch.delete(doc(db, 'payments', id));
-        batch.update(doc(db, 'customers', targetCustomerId), {
-          debt: increment(paymentToDelete.amount || 0),
-        });
-        const auditRef = doc(collection(db, 'audit_logs'));
-        batch.set(auditRef, {
-          action: 'Xóa phiếu thu',
-          user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
-          userId: auth.currentUser?.uid || '',
-          ownerId: ownerId,
-          details: `Đã xóa phiếu thu ${(paymentToDelete.amount || 0).toLocaleString('vi-VN')} đ của ${paymentToDelete.customerName || 'Khách hàng'}`,
-          createdAt: serverTimestamp(),
-        });
-        await batch.commit();
-      } else {
-        await deleteDoc(doc(db, 'payments', id));
-        if (paymentToDelete) {
-          try {
-            await addDoc(collection(db, 'audit_logs'), {
+          if (
+            paymentToDelete &&
+            customerExists &&
+            !String(targetCustomerId).startsWith('guest_')
+          ) {
+            const batch = writeBatch(db);
+            batch.delete(doc(db, 'payments', id));
+            batch.update(doc(db, 'customers', targetCustomerId), {
+              debt: increment(paymentToDelete.amount || 0),
+            });
+            const auditRef = doc(collection(db, 'audit_logs'));
+            batch.set(auditRef, {
               action: 'Xóa phiếu thu',
               user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
               userId: auth.currentUser?.uid || '',
@@ -275,17 +290,32 @@ export function useDebtPayments({
               details: `Đã xóa phiếu thu ${(paymentToDelete.amount || 0).toLocaleString('vi-VN')} đ của ${paymentToDelete.customerName || 'Khách hàng'}`,
               createdAt: serverTimestamp(),
             });
-          } catch (logErr) {
-            console.warn('Audit log error:', logErr);
+            await batch.commit();
+          } else {
+            await deleteDoc(doc(db, 'payments', id));
+            if (paymentToDelete) {
+              try {
+                await addDoc(collection(db, 'audit_logs'), {
+                  action: 'Xóa phiếu thu',
+                  user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
+                  userId: auth.currentUser?.uid || '',
+                  ownerId: ownerId,
+                  details: `Đã xóa phiếu thu ${(paymentToDelete.amount || 0).toLocaleString('vi-VN')} đ của ${paymentToDelete.customerName || 'Khách hàng'}`,
+                  createdAt: serverTimestamp(),
+                });
+              } catch (logErr) {
+                console.warn('Audit log error:', logErr);
+              }
+            }
           }
+
+          showToast('Đã xóa phiếu thu thành công', 'success');
+        } catch (error: any) {
+          console.error('Delete payment error:', error);
+          showToast('Lỗi khi xóa phiếu thu: ' + (error.message || ''), 'error');
         }
       }
-
-      showToast('Đã xóa phiếu thu thành công', 'success');
-    } catch (error: any) {
-      console.error('Delete payment error:', error);
-      showToast('Lỗi khi xóa phiếu thu: ' + (error.message || ''), 'error');
-    }
+    );
   };
 
   return {

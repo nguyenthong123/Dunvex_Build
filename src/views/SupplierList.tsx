@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { smartSearchMatch, calculateSearchScore } from '../utils/searchUtils';
 import { Store, Plus, Search, MapPin, Phone, Trash, X, FileText, ArrowLeft, PenSquare, QrCode, Building2, CreditCard, User } from 'lucide-react';
 import { useOwner } from '../hooks/useOwner';
 import { useSuppliers } from '../hooks/useSuppliers';
@@ -93,7 +94,18 @@ const SupplierList = () => {
 		return t.includes(q) || removeAccents(t).includes(removeAccents(q));
 	};
 
-	const filteredSuppliers = suppliers.filter(s => isMatch(s.name, searchTerm) || isMatch(s.phone, searchTerm));
+	const filteredSuppliers = suppliers.filter(s => smartSearchMatch([
+		s.name || '',
+		s.phone || '',
+		s.address || '',
+		s.taxCode || '',
+		s.note || ''
+	], searchTerm)).sort((a, b) => {
+		const scoreA = calculateSearchScore(a, searchTerm, { primary: ['name', 'phone'] });
+		const scoreB = calculateSearchScore(b, searchTerm, { primary: ['name', 'phone'] });
+		if (scoreA !== scoreB) return scoreB - scoreA;
+		return (a.name || '').localeCompare(b.name || '');
+	});
 
 	const handleSave = async (e: React.FormEvent) => {
 		e.preventDefault();

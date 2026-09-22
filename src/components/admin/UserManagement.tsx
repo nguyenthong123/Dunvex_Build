@@ -18,24 +18,28 @@ export const UserManagement = ({ userList, showAdd, onShowAdd, newUser, setNewUs
 					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 						<div className="space-y-1">
 							<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Tên hiển thị</label>
-							<input type="text" placeholder="VD: Nguyễn Văn A" className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold text-sm dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" value={newUser.displayName} onChange={e => setNewUser({ ...newUser, displayName: e.target.value })} />
+							<input type="text" placeholder="VD: Nguyễn Văn A" className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl px-4 py-3 font-bold text-sm dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" value={newUser.displayName} onChange={e => setNewUser({ ...newUser, displayName: e.target.value })} />
 						</div>
 						<div className="space-y-1">
 							<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Email</label>
-							<input type="email" placeholder="email@gmail.com" className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold text-sm dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })} />
+							<input type="email" placeholder="email@gmail.com" className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl px-4 py-3 font-bold text-sm dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })} />
 						</div>
 						<div className="space-y-1">
 							<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Mật khẩu (mặc định: 123456)</label>
-							<input type="text" placeholder="Để trống để dùng mật khẩu 123456" className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold text-sm dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" value={newUser.password} onChange={e => setNewUser({ ...newUser, password: e.target.value })} />
+							<input type="text" placeholder="Để trống để dùng mật khẩu 123456" className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl px-4 py-3 font-bold text-sm dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" value={newUser.password} onChange={e => setNewUser({ ...newUser, password: e.target.value })} />
 						</div>
 						<div className="space-y-1">
 							<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Vai trò</label>
-							<select className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold text-sm dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })}>
+							<select className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl px-4 py-3 font-bold text-sm dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })}>
 								<option value="sale">Nhân viên Sale</option>
 								<option value="warehouse">Thủ kho</option>
 								<option value="accountant">Kế toán</option>
 								<option value="admin">Quản trị viên</option>
 							</select>
+						</div>
+						<div className="space-y-1">
+							<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Số điểm chấm công thị trường/ngày</label>
+							<input type="number" className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl px-4 py-3 font-bold text-sm dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" value={newUser.marketPointsRequired || 1} onChange={e => setNewUser({ ...newUser, marketPointsRequired: Math.max(1, Number(e.target.value)) })} placeholder="VD: 5" />
 						</div>
 					</div>
 					<div className="flex justify-end gap-3 mt-4">
@@ -98,6 +102,17 @@ export const UserManagement = ({ userList, showAdd, onShowAdd, newUser, setNewUs
 								)}
 							</div>
 
+							<div className="space-y-2">
+								<label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">📍 Số điểm chấm công thị trường/ngày</label>
+								<input
+									type="number"
+									className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20"
+									value={editingUser.marketPointsRequired ?? 1}
+									onChange={e => setEditingUser({ ...editingUser, marketPointsRequired: Math.max(1, Number(e.target.value)) })}
+									placeholder="VD: 5"
+								/>
+							</div>
+
 							<div className="flex gap-3 pt-4">
 								<button onClick={() => setEditingUser(null)} className="flex-1 px-4 py-3 text-slate-500 dark:text-slate-400 font-bold text-sm hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all">Bỏ qua</button>
 								<button onClick={handleUpdateUser} className="flex-1 px-4 py-3 bg-[#1A237E] dark:bg-indigo-600 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-200 dark:shadow-none hover:scale-[1.02] active:scale-[0.98] transition-all">Lưu thay đổi</button>
@@ -125,6 +140,11 @@ export const UserManagement = ({ userList, showAdd, onShowAdd, newUser, setNewUs
 										<span className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight">
 											{user.role === 'admin' ? 'Quản trị' : user.role === 'sale' ? 'Sale' : user.role === 'warehouse' ? 'Kho' : 'Kế toán'}
 										</span>
+										{user.role === 'sale' && (
+											<div className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold mt-0.5">
+												Chỉ tiêu: {user.marketPointsRequired || 1} đ/ngày
+											</div>
+										)}
 									</td>
 									<td className="px-6 py-4">
 										<span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter ${user.status === 'active' ? 'bg-emerald-100 text-emerald-600' : 'bg-orange-100 text-orange-600'}`}>
@@ -197,7 +217,14 @@ export const UserManagement = ({ userList, showAdd, onShowAdd, newUser, setNewUs
 					<div key={user.id} className="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-100 dark:border-slate-800 space-y-3">
 						<div className="flex justify-between items-start">
 							<div>
-								<div className="font-bold text-base dark:text-white">{user.displayName || 'Guest'}</div>
+								<div className="font-bold text-base dark:text-white flex items-center gap-2">
+									{user.displayName || 'Guest'}
+									{user.role === 'sale' && (
+										<span className="text-[9px] font-bold px-1.5 py-0.5 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 rounded">
+											Target: {user.marketPointsRequired || 1}đ
+										</span>
+									)}
+								</div>
 								<div className="text-[10px] text-slate-400 font-bold lowercase">{user.email}</div>
 							</div>
 							<span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-850 text-slate-600 dark:text-slate-300 uppercase tracking-tight">

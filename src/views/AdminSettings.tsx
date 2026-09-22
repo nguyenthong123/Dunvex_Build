@@ -4,7 +4,7 @@ import {
 	Settings, User, Bell, Shield, Database, Globe, Moon, Sun, Users, Activity,
 	FileText, Save, Plus, Trash2, Edit2, Edit3, CheckCircle, XCircle, Crown, Clock,
 	Rocket, Lock, RefreshCcw, ExternalLink, MapPin, Calendar, X, AlertTriangle,
-	ChevronLeft, ChevronRight, Download
+	ChevronLeft, ChevronRight, Download, ShieldAlert
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { auth, db, functions } from '../services/firebase';
@@ -19,6 +19,7 @@ import { useToast } from '../components/shared/Toast';
 import { TabItem, InputSection, LogoUploadSection } from '../components/admin/SharedComponents';
 import { UserManagement } from '../components/admin/UserManagement';
 import { AttendanceAdmin } from '../components/admin/AttendanceAdmin';
+import { StaffApprovalTab } from '../components/admin/StaffApprovalTab';
 
 const scrollbarHideStyle = `
   .no-scrollbar::-webkit-scrollbar {
@@ -33,11 +34,19 @@ const scrollbarHideStyle = `
 const AdminSettings = () => {
 	const { theme, toggleTheme } = useTheme();
 	const owner = useOwner();
-	const { showToast } = useToast();
+	const { showToast, showConfirm } = useToast();
 	const navigate = useNavigate();
 	const { search } = useLocation();
-	const [activeTab, setActiveTab] = useState('general');
+	const queryTab = new URLSearchParams(search).get('tab');
+	const [activeTab, setActiveTab] = useState(queryTab || 'general');
 	const [loading, setLoading] = useState(false);
+
+	useEffect(() => {
+		const tabParam = new URLSearchParams(search).get('tab');
+		if (tabParam) {
+			setActiveTab(tabParam);
+		}
+	}, [search]);
 
 	// General Settings State
 	const [companyInfo, setCompanyInfo] = useState({
@@ -60,6 +69,7 @@ const AdminSettings = () => {
 		attendanceViewers: [] as string[],
 		autoSyncSchedule: 'none',
 		overheadRate: 8.5,
+		marketPointsRequired: 1,
 	});
 	const [syncing, setSyncing] = useState(false);
 	const [syncRange, setSyncRange] = useState({
@@ -76,7 +86,7 @@ const AdminSettings = () => {
 	const [activeEmployees, setActiveEmployees] = useState<any[]>([]);
 	const [pendingInvites, setPendingInvites] = useState<any[]>([]);
 	const [showAddUser, setShowAddUser] = useState(false);
-	const [newUser, setNewUser] = useState({ email: '', role: 'sale', displayName: '' });
+	const [newUser, setNewUser] = useState({ email: '', password: '', role: 'sale', displayName: '', marketPointsRequired: 1 });
 	const [editingUser, setEditingUser] = useState<any>(null);
 
 	// Derived User List (Active + Pending)
@@ -93,6 +103,7 @@ const AdminSettings = () => {
 	const [attendanceLogs, setAttendanceLogs] = useState<any[]>([]);
 	const [attendanceError, setAttendanceError] = useState<string | null>(null);
 	const [fieldCheckins, setFieldCheckins] = useState<any[]>([]);
+	const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
 
 	useEffect(() => {
 		if (owner.loading || !owner.ownerId) return;
@@ -148,11 +159,39 @@ const AdminSettings = () => {
 			}
 		});
 
+		// Pending Approval Counts
+		let pendingProdCount = 0;
+		let pendingCustCount = 0;
+		let pendingAttCount = 0;
+
+		const updateBadge = () => {
+			setPendingApprovalsCount(pendingProdCount + pendingCustCount + pendingAttCount);
+		};
+
+		const unsubPendingProds = onSnapshot(collection(db, 'products'), (snap) => {
+			pendingProdCount = snap.docs.filter(d => {
+				const data = d.data();
+				return data.approvalStatus === 'pending_approval' || data.approvalStatus === 'pending_delete';
+			}).length;
+			updateBadge();
+		});
+
+		const unsubPendingCusts = onSnapshot(collection(db, 'customers'), (snap) => {
+			pendingCustCount = snap.docs.filter(d => {
+				const data = d.data();
+				return data.approvalStatus === 'pending_approval' || data.approvalStatus === 'pending_delete';
+			}).length;
+			updateBadge();
+		});
+
 		// Listen to Attendance Logs
 		const qAtt = query(collection(db, 'attendance_logs'), where('ownerId', '==', owner.ownerId), orderBy('createdAt', 'desc'), limit(500));
 		const unsubAtt = onSnapshot(qAtt, (snap) => {
-			setAttendanceLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+			const logs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+			setAttendanceLogs(logs);
 			setAttendanceError(null);
+			pendingAttCount = logs.filter((a: any) => a.type === 'request' && a.status === 'pending').length;
+			updateBadge();
 		}, (err) => {
 			console.error('Attendance query error:', err);
 			setAttendanceError(err.message);
@@ -163,12 +202,12 @@ const AdminSettings = () => {
 				logs.sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 				setAttendanceLogs(logs);
 				setAttendanceError(null);
+				pendingAttCount = logs.filter((a: any) => a.type === 'request' && a.status === 'pending').length;
+				updateBadge();
 			}, (fallbackErr) => {
 				console.error('Attendance fallback error:', fallbackErr);
 				setAttendanceError(fallbackErr.message);
 			});
-			// Note: we can't return unsubscribe for fallback here easily,
-			// but the original subscription is already errored
 		});
 
 		// Listen to Field Checkins for Market Staff tracking
@@ -206,6 +245,8 @@ const AdminSettings = () => {
 			unsubAtt();
 			unsubField();
 			unsubUsage();
+			unsubPendingProds();
+			unsubPendingCusts();
 		};
 	}, [owner.loading, owner.ownerId]);
 
@@ -249,101 +290,124 @@ const AdminSettings = () => {
 
 	const handleMigrateDebt = async () => {
 		if (!owner.ownerId) return;
-		if (!window.confirm("CẢNH BÁO: Việc này sẽ quét toàn bộ Đơn hàng và Phiếu thu để tính lại Công nợ cho TẤT CẢ khách hàng. Tiếp tục?")) return;
-		
-		setLoading(true);
-		try {
-			const customersSnap = await getDocs(query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId)));
-			const ordersSnap = await getDocs(query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId)));
-			const paymentsSnap = await getDocs(query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId)));
-			
-			const chunks = [];
-			let currentBatch = writeBatch(db);
-			let operationCount = 0;
-			let updateCount = 0;
+		showConfirm(
+			"Đồng bộ công nợ toàn hệ thống",
+			"CẢNH BÁO: Việc này sẽ quét toàn bộ Đơn hàng và Phiếu thu để tính lại Công nợ cho TẤT CẢ khách hàng. Bạn có chắc chắn muốn tiếp tục?",
+			async () => {
+				setLoading(true);
+				try {
+					const customersSnap = await getDocs(query(collection(db, 'customers'), where('ownerId', '==', owner.ownerId)));
+					const ordersSnap = await getDocs(query(collection(db, 'orders'), where('ownerId', '==', owner.ownerId)));
+					const paymentsSnap = await getDocs(query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId)));
 
-			customersSnap.docs.forEach((customerDoc) => {
-				const customerId = customerDoc.id;
-				const custOrders = ordersSnap.docs.filter(o => o.data().customerId === customerId && o.data().status === 'Đơn chốt');
-				const custPayments = paymentsSnap.docs.filter(p => p.data().customerId === customerId);
-				
-				const totalBuy = custOrders.reduce((sum, o) => sum + (Number(o.data().totalAmount) || 0), 0);
-				const totalPay = custPayments.reduce((sum, p) => sum + (Number(p.data().amount) || 0), 0);
-				const finalDebt = totalBuy - totalPay;
-				
-				currentBatch.update(customerDoc.ref, { debt: finalDebt });
-				operationCount++;
-				updateCount++;
+					const chunks = [];
+					let currentBatch = writeBatch(db);
+					let operationCount = 0;
+					let updateCount = 0;
 
-				if (operationCount === 400) {
-					chunks.push(currentBatch.commit());
-					currentBatch = writeBatch(db);
-					operationCount = 0;
+					customersSnap.docs.forEach((customerDoc) => {
+						const customerId = customerDoc.id;
+						const custOrders = ordersSnap.docs.filter(o => o.data().customerId === customerId && o.data().status === 'Đơn chốt');
+						const custPayments = paymentsSnap.docs.filter(p => p.data().customerId === customerId);
+
+						const totalBuy = custOrders.reduce((sum, o) => sum + (Number(o.data().totalAmount) || 0), 0);
+						const totalPay = custPayments.reduce((sum, p) => sum + (Number(p.data().amount) || 0), 0);
+						const finalDebt = totalBuy - totalPay;
+
+						currentBatch.update(customerDoc.ref, { debt: finalDebt });
+						operationCount++;
+						updateCount++;
+
+						if (operationCount === 400) {
+							chunks.push(currentBatch.commit());
+							currentBatch = writeBatch(db);
+							operationCount = 0;
+						}
+					});
+
+					if (operationCount > 0) {
+						chunks.push(currentBatch.commit());
+					}
+
+					await Promise.all(chunks);
+					showToast(`Đã đồng bộ công nợ cho ${updateCount} khách hàng thành công!`, "success");
+				} catch (error: any) {
+					console.error("Migration Error:", error);
+					showToast("Lỗi đồng bộ công nợ: " + error.message, "error");
+				} finally {
+					setLoading(false);
 				}
-			});
-
-			if (operationCount > 0) {
-				chunks.push(currentBatch.commit());
 			}
-
-			await Promise.all(chunks);
-			showToast(`Đã đồng bộ công nợ cho ${updateCount} khách hàng thành công!`, "success");
-		} catch (error: any) {
-			console.error("Migration Error:", error);
-			showToast("Lỗi đồng bộ công nợ: " + error.message, "error");
-		} finally {
-			setLoading(false);
-		}
+		);
 	};
 
 	const handleAddUser = async () => {
 		if (!newUser.email) return showToast("Vui lòng nhập email", "warning");
 		try {
 			setLoading(true);
-			const tempId = newUser.email.replace(/\W/g, '_');
-			await setDoc(doc(db, 'permissions', tempId), {
-				email: newUser.email,
-				displayName: newUser.displayName || newUser.email,
-				role: newUser.role,
-				ownerId: owner.ownerId,
-				ownerEmail: owner.ownerEmail,
-				status: 'pending',
-				accessRights: {
-					dashboard: true,
-					orders_view: true,
-					orders_create: true,
-					inventory_view: true,
-					customers_manage: true,
-					debts_manage: false,
-					users_manage: false,
-					admin: false,
-					system_manage: false
-				},
-				createdAt: serverTimestamp()
-			});
+			const cleanEmail = newUser.email.toLowerCase().trim();
+			const password = newUser.password?.trim() || '123456';
 
-			// Trigger Apps Script to send email invitation
+			// 1. Tạo hoặc Cập nhật tài khoản Auth & Database trực tiếp qua backend API
 			try {
-				await fetch('https://script.google.com/macros/s/AKfycbwIup8ysoKT4E_g8GOVrBiQxXw7SOtqhLWD2b0GOUT54MuoXgTtxP42XSpFR_3aoXAG7g/exec', {
+				const idToken = auth.currentUser ? await auth.currentUser.getIdToken() : '';
+				const res = await fetch('/api/create-user', {
 					method: 'POST',
-					mode: 'no-cors',
 					headers: {
-						'Content-Type': 'application/json'
+						'Content-Type': 'application/json',
+						'Authorization': `Bearer ${idToken}`
 					},
 					body: JSON.stringify({
-						action: 'invite_user',
-						email: newUser.email,
-						role: newUser.role,
-						inviterName: owner.ownerEmail?.split('@')[0] || 'Quản trị viên'
+						email: cleanEmail,
+						password: password,
+						displayName: newUser.displayName || cleanEmail.split('@')[0],
+						role: newUser.role || 'sale',
+						marketPointsRequired: Number(newUser.marketPointsRequired) || 1,
+						ownerId: owner.ownerId,
+						ownerEmail: owner.ownerEmail
 					})
 				});
-			} catch (e) {
-				console.error("Apps Script invite email trigger failed:", e);
+
+				const resData = await res.json();
+				if (!res.ok || resData.error) {
+					throw new Error(resData.error || 'Lỗi tạo tài khoản');
+				}
+
+				showToast(`Đã tạo tài khoản nhân viên thành công! Mật khẩu: ${password}`, "success");
+			} catch (apiErr: any) {
+				console.warn("Backend create-user fallback:", apiErr);
+				// Fallback: update directly via Firestore/REST
+				const allUsersSnap = await getDocs(query(collection(db, 'users')));
+				const existingUser = allUsersSnap.docs.find(d => (d.data().email || '').toLowerCase().trim() === cleanEmail);
+
+				if (existingUser) {
+					await updateDoc(doc(db, 'users', existingUser.id), {
+						displayName: newUser.displayName || existingUser.data().displayName || cleanEmail.split('@')[0],
+						ownerId: owner.ownerId,
+						ownerEmail: owner.ownerEmail,
+						role: newUser.role || 'sale',
+						marketPointsRequired: Number(newUser.marketPointsRequired) || 1,
+						status: 'active'
+					});
+					showToast("Đã liên kết nhân viên vào doanh nghiệp thành công!", "success");
+				} else {
+					const tempId = cleanEmail.replace(/\W/g, '_');
+					await setDoc(doc(db, 'permissions', tempId), {
+						email: cleanEmail,
+						displayName: newUser.displayName || cleanEmail,
+						role: newUser.role,
+						marketPointsRequired: Number(newUser.marketPointsRequired) || 1,
+						ownerId: owner.ownerId,
+						ownerEmail: owner.ownerEmail,
+						status: 'pending',
+						createdAt: serverTimestamp()
+					});
+					showToast("Đã tạo lời mời thành công!", "success");
+				}
 			}
 
-			showToast("Đã gửi lời mời thành công!", "success");
 			setShowAddUser(false);
-			setNewUser({ email: '', role: 'sale', displayName: '' });
+			setNewUser({ email: '', password: '', role: 'sale', displayName: '', marketPointsRequired: 1 });
 		} catch (error: any) {
 			showToast("Lỗi: " + error.message, "error");
 		} finally {
@@ -394,7 +458,8 @@ const AdminSettings = () => {
 			const collectionName = editingUser.status === 'pending' ? 'permissions' : 'users';
 			const updateData: any = {
 				displayName: editingUser.displayName,
-				role: editingUser.role
+				role: editingUser.role,
+				marketPointsRequired: Number(editingUser.marketPointsRequired) || 1
 			};
 			// Lương tháng → tự động tính lương ngày (26 ngày công chuẩn)
 			const monthlyWage = Number(editingUser.monthlyWage) || 0;
@@ -442,10 +507,38 @@ const AdminSettings = () => {
 				return createdDate >= startTimestamp && createdDate <= endTimestamp;
 			});
 
+			const EXCLUDE_PROFIT_KEYWORDS = ['ứng tiền', 'ung tien', 'ưng tiền', 'ứng trước', 'ung truoc', 'tạm ứng', 'tam ung'];
+			const isExcludedFromProfit = (name: string, flag?: boolean) => {
+				if (flag) return true;
+				if (!name) return false;
+				const lower = String(name).toLowerCase();
+				return EXCLUDE_PROFIT_KEYWORDS.some((kw) => lower.includes(kw));
+			};
+			const overheadRate = companyInfo.overheadRate ?? 8.5;
+			const prods = prodSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
 			const orderDetails: any[] = [];
 			syncOrders.forEach((order: any) => {
 				if (Array.isArray(order.items)) {
 					order.items.forEach((item: any) => {
+						const matchedProd: any = prods.find((p: any) => p.id === item.id || p.name === item.name) || {};
+						const excluded = isExcludedFromProfit(item.name, item.excludeProfit || matchedProd.excludeProfit);
+						const applyOverhead = item.applyOverheadCost !== undefined ? Boolean(item.applyOverheadCost) : Boolean(matchedProd.applyOverheadCost);
+						const qty = Number(item.qty || 0);
+						const priceSell = Number(item.price || 0);
+						const buyPrice = Number(item.buyPrice !== undefined && item.buyPrice !== null ? item.buyPrice : (matchedProd.priceImport || matchedProd.costPrice || 0));
+
+						let unitProfit = 0;
+						let profit = 0;
+						if (!excluded) {
+							let effectiveCost = buyPrice;
+							if (applyOverhead && overheadRate > 0) {
+								effectiveCost = buyPrice * (1 + overheadRate / 100);
+							}
+							unitProfit = priceSell - effectiveCost;
+							profit = unitProfit * qty;
+						}
+
 						orderDetails.push({
 							orderId: order.id,
 							orderDate: order.orderDate,
@@ -453,8 +546,11 @@ const AdminSettings = () => {
 							productName: item.name,
 							qty: item.qty,
 							price: item.price,
+							buyPrice: Math.round(buyPrice),
 							unit: item.unit,
 							total: (item.qty || 0) * (item.price || 0),
+							profit: Math.round(profit),
+							unitProfit: Math.round(unitProfit),
 							category: item.category,
 							packaging: item.packaging
 						});
@@ -588,7 +684,11 @@ const AdminSettings = () => {
 				['orders', 'don_hang'],
 				['debts', 'cong_no'],
 				['checkins', 'checkin'],
+				['attendance_logs', 'cham_cong'],
 				['payments', 'lich_su_thanh_toan'],
+				['inventory_logs', 'ton_kho'],
+				['supplier_debts', 'cong_no_nha_cung_cap'],
+				['purchase_orders', 'don_nhap_hang'],
 			];
 
 			for (const [key, sheetName] of sheetConfig) {
@@ -745,6 +845,7 @@ const AdminSettings = () => {
 
 					<div className="flex bg-white dark:bg-slate-900 p-1.5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-x-auto no-scrollbar">
 						{canManageSystem && <TabItem active={activeTab === 'general'} onClick={() => setActiveTab('general')} icon={<Settings size={18} />} label="Hệ thống" />}
+						{canManageUsers && <TabItem active={activeTab === 'approvals'} onClick={() => setActiveTab('approvals')} icon={<ShieldAlert size={18} />} label="Duyệt yêu cầu" badge={pendingApprovalsCount} />}
 						{canManageUsers && <TabItem active={activeTab === 'users'} onClick={() => setActiveTab('users')} icon={<Users size={18} />} label="Nhân sự" />}
 						{canManageUsers && <TabItem active={activeTab === 'permissions'} onClick={() => setActiveTab('permissions')} icon={<Shield size={18} />} label="Phân quyền" />}
 						{(canManageSystem || isAttendanceViewer) && <TabItem active={activeTab === 'attendance'} onClick={() => setActiveTab('attendance')} icon={<Clock size={18} />} label="Bảng công" />}
@@ -753,6 +854,9 @@ const AdminSettings = () => {
 				</div>
 
 				<div className="space-y-8 animate-in fade-in duration-500">
+					{activeTab === 'approvals' && canManageUsers && (
+						<StaffApprovalTab ownerId={owner.ownerId} />
+					)}
 					{activeTab === 'general' && canManageSystem && (
 						<div className="space-y-6">
 							<div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800">
@@ -808,6 +912,18 @@ const AdminSettings = () => {
 												<InputSection label="Giờ kết thúc" type="time" value={companyInfo.workEnd} onChange={(v: string) => setCompanyInfo({ ...companyInfo, workEnd: v })} />
 												<InputSection label="Bán kính (m)" type="number" value={companyInfo.geofenceRadius} onChange={(v: string) => setCompanyInfo({ ...companyInfo, geofenceRadius: Number(v) })} />
 											</div>
+										</div>
+									</div>
+
+									<div className="md:col-span-2 border-t border-slate-100 dark:border-slate-800 pt-6">
+										<h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Cấu hình Chấm công thị trường</h4>
+										<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+											<InputSection 
+												label="Số điểm chấm công tối thiểu trong ngày" 
+												type="number" 
+												value={companyInfo.marketPointsRequired || 1} 
+												onChange={(v: string) => setCompanyInfo({ ...companyInfo, marketPointsRequired: Math.max(1, Number(v)) })} 
+											/>
 										</div>
 									</div>
 								</div>
@@ -955,7 +1071,7 @@ const AdminSettings = () => {
 							handleUpdateUser={handleUpdateUser}
 						/>
 						<div className="mt-8">
-							<SalarySummary userList={filteredUserList} ownerId={owner.ownerId} />
+							<SalarySummary userList={filteredUserList} ownerId={owner.ownerId} companyInfo={companyInfo} />
 						</div>
 						</>
 					)}
@@ -1024,7 +1140,7 @@ const AdminSettings = () => {
 };
 
 // ==================== BẢNG LƯƠNG NHÂN VIÊN ====================
-const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string }) => {
+const SalarySummary = ({ userList, ownerId, companyInfo }: { userList: any[], ownerId: string, companyInfo: any }) => {
 	const [salaryData, setSalaryData] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [month, setMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
@@ -1091,7 +1207,53 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 					dailyDetails[day].attendances.push(a);
 				});
 
-				const daysWorked = Object.keys(dailyDetails).length;
+				let daysWorked = 0;
+				const todayStr = new Date().toISOString().slice(0, 10);
+
+				Object.keys(dailyDetails).forEach(day => {
+					const dayData = dailyDetails[day];
+					const officeCheckins = dayData.attendances.filter((a: any) => a.type !== 'customer' && a.type !== 'request');
+					const marketCheckinsCount = (dayData.checkin ? 1 : 0) + dayData.attendances.filter((a: any) => a.type === 'customer').length;
+					
+					let dayFraction = 0;
+					if (officeCheckins.length > 0) {
+						let totalWorkedMs = 0;
+						officeCheckins.forEach((a: any) => {
+							const inMs = a.checkInAt ? (typeof a.checkInAt === 'string' ? new Date(a.checkInAt).getTime() : a.checkInAt?.seconds ? a.checkInAt.seconds * 1000 : null) : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : a.createdAt ? new Date(a.createdAt).getTime() : null);
+							const outMs = a.checkOutAt ? (typeof a.checkOutAt === 'string' ? new Date(a.checkOutAt).getTime() : a.checkOutAt?.seconds ? a.checkOutAt.seconds * 1000 : null) : null;
+
+							if (inMs) {
+								if (outMs && outMs > inMs) {
+									totalWorkedMs += (outMs - inMs);
+								} else if (day === todayStr) {
+									// Ca đang diễn ra hôm nay
+									const currentMs = Math.max(0, Date.now() - inMs);
+									totalWorkedMs += currentMs;
+								} else {
+									// Ngày cũ quên check-out -> Tính 0.5 công (4h)
+									totalWorkedMs += 4 * 3600 * 1000;
+								}
+							}
+						});
+
+						const hours = totalWorkedMs / (1000 * 3600);
+						if (hours >= 6.5) {
+							dayFraction = 1.0;
+						} else if (hours >= 3.5) {
+							dayFraction = 0.5;
+						} else if (hours > 0) {
+							dayFraction = Math.min(0.5, Math.round((hours / 8) * 100) / 100);
+						} else {
+							dayFraction = 0.5;
+						}
+					} else if (marketCheckinsCount > 0) {
+						const reqPoints = Number(user.marketPointsRequired) || Number(companyInfo.marketPointsRequired) || 1;
+						dayFraction = reqPoints > 0 ? Math.min(1, marketCheckinsCount / reqPoints) : 1;
+					}
+					daysWorked += dayFraction;
+				});
+				daysWorked = Math.round(daysWorked * 100) / 100;
+
 				const WORKING_DAYS = 26; // Ngày công chuẩn / tháng
 				const monthlyWage = Number(user.monthlyWage) || 0;
 				const dailyWage = monthlyWage > 0 
@@ -1107,6 +1269,7 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 					monthlyWage,
 					dailyWage,
 					totalSalary: daysWorked * dailyWage,
+					marketPointsRequired: user.marketPointsRequired || 1,
 					dailyDetails,
 				};
 			});
@@ -1121,24 +1284,72 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 	const getDetailForUser = (userId: string) => {
 		const user = salaryData.find(d => d.userId === userId);
 		if (!user?.dailyDetails) return [];
+		const todayStr = new Date().toISOString().slice(0, 10);
+
 		return Object.entries(user.dailyDetails)
 			.sort(([a], [b]) => b.localeCompare(a))
-			.map(([day, detail]: [string, any]) => ({
-								day,
-				checkinTime: detail.checkin ? (() => {
-					const dt = detail.checkin.createdAt?.toDate?.() || new Date(detail.checkin.createdAt);
-					return dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-				})() : null,
-				checkinNote: detail.checkin?.note || detail.checkin?.location || '',
-				attendances: detail.attendances.map((a: any) => {
-					const dt = a.createdAt?.toDate?.() || new Date(a.createdAt);
-					return {
-						time: dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-						type: a.type || a.status || 'check',
-						note: a.note || a.location || ''
-					};
-				})
-			}));
+			.map(([day, detail]: [string, any]) => {
+				const officeCheckins = detail.attendances.filter((a: any) => a.type !== 'customer' && a.type !== 'request');
+				const marketCheckinsCount = (detail.checkin ? 1 : 0) + detail.attendances.filter((a: any) => a.type === 'customer').length;
+				
+				let dayFraction = 0;
+				let workedHoursFormatted = '';
+
+				if (officeCheckins.length > 0) {
+					let totalWorkedMs = 0;
+					officeCheckins.forEach((a: any) => {
+						const inMs = a.checkInAt ? (typeof a.checkInAt === 'string' ? new Date(a.checkInAt).getTime() : a.checkInAt?.seconds ? a.checkInAt.seconds * 1000 : null) : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : a.createdAt ? new Date(a.createdAt).getTime() : null);
+						const outMs = a.checkOutAt ? (typeof a.checkOutAt === 'string' ? new Date(a.checkOutAt).getTime() : a.checkOutAt?.seconds ? a.checkOutAt.seconds * 1000 : null) : null;
+
+						if (inMs) {
+							if (outMs && outMs > inMs) {
+								totalWorkedMs += (outMs - inMs);
+							} else if (day === todayStr) {
+								const currentMs = Math.max(0, Date.now() - inMs);
+								totalWorkedMs += currentMs;
+							} else {
+								totalWorkedMs += 4 * 3600 * 1000;
+							}
+						}
+					});
+
+					const hours = totalWorkedMs / (1000 * 3600);
+					workedHoursFormatted = `${Math.round(hours * 10) / 10}h`;
+
+					if (hours >= 6.5) {
+						dayFraction = 1.0;
+					} else if (hours >= 3.5) {
+						dayFraction = 0.5;
+					} else if (hours > 0) {
+						dayFraction = Math.min(0.5, Math.round((hours / 8) * 100) / 100);
+					} else {
+						dayFraction = 0.5;
+					}
+				} else if (marketCheckinsCount > 0) {
+					const reqPoints = Number(user.marketPointsRequired) || Number(companyInfo.marketPointsRequired) || 1;
+					dayFraction = reqPoints > 0 ? Math.min(1, marketCheckinsCount / reqPoints) : 1;
+				}
+
+				return {
+					day,
+					dayFraction: Math.round(dayFraction * 100) / 100,
+					workedHoursFormatted,
+					marketCheckinsCount,
+					checkinTime: detail.checkin ? (() => {
+						const dt = detail.checkin.createdAt?.toDate?.() || new Date(detail.checkin.createdAt);
+						return dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+					})() : null,
+					checkinNote: detail.checkin?.note || detail.checkin?.location || '',
+					attendances: detail.attendances.map((a: any) => {
+						const dt = a.createdAt?.toDate?.() || new Date(a.createdAt);
+						return {
+							time: dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+							type: a.type || a.status || 'check',
+							note: a.note || a.location || ''
+						};
+					})
+				};
+			});
 	};
 
 	const formatPrice = (n: number) => n.toLocaleString('vi-VN');
@@ -1188,7 +1399,7 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 															<ChevronRight size={14} className={`text-slate-300 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
 															<div>
 																<div className="font-bold text-sm dark:text-white">{d.name}</div>
-																<div className="text-[10px] text-slate-400">{d.role === 'admin' ? 'Quản trị' : d.role === 'sale' ? 'Sale' : d.role === 'warehouse' ? 'Kho' : 'Kế toán'}</div>
+																<div className="text-[10px] text-slate-400">{d.role === 'admin' ? 'Quản trị' : d.role === 'sale' ? `Sale (Chỉ tiêu: ${d.marketPointsRequired || companyInfo.marketPointsRequired || 1} đ/ngày)` : d.role === 'warehouse' ? 'Kho' : 'Kế toán'}</div>
 															</div>
 														</div>
 													</td>
@@ -1222,11 +1433,16 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 																				<span className="font-black text-sm text-indigo-600 dark:text-indigo-400">
 																					{new Date(day.day).toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' })}
 																				</span>
-																				{day.checkinTime && (
-																					<span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full">
-																						{day.checkinTime}
+																				<div className="flex items-center gap-1.5">
+																					<span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md ${day.dayFraction >= 1 ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400' : 'bg-amber-50 text-amber-650 dark:bg-amber-900/20 dark:text-amber-400'}`}>
+																						{day.dayFraction} công {day.workedHoursFormatted ? `(${day.workedHoursFormatted})` : ''} {day.marketCheckinsCount > 0 ? `(${day.marketCheckinsCount}/${d.marketPointsRequired || companyInfo.marketPointsRequired || 1} đ)` : ''}
 																					</span>
-																				)}
+																					{day.checkinTime && (
+																						<span className="text-[9px] font-bold text-slate-500 bg-slate-50 dark:bg-slate-800 px-1.5 py-0.5 rounded-full">
+																							{day.checkinTime}
+																						</span>
+																					)}
+																				</div>
 																			</div>
 																			{day.checkinNote && (
 																				<p className="text-[10px] text-slate-400 mb-1">📍 {day.checkinNote}</p>
@@ -1279,7 +1495,7 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 											<ChevronRight size={14} className={`text-slate-300 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
 											<div>
 												<h4 className="font-bold text-sm dark:text-white">{d.name}</h4>
-												<span className="text-[10px] text-slate-400 font-bold uppercase">{d.role === 'admin' ? 'Quản trị' : d.role === 'sale' ? 'Sale' : d.role === 'warehouse' ? 'Kho' : 'Kế toán'}</span>
+												<span className="text-[10px] text-slate-400 font-bold uppercase">{d.role === 'admin' ? 'Quản trị' : d.role === 'sale' ? `Sale (Chỉ tiêu: ${d.marketPointsRequired || companyInfo.marketPointsRequired || 1} đ/ngày)` : d.role === 'warehouse' ? 'Kho' : 'Kế toán'}</span>
 											</div>
 										</div>
 										<div className="text-right">
@@ -1311,11 +1527,16 @@ const SalarySummary = ({ userList, ownerId }: { userList: any[], ownerId: string
 															<div className="font-bold text-xs text-indigo-600 dark:text-indigo-400">
 																{new Date(day.day).toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' })}
 															</div>
-															{day.checkinTime && (
-																<span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full">
-																	{day.checkinTime}
+															<div className="flex items-center gap-1.5">
+																<span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md ${day.dayFraction >= 1 ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400' : 'bg-amber-50 text-amber-650 dark:bg-amber-900/20 dark:text-amber-400'}`}>
+																	{day.dayFraction} công {day.workedHoursFormatted ? `(${day.workedHoursFormatted})` : ''} {day.marketCheckinsCount > 0 ? `(${day.marketCheckinsCount}/${d.marketPointsRequired || companyInfo.marketPointsRequired || 1} đ)` : ''}
 																</span>
-															)}
+																{day.checkinTime && (
+																	<span className="text-[9px] font-bold text-slate-500 bg-slate-50 dark:bg-slate-800 px-1.5 py-0.5 rounded-full">
+																		{day.checkinTime}
+																	</span>
+																)}
+															</div>
 														</div>
 														{day.checkinNote && (
 															<p className="text-[10px] text-slate-400">📍 {day.checkinNote}</p>

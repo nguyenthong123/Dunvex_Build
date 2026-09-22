@@ -10,6 +10,8 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
+import { notifySiteCheckinEvent } from '../utils/telegramNotify';
+
 
 const createOrderIcon = (status: string) => {
     let color = status === 'Hoàn thành' ? '#10b981' : '#ef4444'; // Green for complete, Red for pending
@@ -73,7 +75,13 @@ const Checkin = () => {
         if (o.status !== 'Đơn chốt' && o.status !== 'Hoàn thành') return false;
         
         // Date filter
-        const oDate = o.orderDate || (o.createdAt?.seconds ? new Date(o.createdAt.seconds * 1000).toISOString().split('T')[0] : '');
+        let oDate = '';
+        if (o.orderDate) oDate = typeof o.orderDate === 'string' ? o.orderDate.split('T')[0] : '';
+        else if (o.createdAt) {
+            if (typeof o.createdAt === 'string') oDate = o.createdAt.split('T')[0];
+            else if (o.createdAt.seconds) oDate = new Date(o.createdAt.seconds * 1000).toISOString().split('T')[0];
+            else if (typeof o.createdAt.toDate === 'function') oDate = o.createdAt.toDate().toISOString().split('T')[0];
+        }
         if (dateRange.start !== '2020-01-01') {
             if (oDate < dateRange.start || oDate > dateRange.end) return false;
         }
@@ -119,8 +127,20 @@ const Checkin = () => {
                     createdAt: serverTimestamp()
                 });
 
+                // Gửi thông báo Telegram & n8n
+                const targetOrder = deliveryOrders.find(o => o.id === orderId) || selectedOrder;
+                notifySiteCheckinEvent(owner.ownerId, {
+                    userName: auth.currentUser?.displayName || auth.currentUser?.email || 'Tài xế',
+                    customerName: targetOrder?.customerName || 'Khách hàng',
+                    siteName: targetOrder?.customerAddress || 'Công trình',
+                    location: targetOrder?.deliveryLocation,
+                    imageUrl: imageUrl,
+                    note: `Đã hoàn thành giao đơn ${orderId}`
+                }).catch(() => {});
+
                 showToast("Đã giao hàng thành công!", "success");
                 setSelectedOrder(null);
+
             }
         } catch (err: any) { 
             showToast("Lỗi tải ảnh. Vui lòng thử lại.", "error"); 

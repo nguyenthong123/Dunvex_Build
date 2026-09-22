@@ -28,6 +28,7 @@ const Coupons = lazy(() => import('./views/Coupons'));
 const NexusControl = lazy(() => import('./views/NexusControl'));
 const Profile = lazy(() => import('./views/Profile'));
 const Backup = lazy(() => import('./views/Backup'));
+const Trash = lazy(() => import('./views/Trash'));
 
 import MainLayout from './components/layout/MainLayout';
 import ReloadPrompt from './components/ReloadPrompt';
@@ -59,19 +60,67 @@ function RouteFallback() {
 }
 
 function App() {
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<any>(() => {
+    try {
+      const saved = localStorage.getItem('dunvex_user_session');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
   const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
+    const handleLogoutEvent = () => {
+      setCurrentUser(null);
+      setApiCredentials('', '');
+      localStorage.removeItem('dunvex_user_session');
+      localStorage.removeItem('dunvex_owner_id');
+      localStorage.removeItem('dunvex_api_key');
+    };
+    const handleLoginEvent = (e: CustomEvent) => {
+      if (e.detail) {
+        setCurrentUser(e.detail);
+      }
+    };
+    window.addEventListener('dunvex_logout', handleLogoutEvent);
+    window.addEventListener('dunvex_login', handleLoginEvent as EventListener);
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
       if (user) {
-        setApiCredentials('', user.uid);
+        setCurrentUser(user);
+        const existingOwnerId = localStorage.getItem('dunvex_owner_id');
+        if (!existingOwnerId) {
+          setApiCredentials('', user.uid);
+        }
+        localStorage.setItem('dunvex_user_session', JSON.stringify({
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName || user.email?.split('@')[0]
+        }));
+      } else {
+        const savedSession = (() => {
+          try {
+            const s = localStorage.getItem('dunvex_user_session');
+            return s ? JSON.parse(s) : null;
+          } catch (e) { return null; }
+        })();
+        if (!savedSession) {
+          setCurrentUser(null);
+          setApiCredentials('', '');
+          localStorage.removeItem('dunvex_user_session');
+          localStorage.removeItem('dunvex_owner_id');
+          localStorage.removeItem('dunvex_api_key');
+        }
       }
       setAuthLoading(false);
     });
 
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      window.removeEventListener('dunvex_logout', handleLogoutEvent);
+      window.removeEventListener('dunvex_login', handleLoginEvent as EventListener);
+    };
   }, []);
 
   if (authLoading) {
@@ -123,6 +172,7 @@ function App() {
 
               <Route path="/profile" element={currentUser ? <MainLayout><Profile /></MainLayout> : <Navigate to="/login" />} />
               <Route path="/backup" element={currentUser ? <MainLayout><Backup /></MainLayout> : <Navigate to="/login" />} />
+              <Route path="/trash" element={currentUser ? <MainLayout><Trash /></MainLayout> : <Navigate to="/login" />} />
 
               <Route path="*" element={<Navigate to="/" />} />
             </Routes>

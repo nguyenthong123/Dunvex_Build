@@ -19,13 +19,14 @@ import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
 import { getOptimizedImageUrl } from '../utils/validation';
 import InventoryActionModal from '../components/inventory/InventoryActionModal';
+import { smartSearchMatch, calculateSearchScore } from '../utils/searchUtils';
 
 
 const InventoryPage = () => {
 	const navigate = useNavigate();
 	const location = useLocation();
 	const owner = useOwner();
-	const { showToast } = useToast();
+	const { showToast, showConfirm } = useToast();
 
 	// 🔧 REFACTOR: Data từ hooks — bỏ 3 useState + 3 useEffect onSnapshot
 	const { products, loading, findBySku, removeLocal, refresh } = useProducts({
@@ -39,7 +40,7 @@ const InventoryPage = () => {
 	const { orders } = useOrders({
 		ownerId: owner.ownerId,
 		enabled: !owner.loading && !!owner.ownerId,
-		maxResults: 1000,
+		maxResults: 50,
 	});
 
 	// Removed duplicated showScanner and activeTab (merged below)
@@ -78,6 +79,8 @@ const InventoryPage = () => {
 	const setActiveTab = (tab: 'inventory' | 'logs') => {
 		setActiveTabState(tab);
 		sessionStorage.setItem('inventory_activeTab', tab);
+		setSearchTerm('');
+		sessionStorage.removeItem('inventory_search');
 		navigate(`/inventory?tab=${tab}`, { replace: true });
 	};
 
@@ -92,10 +95,35 @@ const InventoryPage = () => {
 	});
 	const [showMobileSearch, setShowMobileSearch] = useState(false);
 	const [selectedIds, setSelectedIds] = useState<string[]>([]);
-	const [currentFilter, setCurrentFilter] = useState<string | null>(() => {
-		return sessionStorage.getItem('inventory_currentFilter') || null;
+	
+	type SortOption = 'default' | 'name_asc' | 'name_desc' | 'stock_asc' | 'stock_desc' | 'newest';
+	type StockFilter = 'all' | 'low_stock' | 'out_of_stock' | 'in_stock';
+
+	const [sortBy, setSortBy] = useState<SortOption>(() => {
+		return (sessionStorage.getItem('inventory_sortBy') as SortOption) || 'default';
 	});
-	const ITEMS_PER_PAGE = 20;
+
+	const [stockFilter, setStockFilter] = useState<StockFilter>(() => {
+		const saved = sessionStorage.getItem('inventory_stockFilter');
+		if (saved) return saved as StockFilter;
+		const initialFilter = sessionStorage.getItem('inventory_currentFilter');
+		return initialFilter === 'low_stock' ? 'low_stock' : 'all';
+	});
+
+	const [selectedCategory, setSelectedCategory] = useState<string>(() => {
+		return sessionStorage.getItem('inventory_category') || 'all';
+	});
+
+	const [itemsPerPage, setItemsPerPage] = useState<number>(() => {
+		return Number(sessionStorage.getItem('inventory_itemsPerPage')) || 25;
+	});
+
+	const currentFilter = stockFilter === 'low_stock' ? 'low_stock' : null;
+	const setCurrentFilter = (f: string | null) => {
+		setStockFilter(f === 'low_stock' ? 'low_stock' : 'all');
+		setCurrentPage(1);
+	};
+
 	const searchRef = useRef<HTMLInputElement>(null);
 	const qrRef = useRef<HTMLCanvasElement>(null);
 
@@ -103,11 +131,15 @@ const InventoryPage = () => {
 	useEffect(() => {
 		sessionStorage.setItem('inventory_activeTab', activeTab);
 		sessionStorage.setItem('inventory_currentPage', currentPage.toString());
+		sessionStorage.setItem('inventory_sortBy', sortBy);
+		sessionStorage.setItem('inventory_stockFilter', stockFilter);
+		sessionStorage.setItem('inventory_category', selectedCategory);
+		sessionStorage.setItem('inventory_itemsPerPage', itemsPerPage.toString());
 		if (currentFilter) sessionStorage.setItem('inventory_currentFilter', currentFilter);
 		else sessionStorage.removeItem('inventory_currentFilter');
-	}, [activeTab, currentPage, currentFilter]);
+	}, [activeTab, currentPage, currentFilter, sortBy, stockFilter, selectedCategory, itemsPerPage]);
 
-	// Enhanced Search Functions
+	// Enhanced Search Functions (fallback if needed)
 	const normalizeText = (text: any) => text ? String(text).normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase() : '';
 	const removeAccents = (str: any) => {
 		return String(str || '').normalize('NFD')
@@ -309,6 +341,7 @@ const InventoryPage = () => {
 			showToast(`Lỗi upload: ${error.message}`, "error");
 		} finally {
 			setUploading(false);
+			if (e.target) e.target.value = '';
 		}
 	};
 
@@ -330,7 +363,7 @@ const InventoryPage = () => {
 
 		const totalImport = logs
 			.filter(l => l.type === 'init' || l.type === 'import' || (l.type === 'audit' && l.diffType === 'increase'))
-			.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+			.reduce((sum, l) => sum + (Number(l.qty ?? l.change) || 0), 0);
 
 		const totalExport = logs
 			.filter(l => {
@@ -345,7 +378,7 @@ const InventoryPage = () => {
 
 				return true;
 			})
-			.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+			.reduce((sum, l) => sum + (Number(l.qty ?? l.change) || 0), 0);
 
 		return { import: totalImport, export: totalExport };
 	};
@@ -366,7 +399,7 @@ const InventoryPage = () => {
 			const logs = inventoryLogs.filter(l => l.productId === p.id);
 			const totalImport = logs
 				.filter(l => l.type === 'init' || l.type === 'import' || (l.type === 'audit' && l.diffType === 'increase'))
-				.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+				.reduce((sum, l) => sum + (Number(l.qty ?? l.change) || 0), 0);
 
 			const totalExport = logs
 				.filter(l => {
@@ -382,7 +415,7 @@ const InventoryPage = () => {
 
 					return true; // Keep audit/manual decreases + standalone export
 				})
-				.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+				.reduce((sum, l) => sum + (Number(l.qty ?? l.change) || 0), 0);
 
 			productStats[p.id] = { import: totalImport, export: totalExport };
 		});
@@ -578,7 +611,7 @@ const InventoryPage = () => {
 	};
 
 	const handleDeleteProduct = async (id: string, bypassConfirm: boolean = false) => {
-		if (bypassConfirm || window.confirm("Bạn có chắc chắn muốn xóa sản phẩm này không?")) {
+		const proceed = async () => {
 			try {
 				// 🎯 Optimistic: ẩn sản phẩm ngay trên UI (không cần chờ server/SSE)
 				removeLocal(id);
@@ -590,37 +623,51 @@ const InventoryPage = () => {
 				refresh();
 				showToast("Lỗi khi xóa sản phẩm", "error");
 			}
+		};
+
+		if (bypassConfirm) {
+			await proceed();
+		} else {
+			showConfirm(
+				"Xóa sản phẩm",
+				"Bạn có chắc chắn muốn xóa sản phẩm này không?",
+				proceed
+			);
 		}
 	};
 
 	const handleBulkDelete = async () => {
-		if (!window.confirm(`Bạn có chắc chắn muốn xóa ${selectedIds.length} sản phẩm đã chọn không?`)) return;
+		showConfirm(
+			"Xóa hàng loạt sản phẩm",
+			`Bạn có chắc chắn muốn xóa ${selectedIds.length} sản phẩm đã chọn không?`,
+			async () => {
+				try {
+					const batch = writeBatch(db);
+					selectedIds.forEach(id => {
+						batch.delete(doc(db, 'products', id));
+					});
 
-		try {
-			const batch = writeBatch(db);
-			selectedIds.forEach(id => {
-				batch.delete(doc(db, 'products', id));
-			});
+					// Log Bulk Delete
+					await addDoc(collection(db, 'audit_logs'), {
+						action: 'Xóa hàng loạt sản phẩm',
+						user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
+						userId: auth.currentUser?.uid || "",
+						ownerId: owner.ownerId,
+						details: `Đã xóa ${selectedIds.length} sản phẩm`,
+						createdAt: serverTimestamp()
+					});
 
-			// Log Bulk Delete
-			await addDoc(collection(db, 'audit_logs'), {
-				action: 'Xóa hàng loạt sản phẩm',
-				user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
-				userId: auth.currentUser?.uid || "",
-				ownerId: owner.ownerId,
-				details: `Đã xóa ${selectedIds.length} sản phẩm`,
-				createdAt: serverTimestamp()
-			});
-
-			await batch.commit();
-			// 🎯 Optimistic: ẩn ngay các sản phẩm đã xóa khỏi UI
-			selectedIds.forEach(id => removeLocal(id));
-			setSelectedIds([]);
-			showToast(`Đã xóa ${selectedIds.length} sản phẩm thành công`, "success");
-		} catch (error) {
-			refresh();
-			showToast("Lỗi khi xóa hàng loạt sản phẩm", "error");
-		}
+					await batch.commit();
+					// 🎯 Optimistic: ẩn ngay các sản phẩm đã xóa khỏi UI
+					selectedIds.forEach(id => removeLocal(id));
+					setSelectedIds([]);
+					showToast(`Đã xóa ${selectedIds.length} sản phẩm thành công`, "success");
+				} catch (error) {
+					refresh();
+					showToast("Lỗi khi xóa hàng loạt sản phẩm", "error");
+				}
+			}
+		);
 	};
 
 	const toggleSelectAll = () => {
@@ -743,38 +790,138 @@ const InventoryPage = () => {
 	const locationState = location.state as any;
 	const missingSkus = locationState?.missingSkus as string[] | undefined;
 
-	const filteredProducts = sourceList.filter(product => {
-		// NẾU CÓ TRUYỀN DANH SÁCH SẢN PHẨM THIẾU TỪ ORDERLIST THÌ CHỈ LỌC NHỮNG SẢN PHẨM ĐÓ
-		if (missingSkus && missingSkus.length > 0) {
-			return missingSkus.includes(product.sku);
+	// Thống kê số lượng theo trạng thái tồn kho cho các nút lọc nhanh
+	const filterCounts = useMemo(() => {
+		let lowStock = 0;
+		let outOfStock = 0;
+		let inStock = 0;
+		sourceList.forEach((p: any) => {
+			const s = Number(p.stock) || 0;
+			if (s <= 5 || p.aiHealth === 'urgent') lowStock++;
+			if (s <= 0) outOfStock++;
+			if (s > 0) inStock++;
+		});
+		return { total: sourceList.length, lowStock, outOfStock, inStock };
+	}, [sourceList]);
+
+	const filteredProducts = useMemo(() => {
+		const list = sourceList.filter((product: any) => {
+			// NẾU CÓ TRUYỀN DANH SÁCH SẢN PHẨM THIẾU TỪ ORDERLIST THÌ CHỈ LỌC NHỮNG SẢN PHẨM ĐÓ
+			if (missingSkus && missingSkus.length > 0) {
+				return missingSkus.includes(product.sku);
+			}
+
+			// Tìm kiếm thông minh
+			if (searchTerm && searchTerm.trim()) {
+				const matchesSearch = smartSearchMatch([
+					product.name || '',
+					product.sku || '',
+					product.serialNumber || '',
+					product.id || '',
+					product.category || '',
+					product.note || '',
+					product.specification || '',
+					product.packaging || '',
+					product.density || ''
+				], searchTerm);
+				if (!matchesSearch) return false;
+			}
+
+			// Lọc theo Danh mục
+			if (selectedCategory !== 'all' && product.category !== selectedCategory) {
+				return false;
+			}
+
+			// Lọc theo Trạng thái tồn kho
+			const stock = Number(product.stock) || 0;
+			if (stockFilter === 'low_stock') {
+				return stock <= 5 || product.aiHealth === 'urgent';
+			}
+			if (stockFilter === 'out_of_stock') {
+				return stock <= 0;
+			}
+			if (stockFilter === 'in_stock') {
+				return stock > 0;
+			}
+
+			return true;
+		});
+
+		// Sắp xếp
+		list.sort((a: any, b: any) => {
+			// Nếu người dùng đang tìm kiếm cụ thể và đang ở chế độ default, ưu tiên theo điểm tìm kiếm
+			if (searchTerm && searchTerm.trim() && sortBy === 'default') {
+				const scoreA = calculateSearchScore(a, searchTerm);
+				const scoreB = calculateSearchScore(b, searchTerm);
+				if (scoreA !== scoreB) return scoreB - scoreA;
+			}
+
+			const stockA = Number(a.stock) || 0;
+			const stockB = Number(b.stock) || 0;
+			const nameA = String(a.name || '').trim();
+			const nameB = String(b.name || '').trim();
+
+			switch (sortBy) {
+				case 'name_asc':
+					return nameA.localeCompare(nameB, 'vi', { sensitivity: 'base' });
+				case 'name_desc':
+					return nameB.localeCompare(nameA, 'vi', { sensitivity: 'base' });
+				case 'stock_asc':
+					if (stockA !== stockB) return stockA - stockB;
+					return nameA.localeCompare(nameB, 'vi', { sensitivity: 'base' });
+				case 'stock_desc':
+					if (stockA !== stockB) return stockB - stockA;
+					return nameA.localeCompare(nameB, 'vi', { sensitivity: 'base' });
+				case 'newest': {
+					const dateA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+					const dateB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+					return dateB - dateA;
+				}
+				case 'default':
+				default: {
+					// MẶC ĐỊNH TỐI ƯU:
+					// 1. Ưu tiên mặt hàng Cảnh báo hết kho / Âm kho / Tồn thấp (<= 5) lên trước
+					const isUrgentA = stockA <= 5 || a.aiHealth === 'urgent';
+					const isUrgentB = stockB <= 5 || b.aiHealth === 'urgent';
+					if (isUrgentA && !isUrgentB) return -1;
+					if (!isUrgentA && isUrgentB) return 1;
+
+					// Nếu cùng thuộc nhóm cảnh báo: ưu tiên mặt hàng ít hơn lên trước
+					if (isUrgentA && isUrgentB && stockA !== stockB) {
+						return stockA - stockB;
+					}
+
+					// Các mặt hàng bình thường xếp theo Tên A -> Z
+					return nameA.localeCompare(nameB, 'vi', { sensitivity: 'base' });
+				}
+			}
+		});
+
+		return list;
+	}, [sourceList, missingSkus, searchTerm, selectedCategory, stockFilter, sortBy]);
+
+	const effectiveItemsPerPage = itemsPerPage === -1 ? (filteredProducts.length || 1) : itemsPerPage;
+	const totalPages = Math.ceil(filteredProducts.length / effectiveItemsPerPage) || 1;
+	const paginatedProducts = itemsPerPage === -1
+		? filteredProducts
+		: filteredProducts.slice(
+			(currentPage - 1) * effectiveItemsPerPage,
+			currentPage * effectiveItemsPerPage
+		);
+
+	const handleHeaderSort = (column: 'name' | 'stock') => {
+		if (column === 'name') {
+			setSortBy(prev => prev === 'name_asc' ? 'name_desc' : 'name_asc');
+		} else if (column === 'stock') {
+			setSortBy(prev => prev === 'stock_asc' ? 'stock_desc' : 'stock_asc');
 		}
-
-		const matchesSearch = isMatch(product.name || '', searchTerm) ||
-			isMatch(product.sku || '', searchTerm) ||
-			isMatch(product.serialNumber || '', searchTerm) ||
-			isMatch(product.id || '', searchTerm) ||
-			isMatch(product.category || '', searchTerm) ||
-			isMatch(product.note || '', searchTerm) ||
-			isMatch(product.specification || '', searchTerm) ||
-			isMatch(product.packaging || '', searchTerm) ||
-			isMatch(product.density || '', searchTerm);
-
-		if (currentFilter === 'low_stock') {
-			return matchesSearch && (Number(product.stock) || 0) <= 10;
-		}
-
-		return matchesSearch;
-	});
-
-	const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
-	const paginatedProducts = filteredProducts.slice(
-		(currentPage - 1) * ITEMS_PER_PAGE,
-		currentPage * ITEMS_PER_PAGE
-	);
+		setCurrentPage(1);
+	};
 
 	const formatPrice = (price: number) => {
 		return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
 	};
+
 
 	const printQRLabel = (product: any) => {
 		const printWindow = window.open('', '_blank');
@@ -878,7 +1025,7 @@ const InventoryPage = () => {
 	const getImageUrl = (url: string) => getOptimizedImageUrl(url);
 
 	const hasViewPermission = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee || (owner.accessRights?.inventory_view ?? true);
-	const hasManagePermission = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee;
+	const hasManagePermission = owner.role?.toLowerCase() === 'admin' || !owner.isEmployee || (owner.accessRights?.inventory_manage ?? owner.accessRights?.products_manage ?? true);
 
 	if (owner.loading) return null;
 
@@ -993,6 +1140,7 @@ const InventoryPage = () => {
 			<div className="flex-1 p-4 md:p-8 overflow-y-auto custom-scrollbar">
 
 
+
 				{/* Mobile Search Bar - Conditional */}
 				{showMobileSearch && (
 					<div className="lg:hidden mb-6 animate-in slide-in-from-top duration-300">
@@ -1024,6 +1172,156 @@ const InventoryPage = () => {
 				{/* Main Content Area */}
 				{activeTab !== 'logs' ? (
 					<>
+						{/* Mobile Search Bar - Always accessible on mobile */}
+						<div className="lg:hidden mb-4">
+							<div className="flex items-center gap-2 bg-white dark:bg-slate-900 rounded-2xl px-4 py-3 shadow-sm border border-slate-200 dark:border-slate-800">
+								<span className="material-symbols-outlined text-slate-400 text-lg">search</span>
+								<input
+									type="text"
+									placeholder="Tìm tên sản phẩm, mã SKU, số seri..."
+									className="flex-1 bg-transparent border-none outline-none text-xs font-bold text-slate-900 dark:text-white placeholder:text-slate-400"
+									value={searchTerm}
+									onChange={(e) => setSearchTerm(e.target.value)}
+								/>
+								{searchTerm && (
+									<button onClick={() => setSearchTerm('')} className="text-slate-300 hover:text-slate-500">
+										<span className="material-symbols-outlined text-base">cancel</span>
+									</button>
+								)}
+							</div>
+						</div>
+
+						{/* FILTER & SORT TOOLBAR */}
+						<div className="mb-5 space-y-3">
+							{/* Quick Status Filters (Chips) */}
+							<div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar no-scrollbar">
+								<button
+									onClick={() => { setStockFilter('all'); setCurrentPage(1); }}
+									className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 ${
+										stockFilter === 'all'
+											? 'bg-[#1A237E] text-white shadow-sm shadow-indigo-900/20'
+											: 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800 hover:border-slate-300'
+									}`}
+								>
+									<span>Tất cả</span>
+									<span className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${
+										stockFilter === 'all' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+									}`}>
+										{filterCounts.total}
+									</span>
+								</button>
+
+								<button
+									onClick={() => { setStockFilter('low_stock'); setCurrentPage(1); }}
+									className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 ${
+										stockFilter === 'low_stock'
+											? 'bg-amber-500 text-white shadow-sm shadow-amber-500/20'
+											: 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40 hover:bg-amber-50 dark:hover:bg-amber-900/20'
+									}`}
+								>
+									<span className="material-symbols-outlined text-sm">warning</span>
+									<span>Sắp hết / Cần nhập (≤ 5)</span>
+									{filterCounts.lowStock > 0 && (
+										<span className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${
+											stockFilter === 'low_stock' ? 'bg-white/20 text-white' : 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'
+										}`}>
+											{filterCounts.lowStock}
+										</span>
+									)}
+								</button>
+
+								<button
+									onClick={() => { setStockFilter('out_of_stock'); setCurrentPage(1); }}
+									className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 ${
+										stockFilter === 'out_of_stock'
+											? 'bg-rose-600 text-white shadow-sm shadow-rose-600/20'
+											: 'bg-white dark:bg-slate-900 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/40 hover:bg-rose-50 dark:hover:bg-rose-900/20'
+									}`}
+								>
+									<span className="material-symbols-outlined text-sm">error</span>
+									<span>Hết hàng / Âm kho</span>
+									{filterCounts.outOfStock > 0 && (
+										<span className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${
+											stockFilter === 'out_of_stock' ? 'bg-white/20 text-white' : 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300'
+										}`}>
+											{filterCounts.outOfStock}
+										</span>
+									)}
+								</button>
+
+								<button
+									onClick={() => { setStockFilter('in_stock'); setCurrentPage(1); }}
+									className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 ${
+										stockFilter === 'in_stock'
+											? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/20'
+											: 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
+									}`}
+								>
+									<span className="material-symbols-outlined text-sm">check_circle</span>
+									<span>Còn hàng (&gt; 0)</span>
+									<span className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${
+										stockFilter === 'in_stock' ? 'bg-white/20 text-white' : 'bg-emerald-50 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
+									}`}>
+										{filterCounts.inStock}
+									</span>
+								</button>
+							</div>
+
+							{/* Secondary Controls: Category + Sort + ItemsPerPage */}
+							<div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+								{/* Left: Category + Sort */}
+								<div className="flex flex-wrap items-center gap-2.5 flex-1 min-w-[280px]">
+									{/* Category Select */}
+									<div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/60 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700/60 text-xs font-semibold text-slate-700 dark:text-slate-300">
+										<span className="material-symbols-outlined text-slate-400 text-base">category</span>
+										<select
+											value={selectedCategory}
+											onChange={(e) => { setSelectedCategory(e.target.value); setCurrentPage(1); }}
+											className="bg-transparent border-none outline-none text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer pr-1"
+										>
+											<option value="all" className="bg-white dark:bg-slate-900">Tất cả danh mục</option>
+											{categories.map((c: string) => (
+												<option key={c} value={c} className="bg-white dark:bg-slate-900">{c}</option>
+											))}
+										</select>
+									</div>
+
+									{/* Sort Select */}
+									<div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/60 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700/60 text-xs font-semibold text-slate-700 dark:text-slate-300">
+										<span className="material-symbols-outlined text-slate-400 text-base">swap_vert</span>
+										<select
+											value={sortBy}
+											onChange={(e) => { setSortBy(e.target.value as any); setCurrentPage(1); }}
+											className="bg-transparent border-none outline-none text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer pr-1"
+										>
+											<option value="default" className="bg-white dark:bg-slate-900">⚡ Mặc định (Ưu tiên cảnh báo + Tên A-Z)</option>
+											<option value="name_asc" className="bg-white dark:bg-slate-900">🔤 Tên: A → Z</option>
+											<option value="name_desc" className="bg-white dark:bg-slate-900">🔤 Tên: Z → A</option>
+											<option value="stock_asc" className="bg-white dark:bg-slate-900">📉 Tồn kho: Thấp → Cao</option>
+											<option value="stock_desc" className="bg-white dark:bg-slate-900">📈 Tồn kho: Cao → Thấp</option>
+											<option value="newest" className="bg-white dark:bg-slate-900">🕒 Mới cập nhật</option>
+										</select>
+									</div>
+								</div>
+
+								{/* Right: Items Per Page */}
+								<div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+									<span className="hidden sm:inline">Hiển thị:</span>
+									<select
+										value={itemsPerPage}
+										onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+										className="bg-slate-50 dark:bg-slate-800/60 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700/60 text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer outline-none"
+									>
+										<option value={20} className="bg-white dark:bg-slate-900">20 / trang</option>
+										<option value={25} className="bg-white dark:bg-slate-900">25 / trang</option>
+										<option value={50} className="bg-white dark:bg-slate-900">50 / trang</option>
+										<option value={100} className="bg-white dark:bg-slate-900">100 / trang</option>
+										<option value={-1} className="bg-white dark:bg-slate-900">Tất cả ({filteredProducts.length})</option>
+									</select>
+								</div>
+							</div>
+						</div>
+
 						{/* Table - Desktop */}
 						<InventoryDesktopTable
 							loading={loading}
@@ -1043,6 +1341,8 @@ const InventoryPage = () => {
 							getProductInventoryStats={getProductInventoryStats}
 							products={products}
 							getImageUrl={getImageUrl}
+							sortBy={sortBy}
+							onSort={handleHeaderSort}
 						/>
 
 						{/* Grid - Mobile */}
@@ -1089,57 +1389,62 @@ const InventoryPage = () => {
 
 							{/* Pagination Controls */}
 							{
-								totalPages > 1 && (
-									<div className="mt-8 mb-12 flex flex-col md:flex-row items-center justify-between gap-4">
+								(totalPages > 1 || filteredProducts.length > 0) && (
+									<div className="mt-8 mb-12 flex flex-col sm:flex-row items-center justify-between gap-4">
 										<p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-											Hiển thị {((currentPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredProducts.length)} trên tổng {filteredProducts.length} {activeTab === 'inventory' ? 'nhóm SKU' : 'lịch sử'}
+											{itemsPerPage === -1
+												? `Hiển thị toàn bộ ${filteredProducts.length} mặt hàng`
+												: `Hiển thị ${filteredProducts.length === 0 ? 0 : ((currentPage - 1) * effectiveItemsPerPage) + 1} - ${Math.min(currentPage * effectiveItemsPerPage, filteredProducts.length)} trên tổng ${filteredProducts.length} mặt hàng`
+											}
 										</p>
-										<div className="flex items-center gap-1">
-											<button
-												onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-												disabled={currentPage === 1}
-												className="size-10 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:border-blue-500 transition-all"
-											>
-												<span className="material-symbols-outlined">chevron_left</span>
-											</button>
-											<div className="flex items-center gap-1 mx-2">
-												{[...Array(totalPages)].map((_, i) => {
-													const pageNum = i + 1;
-													// Show first, last, and pages around current
-													if (
-														pageNum === 1 ||
-														pageNum === totalPages ||
-														(pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
-													) {
-														return (
-															<button
-																key={pageNum}
-																onClick={() => setCurrentPage(pageNum)}
-																className={`size-10 rounded-xl font-bold text-xs transition-all border ${currentPage === pageNum
-																	? 'bg-[#1A237E] text-white border-[#1A237E] shadow-lg shadow-blue-500/20'
-																	: 'bg-white dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-slate-800 hover:border-blue-500'
-																	}`}
-															>
-																{pageNum}
-															</button>
-														);
-													} else if (
-														pageNum === currentPage - 2 ||
-														pageNum === currentPage + 2
-													) {
-														return <span key={pageNum} className="text-slate-300">...</span>;
-													}
-													return null;
-												})}
+										{totalPages > 1 && (
+											<div className="flex items-center gap-1">
+												<button
+													onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+													disabled={currentPage === 1}
+													className="size-10 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:border-blue-500 transition-all"
+												>
+													<span className="material-symbols-outlined">chevron_left</span>
+												</button>
+												<div className="flex items-center gap-1 mx-2">
+													{[...Array(totalPages)].map((_, i) => {
+														const pageNum = i + 1;
+														// Show first, last, and pages around current
+														if (
+															pageNum === 1 ||
+															pageNum === totalPages ||
+															(pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
+														) {
+															return (
+																<button
+																	key={pageNum}
+																	onClick={() => setCurrentPage(pageNum)}
+																	className={`size-10 rounded-xl font-bold text-xs transition-all border ${currentPage === pageNum
+																		? 'bg-[#1A237E] text-white border-[#1A237E] shadow-lg shadow-blue-500/20'
+																		: 'bg-white dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-slate-800 hover:border-blue-500'
+																		}`}
+																>
+																	{pageNum}
+																</button>
+															);
+														} else if (
+															pageNum === currentPage - 2 ||
+															pageNum === currentPage + 2
+														) {
+															return <span key={pageNum} className="text-slate-300">...</span>;
+														}
+														return null;
+													})}
+												</div>
+												<button
+													onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+													disabled={currentPage === totalPages}
+													className="size-10 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:border-blue-500 transition-all"
+												>
+													<span className="material-symbols-outlined">chevron_right</span>
+												</button>
 											</div>
-											<button
-												onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-												disabled={currentPage === totalPages}
-												className="size-10 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:border-blue-500 transition-all"
-											>
-												<span className="material-symbols-outlined">chevron_right</span>
-											</button>
-										</div>
+										)}
 									</div>
 								)
 							}

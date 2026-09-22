@@ -130,150 +130,153 @@ export function useDebtCalculations({
   );
 
   // ── Aggregate data by entity ─────────────────────────────
-  const aggregatedData: AggregatedRow[] = useMemo(() => {
-    return allEntities
-      .map((c: any) => {
-        const customerOrders = orders.filter((o: any) => {
-          if (c.isGuest) {
-            return (
-              (!o.customerId || !registeredMap.has(o.customerId)) &&
-              (o.customerName === c.name || (!o.customerName && c.name === 'Khách vãng lai'))
-            );
-          }
-          return o.customerId === c.id;
-        });
-
-        const customerPayments = payments.filter((p: any) => {
-          if (c.isGuest) {
-            return (
-              (!p.customerId || !registeredMap.has(p.customerId)) &&
-              (p.customerName === c.name || (!p.customerName && c.name === 'Khách vãng lai'))
-            );
-          }
-          return p.customerId === c.id;
-        });
-
-        const hasDateFilter = !!(fromDate || toDate);
-        let periodOrders = customerOrders;
-        let periodPayments = customerPayments;
-
-        if (hasDateFilter) {
-          const start = fromDate || '0000-00-00';
-          const end = toDate || '9999-99-99';
-          periodOrders = customerOrders.filter((o) => {
-            const txDate =
-              o.orderDate ||
-              (o.createdAt?.seconds
-                ? new Date(o.createdAt.seconds * 1000).toISOString().split('T')[0]
-                : '');
-            return txDate >= start && txDate <= end;
-          });
-          periodPayments = customerPayments.filter((p) => {
-            const txDate =
-              p.date ||
-              (p.createdAt?.seconds
-                ? new Date(p.createdAt.seconds * 1000).toISOString().split('T')[0]
-                : '');
-            return txDate >= start && txDate <= end;
-          });
+  const allEntitiesWithDebt: AggregatedRow[] = useMemo(() => {
+    return allEntities.map((c: any) => {
+      const customerOrders = orders.filter((o: any) => {
+        if (c.isGuest) {
+          return (
+            (!o.customerId || !registeredMap.has(o.customerId)) &&
+            (o.customerName === c.name || (!o.customerName && c.name === 'Khách vãng lai'))
+          );
         }
+        return o.customerId === c.id;
+      });
 
-        // Chỉ tính đơn đã chốt — đơn nháp/chưa chốt không phải nợ thật
-        const confirmedStatuses = ['Đơn chốt'];
-        const debtOrders = customerOrders.filter((o) =>
-          confirmedStatuses.includes(o.status),
-        );
-        const lifetimeTotalWaited = debtOrders.reduce(
-          (sum: any, o: any) => sum + (o.totalAmount || 0),
-          0,
-        );
-        const lifetimeTotalPaid = customerPayments.reduce(
-          (sum: any, p: any) => sum + (p.amount || 0),
-          0,
-        );
+      const customerPayments = payments.filter((p: any) => {
+        if (c.isGuest) {
+          return (
+            (!p.customerId || !registeredMap.has(p.customerId)) &&
+            (p.customerName === c.name || (!p.customerName && c.name === 'Khách vãng lai'))
+          );
+        }
+        return p.customerId === c.id;
+      });
 
-        // 🔧 Tính nợ trực tiếp từ payments/orders realtime (không phụ thuộc cron 1 tiếng)
-        const calcDebt = lifetimeTotalWaited - lifetimeTotalPaid;
+      const hasDateFilter = !!(fromDate || toDate);
+      let periodOrders = customerOrders;
+      let periodPayments = customerPayments;
 
-        const hasRealtimeData =
-          lifetimeTotalWaited > 0 ||
-          lifetimeTotalPaid > 0 ||
-          customerOrders.length > 0 ||
-          customerPayments.length > 0;
-        const currentDebt = hasRealtimeData
-          ? calcDebt
-          : (c.totalDebt ?? c.debt ?? 0);
-
-        const displayTotalOrders = hasRealtimeData
-          ? lifetimeTotalWaited
-          : (c.totalOrdersAmount ?? 0);
-
-        const totalPaid = hasDateFilter
-          ? periodPayments.reduce((sum: any, p: any) => sum + (p.amount || 0), 0)
-          : hasRealtimeData
-            ? lifetimeTotalPaid
-            : (c.totalPaymentsAmount ?? 0);
-
-        // Last transaction (unfiltered for accurate sorting and health)
-        const allTx = [
-          ...customerOrders
-            .filter((o: any) => o.status === 'Đơn chốt')
-            .map((o: any) => ({ date: o.orderDate || o.createdAt, type: 'order' })),
-          ...customerPayments.map((p: any) => ({
-            date: p.date || p.createdAt,
-            type: 'payment',
-          })),
-        ].sort((a: any, b: any) => {
-          const da = a.date?.seconds
-            ? a.date.seconds * 1000
-            : a.date
-              ? new Date(a.date).getTime()
-              : 0;
-          const db = b.date?.seconds
-            ? b.date.seconds * 1000
-            : b.date
-              ? new Date(b.date).getTime()
-              : 0;
-          return db - da;
+      if (hasDateFilter) {
+        const start = fromDate || '0000-00-00';
+        const end = toDate || '9999-99-99';
+        periodOrders = customerOrders.filter((o) => {
+          const txDate =
+            o.orderDate ||
+            (o.createdAt?.seconds
+              ? new Date(o.createdAt.seconds * 1000).toISOString().split('T')[0]
+              : '');
+          return txDate >= start && txDate <= end;
         });
+        periodPayments = customerPayments.filter((p) => {
+          const txDate =
+            p.date ||
+            (p.createdAt?.seconds
+              ? new Date(p.createdAt.seconds * 1000).toISOString().split('T')[0]
+              : '');
+          return txDate >= start && txDate <= end;
+        });
+      }
 
-        const turnoverDays = allTx[0]?.date
-          ? Math.floor(
-              (new Date().getTime() -
-                (allTx[0].date?.seconds
-                  ? allTx[0].date.seconds * 1000
-                  : new Date(allTx[0].date).getTime())) /
-                (1000 * 60 * 60 * 24),
-            )
-          : 999;
+      // Chỉ tính đơn đã chốt — đơn nháp/chưa chốt không phải nợ thật
+      const confirmedStatuses = ['Đơn chốt'];
+      const debtOrders = customerOrders.filter((o) =>
+        confirmedStatuses.includes(o.status),
+      );
+      const lifetimeTotalWaited = debtOrders.reduce(
+        (sum: any, o: any) => sum + (o.totalAmount || 0),
+        0,
+      );
+      const lifetimeTotalPaid = customerPayments.reduce(
+        (sum: any, p: any) => sum + (p.amount || 0),
+        0,
+      );
 
-        let debtHealth: 'healthy' | 'slow' | 'risk' | 'critical' = 'healthy';
-        if (currentDebt > 200000000 || (currentDebt > 50000000 && turnoverDays > 60))
-          debtHealth = 'critical';
-        else if (currentDebt > 100000000 || turnoverDays > 30) debtHealth = 'risk';
-        else if (currentDebt > 10000000 || turnoverDays > 15) debtHealth = 'slow';
+      // 🔧 Tính nợ trực tiếp từ payments/orders realtime (không phụ thuộc cron 1 tiếng)
+      const calcDebt = lifetimeTotalWaited - lifetimeTotalPaid;
 
-        return {
-          ...c,
-          totalOrdersAmount: displayTotalOrders,
-          totalPaymentsAmount: totalPaid,
-          currentDebt,
-          lastTx: allTx[0]?.date || null,
-          debtHealth,
-          turnoverDays,
-          hasStatusOrders:
-            periodOrders.some((o) => o.status === 'Đơn chốt') ||
-            periodPayments.length > 0 ||
-            currentDebt > 0,
-          initials:
-            String(c.name || '')
-              .split(' ')
-              .map((n: string) => n[0])
-              .join('')
-              .slice(0, 2)
-              .toUpperCase() || 'KH',
-        };
-      })
+      const hasRealtimeData =
+        lifetimeTotalWaited > 0 ||
+        lifetimeTotalPaid > 0 ||
+        customerOrders.length > 0 ||
+        customerPayments.length > 0;
+      const currentDebt = hasRealtimeData
+        ? calcDebt
+        : (c.totalDebt ?? c.debt ?? 0);
+
+      const displayTotalOrders = hasRealtimeData
+        ? lifetimeTotalWaited
+        : (c.totalOrdersAmount ?? 0);
+
+      const totalPaid = hasDateFilter
+        ? periodPayments.reduce((sum: any, p: any) => sum + (p.amount || 0), 0)
+        : hasRealtimeData
+          ? lifetimeTotalPaid
+          : (c.totalPaymentsAmount ?? 0);
+
+      // Last transaction (unfiltered for accurate sorting and health)
+      const allTx = [
+        ...customerOrders
+          .filter((o: any) => o.status === 'Đơn chốt')
+          .map((o: any) => ({ date: o.orderDate || o.createdAt, type: 'order' })),
+        ...customerPayments.map((p: any) => ({
+          date: p.date || p.createdAt,
+          type: 'payment',
+        })),
+      ].sort((a: any, b: any) => {
+        const da = a.date?.seconds
+          ? a.date.seconds * 1000
+          : a.date
+            ? new Date(a.date).getTime()
+            : 0;
+        const db = b.date?.seconds
+          ? b.date.seconds * 1000
+          : b.date
+            ? new Date(b.date).getTime()
+            : 0;
+        return db - da;
+      });
+
+      const turnoverDays = allTx[0]?.date
+        ? Math.floor(
+            (new Date().getTime() -
+              (allTx[0].date?.seconds
+                ? allTx[0].date.seconds * 1000
+                : new Date(allTx[0].date).getTime())) /
+              (1000 * 60 * 60 * 24),
+          )
+        : 999;
+
+      let debtHealth: 'healthy' | 'slow' | 'risk' | 'critical' = 'healthy';
+      if (currentDebt > 200000000 || (currentDebt > 50000000 && turnoverDays > 60))
+        debtHealth = 'critical';
+      else if (currentDebt > 100000000 || turnoverDays > 30) debtHealth = 'risk';
+      else if (currentDebt > 10000000 || turnoverDays > 15) debtHealth = 'slow';
+
+      return {
+        ...c,
+        totalOrdersAmount: displayTotalOrders,
+        totalPaymentsAmount: totalPaid,
+        currentDebt,
+        lastTx: allTx[0]?.date || null,
+        debtHealth,
+        turnoverDays,
+        hasStatusOrders:
+          periodOrders.some((o) => o.status === 'Đơn chốt') ||
+          periodPayments.length > 0 ||
+          currentDebt > 0,
+        initials:
+          String(c.name || '')
+            .split(' ')
+            .map((n: string) => n[0])
+            .join('')
+            .slice(0, 2)
+            .toUpperCase() || 'KH',
+      };
+    });
+  }, [allEntities, orders, payments, registeredMap, fromDate, toDate]);
+
+  const aggregatedData: AggregatedRow[] = useMemo(() => {
+    return allEntitiesWithDebt
       .filter((item: any) => {
         const matchesName =
           !searchTerm ||
@@ -288,7 +291,7 @@ export function useDebtCalculations({
         return matchesName && matchesStatus;
       })
       .sort((a: any, b: any) => b.currentDebt - a.currentDebt);
-  }, [allEntities, orders, payments, registeredMap, fromDate, toDate, searchTerm, statusFilter]);
+  }, [allEntitiesWithDebt, searchTerm, fromDate, toDate, statusFilter]);
 
   // ── Pagination ───────────────────────────────────────────
   const totalPages = Math.ceil(aggregatedData.length / itemsPerPage);
@@ -304,42 +307,30 @@ export function useDebtCalculations({
   // ── KPI Totals ───────────────────────────────────────────
   const totalWaitedAll = useMemo(
     () =>
-      customers.reduce(
-        (sum: any, c: any) =>
-          sum +
-          (c.totalOrdersAmount ??
-            aggregatedData.find((a: any) => a.id === c.id)?.totalOrdersAmount ??
-            0),
+      aggregatedData.reduce(
+        (sum: number, item: AggregatedRow) => sum + (Number(item.totalOrdersAmount) || 0),
         0,
       ),
-    [customers, aggregatedData],
+    [aggregatedData],
   );
 
   const totalPaidAll = useMemo(
     () =>
-      customers.reduce(
-        (sum: any, c: any) =>
-          sum +
-          (c.totalPaymentsAmount ??
-            aggregatedData.find((a: any) => a.id === c.id)?.totalPaymentsAmount ??
-            0),
+      aggregatedData.reduce(
+        (sum: number, item: AggregatedRow) => sum + (Number(item.totalPaymentsAmount) || 0),
         0,
       ),
-    [customers, aggregatedData],
+    [aggregatedData],
   );
 
   const totalUnpaidAll = useMemo(
     () =>
-      customers.reduce(
-        (sum: any, c: any) =>
-          sum +
-          (c.totalDebt ??
-            ((aggregatedData.find((a: any) => a.id === c.id)?.currentDebt ?? 0) > 0
-              ? aggregatedData.find((a: any) => a.id === c.id)?.currentDebt
-              : 0)),
+      aggregatedData.reduce(
+        (sum: number, item: AggregatedRow) =>
+          sum + ((Number(item.currentDebt) || 0) > 0 ? Number(item.currentDebt) : 0),
         0,
       ),
-    [customers, aggregatedData],
+    [aggregatedData],
   );
 
   // ── Pagination helpers ───────────────────────────────────
@@ -378,6 +369,7 @@ export function useDebtCalculations({
     formatPrice,
     formatDate,
     getImageUrl,
+    allEntitiesWithDebt,
     aggregatedData,
     paginatedData,
     totalPages,

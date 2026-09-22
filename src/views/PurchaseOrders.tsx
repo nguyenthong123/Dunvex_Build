@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { smartSearchMatch, calculateSearchScore } from '../utils/searchUtils';
 import { Store, Plus, Search, Trash, X, ArrowLeft, CheckCircle2, Package, History, MessageCircle, Send, Loader, Edit3, Printer, Image as ImageIcon, Copy } from 'lucide-react';
 import html2canvas from 'html2canvas-pro';
 import { useOwner } from '../hooks/useOwner';
@@ -436,8 +437,26 @@ const PurchaseOrders = () => {
 		return t.includes(q) || removeAccents(t).includes(removeAccents(q));
 	};
 
-	const filteredPOs = purchaseOrders.filter(po => isMatch(po.supplierName, searchTerm) || isMatch(po.id, searchTerm));
-	const filteredSuppliers = suppliers.filter(s => isMatch(s.name, supplierSearchQuery) || isMatch(s.phone, supplierSearchQuery));
+	const filteredPOs = purchaseOrders.filter(po => smartSearchMatch([
+		po.id || '',
+		po.supplierName || '',
+		po.supplierPhone || '',
+		po.note || '',
+		...(Array.isArray(po.items) ? po.items.map((i: any) => i.name || '') : [])
+	], searchTerm));
+
+	const filteredSuppliers = suppliers.filter(s => smartSearchMatch([
+		s.name || '',
+		s.phone || '',
+		s.address || '',
+		s.taxCode || '',
+		s.note || ''
+	], supplierSearchQuery)).sort((a, b) => {
+		const scoreA = calculateSearchScore(a, supplierSearchQuery, { primary: ['name', 'phone'] });
+		const scoreB = calculateSearchScore(b, supplierSearchQuery, { primary: ['name', 'phone'] });
+		if (scoreA !== scoreB) return scoreB - scoreA;
+		return (a.name || '').localeCompare(b.name || '');
+	});
 	
 	const categories = Array.from(new Set([
 		'Tất cả',
@@ -449,11 +468,26 @@ const PurchaseOrders = () => {
 	});
 
 	const activeCategory = activeRow !== null ? items[activeRow]?.category : null;
+	const hasProdSearch = productSearchQuery && productSearchQuery.trim().length > 0;
 	const filteredProducts = products.filter(p => {
-		const matchSearch = isMatch(p.name, productSearchQuery) || isMatch(p.sku, productSearchQuery);
-		const matchCategory = !activeCategory || activeCategory === 'Tất cả' || (p as any).category === activeCategory;
+		const matchSearch = smartSearchMatch([
+			p.name || '',
+			p.sku || '',
+			p.serialNumber || '',
+			p.category || '',
+			p.specification || '',
+			p.packaging || '',
+			p.density || '',
+			p.note || ''
+		], productSearchQuery);
+		const matchCategory = !hasProdSearch ? (!activeCategory || activeCategory === 'Tất cả' || (p as any).category === activeCategory) : true;
 		return matchSearch && matchCategory;
-	}).slice(0, 20);
+	}).sort((a, b) => {
+		const scoreA = calculateSearchScore(a, productSearchQuery);
+		const scoreB = calculateSearchScore(b, productSearchQuery);
+		if (scoreA !== scoreB) return scoreB - scoreA;
+		return (a.name || '').localeCompare(b.name || '');
+	}).slice(0, 50);
 
 	const calculateSubTotal = () => {
 		return items.reduce((sum, item) => sum + (Number(item.qty) || 0) * (Number(item.priceImport) || 0), 0);
@@ -667,6 +701,7 @@ const PurchaseOrders = () => {
 						productId: pid,
 						productName: item?.name || pid,
 						type: diff > 0 ? 'import' : 'export',
+						qty: Math.abs(diff),
 						change: Math.abs(diff),
 						note: `Sửa đơn nhập - PO #${editingPO.id.slice(0, 8)} (chênh lệch ${diff > 0 ? '+' : ''}${diff})`,
 						priceImport: Number(item?.priceImport || 0),
@@ -765,11 +800,12 @@ const PurchaseOrders = () => {
 					productId: item.productId,
 					productName: item.name,
 					type: 'import',
+					qty: Number(item.qty),
 					change: Number(item.qty),
 					note: `Nhập hàng từ ${selectedSupplier.name} - PO #${orderId.slice(0, 8)}`,
 					priceImport: Number(item.priceImport),
 					beforeStock: product?.stock || 0,
-					afterStock: (product?.stock || 0) + Number(item.qty),
+					afterStock: (product?.stock || 0) + Number(item.qty)
 				});
 			});
 			// Fire-and-forget inventory logs (non-critical)
@@ -1049,7 +1085,13 @@ const PurchaseOrders = () => {
 		{detailPO && (
 			<div className="fixed inset-0 z-[150] bg-slate-955/95 backdrop-blur-xl animate-in fade-in duration-200 print:hidden" onClick={() => { setDetailPO(null); setPoZoom(1); }}>
 				{/* Controls bar */}
-				<div className="fixed top-0 left-0 right-0 flex items-center justify-between p-3 bg-slate-950/80 backdrop-blur-lg border-b border-white/5 z-[160] no-print" onClick={e => e.stopPropagation()}>
+				<div 
+					className="fixed top-0 left-0 right-0 flex items-center justify-between p-3 bg-slate-950/80 backdrop-blur-lg border-b border-white/5 z-[160] no-print" 
+					onClick={e => e.stopPropagation()}
+					style={{
+						paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))'
+					}}
+				>
 					<span className="text-white text-xs font-black uppercase tracking-wider pl-2">Chi tiết phiếu nhập</span>
 					
 					{/* Desktop buttons (Hidden on Mobile) */}
@@ -1086,7 +1128,12 @@ const PurchaseOrders = () => {
 					</button>
 				</div>
 				{/* SCROLLABLE WRAPPER FOR TICKET CONTENT */}
-				<div className="w-full h-full overflow-y-auto pt-20 pb-28 md:pt-16 md:pb-10 flex flex-col items-center justify-start p-4 custom-scrollbar">
+				<div 
+					className="w-full h-full overflow-y-auto pb-28 md:pb-10 flex flex-col items-center justify-start p-4 custom-scrollbar"
+					style={{
+						paddingTop: window.innerWidth < 768 ? 'calc(5rem + env(safe-area-inset-top, 0px))' : '4rem'
+					}}
+				>
 					<div className="my-auto flex flex-col items-center" style={{ zoom: poZoom, transformOrigin: 'top center' }} onClick={e => e.stopPropagation()}>
 					<div
 						id="purchase-order-ticket-bill"

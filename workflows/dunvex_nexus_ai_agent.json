@@ -1,0 +1,202 @@
+{
+  "name": "Dunvex Nexus - Super Admin AI Agent (Quyền & Cấu Hình)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nexus-agent",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-nexus-webhook",
+      "name": "1. Lệnh Từ Admin (Webhook / Telegram)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [100, 300],
+      "webhookId": "nexus-agent-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst body = input.body || input;\nconst message = body.message || body.command || body.text || 'Kiểm tra trạng thái hệ thống';\nconst adminId = body.adminId || 'super_admin';\n\nreturn [{\n  json: {\n    message,\n    adminId\n  }\n}];"
+      },
+      "id": "node-extract-command",
+      "name": "2. Trích Xuất Lệnh Điều Khiển",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [320, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://dunvex.com/api/data/system_config/main",
+        "method": "GET",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "dunvex_b0b177d643677fb0a676bd3001881112"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "node-get-system-status",
+      "name": "3. Đọc Trạng Thái Toàn Hệ Thống (Nexus)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [540, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const command = $('2. Trích Xuất Lệnh Điều Khiển').first().json.message.toLowerCase();\nconst currentConfig = $input.first().json.data || $input.first().json || {};\n\nlet action = 'query';\nlet updatePayload = {};\nlet reply = '';\n\n// 1. Phân tích lệnh đóng/mở quyền toàn trang\nif (command.includes('bảo trì') || command.includes('maintenance')) {\n  const enable = !command.includes('tắt') && !command.includes('mở');\n  action = 'toggle_system';\n  updatePayload = { maintenance_mode: enable };\n  reply = enable ? '⛔ ĐÃ BẬT CHẾ ĐỘ BẢO TRÌ TOÀN TRANG!' : '✅ ĐÃ TẮT CHẾ ĐỘ BẢO TRÌ (Hệ thống mở lại bình thường)!';\n} else if (command.includes('khoá tạo đơn') || command.includes('khoá đơn free')) {\n  action = 'toggle_system';\n  updatePayload = { lock_free_orders: true };\n  reply = '🔒 ĐÃ KHOÁ TÍNH NĂNG TẠO ĐƠN VỚI TÀI KHOẢN FREE!';\n} else if (command.includes('mở tạo đơn') || command.includes('mở đơn free')) {\n  action = 'toggle_system';\n  updatePayload = { lock_free_orders: false };\n  reply = '🔓 ĐÃ MỞ KHOÁ TÍNH NĂNG TẠO ĐƠN CHO TÀI KHOẢN FREE!';\n} else if (command.includes('khoá nợ') || command.includes('khoá công nợ')) {\n  action = 'toggle_system';\n  updatePayload = { lock_free_debts: true };\n  reply = '🔒 ĐÃ KHOÁ TÍNH NĂNG QUẢN LÝ CÔNG NỢ VỚI TÀI KHOẢN FREE!';\n} else if (command.includes('mở nợ') || command.includes('mở công nợ')) {\n  action = 'toggle_system';\n  updatePayload = { lock_free_debts: false };\n  reply = '🔓 ĐÃ MỞ KHOÁ TÍNH NĂNG CÔNG NỢ CHO TÀI KHOẢN FREE!';\n} else {\n  // Lệnh tra cứu trạng thái\n  reply = `📊 BÁO CÁO TRẠNG THÁI NEXUS CONTROL:\\n` +\n    `• Chế độ bảo trì: ${currentConfig.maintenance_mode ? '🔴 ĐANG BẬT' : '🟢 ĐANG TẮT'}\\n` +\n    `• Khoá đơn Free: ${currentConfig.lock_free_orders ? '🔒 ĐANG KHOÁ' : '🟢 MỞ'}\\n` +\n    `• Khoá nợ Free: ${currentConfig.lock_free_debts ? '🔒 ĐANG KHOÁ' : '🟢 MỞ'}\\n` +\n    `• Khoá Sheet Free: ${currentConfig.lock_free_sheets ? '🔒 ĐANG KHOÁ' : '🟢 MỞ'}\\n` +\n    `• Tự động khoá AI: ${currentConfig.ai_auto_lock ? '🛡️ BẬT' : '⚪ TẮT'}`;\n}\n\nreturn [{\n  json: {\n    action,\n    updatePayload,\n    reply,\n    shouldUpdate: Object.keys(updatePayload).length > 0\n  }\n}];"
+      },
+      "id": "node-ai-nexus-logic",
+      "name": "4. AI Agent: Phân Tích & Ra Quyết Định",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [760, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.shouldUpdate }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "node-if-update",
+      "name": "5. Có Cần Cập Nhật Quyền?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [980, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://dunvex.com/api/data/system_config/main",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "dunvex_b0b177d643677fb0a676bd3001881112"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.updatePayload) }}",
+        "options": {}
+      },
+      "id": "node-apply-system-flag",
+      "name": "6. Thực Thi Đóng/Mở Quyền Trên Trang",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"nexusMessage\": \"{{ $('4. AI Agent: Phân Tích & Ra Quyết Định').first().json.reply }}\",\n  \"updated\": {{ $('4. AI Agent: Phân Tích & Ra Quyết Định').first().json.shouldUpdate }},\n  \"timestamp\": \"{{ $now.toISO() }}\"\n}",
+        "options": {}
+      },
+      "id": "node-nexus-respond",
+      "name": "7. Trả Kết Quả Thực Thi Cho Sếp",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1420, 300]
+    }
+  ],
+  "connections": {
+    "1. Lệnh Từ Admin (Webhook / Telegram)": {
+      "main": [
+        [
+          {
+            "node": "2. Trích Xuất Lệnh Điều Khiển",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Trích Xuất Lệnh Điều Khiển": {
+      "main": [
+        [
+          {
+            "node": "3. Đọc Trạng Thái Toàn Hệ Thống (Nexus)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. Đọc Trạng Thái Toàn Hệ Thống (Nexus)": {
+      "main": [
+        [
+          {
+            "node": "4. AI Agent: Phân Tích & Ra Quyết Định",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4. AI Agent: Phân Tích & Ra Quyết Định": {
+      "main": [
+        [
+          {
+            "node": "5. Có Cần Cập Nhật Quyền?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5. Có Cần Cập Nhật Quyền?": {
+      "main": [
+        [
+          {
+            "node": "6. Thực Thi Đóng/Mở Quyền Trên Trang",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "7. Trả Kết Quả Thực Thi Cho Sếp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6. Thực Thi Đóng/Mở Quyền Trên Trang": {
+      "main": [
+        [
+          {
+            "node": "7. Trả Kết Quả Thực Thi Cho Sếp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

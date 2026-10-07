@@ -7,7 +7,7 @@ if [ -f .env ]; then
   set +a
 fi
 
-VPS_IP="${VPS_IP:-136.109.194.84}"
+VPS_IP="${VPS_IP:-34.133.127.214}"
 VPS_USER="${VPS_USER:-zomby}"
 VPS_DIR="${VPS_DIR:-/home/zomby/dunvex_app}"
 SSH_KEY="${SSH_KEY:-$HOME/.ssh/google_compute_engine}"

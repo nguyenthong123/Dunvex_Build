@@ -39,25 +39,13 @@ upload_script.gs
 GAS_*
 *.gs
 !upload_script.gs.example
-# VPS/Server code (không deploy lên Vercel)
-server/
-!server/
-server/*
-!server/routes/
-server/routes/*
-!server/routes/api.js
-!server/routes/releases.js
-!server/routes/releases.test.js
-!server/releases/
-server/releases/*
-!server/releases/*.json
-!server/releases/mac/
-server/releases/mac/*
-!server/releases/windows/
-server/releases/windows/*
-server.js
-ecosystem.config.cjs
-deploy_vps.sh
+# Server release binaries and local database (keep source code tracked)
+server/dunvex.db
+server/releases/mac/*.dmg
+server/releases/windows/*.exe
+server/releases/windows/*.zip
+deploy.tar.gz
+.npm-cache/
 deploy.tar.gz
 dunvex_nginx.conf
 cors.json

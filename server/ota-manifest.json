@@ -1,0 +1,9 @@
+{
+  "version": "1.0.1",
+  "buildNumber": 129,
+  "releaseDate": "2026-10-02T06:49:33.040Z",
+  "bundleHash": "dce043ab2387abfc2da92baa81ddc0300d95c1eef7aaddedeadf62dd472f928c",
+  "size": 1005043,
+  "bundleUrl": "/api/ota-update/bundle.zip",
+  "releaseNotes": "Cập nhật ứng dụng Dunvex"
+}

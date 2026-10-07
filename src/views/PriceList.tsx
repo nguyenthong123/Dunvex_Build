@@ -15,6 +15,8 @@ import { getOptimizedImageUrl } from '../utils/validation';
 import { generateTicketPng } from '../components/orderTicket/ticketImage';
 import { useToast } from '../components/shared/Toast';
 import { useProducts } from '../hooks/useProducts';
+import { CachedImage } from '../components/shared/CachedImage';
+import { copyOrShareImage } from '../utils/imageSharing';
 
 const DEFAULT_POLICY = `Báo giá trên là giá niêm yết chính thức, chưa bao gồm chiết khấu linh hoạt theo số lượng.
 Mọi thắc mắc vui lòng liên hệ trực tiếp hotline hoặc truy cập website công ty để biết thêm chi tiết.`;
@@ -776,12 +778,16 @@ const PriceList = () => {
 		setIsCopyingImage(true);
 		try {
 			const dataUrl = await generateTicketPng(node, false);
-			const blob = dataURLtoBlob(dataUrl);
-			if (!navigator.clipboard || !window.ClipboardItem) {
-				throw new Error('unsupported');
+			const fileName = `Bao-gia-${(selectedList?.title || 'danh-sach').replace(/[^\w\d-]/g, '-')}.png`;
+			const res = await copyOrShareImage({
+				dataUrl,
+				fileName,
+				title: 'Bảng báo giá sản phẩm',
+				text: `Bảng báo giá - ${selectedList?.title || ''}`,
+			});
+			if (res.message) {
+				showToast(res.message, 'success');
 			}
-			await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-			showToast('✅ Đã sao chép bảng giá dưới dạng ảnh!', 'success');
 		} catch (error) {
 			console.error('Lỗi sao chép ảnh bảng giá:', error);
 			// Fallback: tải ảnh xuống để gửi thủ công
@@ -791,7 +797,7 @@ const PriceList = () => {
 				link.download = `Bao-gia-${(selectedList?.title || 'danh-sach').replace(/[^\w\d-]/g, '-')}.png`;
 				link.href = dataUrl;
 				link.click();
-				showToast('⚠️ Trình duyệt không cho copy trực tiếp, đã tải ảnh xuống.', 'warning');
+				showToast('Đã tải ảnh bảng giá về máy!', 'success');
 			} catch (e2) {
 				console.error('Lỗi tạo ảnh bảng giá:', e2);
 				showToast('Không thể tạo ảnh bảng giá.', 'error');
@@ -942,28 +948,30 @@ const PriceList = () => {
 		});
 	}, [headers]);
 
-	const filteredData = priceData.filter(item => {
-		const matchGroup = !selectedGroup || (groupColumn && item[groupColumn] === selectedGroup);
-		
-		if (!searchTerm) {
-			return matchGroup;
-		}
-
-		// Chia nhỏ từ khóa tìm kiếm và bỏ dấu (VD: "keo xu ly" sẽ tìm được "Keo xử lý")
-		const searchKeywords = normalizeString(searchTerm).split(/\s+/).filter(Boolean);
-		
-		// Chỉ tìm kiếm trong các cột đã lọc (bỏ qua mô tả, kích thước, ghi chú)
-		const searchValues = searchColumns.length > 0 
-			? searchColumns.map(col => item[col]) 
-			: Object.values(item);
+	const filteredData = React.useMemo(() => {
+		return priceData.filter(item => {
+			const matchGroup = !selectedGroup || (groupColumn && item[groupColumn] === selectedGroup);
 			
-		const itemString = normalizeString(searchValues.join(' '));
+			if (!searchTerm) {
+				return matchGroup;
+			}
 
-		// Đảm bảo tất cả các từ khóa đều xuất hiện (không phân biệt thứ tự)
-		const matchSearch = searchKeywords.every(keyword => itemString.includes(keyword));
+			// Chia nhỏ từ khóa tìm kiếm và bỏ dấu (VD: "keo xu ly" sẽ tìm được "Keo xử lý")
+			const searchKeywords = normalizeString(searchTerm).split(/\s+/).filter(Boolean);
+			
+			// Chỉ tìm kiếm trong các cột đã lọc (bỏ qua mô tả, kích thước, ghi chú)
+			const searchValues = searchColumns.length > 0 
+				? searchColumns.map(col => item[col]) 
+				: Object.values(item);
+				
+			const itemString = normalizeString(searchValues.join(' '));
 
-		return matchSearch && matchGroup;
-	});
+			// Đảm bảo tất cả các từ khóa đều xuất hiện (không phân biệt thứ tự)
+			const matchSearch = searchKeywords.every(keyword => itemString.includes(keyword));
+
+			return matchSearch && matchGroup;
+		});
+	}, [priceData, selectedGroup, groupColumn, searchTerm, searchColumns]);
 
 	// Sort and display price lists
 	const sortedPriceLists = React.useMemo(() => {
@@ -1400,10 +1408,11 @@ const PriceList = () => {
 															<td className="py-2 px-1 text-center border border-slate-200 align-middle">
 																{row.imageUrl ? (
 																	<div className="relative inline-block group">
-																		<img
-																			src={getOptimizedImageUrl(row.imageUrl)}
+																		<CachedImage
+																			src={row.imageUrl}
 																			alt={row['Tên sản phẩm'] || row['Tên SP'] || row['Sản phẩm'] || ''}
 																			className="w-16 h-16 object-cover rounded-lg border border-slate-200 shadow-sm group-hover:scale-[2.5] group-hover:z-50 group-hover:shadow-xl transition-transform duration-200 origin-center"
+																			fallbackText={row['Tên sản phẩm'] || row['Tên SP'] || ''}
 																		/>
 																		<button
 																			onClick={() => handleImageRemove(row)}

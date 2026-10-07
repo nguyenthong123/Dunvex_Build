@@ -41,6 +41,20 @@ GAS_*
 !upload_script.gs.example
 # VPS/Server code (không deploy lên Vercel)
 server/
+!server/
+server/*
+!server/routes/
+server/routes/*
+!server/routes/api.js
+!server/routes/releases.js
+!server/routes/releases.test.js
+!server/releases/
+server/releases/*
+!server/releases/*.json
+!server/releases/mac/
+server/releases/mac/*
+!server/releases/windows/
+server/releases/windows/*
 server.js
 ecosystem.config.cjs
 deploy_vps.sh
@@ -51,6 +65,15 @@ cors.json
 
 # Test & debug scripts
 scripts/
+!/scripts/
+scripts/*
+!/scripts/publish_ota.js
+!/scripts/release_channel.js
+!/scripts/deploy_web.sh
+!/scripts/release_apps.sh
+!/scripts/build_mac_app.sh
+!/scripts/build_windows_app.sh
+!/scripts/DunvexApp.swift
 test-*.js
 test-*.cjs
 check_*.js
@@ -89,3 +112,19 @@ test-results/
 *.db
 *.db-shm
 *.db-wal
+
+# Android signing keys & binary build artifacts (sensitive)
+*.keystore
+*.jks
+*.apk
+*.idsig
+dist-mac/
+dist-win/
+dist-win-save-dialog/
+downloads/
+dist.zip
+*.exe
+*.dmg
+*.zip
+*.pdb
+/main

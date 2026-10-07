@@ -2,20 +2,30 @@ import { useLocation } from 'react-router-dom';
 import { SUPER_ADMIN_EMAIL } from '../constants';
 import { useOwner } from './useOwner';
 import { auth } from '../services/firebase';
+import { isNativeApp } from '../utils/platform';
 
 export interface NavItem {
 	icon: string;
 	label: string;
+	mobileLabel?: string;
 	path: string;
 	isCenter?: boolean;
 	mobileOnly?: boolean;
 	desktopOnly?: boolean;
 	permissionKey?: string;
+	badge?: string | number;
+	shortcut?: string;
+}
+
+export interface NavGroup {
+	id: string;
+	title: string;
+	icon?: string;
+	items: NavItem[];
 }
 
 /**
- * Hook trung tâm quản lý cấu hình điều hướng và các nút động theo ngữ cảnh.
- * Giúp mã nguồn sạch hơn và đảm bảo tính nhất quán trên toàn hệ thống.
+ * Hook trung tâm quản lý cấu hình điều hướng và các nhóm nghiệp vụ Desktop / Mobile.
  */
 export function useNavigationConfig() {
 	const location = useLocation();
@@ -45,123 +55,129 @@ export function useNavigationConfig() {
 		// Kiểm tra phân quyền dựa trên nút Bật/Tắt
 		const val = owner.accessRights?.[key];
 		
-		// Nếu đã được set cụ thể trong database (true hoặc false) thì lấy giá trị đó
 		if (val !== undefined) return val === true;
 
-		// Nếu chưa được set (mới thêm tính năng hoặc chưa từng click toggle):
-		// Các mục nhạy cảm/quản lý sẽ KHÓA mặc định
 		const sensitiveKeys = ['admin', 'users_manage', 'system_manage'];
 		if (sensitiveKeys.includes(key)) return false;
 
-		// Các mục nghiệp vụ (Đơn hàng, Kho, Khách hàng...) sẽ MỞ mặc định
 		return true;
 	};
 
 	// 1. Cấu hình nút cộng ở giữa thay đổi theo trang
 	const getCenterItem = (): NavItem => {
-		const path = location.pathname;
+		const currentPath = location.pathname;
 
-		if (path === '/orders' || path === '/') {
+		if (currentPath === '/orders' || currentPath === '/') {
 			return {
 				icon: 'add_shopping_cart',
 				label: 'Lên đơn',
+				mobileLabel: 'Lên đơn',
 				path: '/quick-order',
 				permissionKey: 'orders_create'
 			};
 		}
 
-		if (path === '/inventory') {
+		if (currentPath === '/inventory') {
 			return {
 				icon: 'add_box',
 				label: 'Phiếu Kho',
+				mobileLabel: 'Tạo phiếu',
 				path: 'event:open-mobile-add',
 				permissionKey: 'inventory_manage'
 			};
 		}
 
-		if (path === '/customers') {
+		if (currentPath === '/customers') {
 			return {
 				icon: 'person_add',
 				label: 'Thêm Khách',
+				mobileLabel: 'Thêm khách',
 				path: 'event:open-mobile-add',
 				permissionKey: 'customers_manage'
 			};
 		}
 
-		if (path === '/debts') {
+		if (currentPath === '/debts') {
 			return {
 				icon: 'payments',
 				label: 'Thu nợ',
+				mobileLabel: 'Thu nợ',
 				path: 'event:open-mobile-add',
 				permissionKey: 'debts_manage'
 			};
 		}
 
-		if (path === '/admin') {
+		if (currentPath === '/admin') {
 			return {
 				icon: 'person_add',
 				label: 'Thêm NV',
+				mobileLabel: 'Thêm NV',
 				path: 'event:open-mobile-add',
 				permissionKey: 'users_manage'
 			};
 		}
 
-		if (path.startsWith('/services')) {
+		if (currentPath.startsWith('/services')) {
 			return {
 				icon: 'shopping_cart',
 				label: 'Mua gói',
+				mobileLabel: 'Mua gói',
 				path: '/services?action=buy',
 			};
 		}
 
-		if (path === '/attendance') {
+		if (currentPath === '/attendance') {
 			return {
 				icon: 'task_alt',
 				label: 'Chấm công vào',
+				mobileLabel: 'Chấm công',
 				path: '/attendance?action=checkin',
 				permissionKey: 'checkin_create'
 			};
 		}
 
-		if (path === '/leaves') {
+		if (currentPath === '/leaves') {
 			return {
 				icon: 'add',
 				label: 'Đăng ký nghỉ',
+				mobileLabel: 'Nghỉ phép',
 				path: 'event:open-leave-create'
 			};
 		}
 
-
-
-		if (path === '/settings') {
+		if (currentPath === '/settings') {
 			return {
 				icon: 'contrast',
 				label: 'Chế độ tối',
+				mobileLabel: 'Đổi nền',
 				path: '/settings?action=toggleTheme',
 			};
 		}
 
-		if (path === '/price-list') {
+		if (currentPath === '/price-list') {
 			return {
 				icon: 'cloud_upload',
 				label: 'Cập nhật Data',
+				mobileLabel: 'Nạp data',
 				path: 'event:open-mobile-add',
 			};
 		}
 
-		if (path === '/coupons') {
+		if (currentPath === '/coupons') {
 			return {
 				icon: 'confirmation_number',
 				label: 'Tạo mã',
+				mobileLabel: 'Tạo mã',
 				path: 'event:open-mobile-add',
 				permissionKey: 'coupons_manage'
 			};
 		}
 
-		if (path === '/backup') {
+		if (currentPath === '/backup') {
 			return {
 				icon: 'cloud_download',
 				label: 'Backup ngay',
+				mobileLabel: 'Sao lưu',
 				path: 'event:none',
 			};
 		}
@@ -170,41 +186,95 @@ export function useNavigationConfig() {
 		return {
 			icon: 'add',
 			label: 'Thêm SP',
+			mobileLabel: 'Thêm SP',
 			path: 'event:open-mobile-add',
 			permissionKey: 'products_manage'
 		};
 	};
 
-	// 2. Toàn bộ danh sách Menu trong hệ thống
-	const allItems: NavItem[] = [
-		{ icon: 'home', label: 'Trang chủ', path: '/' },                                      // 0
-		{ icon: 'receipt_long', label: 'Đơn hàng', path: '/orders', permissionKey: 'orders_view' }, // 1
-		{ ...getCenterItem(), isCenter: true },                                              // 2
-		{ icon: 'account_balance_wallet', label: 'Công nợ', path: '/debts', permissionKey: 'debts_manage' }, // 3
-		{ icon: 'group', label: 'Khách hàng', path: '/customers', permissionKey: 'customers_manage' },       // 4
-		{ icon: 'category', label: 'Sản phẩm', path: '/products', permissionKey: 'inventory_view' },     // 5
-		{ icon: 'inventory_2', label: 'Tồn kho', path: '/inventory', permissionKey: 'inventory_view' },    // 5.5
-		{ icon: 'local_shipping', label: 'Đơn nhập hàng', path: '/purchase-orders', permissionKey: 'admin' }, // NEW
-		{ icon: 'storefront', label: 'Nhà cung cấp', path: '/suppliers', permissionKey: 'admin' }, // NEW
-		{ icon: 'account_balance', label: 'Công nợ NCC', path: '/supplier-debts', permissionKey: 'admin' }, // NEW
-		{ icon: 'request_quote', label: 'Báo giá', path: '/price-list' },                                     // 6
-		{ icon: 'route', label: 'Giao hàng', path: '/checkin', permissionKey: 'checkin_create' }, // 7
-		{ icon: 'confirmation_number', label: 'Ưu đãi', path: '/coupons' },                                    // 8
-		{ icon: 'timer', label: 'Chấm công', path: '/attendance' },                                           // 9
-		{ icon: 'event_available', label: 'Nghỉ phép', path: '/leaves' },                                          // 9.5
-		{ icon: 'workspace_premium', label: 'Dịch vụ', path: '/services' },                                          // 10
-		{ icon: 'admin_panel_settings', label: 'Quản trị', path: '/admin', permissionKey: 'admin' },          // 11
-		{ icon: 'settings', label: 'Cài đặt', path: '/settings' },                                            // 12
-		{ icon: 'delete', label: 'Thùng rác', path: '/trash' },                                               // 13
-		{ icon: 'security', label: 'Nexus Control', path: '/nexus-control', permissionKey: 'nexus_control' }, // 14
-		{ icon: 'cloud_download', label: 'Sao lưu & PH', path: '/backup', permissionKey: 'nexus_control' },                                     // 14.5
-		{ icon: 'person', label: 'Hồ sơ', path: '/profile' },                                              // 15
+	// 2. Nhóm nghiệp vụ có cấu trúc rõ ràng cho Desktop (macOS & Windows)
+	const rawNavGroups: NavGroup[] = [
+		{
+			id: 'overview',
+			title: 'Tổng quan',
+			items: [
+				{ icon: 'dashboard', label: 'Bảng điều khiển', mobileLabel: 'Tổng quan', path: '/', shortcut: 'F1' },
+			]
+		},
+		{
+			id: 'sales',
+			title: 'Bán hàng & Đơn hàng',
+			items: [
+				{ icon: 'point_of_sale', label: 'Lên đơn nhanh (POS)', mobileLabel: 'Lên đơn', path: '/quick-order', permissionKey: 'orders_create', shortcut: 'F2' },
+				{ icon: 'receipt_long', label: 'Danh sách đơn hàng', mobileLabel: 'Đơn hàng', path: '/orders', permissionKey: 'orders_view' },
+				{ icon: 'request_quote', label: 'Báo giá & Bảng giá', mobileLabel: 'Báo giá', path: '/price-list' },
+				{ icon: 'confirmation_number', label: 'Mã ưu đãi & Giảm giá', mobileLabel: 'Giảm giá', path: '/coupons' },
+			]
+		},
+		{
+			id: 'inventory',
+			title: 'Kho & Mua hàng',
+			items: [
+				{ icon: 'inventory_2', label: 'Quản lý tồn kho', mobileLabel: 'Kho hàng', path: '/inventory', permissionKey: 'inventory_view', shortcut: 'F4' },
+				{ icon: 'category', label: 'Danh mục sản phẩm', mobileLabel: 'Sản phẩm', path: '/products', permissionKey: 'inventory_view' },
+				{ icon: 'local_shipping', label: 'Đơn nhập hàng (PO)', mobileLabel: 'Nhập hàng', path: '/purchase-orders', permissionKey: 'admin' },
+				{ icon: 'storefront', label: 'Nhà cung cấp', mobileLabel: 'Nhà CC', path: '/suppliers', permissionKey: 'admin' },
+			]
+		},
+		{
+			id: 'customers_debts',
+			title: 'Khách hàng & Công nợ',
+			items: [
+				{ icon: 'group', label: 'Sổ khách hàng', mobileLabel: 'Khách hàng', path: '/customers', permissionKey: 'customers_manage' },
+				{ icon: 'account_balance_wallet', label: 'Sổ nợ khách hàng', mobileLabel: 'Công nợ', path: '/debts', permissionKey: 'debts_manage', shortcut: 'F3' },
+				{ icon: 'account_balance', label: 'Công nợ Nhà cung cấp', mobileLabel: 'Nợ NCC', path: '/supplier-debts', permissionKey: 'admin' },
+				{ icon: 'route', label: 'Giao hàng & Check-in', mobileLabel: 'Giao hàng', path: '/checkin', permissionKey: 'checkin_create' },
+			]
+		},
+		{
+			id: 'hr',
+			title: 'Nhân sự & Chấm công',
+			items: [
+				{ icon: 'timer', label: 'Chấm công GPS', mobileLabel: 'Chấm công', path: '/attendance' },
+				{ icon: 'event_available', label: 'Quản lý nghỉ phép', mobileLabel: 'Nghỉ phép', path: '/leaves' },
+			]
+		},
+		{
+			id: 'system',
+			title: 'Quản trị & Cấu hình',
+			items: [
+				{ icon: 'admin_panel_settings', label: 'Quản trị & Phân quyền', mobileLabel: 'Quản trị', path: '/admin', permissionKey: 'admin' },
+				{ icon: 'settings', label: 'Cài đặt hệ thống', mobileLabel: 'Cài đặt', path: '/settings' },
+				{ icon: 'download_for_offline', label: 'Tải app cho máy khác', mobileLabel: 'Tải App', path: '/download' },
+				{ icon: 'delete', label: 'Thùng rác phục hồi', mobileLabel: 'Thùng rác', path: '/trash' },
+				{ icon: 'workspace_premium', label: 'Gói dịch vụ & Bản quyền', mobileLabel: 'Gói cước', path: '/services' },
+				{ icon: 'security', label: 'Nexus Control', mobileLabel: 'Nexus', path: '/nexus-control', permissionKey: 'nexus_control' },
+				{ icon: 'cloud_download', label: 'Sao lưu & Phục hồi', mobileLabel: 'Sao lưu', path: '/backup', permissionKey: 'nexus_control' },
+			]
+		}
 	];
 
-	// Xử lý Dynamic Menu cho Mobile - Giờ đây đã được ổn định hóa và kiểm tra quyền
+	// Lọc nhóm theo quyền và nền tảng (chỉ hiện Tải app trên Web)
+	const isNative = isNativeApp();
+	const navGroups = rawNavGroups
+		.map(group => ({
+			...group,
+			items: group.items
+				.filter(item => !(isNative && (item.path === '/download' || item.path === '/downloads' || item.path === '/tai-ung-dung')))
+				.filter(item => hasPermission(item.permissionKey))
+		}))
+		.filter(group => group.items.length > 0);
+
+	// Toàn bộ danh sách phẳng (cho Mobile và các màn hình khác)
+	const allItems: NavItem[] = [
+		...navGroups.flatMap(g => g.items),
+		{ icon: 'person', label: 'Hồ sơ', mobileLabel: 'Tài khoản', path: '/profile' },
+	];
+
+	// Xử lý Dynamic Menu cho Mobile
 	const getMobileItems = () => {
-		const home = allItems[0];
-		const orders = allItems[1];
+		const home = allItems.find(i => i.path === '/') || allItems[0];
+		const orders = allItems.find(i => i.path === '/orders') || allItems[1];
 
 		const hasLocalSearch = [
 			'/products', '/inventory', '/orders', '/customers', '/debts', 
@@ -214,26 +284,22 @@ export function useNavigationConfig() {
 		const searchBtn: NavItem = { 
 			icon: 'search', 
 			label: 'Tìm kiếm', 
+			mobileLabel: 'Tìm kiếm',
 			path: hasLocalSearch ? 'event:open-mobile-search' : '/orders?search=focus' 
 		};
 
 		const profileBtn = allItems.find(i => i.path === '/profile') || allItems[allItems.length - 1];
 		const center = { ...getCenterItem(), isCenter: true };
 
-		// Các vị trí 1, 2, 4, 5 (không tính center ở vị trí 3)
 		const slots = [home, orders, searchBtn, profileBtn];
 		
-		// Kiểm tra quyền cho từng slot, nếu không có quyền thì thay thế bằng fallback hợp lệ
 		const validatedSlots = slots.map(item => {
 			if (hasPermission(item.permissionKey)) return item;
-			
-			// Fallback sequence: Khách hàng -> Cài đặt -> Trang chủ
-			if (hasPermission('customers_manage')) return allItems[4]; // Khách hàng
-			if (hasPermission('settings')) return allItems[12]; // Cài đặt
-			return allItems[0]; // Trang chủ (luôn mở)
+			if (hasPermission('customers_manage')) return allItems.find(i => i.path === '/customers') || allItems[0];
+			if (hasPermission('settings')) return allItems.find(i => i.path === '/settings') || allItems[0];
+			return allItems[0];
 		});
 
-		// Trả về đúng 5 vị trí cố định (Center ở giữa) để đảm bảo giao diện không bị nhảy
 		return [validatedSlots[0], validatedSlots[1], center, validatedSlots[2], validatedSlots[3]];
 	};
 
@@ -243,6 +309,7 @@ export function useNavigationConfig() {
 	return {
 		navItems: mobileItems,
 		sidebarItems,
+		navGroups,
 		currentPath: location.pathname
 	};
-};
+}

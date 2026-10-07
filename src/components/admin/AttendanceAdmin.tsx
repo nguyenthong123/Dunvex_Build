@@ -29,9 +29,15 @@ export const AttendanceAdmin = ({ logs, fieldLogs, companyInfo, setCompanyInfo, 
 
 		const getSeconds = (time: any) => {
 			if (!time) return null;
+			if (typeof time === 'number') return time < 1e12 ? time : Math.floor(time / 1000);
 			if (time.seconds !== undefined) return time.seconds;
-			if (typeof time === 'string') return Math.floor(new Date(time).getTime() / 1000);
-			if (time.toDate) return Math.floor(time.toDate().getTime() / 1000);
+			if (time._seconds !== undefined) return time._seconds;
+			if (typeof time.toDate === 'function') return Math.floor(time.toDate().getTime() / 1000);
+			if (time instanceof Date) return Math.floor(time.getTime() / 1000);
+			if (typeof time === 'string') {
+				const d = new Date(time);
+				if (!isNaN(d.getTime())) return Math.floor(d.getTime() / 1000);
+			}
 			return null;
 		};
 
@@ -53,8 +59,8 @@ export const AttendanceAdmin = ({ logs, fieldLogs, companyInfo, setCompanyInfo, 
 			if (log.type === 'request') {
 				data[key].requests.push(log);
 			} else if (log.type === 'customer') {
-				const checkInSec = getSeconds(log.checkInAt);
-				const checkOutSec = getSeconds(log.checkOutAt);
+				const checkInSec = getSeconds(log.clientCheckInAt || log.checkInAt);
+				const checkOutSec = getSeconds(log.clientCheckOutAt || log.checkOutAt);
 
 				if (checkInSec !== null) {
 					const tObj = { seconds: checkInSec };
@@ -77,8 +83,10 @@ export const AttendanceAdmin = ({ logs, fieldLogs, companyInfo, setCompanyInfo, 
 				}
 				data[key].status = 'field-trip';
 			} else {
-				if (log.checkInAt) data[key].officeIn = log.checkInAt;
-				if (log.checkOutAt) data[key].officeOut = log.checkOutAt;
+				const inTime = log.clientCheckInAt ? { seconds: Math.floor(log.clientCheckInAt / 1000) } : log.checkInAt;
+				const outTime = log.clientCheckOutAt ? { seconds: Math.floor(log.clientCheckOutAt / 1000) } : log.checkOutAt;
+				if (inTime) data[key].officeIn = inTime;
+				if (outTime) data[key].officeOut = outTime;
 				if (log.status === 'late') data[key].status = 'late';
 			}
 		});

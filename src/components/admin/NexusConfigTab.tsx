@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { CreditCard, Crown, Clock, CheckCircle2, Zap, Rocket, Shield, Download, Database, Activity, Bot, RefreshCw, Send, Cloud, ExternalLink, Play } from 'lucide-react';
 import { useToast } from '../shared/Toast';
+import { apiUrl } from '../../services/apiClient';
 
 const VIETNAM_BANKS = [
 	{ id: "VCB", name: "Vietcombank (VCB)" },
@@ -94,7 +95,7 @@ export function NexusConfigTab({
 			localStorage.setItem('nexus_agent_chat_id', cleanChatId);
 
 			// Lưu cấu hình Super Admin Telegram vào database
-			await fetch('/api/data/system_config/main', {
+			await fetch(apiUrl('/api/data/system_config/main'), {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -147,7 +148,7 @@ export function NexusConfigTab({
 	const handleTriggerDriveBackup = async () => {
 		setIsBackingUp(true);
 		try {
-			const res = await fetch('/api/backup-gdrive?token=5e2b86a8fdc7e19d7d4c2b9f3a5e1d7d8e6c4b2a9f1d8c7a', {
+			const res = await fetch(apiUrl('/api/backup-gdrive?token=5e2b86a8fdc7e19d7d4c2b9f3a5e1d7d8e6c4b2a9f1d8c7a'), {
 				method: 'POST'
 			});
 			const data = await res.json();

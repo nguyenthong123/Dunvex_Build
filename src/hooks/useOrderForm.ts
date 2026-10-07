@@ -3,18 +3,20 @@ import { smartSearchMatch, calculateSearchScore } from '../utils/searchUtils';
 import { calculateCouponDiscount } from '../utils/couponUtils';
 import { findValidCustomerRebate } from '../utils/rebateUtils';
 import { shouldExcludeFromProfit } from '../utils/profitUtils';
+import { getTodayString, getLocalDateString } from '../utils/dateUtils';
 import { db, auth } from '../services/firebase';
 import { collection, query, onSnapshot, doc, getDoc, serverTimestamp, where, getDocs, limit, Timestamp, runTransaction, increment } from '../services/firebase';
 import { customerRebateService } from '../services/dataAccess';
 import { useProducts } from './useProducts';
 import { useCustomers } from './useCustomers';
-import { sendTelegramNotification } from '../utils/telegramNotify';
+import { sendTelegramNotification, notifyOrderEvent } from '../utils/telegramNotify';
 
 interface UseOrderFormParams {
 	owner: any;
 	showToast: (msg: string, type?: 'success' | 'warning' | 'error' | 'info') => void;
 	editId?: string;
 	location: any;
+	onSuccess?: (isEdit: boolean) => void;
 }
 
 // ── Top-level Stable Normalization Helpers (không tạo lại mỗi render) ──
@@ -39,7 +41,7 @@ const isMatch = (target: string, query: string) => {
 	return t.includes(q) || removeAccents(t).includes(removeAccents(q));
 };
 
-export function useOrderForm({ owner, showToast, editId, location }: UseOrderFormParams) {
+export function useOrderForm({ owner, showToast, editId, location, onSuccess }: UseOrderFormParams) {
 	// ── Data Hooks (products, customers) ──
 	const { products: hookProducts } = useProducts({ ownerId: owner.ownerId, enabled: !owner.loading && !!owner.ownerId });
 	const { customers: hookCustomers } = useCustomers({ ownerId: owner.ownerId, enabled: !owner.loading && !!owner.ownerId });
@@ -93,7 +95,7 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 	const [showCustomerResults, setShowCustomerResults] = useState(false);
 	const [orderStatus, setOrderStatus] = useState('Đơn chốt');
 	const [orderNote, setOrderNote] = useState('');
-	const [orderDate, setOrderDate] = useState(new Date().toISOString().split('T')[0]);
+	const [orderDate, setOrderDate] = useState(getTodayString());
 	const [deliveryLocation, setDeliveryLocation] = useState('');
 	const [parsedLocation, setParsedLocation] = useState<{lat: number, lng: number} | null>(null);
 
@@ -134,7 +136,7 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 			where('status', '==', 'active')
 		);
 		const unsub = onSnapshot(q, (snap) => {
-			const today = new Date().toISOString().split('T')[0];
+			const today = getTodayString();
 			const active = snap.docs
 				.map(d => ({ id: d.id, ...d.data() }))
 				.filter((c: any) => !c.expiry || c.expiry >= today);
@@ -305,7 +307,7 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 			return;
 		}
 
-		const dateToCheck = orderDate || new Date().toISOString().split('T')[0];
+		const dateToCheck = orderDate || getTodayString();
 		const validRebate = findValidCustomerRebate(availableRebates, custId, custName, dateToCheck);
 
 		if (validRebate && (!appliedRebate || appliedRebate.id !== validRebate.id)) {
@@ -428,7 +430,7 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 						}));
 					}
 
-					const formattedDate = (data.orderDate || new Date().toISOString()).split('T')[0];
+					const formattedDate = data.orderDate ? getLocalDateString(data.orderDate) : getTodayString();
 					setOrderDate(formattedDate);
 					setOrderStatus(data.status || 'Đơn chốt');
 					setOrderNote(data.note || '');
@@ -840,7 +842,7 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 				return;
 			}
 
-			const today = new Date().toISOString().split('T')[0];
+			const today = getTodayString();
 			if (coupon.expiry && coupon.expiry < today) {
 				showToast("Mã giảm giá đã hết hạn sử dụng", "warning");
 				return;
@@ -1210,17 +1212,15 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 					});
 				});
 
-				if (orderStatus === 'Đơn chốt') {
-					sendTelegramNotification(owner.ownerId, `✏️ <b>ĐƠN HÀNG ĐÃ SỬA</b>
-- Khách hàng: <b>${orderData.customerName}</b>
-- Tổng tiền: <b>${finalTotal.toLocaleString('vi-VN')} đ</b>
-- Nhân viên: ${owner.userDisplayName || auth.currentUser?.displayName || 'Admin'}`, 'order', {
-						customerName: orderData.customerName,
-						totalAmount: finalTotal,
-						status: 'Đã sửa đơn',
-						actorName: owner.userDisplayName || auth.currentUser?.displayName || 'Admin'
-					});
-				}
+				const actorName = owner.userDisplayName || auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên';
+				notifyOrderEvent(owner.ownerId, {
+					customerName: orderData.customerName,
+					totalAmount: finalTotal,
+					status: orderStatus === 'Đơn chốt' ? 'Đơn chốt (Đã sửa)' : (orderStatus || 'Đã sửa đơn'),
+					actorName,
+					orderId: editId,
+					orderCode: orderData.orderCode || ''
+				}).catch(err => console.warn('Lỗi gửi Telegram khi sửa đơn:', err));
 
 			} else {
 				orderData.createdAt = Timestamp.now();
@@ -1360,21 +1360,30 @@ export function useOrderForm({ owner, showToast, editId, location }: UseOrderFor
 					});
 				});
 
-				if (orderStatus === 'Đơn chốt') {
-					sendTelegramNotification(owner.ownerId, `📦 <b>ĐƠN HÀNG MỚI (CHỐT)</b>
-- Khách hàng: <b>${orderData.customerName}</b>
-- Tổng tiền: <b>${finalTotal.toLocaleString('vi-VN')} đ</b>
-- Nhân viên lên đơn: ${owner.userDisplayName || auth.currentUser?.displayName || 'Admin'}`, 'order', {
-						customerName: orderData.customerName,
-						totalAmount: finalTotal,
-						status: 'Đơn chốt mới',
-						actorName: owner.userDisplayName || auth.currentUser?.displayName || 'Admin'
-					});
-				}
+				const actorName = owner.userDisplayName || auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên';
+				notifyOrderEvent(owner.ownerId, {
+					customerName: orderData.customerName,
+					totalAmount: finalTotal,
+					status: orderStatus || 'Đơn chốt',
+					actorName,
+					orderId: newOrderId,
+					orderCode: orderData.orderCode || '',
+					note: orderData.note || ''
+				}).catch(err => console.warn('Lỗi gửi Telegram khi tạo đơn mới:', err));
 
 			}
 			vibrate([100, 50, 100]);
-			setShowSuccessModal(true);
+			if (editId) {
+				showToast("Cập nhật đơn hàng thành công!", "success");
+				if (onSuccess) {
+					onSuccess(true);
+				}
+			} else {
+				showToast("Lên đơn hàng thành công!", "success");
+				if (onSuccess) {
+					onSuccess(false);
+				}
+			}
 		} catch (error) {
 			showToast("Lỗi khi lưu đơn hàng: " + error, "error");
 		} finally {

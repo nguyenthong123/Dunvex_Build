@@ -20,6 +20,11 @@ describe('Search Utilities Suite', () => {
     expect(smartSearchMatch('Keo 3X Bond Siêu Dính', 'bond 3x')).toBe(true);
   });
 
+  it('should find Vietnamese customer names regardless of accents', () => {
+    expect(smartSearchMatch('ANH PHONG MŨ CỐI', 'anh phong mu coi')).toBe(true);
+    expect(smartSearchMatch('ANH PHONG MŨ CỐI', 'anh phong mủ cối')).toBe(true);
+  });
+
   it('should match phone numbers ignoring spaces, dashes, and special characters', () => {
     expect(smartSearchMatch('090-123 4567', '0901234567')).toBe(true);
     expect(smartSearchMatch('090 123 4567', '090-123')).toBe(true);

@@ -1,15 +1,22 @@
 import { useNavigate } from 'react-router-dom';
 import { shouldExcludeFromProfit } from '../utils/profitUtils';
 import { auth, db } from '../services/firebase';
-import { signOut } from 'firebase/auth';
+import { logoutSQLiteSession } from '../services/apiClient';
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, getDocs, query, where } from '../services/firebase';
 import { useNavigationConfig } from '../hooks/useNavigationConfig';
-import { Eye, EyeOff, TrendingUp, TrendingDown, AlertTriangle, Wallet, Gift, Trophy, User as UserIcon } from 'lucide-react';
+import { Eye, EyeOff, TrendingUp, TrendingDown, AlertTriangle, Wallet, Gift, Trophy, User as UserIcon, Clock, PackageCheck, ShoppingCart, CreditCard, ArrowRight, Layers, RefreshCw } from 'lucide-react';
 
 import { useOwner } from '../hooks/useOwner';
 import { useProducts } from '../hooks/useProducts';
 import { useOrders } from '../hooks/useOrders';
+import { isNativeApp } from '../utils/platform';
+import {
+	needsNativeOrderLineItems,
+	normalizeNativeDashboardOrder,
+	normalizeNativeDashboardProduct,
+} from '../utils/nativeDashboardData';
+import { localDb } from '../services/localDb/localDatabase';
 import QRScanner from '../components/shared/QRScanner';
 import { QrCode } from 'lucide-react';
 import { useToast } from '../components/shared/Toast';
@@ -121,11 +128,82 @@ const Home = () => {
 		ownerId: owner.ownerId,
 		enabled: !owner.loading && !!owner.ownerId,
 	});
-	const { orders } = useOrders({
+	const { orders, loading: ordersLoading } = useOrders({
 		ownerId: owner.ownerId,
 		enabled: !owner.loading && !!owner.ownerId,
-		maxResults: 9999,
+		maxResults: isNativeApp() ? 999999 : 9999,
 	});
+	const [nativeOrderItems, setNativeOrderItems] = useState<any[]>([]);
+	const [nativeOrderItemsLoading, setNativeOrderItemsLoading] = useState(false);
+
+	useEffect(() => {
+		if (!isNativeApp()) return;
+		if (!owner.ownerId || orders.length === 0) {
+			setNativeOrderItems([]);
+			setNativeOrderItemsLoading(false);
+			return;
+		}
+
+		const orderIds = orders
+			.filter(needsNativeOrderLineItems)
+			.map((order) => order.id)
+			.filter((id): id is string => typeof id === 'string' && id.length > 0);
+		if (orderIds.length === 0) {
+			setNativeOrderItems([]);
+			setNativeOrderItemsLoading(false);
+			return;
+		}
+
+		let active = true;
+		let reloadTimer: ReturnType<typeof setTimeout> | undefined;
+		const loadOrderItems = async () => {
+			setNativeOrderItemsLoading(true);
+			try {
+				const items = await localDb.getOrderItemsForOrders(orderIds, owner.ownerId);
+				if (active) setNativeOrderItems(items);
+			} catch (error) {
+				console.error('[Home] Unable to load native dashboard order items:', error);
+				if (active) setNativeOrderItems([]);
+			} finally {
+				if (active) setNativeOrderItemsLoading(false);
+			}
+		};
+
+		void loadOrderItems();
+		const handleCollectionChanged = (event: Event) => {
+			if ((event as CustomEvent<{ collection?: string }>).detail?.collection !== 'order_items') return;
+			if (reloadTimer) clearTimeout(reloadTimer);
+			reloadTimer = setTimeout(() => void loadOrderItems(), 150);
+		};
+		window.addEventListener('collection_changed', handleCollectionChanged);
+
+		return () => {
+			active = false;
+			if (reloadTimer) clearTimeout(reloadTimer);
+			window.removeEventListener('collection_changed', handleCollectionChanged);
+		};
+	}, [owner.ownerId, orders]);
+
+	const dashboardOrders = useMemo(() => {
+		if (!isNativeApp()) return orders;
+		const itemsByOrder = new Map<string, any[]>();
+		for (const item of nativeOrderItems) {
+			const orderId = item.order_id || item.orderId;
+			if (!orderId) continue;
+			const items = itemsByOrder.get(orderId) || [];
+			items.push(item);
+			itemsByOrder.set(orderId, items);
+		}
+		return orders.map((order) =>
+			normalizeNativeDashboardOrder(order, itemsByOrder.get(order.id) || []),
+		);
+	}, [orders, nativeOrderItems]);
+	const dashboardProducts = useMemo(
+		() => isNativeApp() ? products.map(normalizeNativeDashboardProduct) : products,
+		[products],
+	);
+	const isNativeDashboardLoading = isNativeApp() &&
+		(ordersLoading || productsLoading || nativeOrderItemsLoading);
 
 	const [showProfit, setShowProfit] = useState(false);
 	const [chartFilter, setChartFilter] = useState('7days');
@@ -154,7 +232,7 @@ const Home = () => {
 					localStorage.removeItem('dunvex_owner_id');
 					localStorage.removeItem('dunvex_api_key');
 					window.dispatchEvent(new CustomEvent('dunvex_logout'));
-					await signOut(auth);
+					await logoutSQLiteSession();
 					navigate('/login');
 				} catch (error) {
 					showToast("Lỗi khi đăng xuất", "error");
@@ -176,12 +254,12 @@ const Home = () => {
 
 	// 1. Revenue & Profit Today
 	const today = getLocalDateStr(new Date());
-	const todayOrders = orders.filter(o => {
+	const todayOrders = dashboardOrders.filter(o => {
 		const d = parseOrderDateStr(o);
 		return d === today && o.status === 'Đơn chốt';
 	});
 
-	const revenueToday = todayOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+	const revenueToday = todayOrders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
 
 	const profitToday = todayOrders.reduce((sum, o) => {
 		if (typeof o.totalProfit === 'number') {
@@ -189,16 +267,16 @@ const Home = () => {
 		}
 		const itemsProfit = (o.items || []).reduce((pSum: number, item: any) => {
 			const sell = Number(item.price) || 0;
-			const currentProd = products.find(p => p.id === (item.productId || item.id));
+			const currentProd = dashboardProducts.find(p => p.id === (item.productId || item.id));
 			// 🔧 Bỏ qua sản phẩm đặc thù không tính lợi nhuận (thợ ứng tiền, ứng tiền, ...)
 			if (shouldExcludeFromProfit(currentProd?.name || '', currentProd?.excludeProfit)) return pSum;
 			const activeBuyPrice = (Number(item.buyPrice) || 0) > 0 ? Number(item.buyPrice) : (currentProd ? (Number(currentProd.priceImport) || 0) : 0);
-			const qty = Number(item.qty) || 0;
+			const qty = Number(item.qty ?? item.quantity) || 0;
 			return pSum + ((sell - activeBuyPrice) * qty);
 		}, 0);
 
 		// Subtract Order Discount
-		const finalProfit = itemsProfit - (o.discountValue || 0);
+		const finalProfit = itemsProfit - (Number(o.discountValue) || 0);
 		return sum + finalProfit;
 	}, 0);
 
@@ -207,26 +285,26 @@ const Home = () => {
 	startOfMonth.setDate(1);
 	startOfMonth.setHours(0, 0, 0, 0);
 
-	const thisMonthOrders = orders.filter(o => {
+	const thisMonthOrders = dashboardOrders.filter(o => {
 		const d = parseOrderDate(o);
-		return d >= startOfMonth && o.status === 'Đơn chốt';
+		return d >= startOfMonth && (!isNativeApp() || d <= new Date()) && o.status === 'Đơn chốt';
 	});
 
-	const revenueThisMonth = thisMonthOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+	const revenueThisMonth = thisMonthOrders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
 	const profitThisMonth = thisMonthOrders.reduce((sum, o) => {
 		if (typeof o.totalProfit === 'number') {
 			return sum + o.totalProfit;
 		}
 		const itemsProfit = (o.items || []).reduce((pSum: number, item: any) => {
 			const sell = Number(item.price) || 0;
-			const currentProd = products.find(p => p.id === (item.productId || item.id));
+			const currentProd = dashboardProducts.find(p => p.id === (item.productId || item.id));
 			// 🔧 Bỏ qua sản phẩm đặc thù không tính lợi nhuận (thợ ứng tiền, ứng tiền, ...)
 			if (shouldExcludeFromProfit(currentProd?.name || '', currentProd?.excludeProfit)) return pSum;
 			const activeBuyPrice = (Number(item.buyPrice) || 0) > 0 ? Number(item.buyPrice) : (currentProd ? (Number(currentProd.priceImport) || 0) : 0);
-			const qty = Number(item.qty) || 0;
+			const qty = Number(item.qty ?? item.quantity) || 0;
 			return pSum + ((sell - activeBuyPrice) * qty);
 		}, 0);
-		return sum + (itemsProfit - (o.discountValue || 0));
+		return sum + (itemsProfit - (Number(o.discountValue) || 0));
 	}, 0);
 
 	// 1.2 Chart Data (Daily Sales Trend for the last 7 days - Global/Admin or Local/Sale)
@@ -240,7 +318,7 @@ const Home = () => {
 			const dayRevenue = targetOrders.filter(o => {
 				const od = parseOrderDateStr(o);
 				return od === dateStr && o.status === 'Đơn chốt';
-			}).reduce((s, o) => s + (o.totalAmount || 0), 0);
+			}).reduce((s, o) => s + (Number(o.totalAmount) || 0), 0);
 
 			data.push({
 				label: i === 0 ? 'Hôm nay' : `${d.getDate()}/${d.getMonth() + 1}`,
@@ -251,17 +329,17 @@ const Home = () => {
 		return data;
 	};
 
-	const chartData = getDailyChartData(orders);
+	const chartData = getDailyChartData(dashboardOrders);
 	const maxRevenue = Math.max(...chartData.map(d => d.value), 1000000);
 
 	// Calculate Today's Growth (comparison with yesterday)
 	const yesterday = new Date();
 	yesterday.setDate(yesterday.getDate() - 1);
 	const yesterdayStr = getLocalDateStr(yesterday);
-	const revenueYesterday = orders.filter(o => {
+	const revenueYesterday = dashboardOrders.filter(o => {
 		const od = parseOrderDateStr(o);
 		return od === yesterdayStr && o.status === 'Đơn chốt';
-	}).reduce((s, o) => s + (o.totalAmount || 0), 0);
+	}).reduce((s, o) => s + (Number(o.totalAmount) || 0), 0);
 
 	const growthPct = revenueYesterday === 0 ? 100 : Math.round(((revenueToday - revenueYesterday) / revenueYesterday) * 100);
 
@@ -278,7 +356,7 @@ const Home = () => {
 			const dayRevenue = thisMonthOrders.filter(o => {
 				const od = parseOrderDateStr(o);
 				return od === dateStr && o.status === 'Đơn chốt';
-			}).reduce((s, o) => s + (o.totalAmount || 0), 0);
+			}).reduce((s, o) => s + (Number(o.totalAmount) || 0), 0);
 			runningTotal += dayRevenue;
 			data.push({ label: `${d}/${now.getMonth() + 1}`, value: dayRevenue, cumulative: runningTotal, isToday: d === today });
 		}
@@ -305,7 +383,7 @@ const Home = () => {
 		return parseOrderTime(o);
 	};
 
-	const recentClosedOrders = [...orders]
+	const recentClosedOrders = [...dashboardOrders]
 		.filter(o => o.status === 'Đơn chốt')
 		.sort((a, b) => getOrderTime(b) - getOrderTime(a));
 
@@ -331,12 +409,12 @@ const Home = () => {
 	}
 
 	const customerSalesData = uniqueRecentCustomers.map(cust => {
-		const totalSales = orders
+		const totalSales = dashboardOrders
 			.filter(o => o.status === 'Đơn chốt' && (
 				(cust.id && o.customerId === cust.id) ||
 				(!cust.id && (o.customerBusinessName || o.customerName || 'Khách lẻ') === cust.name)
 			))
-			.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+			.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
 
 		return {
 			label: cust.name,
@@ -346,8 +424,11 @@ const Home = () => {
 
 	const maxCustRevenue = Math.max(...customerSalesData.map(d => d.value), 1);
 
-	// 2. Stock Warnings
+	// 2. Stock Warnings & Action items
 	const lowStockProducts = products.filter(p => p.stock !== undefined && p.stock <= 10); // Warning threshold
+	const pendingOrders = useMemo(() => {
+		return dashboardOrders.filter(o => o.status === 'Đơn tạm' || o.status === 'Chờ duyệt' || o.status === 'Đang xử lý');
+	}, [dashboardOrders]);
 
 	// --- PERMISSION CHECK ---
 	const hasDashboardAccess = owner.role === 'admin' || (owner.accessRights?.dashboard ?? true);
@@ -379,7 +460,9 @@ const Home = () => {
 			{/* HEADER */}
 			{/* HEADER - Hidden on Mobile to use MainLayout Header */}
 			<header className="hidden md:flex h-16 md:h-20 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 items-center justify-between px-4 md:px-8 shrink-0 relative z-20 transition-colors duration-300">
-				<h2 className="text-lg md:text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight">Tổng Quan Hệ Thống</h2>
+				<div className="flex items-center gap-3">
+					<h2 className="text-lg md:text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight">Tổng Quan Hệ Thống</h2>
+				</div>
 				<div className="flex items-center gap-4">
 					{/* Global Scanner Button */}
 					<button
@@ -390,8 +473,6 @@ const Home = () => {
 						<QrCode size={24} className="group-hover:scale-110 transition-transform" />
 						<span className="hidden md:inline text-xs font-bold uppercase tracking-widest">Quét Mã</span>
 					</button>
-
-
 
 					<div
 						onClick={() => navigate('/profile')}
@@ -410,11 +491,26 @@ const Home = () => {
 												owner.role === 'accountant' ? 'Kế Toán' : 'Nhân Viên'}
 							</p>
 						</div>
-						<img
-							alt="Profile"
-							className="size-10 rounded-full object-cover border-2 border-[#1A237E]/10 dark:border-indigo-400/20 group-hover:border-[#1A237E] dark:group-hover:border-indigo-400 transition-colors"
-							src={auth.currentUser?.photoURL || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=100"}
-						/>
+						<div className="relative size-10 shrink-0">
+							{auth.currentUser?.photoURL ? (
+								<img
+									alt=""
+									className="size-full rounded-full object-cover border-2 border-[#1A237E]/10 dark:border-indigo-400/20 group-hover:border-[#1A237E] dark:group-hover:border-indigo-400 transition-colors"
+									src={auth.currentUser.photoURL}
+									onError={(e) => {
+										const target = e.target as HTMLElement;
+										target.style.display = 'none';
+										if (target.parentElement) {
+											const placeholder = target.parentElement.querySelector('.home-avatar-placeholder');
+											if (placeholder) (placeholder as HTMLElement).style.display = 'flex';
+										}
+									}}
+								/>
+							) : null}
+							<div className={`home-avatar-placeholder size-full rounded-full bg-[#1A237E]/10 dark:bg-indigo-900/40 border-2 border-[#1A237E]/20 text-[#1A237E] dark:text-indigo-400 items-center justify-center font-black text-sm uppercase transition-colors group-hover:bg-[#1A237E] group-hover:text-white ${auth.currentUser?.photoURL ? 'hidden' : 'flex'}`}>
+								{(owner.userDisplayName || auth.currentUser?.displayName || auth.currentUser?.email || 'U').charAt(0).toUpperCase()}
+							</div>
+						</div>
 					</div>
 				</div>
 			</header>
@@ -436,31 +532,98 @@ const Home = () => {
 					</div>
 				</div>
 
-				{/* 🏆 TOP 10 NHÂN VIÊN BÁN HÀNG THÁNG */}
-				<div className="mb-8 bg-white dark:bg-slate-900 rounded-[2.5rem] p-6 md:p-8 shadow-sm border border-slate-100 dark:border-slate-800">
-					<TopSellers ownerId={owner.ownerId || ''} />
-				</div>
-
-				{/* 🏆 BẢNG DOANH SỐ NHÂN VIÊN HÔM NAY */}
-				<StaffLeaderboard orders={orders} todayStr={today} formatPrice={formatPrice} />
-
-				{/* Alerts Section */}
-				<div className="mb-6 flex flex-col md:flex-row gap-4">
-					{lowStockProducts.length > 0 && (
-						<div className="flex-1 bg-white dark:bg-slate-900 border-l-4 border-[#FF6D00] p-4 rounded-r-xl shadow-sm flex items-center justify-between">
-							<div className="flex items-center gap-3">
-								<div className="bg-orange-50 dark:bg-orange-900/20 p-2 rounded-lg text-[#FF6D00]">
-									<AlertTriangle size={24} />
-								</div>
-								<div>
-									<h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">Tồn kho thấp</h4>
-									<p className="text-[11px] text-slate-500 font-bold">{lowStockProducts.length} mặt hàng</p>
-								</div>
+				{/* 🚀 ACTION CENTER: CÁC ĐIỂM CẦN XỬ LÝ & TRUY CẬP NHANH */}
+				{isNativeApp() ? (
+					<div className="mb-6 h-1 w-full rounded-full bg-[#1A237E]" aria-hidden="true" />
+				) : (
+				<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+					{/* Đơn hàng cần xử lý */}
+					<div
+						onClick={() => navigate('/orders')}
+						className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md hover:border-[#1A237E]/40 dark:hover:border-indigo-500/40 transition-all cursor-pointer flex items-center justify-between group"
+					>
+						<div className="flex items-center gap-3">
+							<div className="size-11 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-[#1A237E] dark:text-indigo-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+								<Clock size={22} />
 							</div>
-							<button onClick={() => navigate('/inventory?filter=low_stock')} className="text-xs font-bold text-[#FF6D00] px-3 py-1 bg-orange-50 dark:bg-orange-900/20 rounded-lg">Xem</button>
+							<div>
+								<p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Đơn chờ xử lý</p>
+								<p className="text-lg font-black text-slate-800 dark:text-white">
+									{pendingOrders.length} <span className="text-xs font-normal text-slate-400">đơn</span>
+								</p>
+							</div>
 						</div>
-					)}
+						<ArrowRight size={16} className="text-slate-300 group-hover:text-[#1A237E] dark:group-hover:text-indigo-400 group-hover:translate-x-1 transition-all" />
+					</div>
+
+					{/* Cảnh báo tồn kho */}
+					<div
+						onClick={() => navigate('/inventory?filter=low_stock')}
+						className={`bg-white dark:bg-slate-900 p-4 rounded-2xl border shadow-sm hover:shadow-md transition-all cursor-pointer flex items-center justify-between group ${
+							lowStockProducts.length > 0
+								? 'border-amber-200 dark:border-amber-900/50 hover:border-amber-400'
+								: 'border-slate-200 dark:border-slate-800 hover:border-[#1A237E]/30 dark:hover:border-indigo-500/30'
+						}`}
+					>
+						<div className="flex items-center gap-3">
+							<div className={`size-11 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform ${
+								lowStockProducts.length > 0
+									? 'bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400'
+									: 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
+							}`}>
+								<AlertTriangle size={22} />
+							</div>
+							<div>
+								<p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Cảnh báo tồn kho</p>
+								<p className={`text-lg font-black ${lowStockProducts.length > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-800 dark:text-white'}`}>
+									{lowStockProducts.length} <span className="text-xs font-normal text-slate-400">mặt hàng</span>
+								</p>
+							</div>
+						</div>
+						<ArrowRight size={16} className="text-slate-300 group-hover:text-[#FF6D00] group-hover:translate-x-1 transition-all" />
+					</div>
+
+					{/* Lên đơn nhanh (F2) */}
+					<div
+						onClick={() => navigate('/quick-order')}
+						className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md hover:border-[#FF6D00]/50 transition-all cursor-pointer flex items-center justify-between group"
+					>
+						<div className="flex items-center gap-3">
+							<div className="size-11 rounded-xl bg-orange-50 dark:bg-orange-900/30 text-[#FF6D00] flex items-center justify-center group-hover:scale-110 transition-transform">
+								<ShoppingCart size={22} />
+							</div>
+							<div>
+								<div className="flex items-center gap-1.5">
+									<p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Bán hàng (POS)</p>
+									<span className="text-[9px] px-1.5 py-0.2 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded font-mono font-bold">F2</span>
+								</div>
+								<p className="text-sm font-black text-slate-800 dark:text-white mt-0.5">Lên đơn mới</p>
+							</div>
+						</div>
+						<ArrowRight size={16} className="text-slate-300 group-hover:text-[#FF6D00] group-hover:translate-x-1 transition-all" />
+					</div>
+
+					{/* Tra cứu công nợ (F3) */}
+					<div
+						onClick={() => navigate('/debts')}
+						className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md hover:border-[#1A237E]/30 dark:hover:border-indigo-500/30 transition-all cursor-pointer flex items-center justify-between group"
+					>
+						<div className="flex items-center gap-3">
+							<div className="size-11 rounded-xl bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+								<CreditCard size={22} />
+							</div>
+							<div>
+								<div className="flex items-center gap-1.5">
+									<p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Sổ công nợ</p>
+									<span className="text-[9px] px-1.5 py-0.2 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded font-mono font-bold">F3</span>
+								</div>
+								<p className="text-sm font-black text-slate-800 dark:text-white mt-0.5">Khách & NCC</p>
+							</div>
+						</div>
+						<ArrowRight size={16} className="text-slate-300 group-hover:text-purple-600 dark:group-hover:text-purple-400 group-hover:translate-x-1 transition-all" />
+					</div>
 				</div>
+				)}
 
 				<div className="grid grid-cols-12 gap-6">
 					{/* Revenue and Profit Card */}
@@ -477,7 +640,7 @@ const Home = () => {
 
 							<div className="flex items-baseline gap-2 mb-6">
 								<h2 className="text-4xl font-black tracking-tighter">
-									{(revenueToday / 1000000).toFixed(1)}M
+									{isNativeDashboardLoading ? '…' : `${(revenueToday / 1000000).toFixed(1)}M`}
 								</h2>
 								<span className="text-sm font-bold text-[#FF6D00]">VND</span>
 							</div>
@@ -487,9 +650,9 @@ const Home = () => {
 									<p className="text-[10px] text-white/50 uppercase font-bold mb-1">Lợi nhuận ước tính</p>
 									<div className="flex items-center gap-2">
 										<p className="text-2xl font-black text-green-400">
-											+{(profitToday / 1000000).toFixed(1)}M
+											{isNativeDashboardLoading ? '…' : `+${(profitToday / 1000000).toFixed(1)}M`}
 										</p>
-										{revenueToday > 0 && (
+										{!isNativeDashboardLoading && revenueToday > 0 && (
 											<span className="text-[10px] font-bold bg-green-400/20 text-green-400 px-2 py-0.5 rounded">
 												{((profitToday / revenueToday) * 100).toFixed(1)}%
 											</span>
@@ -501,13 +664,17 @@ const Home = () => {
 							<div className="flex gap-4">
 								<div className="bg-white/10 backdrop-blur-md px-3 py-2 rounded-xl flex-1 border border-white/5">
 									<p className="text-[10px] text-white/50 uppercase font-bold">Đơn hàng</p>
-									<p className="text-lg font-bold">{todayOrders.length}</p>
+									<p className="text-lg font-bold">{isNativeDashboardLoading ? '…' : todayOrders.length}</p>
 								</div>
 								<div className="bg-white/10 backdrop-blur-md px-3 py-2 rounded-xl flex-1 border border-white/5">
 									<p className="text-[10px] text-white/50 uppercase font-bold">Tăng trưởng</p>
 									<p className={`text-lg font-bold flex items-center gap-1 ${growthPct >= 0 ? 'text-green-400' : 'text-rose-400'}`}>
-										{growthPct >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-										{growthPct}%
+										{isNativeDashboardLoading ? '…' : (
+											<>
+												{growthPct >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+												{growthPct}%
+											</>
+										)}
 									</p>
 								</div>
 							</div>
@@ -574,7 +741,7 @@ const Home = () => {
 									</div>
 								)) : (
 									<div className="w-full h-32 flex items-center justify-center text-slate-400 text-[10px] lg:text-xs font-bold uppercase tracking-widest">
-										Chưa có dữ liệu đơn chốt
+										{isNativeDashboardLoading ? 'Đang đọc dữ liệu trên thiết bị...' : 'Chưa có dữ liệu đơn chốt'}
 									</div>
 								)}
 							</div>
@@ -666,7 +833,7 @@ const Home = () => {
 						</div>
 					) : (
 						<div className="w-full h-24 lg:h-32 flex items-center justify-center text-slate-400 text-[10px] lg:text-xs font-bold uppercase tracking-widest">
-							Chưa có đơn hàng trong tháng
+							{isNativeDashboardLoading ? 'Đang đọc dữ liệu trên thiết bị...' : 'Chưa có đơn hàng trong tháng'}
 						</div>
 					)}
 				</div>
@@ -687,17 +854,30 @@ const Home = () => {
 								<div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-800">
 									<p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase font-black tracking-widest mb-1.5">Hôm nay</p>
 									<p className="text-xl font-black text-slate-800 dark:text-white tracking-tighter">
-										{formatPrice(profitToday)}
+										{isNativeDashboardLoading ? 'Đang tải...' : formatPrice(profitToday)}
 									</p>
 								</div>
 								<div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-800">
 									<p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase font-black tracking-widest mb-1.5">Tháng này</p>
 									<p className="text-xl font-black text-slate-800 dark:text-white tracking-tighter">
-										{formatPrice(profitThisMonth)}
+										{isNativeDashboardLoading ? 'Đang tải...' : formatPrice(profitThisMonth)}
 									</p>
 								</div>
 							</div>
 						</div>
+					</div>
+				</div>
+
+				{/* 🏆 VINH DANH & DOANH SỐ NHÂN VIÊN */}
+				<div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+					<div className="bg-white dark:bg-slate-900 rounded-[2rem] p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+						<TopSellers
+							ownerId={owner.ownerId || ''}
+							orders={isNativeApp() ? dashboardOrders : undefined}
+						/>
+					</div>
+					<div>
+						<StaffLeaderboard orders={orders} todayStr={today} formatPrice={formatPrice} />
 					</div>
 				</div>
 			</main>

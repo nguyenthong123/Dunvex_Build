@@ -21,6 +21,8 @@ import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
 import { getOptimizedImageUrl } from '../utils/validation';
 import { productService } from '../services/dataAccess';
+import { saveWorkbookToFile } from '../utils/excelExport';
+import { Package, CheckCircle2, AlertTriangle, XCircle, Download, ArrowUpDown, Tag, Plus, Upload, Filter, Sparkles, Layers } from 'lucide-react';
 
 
 const ProductList = () => {
@@ -29,28 +31,28 @@ const ProductList = () => {
 	const owner = useOwner();
 	const { showToast, showConfirm } = useToast();
 
-	// 🔧 REFACTOR: Data từ hooks — bỏ 3 useState + 3 useEffect onSnapshot
+	// ── Filters & Search ──
 	const [searchTerm, setSearchTerm] = useState('');
 	const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
+	const [statusTab, setStatusTab] = useState<'all' | 'active' | 'low_stock' | 'inactive'>('all');
+	const [selectedCategory, setSelectedCategory] = useState<string>('all');
+	const [sortBy, setSortBy] = useState<'name_asc' | 'price_desc' | 'price_asc' | 'stock_asc' | 'stock_desc' | 'newest'>('name_asc');
 	const [currentPage, setCurrentPage] = useState(1);
-	const ITEMS_PER_PAGE = 20;
+	const ITEMS_PER_PAGE = 25;
 
 	useEffect(() => {
 		const timer = setTimeout(() => {
 			setDebouncedSearchTerm(searchTerm);
-			setCurrentPage(1); // Reset page on search change
+			setCurrentPage(1);
 		}, 300);
 		return () => clearTimeout(timer);
 	}, [searchTerm]);
 
-	// 🔧 REFACTOR: Data từ hooks — bỏ 3 useState + 3 useEffect onSnapshot
-	const { products, totalItems, totalPages, loading, create: createProduct, update: updateProduct, remove: removeProduct, removeLocal, refresh, findBySku } = useProducts({
+	// Fetch all products in realtime for client-side search, filtering, and sorting
+	const { products, loading, create: createProduct, update: updateProduct, remove: removeProduct, removeLocal, refresh, findBySku } = useProducts({
 		ownerId: owner.ownerId,
 		enabled: !owner.loading && !!owner.ownerId,
-		isPaginated: true,
-		page: currentPage,
-		pageSize: ITEMS_PER_PAGE,
-		searchKeyword: debouncedSearchTerm
+		isPaginated: false,
 	});
 	const { logs: inventoryLogs } = useInventoryLogs({
 		ownerId: owner.ownerId,
@@ -59,7 +61,7 @@ const ProductList = () => {
 	const { orders } = useOrders({
 		ownerId: owner.ownerId,
 		enabled: !owner.loading && !!owner.ownerId,
-		maxResults: 50,
+		maxResults: 99999,
 	});
 
 	const [showAddForm, setShowAddForm] = useState(false);
@@ -749,34 +751,125 @@ const ProductList = () => {
 	const locationState = location.state as any;
 	const missingSkus = locationState?.missingSkus as string[] | undefined;
 
-	const filteredProducts = sourceList.filter(product => {
-		// NẾU CÓ TRUYỀN DANH SÁCH SẢN PHẨM THIẾU TỪ ORDERLIST THÌ CHỈ LỌC NHỮNG SẢN PHẨM ĐÓ
-		if (missingSkus && missingSkus.length > 0) {
-			return missingSkus.includes(product.sku);
+	// Summary KPI counts
+	const totalCount = products.length;
+	const activeCount = useMemo(() => products.filter(p => p.status === 'Kinh doanh' || !p.status).length, [products]);
+	const lowStockCount = useMemo(() => products.filter(p => (Number(p.stock) || 0) <= 0).length, [products]);
+	const inactiveCount = useMemo(() => products.filter(p => p.status === 'Ngừng kinh doanh').length, [products]);
+
+	// Available unique categories from products
+	const allCategories = useMemo(() => {
+		const cats = new Set<string>();
+		products.forEach(p => {
+			if (p.category && p.category.trim()) cats.add(p.category.trim());
+		});
+		return Array.from(cats).sort((a, b) => a.localeCompare(b, 'vi'));
+	}, [products]);
+
+	const filteredProducts = useMemo(() => {
+		return sourceList.filter(product => {
+			// 1. Missing SKUs from order
+			if (missingSkus && missingSkus.length > 0) {
+				if (!missingSkus.includes(product.sku)) return false;
+			}
+
+			// 2. Status Tab Filter
+			if (statusTab === 'active') {
+				if (product.status === 'Ngừng kinh doanh') return false;
+			} else if (statusTab === 'low_stock') {
+				if ((Number(product.stock) || 0) > 0) return false;
+			} else if (statusTab === 'inactive') {
+				if (product.status !== 'Ngừng kinh doanh') return false;
+			}
+
+			// 3. Category Filter
+			if (selectedCategory !== 'all') {
+				if (product.category !== selectedCategory) return false;
+			}
+
+			// 4. Search Keyword Match
+			if (debouncedSearchTerm) {
+				return smartSearchMatch([
+					product.name || '',
+					product.sku || '',
+					product.serialNumber || '',
+					product.category || '',
+					product.specification || '',
+					product.packaging || '',
+					product.density || '',
+					product.note || ''
+				], debouncedSearchTerm);
+			}
+
+			return true;
+		}).sort((a, b) => {
+			// If search is active, prioritize search relevance first
+			if (debouncedSearchTerm) {
+				const scoreA = calculateSearchScore(a, debouncedSearchTerm);
+				const scoreB = calculateSearchScore(b, debouncedSearchTerm);
+				if (scoreA !== scoreB) return scoreB - scoreA;
+			}
+
+			switch (sortBy) {
+				case 'price_desc':
+					return (Number(b.priceSell) || 0) - (Number(a.priceSell) || 0);
+				case 'price_asc':
+					return (Number(a.priceSell) || 0) - (Number(b.priceSell) || 0);
+				case 'stock_asc':
+					return (Number(a.stock) || 0) - (Number(b.stock) || 0);
+				case 'stock_desc':
+					return (Number(b.stock) || 0) - (Number(a.stock) || 0);
+				case 'newest': {
+					const ta = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0;
+					const tb = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0;
+					return tb - ta;
+				}
+				case 'name_asc':
+				default:
+					return String(a.name || '').localeCompare(String(b.name || ''), 'vi');
+			}
+		});
+	}, [sourceList, missingSkus, statusTab, selectedCategory, debouncedSearchTerm, sortBy]);
+
+	const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
+	const paginatedProducts = useMemo(() => {
+		const start = (currentPage - 1) * ITEMS_PER_PAGE;
+		return filteredProducts.slice(start, start + ITEMS_PER_PAGE);
+	}, [filteredProducts, currentPage, ITEMS_PER_PAGE]);
+
+	const handleExportExcel = async () => {
+		if (filteredProducts.length === 0) {
+			showToast("Không có sản phẩm nào để xuất file", "warning");
+			return;
 		}
-
-		if (currentFilter === 'low_stock') {
-			return (Number(product.stock) || 0) <= 10;
+		try {
+			const XLSX = await import('xlsx');
+			const dataToExport = filteredProducts.map((p, idx) => ({
+				'STT': idx + 1,
+				'Mã SKU': p.sku || '',
+				'Số Seri': p.serialNumber || '',
+				'Tên sản phẩm': p.name || '',
+				'Danh mục': p.category || '',
+				'Đơn vị tính': p.unit || '',
+				'Giá bán (đ)': p.priceSell || 0,
+				'Giá vốn (đ)': p.priceImport || 0,
+				'Tồn kho': p.stock || 0,
+				'Trạng thái': p.status === 'Kinh doanh' || !p.status ? 'Đang kinh doanh' : (p.status || 'Ngừng bán'),
+				'Quy cách': p.specification || '',
+				'Đóng gói': p.packaging || '',
+				'Ghi chú': p.note || ''
+			}));
+			const ws = XLSX.utils.json_to_sheet(dataToExport);
+			const wb = XLSX.utils.book_new();
+			XLSX.utils.book_append_sheet(wb, ws, 'San_Pham');
+			const fileName = `Danh_sach_san_pham_${new Date().toISOString().slice(0, 10)}.xlsx`;
+			const savedLocation = await saveWorkbookToFile(wb, fileName);
+			showToast(`Đã xuất ${filteredProducts.length} sản phẩm sang file Excel thành công (${savedLocation})!`, "success");
+		} catch (error: any) {
+			console.error("Export Excel error:", error);
+			showToast("Lỗi khi xuất file Excel", "error");
 		}
-
-		return smartSearchMatch([
-			product.name || '',
-			product.sku || '',
-			product.serialNumber || '',
-			product.category || '',
-			product.specification || '',
-			product.packaging || '',
-			product.density || '',
-			product.note || ''
-		], debouncedSearchTerm);
-	}).sort((a, b) => {
-		const scoreA = calculateSearchScore(a, debouncedSearchTerm);
-		const scoreB = calculateSearchScore(b, debouncedSearchTerm);
-		if (scoreA !== scoreB) return scoreB - scoreA;
-		return (a.name || '').localeCompare(b.name || '');
-	});
-
-	const paginatedProducts = filteredProducts;
+	};
 
 	const formatPrice = (price: number) => {
 		return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
@@ -918,67 +1011,64 @@ const ProductList = () => {
 					<h2 className="text-sm lg:text-lg xl:text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight line-clamp-1">Sản Phẩm</h2>
 				</div>
 
-				<div className="flex items-center gap-4">
-						<div className="hidden lg:flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-full px-4 py-2 w-48 xl:w-64 border border-slate-200 dark:border-transparent focus-within:border-[#FF6D00] focus-within:bg-white dark:focus-within:bg-slate-900 transition-all">
-							<span className="material-symbols-outlined text-slate-500 text-lg">search</span>
-							<input
-								ref={searchRef}
-								type="text"
-								placeholder="Tìm kiếm..."
-								className="bg-transparent border-none outline-none w-full text-sm font-black text-slate-900 dark:text-slate-200 placeholder:text-slate-500"
-								value={searchTerm}
-								onChange={(e) => setSearchTerm(e.target.value)}
-							/>
-						</div>
+				<div className="flex items-center gap-3">
+					<div className="hidden lg:flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-full px-4 py-2 w-48 xl:w-64 border border-slate-200 dark:border-transparent focus-within:border-[#FF6D00] focus-within:bg-white dark:focus-within:bg-slate-900 transition-all">
+						<span className="material-symbols-outlined text-slate-500 text-lg">search</span>
+						<input
+							ref={searchRef}
+							type="text"
+							placeholder="Tìm kiếm sản phẩm, SKU..."
+							className="bg-transparent border-none outline-none w-full text-sm font-black text-slate-900 dark:text-slate-200 placeholder:text-slate-500"
+							value={searchTerm}
+							onChange={(e) => setSearchTerm(e.target.value)}
+						/>
+					</div>
 
-					{currentFilter === 'low_stock' && (
-						<div className="flex bg-orange-50 dark:bg-orange-900/20 text-[#FF6D00] px-4 py-2 rounded-xl border border-orange-100 dark:border-orange-900/50 items-center gap-3 shadow-sm animate-in fade-in slide-in-from-right-4 duration-300">
-							<div className="size-2 bg-[#FF6D00] rounded-full animate-pulse shadow-[0_0_8px_rgba(255,109,0,0.6)]"></div>
-							<span className="text-[11px] font-black uppercase tracking-wider">Đang xem: Tồn kho thấp</span>
-							<button 
-								onClick={() => setCurrentFilter(null)}
-								className="size-6 bg-white dark:bg-slate-800 rounded-lg flex items-center justify-center text-slate-400 hover:text-rose-500 transition-colors shadow-sm"
-								title="Bỏ lọc"
+					<div className="flex items-center gap-2">
+						{selectedIds.length > 0 && hasManagePermission && (
+							<button
+								onClick={handleBulkDelete}
+								className="flex bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 px-3.5 py-2.5 rounded-xl font-bold border border-rose-200/80 dark:border-rose-900/50 active:scale-95 transition-all items-center gap-1.5 hover:bg-rose-100 text-xs"
 							>
-								<span className="material-symbols-outlined text-sm font-bold">close</span>
+								<span className="material-symbols-outlined text-lg">delete_sweep</span>
+								<span>Xóa ({selectedIds.length})</span>
 							</button>
-						</div>
-					)}
+						)}
 
-					{hasManagePermission && (
-						<div className="flex items-center gap-2">
-							{selectedIds.length > 0 && (
+						<button
+							onClick={handleExportExcel}
+							className="hidden sm:flex bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 xl:px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider border border-slate-200/80 dark:border-slate-800 active:scale-95 transition-all items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm"
+							title="Xuất danh sách sản phẩm ra file Excel"
+						>
+							<Download size={15} />
+							<span className="hidden xl:inline">Xuất Excel</span>
+						</button>
+
+						{hasManagePermission && (
+							<>
 								<button
-									onClick={handleBulkDelete}
-									className="flex bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 px-4 py-2.5 rounded-xl font-bold border border-rose-100 dark:border-rose-900/50 active:scale-95 transition-all items-center gap-2 hover:bg-rose-100"
+									onClick={() => {
+										setShowImport(true);
+										navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
+									}}
+									className="hidden md:flex bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 xl:px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider border border-slate-200/80 dark:border-slate-800 active:scale-95 transition-all items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm"
 								>
-									<span className="material-symbols-outlined">delete_sweep</span>
-									<span>Xóa ({selectedIds.length})</span>
+									<Upload size={15} />
+									<span className="hidden xl:inline">Nhập Excel</span>
 								</button>
-							)}
-
-							<button
-								onClick={() => {
-									setShowImport(true);
-									navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
-								}}
-								className="hidden md:flex bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-3 xl:px-4 py-2.5 rounded-xl font-bold border border-slate-200 dark:border-slate-800 active:scale-95 transition-all items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-700"
-							>
-								<span className="material-symbols-outlined">file_upload</span>
-								<span className="hidden xl:inline">Nhập Excel</span>
-							</button>
-							<button
-								onClick={() => {
-									setShowAddForm(true);
-									navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
-								}}
-								className="hidden md:flex bg-[#FF6D00] hover:bg-orange-600 text-white px-3 xl:px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-orange-500/20 active:scale-95 transition-all items-center gap-2"
-							>
-								<span className="material-symbols-outlined text-xl">add</span>
-								<span className="hidden xl:inline">Thêm Mới</span>
-							</button>
-						</div>
-					)}
+								<button
+									onClick={() => {
+										setShowAddForm(true);
+										navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
+									}}
+									className="flex bg-[#FF6D00] hover:bg-orange-600 text-white px-4 xl:px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider shadow-lg shadow-orange-500/20 active:scale-95 transition-all items-center gap-1.5"
+								>
+									<Plus size={16} />
+									<span>Thêm Mới</span>
+								</button>
+							</>
+						)}
+					</div>
 				</div>
 			</header>
 
@@ -996,8 +1086,6 @@ const ProductList = () => {
 
 			{/* CONTENT */}
 			<div className="flex-1 p-4 md:p-8 overflow-y-auto custom-scrollbar">
-
-
 				{/* Mobile Search Bar - Conditional */}
 				{showMobileSearch && (
 					<div className="lg:hidden mb-6 animate-in slide-in-from-top duration-300">
@@ -1026,129 +1114,288 @@ const ProductList = () => {
 					</div>
 				)}
 
-				{/* Main Content Area */}
-				<>
+				<div className="max-w-7xl mx-auto flex flex-col gap-6">
+					{/* KPI Summary Cards */}
+					<div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+						<div
+							onClick={() => { setStatusTab('all'); setCurrentPage(1); }}
+							className={`p-4 md:p-5 rounded-[1.5rem] border transition-all cursor-pointer ${
+								statusTab === 'all'
+									? 'bg-indigo-50/80 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-900/60 shadow-sm'
+									: 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300'
+							}`}
+						>
+							<div className="flex items-center justify-between mb-2">
+								<span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Tổng sản phẩm</span>
+								<div className="size-8 rounded-xl bg-[#1A237E]/10 dark:bg-indigo-500/10 flex items-center justify-center text-[#1A237E] dark:text-indigo-400">
+									<Package size={16} />
+								</div>
+							</div>
+							<div className="text-xl md:text-2xl font-black text-slate-900 dark:text-white">
+								{totalCount} <span className="text-xs font-bold text-slate-400 font-normal">mã</span>
+							</div>
+						</div>
+
+						<div
+							onClick={() => { setStatusTab('active'); setCurrentPage(1); }}
+							className={`p-4 md:p-5 rounded-[1.5rem] border transition-all cursor-pointer ${
+								statusTab === 'active'
+									? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900/60 shadow-sm'
+									: 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300'
+							}`}
+						>
+							<div className="flex items-center justify-between mb-2">
+								<span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Đang bán</span>
+								<div className="size-8 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+									<CheckCircle2 size={16} />
+								</div>
+							</div>
+							<div className="text-xl md:text-2xl font-black text-emerald-600 dark:text-emerald-400">
+								{activeCount} <span className="text-xs font-bold text-slate-400 font-normal">mã</span>
+							</div>
+						</div>
+
+						<div
+							onClick={() => { setStatusTab('low_stock'); setCurrentPage(1); }}
+							className={`p-4 md:p-5 rounded-[1.5rem] border transition-all cursor-pointer ${
+								statusTab === 'low_stock'
+									? 'bg-rose-50/80 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/60 shadow-sm'
+									: 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300'
+							}`}
+						>
+							<div className="flex items-center justify-between mb-2">
+								<span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Hết / Âm kho</span>
+								<div className="size-8 rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-600 dark:text-rose-400">
+									<AlertTriangle size={16} />
+								</div>
+							</div>
+							<div className="text-xl md:text-2xl font-black text-rose-600 dark:text-rose-400">
+								{lowStockCount} <span className="text-xs font-bold text-slate-400 font-normal">mã</span>
+							</div>
+						</div>
+
+						<div
+							onClick={() => { setStatusTab('inactive'); setCurrentPage(1); }}
+							className={`p-4 md:p-5 rounded-[1.5rem] border transition-all cursor-pointer ${
+								statusTab === 'inactive'
+									? 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700 shadow-sm'
+									: 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300'
+							}`}
+						>
+							<div className="flex items-center justify-between mb-2">
+								<span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Ngừng bán</span>
+								<div className="size-8 rounded-xl bg-slate-500/10 flex items-center justify-center text-slate-500">
+									<XCircle size={16} />
+								</div>
+							</div>
+							<div className="text-xl md:text-2xl font-black text-slate-600 dark:text-slate-400">
+								{inactiveCount} <span className="text-xs font-bold text-slate-400 font-normal">mã</span>
+							</div>
+						</div>
+					</div>
+
+					{/* Filter Controls Bar */}
+					<div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
+						{/* Status Filter Tabs */}
+						<div className="flex flex-wrap items-center gap-1.5">
+							<button
+								onClick={() => { setStatusTab('all'); setCurrentPage(1); }}
+								className={`px-3.5 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all ${
+									statusTab === 'all'
+										? 'bg-[#1A237E] text-white dark:bg-indigo-600 shadow-sm'
+										: 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+								}`}
+							>
+								Tất cả ({totalCount})
+							</button>
+							<button
+								onClick={() => { setStatusTab('active'); setCurrentPage(1); }}
+								className={`px-3.5 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all ${
+									statusTab === 'active'
+										? 'bg-emerald-600 text-white shadow-sm'
+										: 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+								}`}
+							>
+								Đang bán ({activeCount})
+							</button>
+							<button
+								onClick={() => { setStatusTab('low_stock'); setCurrentPage(1); }}
+								className={`px-3.5 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all ${
+									statusTab === 'low_stock'
+										? 'bg-rose-600 text-white shadow-sm'
+										: 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+								}`}
+							>
+								Hết / Âm kho ({lowStockCount})
+							</button>
+							{inactiveCount > 0 && (
+								<button
+									onClick={() => { setStatusTab('inactive'); setCurrentPage(1); }}
+									className={`px-3.5 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all ${
+										statusTab === 'inactive'
+											? 'bg-slate-700 text-white shadow-sm'
+											: 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+									}`}
+								>
+									Ngừng bán ({inactiveCount})
+								</button>
+							)}
+						</div>
+
+						{/* Dropdown Filters: Category & Sorting */}
+						<div className="flex flex-wrap items-center gap-2">
+							{/* Category Filter */}
+							<div className="relative">
+								<select
+									value={selectedCategory}
+									onChange={(e) => { setSelectedCategory(e.target.value); setCurrentPage(1); }}
+									className="appearance-none bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-1.5 pr-8 text-[11px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-[#1A237E]/20 outline-none cursor-pointer"
+								>
+									<option value="all">Tất cả danh mục</option>
+									{allCategories.map(cat => (
+										<option key={cat} value={cat}>{cat}</option>
+									))}
+								</select>
+								<Filter size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+							</div>
+
+							{/* Sort Options */}
+							<div className="relative">
+								<select
+									value={sortBy}
+									onChange={(e) => setSortBy(e.target.value as any)}
+									className="appearance-none bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-1.5 pr-8 text-[11px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-[#1A237E]/20 outline-none cursor-pointer"
+								>
+									<option value="name_asc">Tên: A → Z</option>
+									<option value="price_desc">Giá bán: Cao → Thấp</option>
+									<option value="price_asc">Giá bán: Thấp → Cao</option>
+									<option value="stock_asc">Tồn kho: Thấp → Cao</option>
+									<option value="stock_desc">Tồn kho: Cao → Thấp</option>
+									<option value="newest">Mới cập nhật nhất</option>
+								</select>
+								<ArrowUpDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+							</div>
+						</div>
+					</div>
+
+					{/* Missing SKUs Alert */}
+					{missingSkus && missingSkus.length > 0 && (
+						<div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-xl p-4 flex items-center justify-between">
+							<div className="flex items-center gap-3 text-amber-800 dark:text-amber-300">
+								<div className="p-2 bg-amber-100 dark:bg-amber-900/40 rounded-lg">
+									<span className="material-symbols-outlined">warning</span>
+								</div>
+								<div>
+									<p className="font-bold text-sm">Đang lọc mặt hàng thiếu tồn kho từ đơn hàng</p>
+									<p className="text-xs opacity-80 mt-0.5">Vui lòng cập nhật số lượng tồn kho cho các sản phẩm dưới đây.</p>
+								</div>
+							</div>
+							<button 
+								onClick={() => {
+									const state = { ...location.state };
+									delete state.missingSkus;
+									navigate('/products', { state, replace: true });
+								}}
+								className="px-4 py-2 bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 font-bold text-xs rounded-lg border border-amber-200 dark:border-amber-700/50 hover:bg-amber-50 dark:hover:bg-amber-900/40 transition-colors"
+							>
+								Xóa bộ lọc
+							</button>
+						</div>
+					)}
+
 					{/* Table - Desktop */}
 					<InventoryDesktopTable
-							loading={loading}
-							paginatedProducts={paginatedProducts}
-							selectedIds={selectedIds}
-							activeTab={'products'}
-							expandedSkus={expandedSkus}
-							hasManagePermission={hasManagePermission}
-							toggleSelectAll={toggleSelectAll}
-							toggleSelect={toggleSelect}
-							openDetail={openDetail}
-							openEdit={openEdit}
-							copyToClipboard={copyToClipboard}
-							formatPrice={formatPrice}
-							setExpandedSkus={setExpandedSkus}
-							handleDeleteProduct={handleDeleteProduct}
-							getProductInventoryStats={getProductInventoryStats}
-							products={products}
-							getImageUrl={getImageUrl}
-						/>
+						loading={loading}
+						paginatedProducts={paginatedProducts}
+						selectedIds={selectedIds}
+						activeTab={'products'}
+						expandedSkus={expandedSkus}
+						hasManagePermission={hasManagePermission}
+						toggleSelectAll={toggleSelectAll}
+						toggleSelect={toggleSelect}
+						openDetail={openDetail}
+						openEdit={openEdit}
+						copyToClipboard={copyToClipboard}
+						formatPrice={formatPrice}
+						setExpandedSkus={setExpandedSkus}
+						handleDeleteProduct={handleDeleteProduct}
+						getProductInventoryStats={getProductInventoryStats}
+						products={products}
+						getImageUrl={getImageUrl}
+					/>
 
-						{/* Grid - Mobile */}
-						<InventoryMobileGrid
-							loading={loading}
-							paginatedProducts={paginatedProducts}
-							activeTab={'products'}
-							expandedSkus={expandedSkus}
-							openDetail={openDetail}
-							openEdit={openEdit}
-							getImageUrl={getImageUrl}
-							formatPrice={formatPrice}
-							setExpandedSkus={setExpandedSkus}
-							products={products}
-							handleDeleteProduct={handleDeleteProduct}
-							getProductInventoryStats={getProductInventoryStats}
-							hasManagePermission={hasManagePermission}
-						/>
-						<div className="mt-8 mb-4">
+					{/* Grid - Mobile */}
+					<InventoryMobileGrid
+						loading={loading}
+						paginatedProducts={paginatedProducts}
+						activeTab={'products'}
+						expandedSkus={expandedSkus}
+						openDetail={openDetail}
+						openEdit={openEdit}
+						getImageUrl={getImageUrl}
+						formatPrice={formatPrice}
+						setExpandedSkus={setExpandedSkus}
+						products={products}
+						handleDeleteProduct={handleDeleteProduct}
+						getProductInventoryStats={getProductInventoryStats}
+						hasManagePermission={hasManagePermission}
+					/>
 
-							{missingSkus && missingSkus.length > 0 && (
-								<div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-xl p-4 mb-4 flex items-center justify-between">
-									<div className="flex items-center gap-3 text-amber-800 dark:text-amber-300">
-										<div className="p-2 bg-amber-100 dark:bg-amber-900/40 rounded-lg">
-											<span className="material-symbols-outlined">warning</span>
-										</div>
-										<div>
-											<p className="font-bold text-sm">Đang lọc mặt hàng thiếu tồn kho từ đơn hàng</p>
-											<p className="text-xs opacity-80 mt-0.5">Vui lòng cập nhật số lượng tồn kho cho các sản phẩm dưới đây.</p>
-										</div>
-									</div>
-									<button 
-										onClick={() => {
-											const state = { ...location.state };
-											delete state.missingSkus;
-											navigate('/products', { state, replace: true });
-										}}
-										className="px-4 py-2 bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 font-bold text-xs rounded-lg border border-amber-200 dark:border-amber-700/50 hover:bg-amber-50 dark:hover:bg-amber-900/40 transition-colors"
-									>
-										Xóa bộ lọc
-									</button>
+					{/* Pagination Controls */}
+					{!loading && totalPages > 1 && (
+						<div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 transition-colors mb-8">
+							<p className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-2">
+								Hiển thị {((currentPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredProducts.length)} trên tổng {filteredProducts.length} sản phẩm
+							</p>
+							<div className="flex items-center gap-1">
+								<button
+									onClick={() => { setCurrentPage(prev => Math.max(prev - 1, 1)); window.scrollTo(0, 0); }}
+									disabled={currentPage === 1}
+									className="size-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
+								>
+									<span className="material-symbols-outlined">chevron_left</span>
+								</button>
+								<div className="flex items-center gap-1 mx-2">
+									{[...Array(totalPages)].map((_, i) => {
+										const pageNum = i + 1;
+										if (
+											pageNum === 1 ||
+											pageNum === totalPages ||
+											(pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
+										) {
+											return (
+												<button
+													key={pageNum}
+													onClick={() => { setCurrentPage(pageNum); window.scrollTo(0, 0); }}
+													className={`size-10 rounded-xl font-black text-xs transition-all ${
+														currentPage === pageNum
+															? 'bg-[#1A237E] text-white shadow-lg shadow-blue-500/20'
+															: 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+													}`}
+												>
+													{pageNum}
+												</button>
+											);
+										} else if (
+											pageNum === currentPage - 2 ||
+											pageNum === currentPage + 2
+										) {
+											return <span key={pageNum} className="text-slate-300">...</span>;
+										}
+										return null;
+									})}
 								</div>
-							)}
-
-							{/* Pagination Controls */}
-							{
-								totalPages > 1 && (
-									<div className="mt-8 mb-12 flex flex-col md:flex-row items-center justify-between gap-4">
-										<p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-											Hiển thị {((currentPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, totalItems)} trên tổng {totalItems} sản phẩm
-										</p>
-										<div className="flex items-center gap-1">
-											<button
-												onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-												disabled={currentPage === 1}
-												className="size-10 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:border-blue-500 transition-all"
-											>
-												<span className="material-symbols-outlined">chevron_left</span>
-											</button>
-											<div className="flex items-center gap-1 mx-2">
-												{[...Array(totalPages)].map((_, i) => {
-													const pageNum = i + 1;
-													// Show first, last, and pages around current
-													if (
-														pageNum === 1 ||
-														pageNum === totalPages ||
-														(pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
-													) {
-														return (
-															<button
-																key={pageNum}
-																onClick={() => setCurrentPage(pageNum)}
-																className={`size-10 rounded-xl font-bold text-xs transition-all border ${currentPage === pageNum
-																	? 'bg-[#1A237E] text-white border-[#1A237E] shadow-lg shadow-blue-500/20'
-																	: 'bg-white dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-slate-800 hover:border-blue-500'
-																	}`}
-															>
-																{pageNum}
-															</button>
-														);
-													} else if (
-														pageNum === currentPage - 2 ||
-														pageNum === currentPage + 2
-													) {
-														return <span key={pageNum} className="text-slate-300">...</span>;
-													}
-													return null;
-												})}
-											</div>
-											<button
-												onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-												disabled={currentPage === totalPages}
-												className="size-10 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:border-blue-500 transition-all"
-											>
-												<span className="material-symbols-outlined">chevron_right</span>
-											</button>
-										</div>
-									</div>
-								)
-							}
+								<button
+									onClick={() => { setCurrentPage(prev => Math.min(prev + 1, totalPages)); window.scrollTo(0, 0); }}
+									disabled={currentPage === totalPages}
+									className="size-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
+								>
+									<span className="material-symbols-outlined">chevron_right</span>
+								</button>
+							</div>
 						</div>
-					</>
+					)}
+				</div>
 			</div>
 
 			<InventoryFormModal

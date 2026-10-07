@@ -6,6 +6,16 @@ import { ScrollProvider } from './context/ScrollContext'
 import './styles/global.css'
 import { BrowserRouter } from 'react-router-dom'
 
+const entryModule = document.querySelector<HTMLScriptElement>('script[type="module"][src]')?.src;
+const recoveryKey = entryModule ? `dunvex:preload-recovery:${entryModule}` : null;
+
+window.addEventListener('vite:preloadError', (event) => {
+	if (!recoveryKey || sessionStorage.getItem(recoveryKey) === '1') return;
+	sessionStorage.setItem(recoveryKey, '1');
+	event.preventDefault();
+	window.location.reload();
+});
+
 // 🔒 Bảo mật: Tắt toàn bộ console logs & warns trên môi trường Production
 if (import.meta.env.PROD) {
 	console.log = () => {};

@@ -106,7 +106,10 @@ export const getRemoteOrigin = () => {
 		const isNativeApp = origin.startsWith('capacitor://') || 
 							origin.startsWith('ionic://') || 
 							origin === 'http://localhost' || 
-							origin === 'https://localhost';
+							origin === 'https://localhost' ||
+							origin.includes(':41738') ||
+							origin.includes(':5173') ||
+							(window as any).webkit?.messageHandlers !== undefined;
 		if (!isNativeApp) {
 			return origin;
 		}
@@ -116,18 +119,21 @@ export const getRemoteOrigin = () => {
 
 export const getOptimizedImageUrl = (url: string) => {
 	if (!url) return '';
-
-	// Proxy external images in native apps to bypass CORS restrictions
-	if (url.startsWith('http') && !url.includes('dunvex.com') && !url.includes('localhost') && !url.includes('127.0.0.1')) {
-		const base = getRemoteOrigin();
-		const isNative = typeof window !== 'undefined' && window.location && base !== window.location.origin;
-		if (isNative) {
-			return `${base}/api/image-proxy?url=${encodeURIComponent(url)}`;
-		}
+	if (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('file:') || url.startsWith('capacitor://')) {
+		return url;
 	}
 
+	// Local machine images (macOS Local Embedded Server)
+	if (url.startsWith('/local-images/') || url.includes('/local-images/')) {
+		if (url.startsWith('http://') || url.startsWith('https://')) return url;
+		const cleanPath = url.startsWith('/') ? url : `/${url}`;
+		return `http://127.0.0.1:41738${cleanPath}`;
+	}
+
+	const base = getRemoteOrigin();
+
+	// If it's an uploaded file from server (/uploads/...)
 	if (url.includes('/uploads/')) {
-		const base = getRemoteOrigin();
 		if (url.startsWith('/uploads/')) {
 			return `${base}${url}`;
 		}
@@ -136,6 +142,14 @@ export const getOptimizedImageUrl = (url: string) => {
 			return `${base}${url.substring(idx)}`;
 		}
 		return url;
+	}
+
+	// Proxy external images in native apps to bypass CORS restrictions
+	if (url.startsWith('http') && !url.includes('dunvex.com') && !url.includes('localhost') && !url.includes('127.0.0.1')) {
+		const isNative = typeof window !== 'undefined' && window.location && base !== window.location.origin;
+		if (isNative) {
+			return `${base}/api/image-proxy?url=${encodeURIComponent(url)}`;
+		}
 	}
 
 	// Cloudinary optimization

@@ -1,9 +1,12 @@
 /**
  * Hook tính toán công nợ — aggregate orders + payments + customers thành bảng công nợ
  * 🔧 REFACTOR: Extract from Debts.tsx (state, helpers, guest entities, KPI totals)
+ * 🚀 UPGRADE: Hỗ trợ lọc trạng thái nợ (Còn nợ, Đã hết, Tất cả), sắp xếp đa tiêu chí, chuẩn hóa Timestamp
  */
 
 import { useState, useEffect, useMemo } from 'react';
+import { getOrderTimestamp, getPaymentTimestamp, getTxDateString, formatOrderDateOnly } from '../utils/orderFilter';
+import { smartSearchMatch } from '../utils/searchUtils';
 
 export interface AggregatedRow {
   id: string;
@@ -15,12 +18,19 @@ export interface AggregatedRow {
   totalPaymentsAmount: number;
   currentDebt: number;
   lastTx: any;
+  lastTxTimestamp: number;
+  lastTxDate: string;
   debtHealth: 'healthy' | 'slow' | 'risk' | 'critical';
   turnoverDays: number;
   hasStatusOrders: boolean;
+  periodOrdersCount: number;
+  periodPaymentsCount: number;
   initials: string;
   [key: string]: any;
 }
+
+export type DebtStatusFilter = 'unpaid' | 'paid' | 'all';
+export type DebtSortOption = 'debt_desc' | 'recent_tx' | 'name_asc' | 'debt_asc';
 
 export interface UseDebtCalculationsParams {
   orders: any[];
@@ -29,7 +39,9 @@ export interface UseDebtCalculationsParams {
   searchTerm: string;
   fromDate: string;
   toDate: string;
-  statusFilter: string;
+  statusFilter?: string;
+  debtStatusFilter?: DebtStatusFilter;
+  sortBy?: DebtSortOption;
   currentPage: number;
   itemsPerPage: number;
 }
@@ -42,6 +54,8 @@ export function useDebtCalculations({
   fromDate,
   toDate,
   statusFilter,
+  debtStatusFilter = 'all',
+  sortBy = 'recent_tx',
   currentPage,
   itemsPerPage,
 }: UseDebtCalculationsParams) {
@@ -63,8 +77,7 @@ export function useDebtCalculations({
 
   const formatDate = (date: any) => {
     if (!date) return '---';
-    if (date.seconds) return new Date(date.seconds * 1000).toLocaleDateString('vi-VN');
-    return new Date(date).toLocaleDateString('vi-VN');
+    return formatOrderDateOnly(date);
   };
 
   const getImageUrl = (url: string) => {
@@ -160,19 +173,11 @@ export function useDebtCalculations({
         const start = fromDate || '0000-00-00';
         const end = toDate || '9999-99-99';
         periodOrders = customerOrders.filter((o) => {
-          const txDate =
-            o.orderDate ||
-            (o.createdAt?.seconds
-              ? new Date(o.createdAt.seconds * 1000).toISOString().split('T')[0]
-              : '');
+          const txDate = getTxDateString(o);
           return txDate >= start && txDate <= end;
         });
         periodPayments = customerPayments.filter((p) => {
-          const txDate =
-            p.date ||
-            (p.createdAt?.seconds
-              ? new Date(p.createdAt.seconds * 1000).toISOString().split('T')[0]
-              : '');
+          const txDate = getTxDateString(p);
           return txDate >= start && txDate <= end;
         });
       }
@@ -191,7 +196,7 @@ export function useDebtCalculations({
         0,
       );
 
-      // 🔧 Tính nợ trực tiếp từ payments/orders realtime (không phụ thuộc cron 1 tiếng)
+      // 🔧 Tính nợ trực tiếp từ payments/orders realtime
       const calcDebt = lifetimeTotalWaited - lifetimeTotalPaid;
 
       const hasRealtimeData =
@@ -217,33 +222,24 @@ export function useDebtCalculations({
       const allTx = [
         ...customerOrders
           .filter((o: any) => o.status === 'Đơn chốt')
-          .map((o: any) => ({ date: o.orderDate || o.createdAt, type: 'order' })),
+          .map((o: any) => ({
+            timestamp: getOrderTimestamp(o),
+            dateStr: getTxDateString(o),
+            raw: o.orderDate || o.createdAt,
+            type: 'order' as const,
+          })),
         ...customerPayments.map((p: any) => ({
-          date: p.date || p.createdAt,
-          type: 'payment',
+          timestamp: getPaymentTimestamp(p),
+          dateStr: getTxDateString(p),
+          raw: p.date || p.createdAt,
+          type: 'payment' as const,
         })),
-      ].sort((a: any, b: any) => {
-        const da = a.date?.seconds
-          ? a.date.seconds * 1000
-          : a.date
-            ? new Date(a.date).getTime()
-            : 0;
-        const db = b.date?.seconds
-          ? b.date.seconds * 1000
-          : b.date
-            ? new Date(b.date).getTime()
-            : 0;
-        return db - da;
-      });
+      ]
+        .filter((tx) => tx.timestamp > 0)
+        .sort((a, b) => b.timestamp - a.timestamp);
 
-      const turnoverDays = allTx[0]?.date
-        ? Math.floor(
-            (new Date().getTime() -
-              (allTx[0].date?.seconds
-                ? allTx[0].date.seconds * 1000
-                : new Date(allTx[0].date).getTime())) /
-              (1000 * 60 * 60 * 24),
-          )
+      const turnoverDays = allTx[0]?.timestamp
+        ? Math.max(0, Math.floor((Date.now() - allTx[0].timestamp) / (1000 * 60 * 60 * 24)))
         : 999;
 
       let debtHealth: 'healthy' | 'slow' | 'risk' | 'critical' = 'healthy';
@@ -257,13 +253,17 @@ export function useDebtCalculations({
         totalOrdersAmount: displayTotalOrders,
         totalPaymentsAmount: totalPaid,
         currentDebt,
-        lastTx: allTx[0]?.date || null,
+        lastTx: allTx[0]?.raw || null,
+        lastTxTimestamp: allTx[0]?.timestamp || 0,
+        lastTxDate: allTx[0]?.dateStr ? formatOrderDateOnly(null, allTx[0].dateStr) : '',
         debtHealth,
         turnoverDays,
+        periodOrdersCount: periodOrders.length,
+        periodPaymentsCount: periodPayments.length,
         hasStatusOrders:
-          periodOrders.some((o) => o.status === 'Đơn chốt') ||
-          periodPayments.length > 0 ||
-          currentDebt > 0,
+          customerOrders.some((o) => o.status === 'Đơn chốt') ||
+          customerPayments.length > 0 ||
+          currentDebt !== 0,
         initials:
           String(c.name || '')
             .split(' ')
@@ -275,23 +275,70 @@ export function useDebtCalculations({
     });
   }, [allEntities, orders, payments, registeredMap, fromDate, toDate]);
 
+  // ── Helper search matching ───────────────────────────────
+  const matchesSearch = (item: AggregatedRow, term: string) => {
+    if (!term) return true;
+    return smartSearchMatch([item.name || '', item.phone || '', item.id || ''], term);
+  };
+
+  // ── Filtered data ────────────────────────────────────────
+  const filteredData = useMemo(() => {
+    return allEntitiesWithDebt.filter((item: AggregatedRow) => {
+      // 1. Search term match
+      if (!matchesSearch(item, searchTerm)) return false;
+
+      // 2. Date range filter
+      if (fromDate || toDate) {
+        const hasTxInRange = item.periodOrdersCount > 0 || item.periodPaymentsCount > 0;
+        if (!hasTxInRange) return false;
+      }
+
+      // 3. Debt status filter
+      if (debtStatusFilter === 'unpaid') {
+        return item.currentDebt > 0;
+      }
+      if (debtStatusFilter === 'paid') {
+        return item.currentDebt <= 0 && (item.totalOrdersAmount > 0 || item.totalPaymentsAmount > 0);
+      }
+
+      // 'all': Chỉ lấy các đối tác có lịch sử đơn hàng hoặc thu nợ
+      return item.hasStatusOrders;
+    });
+  }, [allEntitiesWithDebt, searchTerm, fromDate, toDate, debtStatusFilter]);
+
+  // ── Sorted data ──────────────────────────────────────────
   const aggregatedData: AggregatedRow[] = useMemo(() => {
-    return allEntitiesWithDebt
-      .filter((item: any) => {
-        const matchesName =
-          !searchTerm ||
-          String(item.name || '').toLowerCase().includes(searchTerm.toLowerCase());
+    return [...filteredData].sort((a: AggregatedRow, b: AggregatedRow) => {
+      switch (sortBy) {
+        case 'recent_tx':
+          return (b.lastTxTimestamp || 0) - (a.lastTxTimestamp || 0);
+        case 'name_asc':
+          return String(a.name || '').localeCompare(String(b.name || ''), 'vi');
+        case 'debt_asc':
+          return a.currentDebt - b.currentDebt;
+        case 'debt_desc':
+        default:
+          return b.currentDebt - a.currentDebt;
+      }
+    });
+  }, [filteredData, sortBy]);
 
-        if (fromDate || toDate) {
-          const hasTxInRange = item.totalOrdersAmount > 0 || item.totalPaymentsAmount > 0;
-          return matchesName && hasTxInRange;
-        }
+  // ── Summary Counts for Tabs ──────────────────────────────
+  const debtCounts = useMemo(() => {
+    let unpaid = 0;
+    let paid = 0;
+    let all = 0;
 
-        const matchesStatus = item.hasStatusOrders;
-        return matchesName && matchesStatus;
-      })
-      .sort((a: any, b: any) => b.currentDebt - a.currentDebt);
-  }, [allEntitiesWithDebt, searchTerm, fromDate, toDate, statusFilter]);
+    allEntitiesWithDebt.forEach((item) => {
+      if (item.hasStatusOrders) {
+        all++;
+        if (item.currentDebt > 0) unpaid++;
+        else if (item.totalOrdersAmount > 0 || item.totalPaymentsAmount > 0) paid++;
+      }
+    });
+
+    return { unpaid, paid, all };
+  }, [allEntitiesWithDebt]);
 
   // ── Pagination ───────────────────────────────────────────
   const totalPages = Math.ceil(aggregatedData.length / itemsPerPage);
@@ -307,30 +354,30 @@ export function useDebtCalculations({
   // ── KPI Totals ───────────────────────────────────────────
   const totalWaitedAll = useMemo(
     () =>
-      aggregatedData.reduce(
+      allEntitiesWithDebt.reduce(
         (sum: number, item: AggregatedRow) => sum + (Number(item.totalOrdersAmount) || 0),
         0,
       ),
-    [aggregatedData],
+    [allEntitiesWithDebt],
   );
 
   const totalPaidAll = useMemo(
     () =>
-      aggregatedData.reduce(
+      allEntitiesWithDebt.reduce(
         (sum: number, item: AggregatedRow) => sum + (Number(item.totalPaymentsAmount) || 0),
         0,
       ),
-    [aggregatedData],
+    [allEntitiesWithDebt],
   );
 
   const totalUnpaidAll = useMemo(
     () =>
-      aggregatedData.reduce(
+      allEntitiesWithDebt.reduce(
         (sum: number, item: AggregatedRow) =>
           sum + ((Number(item.currentDebt) || 0) > 0 ? Number(item.currentDebt) : 0),
         0,
       ),
-    [aggregatedData],
+    [allEntitiesWithDebt],
   );
 
   // ── Pagination helpers ───────────────────────────────────
@@ -376,6 +423,7 @@ export function useDebtCalculations({
     totalWaitedAll,
     totalPaidAll,
     totalUnpaidAll,
+    debtCounts,
     getPageNumbers,
   };
 }

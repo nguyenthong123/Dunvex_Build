@@ -1,4 +1,5 @@
 import React from 'react';
+import { CachedImage } from '../shared/CachedImage';
 
 interface InventoryFormModalProps {
 	show: boolean;
@@ -64,10 +65,10 @@ const InventoryFormModal: React.FC<InventoryFormModalProps> = ({
 						<div className="flex flex-col items-center">
 							<div className="relative size-32 bg-slate-50 dark:bg-slate-800 rounded-2xl border-2 border-dashed border-gray-200 dark:border-slate-700 flex items-center justify-center overflow-hidden group">
 								{formData.imageUrl ? (
-									<img
-										src={getImageUrl(formData.imageUrl)}
+									<CachedImage
+										src={formData.imageUrl}
 										className="size-full object-cover"
-										referrerPolicy="no-referrer"
+										fallbackIcon={<span className="material-symbols-outlined text-gray-300 dark:text-slate-600 text-3xl">cloud_upload</span>}
 									/>
 								) : (
 									<div className="text-center p-2">

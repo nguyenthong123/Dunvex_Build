@@ -1,6 +1,7 @@
 # 🏗️ Dunvex Build — Architecture & Project Guide
 
-> **Dành cho AI Agent** — đọc file này đầu tiên khi mở project.
+> ⚠️ **BẮT BUỘC CHO AI AGENT**: Đọc [AGENTS.md](file:///Volumes/DATA_SSD/Projects/Dunvex_Build-main/AGENTS.md) trước khi làm việc.
+> **NGUYÊN TẮC CỐT LÕI**: Tuyệt đối **tách biệt luồng phát hành** Web (`npm run deploy:web`) và App Android/Mac/Win (`npm run deploy:android`, `deploy:mac`, `deploy:win`). Cập nhật app KHÔNG ĐƯỢC ảnh hưởng hay sửa đổi web đang chạy.
 
 ---
 
@@ -80,6 +81,21 @@ scp -o StrictHostKeyChecking=no -i ~/.ssh/google_compute_engine \
 - **Toàn bộ data** (orders, customers, payments, products...) lưu trong SQLite trên VPS.
 - `fakeFirestore.ts` giả lập Firestore API nhưng thực chất gọi REST API → SQLite.
 - `src/services/firebase.ts` export `db` là dummy, re-export từ `fakeFirestore.ts`.
+- **Android offline**: `src/services/localDb/localDatabase.ts` đọc/ghi SQLite riêng trong vùng lưu trữ app qua Capacitor SQLite; thay đổi được ghi cục bộ trước rồi đồng bộ lên VPS khi có mạng. IndexedDB hiện có được chuyển sang SQLite một lần và vẫn được giữ làm bản dự phòng. Trình duyệt web tiếp tục dùng IndexedDB.
+- **App desktop Windows/macOS**: SQLite và thư mục ảnh offline mặc định nằm trong thư mục dữ liệu riêng của Dunvex; người dùng có thể chuyển cả hai sang thư mục `DunvexData` trong ổ/thư mục đã chọn. Quá trình chuyển checkpoint WAL, sao chép và kiểm tra SQLite/ảnh trước khi đổi vị trí hoạt động. Cache IndexedDB/HTTP do WebView quản lý và không di chuyển; Android giữ SQLite/ảnh trong vùng riêng của app.
+
+---
+
+## 🚫 QUY TẮC BẢO MẬT & DỮ LIỆU BẮT BUỘC CHO AI AGENT (STRICT RULES)
+
+> [!CAUTION]
+> **1. TUYỆT ĐỐI KHÔNG TỰ Ý BACKUP / GHI ĐÈ / RESTORE DATABASE TRÊN VPS:**
+> - **NGHIÊM CẤM** AI tự ý chạy lệnh copy đè (`scp`, `rsync`, restore) file database SQLite (`dunvex.db`) từ máy local lên VPS hoặc từ các file backup cũ lên VPS.
+> - **Lý do**: Database trên VPS đang chứa dữ liệu trạng thái thời gian thực (trạng thái bật/tắt khóa tính năng trên Nexus Control, lịch sử thanh toán, hạn dùng gói cước của 57 doanh nghiệp). Mọi hành vi tự ý ghi đè DB sẽ làm **sai lệch trạng thái bật/tắt (toggle) trên Nexus Control** và gây mất dữ liệu live.
+> 
+> **2. KHÔNG TỰ Ý CHẠY CÁC SCRIPT BACKUP LÀM XÁO TRỘN DỮ LIỆU:**
+> - Không tự động trigger các script backup/restore dữ liệu trừ khi có yêu cầu bằng văn bản rõ ràng từ User.
+> - Khi deploy code (`deploy_vps.sh`), chỉ deploy thư mục `dist/`, `server/`, code logic — **KHÔNG ĐƯỢC CHẠM VÀO THƯ MỤC `data/dunvex.db` TRÊN VPS**.
 
 ---
 

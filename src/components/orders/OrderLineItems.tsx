@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { ChevronDown, CheckCircle, Package, Trash2, Plus, QrCode } from 'lucide-react';
 import { smartSearchMatch, calculateSearchScore, normalizeText as searchNormalizeText } from '../../utils/searchUtils';
+import { CachedImage } from '../shared/CachedImage';
 
 interface OrderLineItemsProps {
     lineItems: any[];
@@ -177,7 +178,17 @@ const OrderLineItems: React.FC<OrderLineItemsProps> = ({
                                             setLineSearchQuery('');
                                         }}
                                     >
-                                        <div className="flex items-center gap-1.5 w-full min-w-0 overflow-hidden">
+                                        <div className="flex items-center gap-2 w-full min-w-0 overflow-hidden">
+                                            {item.productId && (item.imageUrl || products.find(p => p.id === item.productId)?.imageUrl) && (
+                                                <div className="w-6 h-6 rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-800 shrink-0">
+                                                    <CachedImage
+                                                        src={item.imageUrl || products.find(p => p.id === item.productId)?.imageUrl}
+                                                        alt={item.name}
+                                                        className="w-full h-full object-cover"
+                                                        fallbackText={item.name}
+                                                    />
+                                                </div>
+                                            )}
                                             <span className={`text-[11px] lg:text-xs font-semibold truncate ${item.name ? 'text-slate-900 dark:text-white' : 'text-slate-300 dark:text-slate-600'}`}>
                                                 {item.name || 'Tìm sản phẩm...'}
                                             </span>
@@ -226,33 +237,49 @@ const OrderLineItems: React.FC<OrderLineItemsProps> = ({
                                                         return (
                                                             <div
                                                                 key={p.id}
-                                                                className={`px-5 py-4 hover:bg-[#1A237E]/5 dark:hover:bg-indigo-500/10 cursor-pointer border-b border-slate-50 dark:border-slate-700/50 last:border-none transition-all flex items-center justify-between group/prod`}
+                                                                className={`px-4 py-3 hover:bg-[#1A237E]/5 dark:hover:bg-indigo-500/10 cursor-pointer border-b border-slate-50 dark:border-slate-700/50 last:border-none transition-all flex items-center justify-between gap-3 group/prod`}
                                                                 onClick={() => {
                                                                     updateLineItem(lineKey, 'productId', p.id);
                                                                     setActiveRow(null);
                                                                     setActiveField(null);
                                                                 }}
                                                             >
-                                                                <div className="flex flex-col gap-1 max-w-[70%]">
-                                                                    <span className="text-xs font-black text-slate-800 dark:text-slate-200 group-hover/prod:text-[#1A237E] dark:group-hover/prod:text-indigo-400 transition-colors uppercase leading-tight line-clamp-2">{p.name}</span>
-                                                                    {p.serialNumber && (
-                                                                        <span className="text-[9px] font-black text-[#B48C00] uppercase leading-none">
-                                                                            SN: {p.serialNumber}
-                                                                        </span>
+                                                                <div className="flex items-center gap-3 max-w-[70%] min-w-0">
+                                                                    {p.imageUrl ? (
+                                                                        <div className="w-10 h-10 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-800 shrink-0 shadow-xs">
+                                                                            <CachedImage
+                                                                                src={p.imageUrl}
+                                                                                alt={p.name}
+                                                                                className="w-full h-full object-cover"
+                                                                                fallbackText={p.name}
+                                                                            />
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div className="w-10 h-10 rounded-lg border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-[10px] font-black text-slate-400 shrink-0 uppercase select-none">
+                                                                            {p.name?.slice(0, 2)}
+                                                                        </div>
                                                                     )}
-                                                                    {p.specification && (
-                                                                        <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 leading-tight line-clamp-2">
-                                                                            QC: {p.specification}
-                                                                        </span>
-                                                                    )}
-                                                                    <div className="flex items-center gap-2">
-                                                                        <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded text-[9px] font-black text-slate-500 uppercase">
-                                                                            {p.sku || 'N/A'}
-                                                                        </span>
-                                                                        <span className="text-[9px] font-bold text-slate-400">{p.unit}</span>
+                                                                    <div className="flex flex-col gap-0.5 min-w-0">
+                                                                        <span className="text-xs font-black text-slate-800 dark:text-slate-200 group-hover/prod:text-[#1A237E] dark:group-hover/prod:text-indigo-400 transition-colors uppercase leading-tight line-clamp-2">{p.name}</span>
+                                                                        {p.serialNumber && (
+                                                                            <span className="text-[9px] font-black text-[#B48C00] uppercase leading-none">
+                                                                                SN: {p.serialNumber}
+                                                                            </span>
+                                                                        )}
+                                                                        {p.specification && (
+                                                                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 leading-tight line-clamp-1">
+                                                                                QC: {p.specification}
+                                                                            </span>
+                                                                        )}
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded text-[9px] font-black text-slate-500 uppercase">
+                                                                                {p.sku || 'N/A'}
+                                                                            </span>
+                                                                            <span className="text-[9px] font-bold text-slate-400">{p.unit}</span>
+                                                                        </div>
                                                                     </div>
                                                                 </div>
-                                                                <div className="text-right">
+                                                                <div className="text-right shrink-0">
                                                                     <div className="text-xs font-black text-[#f27121] mb-0.5">{p.priceSell.toLocaleString('vi-VN')} đ</div>
                                                                     <div className={`text-[9px] font-black uppercase tracking-widest ${effStock > 0 ? 'text-green-500' : 'text-rose-500'}`}>
                                                                         {effStock > 0 ? `TỒN: ${effStock}` : 'HẾT HÀNG'}

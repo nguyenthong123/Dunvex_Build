@@ -1,6 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { X, Printer, Copy, Download, CheckCircle2, FileText, Image as ImageIcon } from 'lucide-react';
-import html2canvas from 'html2canvas-pro';
+import { generateTicketPng, dataURLtoBlob } from '../orderTicket/ticketImage';
+import { printService } from '../../services/printService';
+import { copyOrShareImage } from '../../utils/imageSharing';
 
 interface PaymentDetailModalProps {
 	showPaymentDetail: boolean;
@@ -79,9 +81,110 @@ export const PaymentDetailModal: React.FC<PaymentDetailModalProps> = ({
 	const [showCopySuccess, setShowCopySuccess] = useState(false);
 	const paperRef = useRef<HTMLDivElement>(null);
 
+	// Pre-generate PNG and Blob cache for instant clipboard copy
+	const cachedPngRef = useRef<string | null>(null);
+	const cachedBlobRef = useRef<Blob | null>(null);
+	const isGeneratingRef = useRef(false);
+
+	const preGeneratePng = useCallback(async () => {
+		if (isGeneratingRef.current || !paperRef.current) return;
+		isGeneratingRef.current = true;
+		try {
+			const dataUrl = await generateTicketPng(paperRef.current, true, 420);
+			cachedPngRef.current = dataUrl;
+			cachedBlobRef.current = dataURLtoBlob(dataUrl);
+		} catch (e) {
+			console.warn('Pre-generate payment receipt PNG failed:', e);
+		} finally {
+			isGeneratingRef.current = false;
+		}
+	}, []);
+
+	useEffect(() => {
+		if (!showPaymentDetail || !selectedPayment) {
+			cachedPngRef.current = null;
+			cachedBlobRef.current = null;
+			return;
+		}
+		const timer = setTimeout(() => {
+			preGeneratePng();
+		}, 700);
+		return () => clearTimeout(timer);
+	}, [showPaymentDetail, selectedPayment, preGeneratePng]);
+
 	if (!showPaymentDetail || !selectedPayment) return null;
 
-	const handlePrint = () => {
+	const handlePrint = async () => {
+		let dataUrl = cachedPngRef.current;
+		if (!dataUrl && paperRef.current) {
+			try {
+				dataUrl = await generateTicketPng(paperRef.current, true, 800);
+				cachedPngRef.current = dataUrl;
+			} catch (e) {
+				console.warn('[handlePrint] Error generating PNG for payment slip:', e);
+			}
+		}
+
+		if (dataUrl) {
+			const fullHtml = `
+				<!DOCTYPE html>
+				<html>
+					<head>
+						<meta charset="utf-8">
+						<title>Phiếu Thu Tiền - ${selectedPayment.customerName || ''}</title>
+						<style>
+							@page {
+								size: A4 portrait;
+								margin: 0;
+							}
+							* { box-sizing: border-box; margin: 0; padding: 0; }
+							html, body {
+								width: 100%;
+								height: 100%;
+								margin: 0;
+								padding: 0;
+								background: #ffffff;
+								-webkit-print-color-adjust: exact !important;
+								print-color-adjust: exact !important;
+								overflow: hidden;
+							}
+							.page-container {
+								width: 100%;
+								height: 100%;
+								display: flex;
+								justify-content: center;
+								align-items: flex-start;
+								padding: 0;
+								margin: 0;
+								page-break-inside: avoid !important;
+								page-break-after: avoid !important;
+							}
+							img {
+								width: 100%;
+								max-width: 210mm;
+								max-height: 297mm;
+								height: auto;
+								display: block;
+								margin: 0 auto;
+								page-break-inside: avoid !important;
+							}
+						</style>
+					</head>
+					<body>
+						<div class="page-container">
+							<img src="${dataUrl}" alt="Phiếu Thu Tiền" />
+						</div>
+					</body>
+				</html>
+			`;
+			printService.printHtml(fullHtml, {
+				isReceipt: false,
+				title: `Phiếu Thu - ${selectedPayment.customerName || ''}`
+			});
+			return;
+		}
+
+		// Fallback print
 		const printWindow = window.open('', '_blank', 'width=800,height=900');
 		if (!printWindow) return;
 		printWindow.document.write(`
@@ -171,14 +274,11 @@ export const PaymentDetailModal: React.FC<PaymentDetailModalProps> = ({
 		if (!paperRef.current) return;
 		setIsSavingImage(true);
 		try {
-			const canvas = await html2canvas(paperRef.current, {
-				backgroundColor: '#ffffff',
-				scale: 2,
-				useCORS: true,
-				allowTaint: false,
-				logging: false,
-			});
-			const dataUrl = canvas.toDataURL('image/png');
+			let dataUrl = cachedPngRef.current;
+			if (!dataUrl) {
+				dataUrl = await generateTicketPng(paperRef.current, true, 420);
+				cachedPngRef.current = dataUrl;
+			}
 			const link = document.createElement('a');
 			link.download = `phieu_thu_${selectedPayment.customerName?.replace(/\s+/g, '_') || 'khach_hang'}.png`;
 			link.href = dataUrl;
@@ -194,40 +294,37 @@ export const PaymentDetailModal: React.FC<PaymentDetailModalProps> = ({
 	const handleCopyImage = async () => {
 		if (!paperRef.current) return;
 		setIsSavingImage(true);
-		let generatedUrl = '';
 		try {
-			if (!navigator.clipboard || !window.ClipboardItem) {
-				throw new Error("Trình duyệt không hỗ trợ Clipboard API hoặc kết nối HTTP không bảo mật");
+			let dataUrl = cachedPngRef.current;
+			if (!dataUrl) {
+				dataUrl = await generateTicketPng(paperRef.current, true, 420);
+				cachedPngRef.current = dataUrl;
 			}
 
-			const blobPromise = (async () => {
-				const canvas = await html2canvas(paperRef.current!, {
-					backgroundColor: '#ffffff',
-					scale: 2,
-					useCORS: true,
-					allowTaint: false,
-					logging: false,
-				});
-				const dataUrl = canvas.toDataURL('image/png');
-				generatedUrl = dataUrl;
-				const response = await fetch(dataUrl);
-				if (!response.ok) throw new Error(`HTTP status ${response.status}`);
-				return await response.blob();
-			})();
+			const fileName = `phieu_thu_${selectedPayment?.id || Date.now()}.png`;
+			await copyOrShareImage({
+				dataUrl,
+				fileName,
+				title: 'Phiếu thu tiền khách hàng',
+				text: `Phiếu thu tiền - Khách hàng ${selectedPayment?.customerName || ''}`,
+			});
 
-			await navigator.clipboard.write([
-				new ClipboardItem({
-					'image/png': blobPromise
-				})
-			]);
 			setShowCopySuccess(true);
 			setTimeout(() => setShowCopySuccess(false), 2500);
+			setTimeout(() => preGeneratePng(), 400);
 		} catch (error) {
 			console.error("Lỗi sao chép hình ảnh:", error);
-			if (generatedUrl) {
-				setCapturedImage(generatedUrl);
-			} else {
-				alert("Không thể sao chép phiếu thu: " + (error instanceof Error ? error.message : String(error)));
+			// Direct fallback download without annoying alert
+			try {
+				let fallbackUrl = cachedPngRef.current || (await generateTicketPng(paperRef.current, true, 420));
+				const link = document.createElement('a');
+				link.download = `phieu_thu_${selectedPayment?.id || Date.now()}.png`;
+				link.href = fallbackUrl;
+				link.click();
+				setShowCopySuccess(true);
+				setTimeout(() => setShowCopySuccess(false), 2500);
+			} catch (e) {
+				console.error("Lỗi fallback ảnh:", e);
 			}
 		} finally {
 			setIsSavingImage(false);
@@ -406,8 +503,7 @@ export const PaymentDetailModal: React.FC<PaymentDetailModalProps> = ({
 							<button
 								onClick={async () => {
 									try {
-										const response = await fetch(capturedImage);
-										const blob = await response.blob();
+										const blob = dataURLtoBlob(capturedImage);
 										await navigator.clipboard.write([
 											new ClipboardItem({
 												'image/png': blob

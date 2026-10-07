@@ -6,6 +6,28 @@ interface NexusLogsTabProps {
 	loading?: boolean;
 }
 
+export function formatAuditLogDate(value: any): string {
+	let date: Date;
+	if (typeof value?.toDate === 'function') {
+		date = value.toDate();
+	} else if (typeof value?.seconds === 'number' || typeof value?._seconds === 'number') {
+		const seconds = value.seconds ?? value._seconds;
+		const nanoseconds = value.nanoseconds ?? value._nanoseconds ?? 0;
+		date = new Date(seconds * 1000 + nanoseconds / 1_000_000);
+	} else {
+		date = new Date(value);
+	}
+
+	if (Number.isNaN(date.getTime())) return '---';
+	return date.toLocaleString('vi-VN', {
+		hour: '2-digit',
+		minute: '2-digit',
+		day: '2-digit',
+		month: '2-digit',
+		year: '2-digit'
+	});
+}
+
 export function NexusLogsTab({ logs, loading }: NexusLogsTabProps) {
 	return (
 		<div className="space-y-6">
@@ -36,13 +58,7 @@ export function NexusLogsTab({ logs, loading }: NexusLogsTabProps) {
 							{logs.map((log) => (
 								<tr key={log.id} className="hover:bg-slate-800/30 transition-colors group text-xs" data-chatbot-row={log.id}>
 									<td className="px-8 py-6 text-slate-400 font-medium whitespace-nowrap" data-chatbot-cell="time">
-										{log.createdAt?.toDate ? log.createdAt.toDate().toLocaleString('vi-VN', {
-											hour: '2-digit',
-											minute: '2-digit',
-											day: '2-digit',
-											month: '2-digit',
-											year: '2-digit'
-										}) : '---'}
+										{formatAuditLogDate(log.createdAt)}
 									</td>
 									<td className="px-8 py-6" data-chatbot-cell="user">
 										<div className="flex items-center gap-3">
@@ -87,7 +103,7 @@ export function NexusLogsTab({ logs, loading }: NexusLogsTabProps) {
 							<div className="flex items-center justify-between pt-2">
 								<span className="text-[9px] text-slate-600 font-black uppercase tracking-tighter">{log.path || '/home'}</span>
 								<span className="text-[9px] text-slate-600 font-medium">
-									{log.createdAt?.toDate ? log.createdAt.toDate().toLocaleString('vi-VN') : '---'}
+									{formatAuditLogDate(log.createdAt)}
 								</span>
 							</div>
 						</div>

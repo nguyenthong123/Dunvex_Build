@@ -1,4 +1,5 @@
 import { getOptimizedImageUrl } from '../../utils/validation';
+import { formatDateVN } from '../../utils/dateUtils';
 
 /** Resolve an image URL to its optimized variant (empty string if unavailable). */
 export const getTicketImageUrl = (url: string): string => {
@@ -8,12 +9,7 @@ export const getTicketImageUrl = (url: string): string => {
 };
 
 export const formatDate = (date: any): string => {
-	if (!date) return '---';
-	// Firestore Timestamp
-	if (date.seconds) return new Date(date.seconds * 1000).toLocaleDateString('vi-VN');
-	// ISO string (orderDate)
-	const d = new Date(date);
-	return isNaN(d.getTime()) ? '---' : d.toLocaleDateString('vi-VN');
+	return formatDateVN(date);
 };
 
 export const formatPrice = (num: number): string => {

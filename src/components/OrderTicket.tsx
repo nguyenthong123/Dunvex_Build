@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { X, CheckCircle2 } from 'lucide-react';
-import { db, doc, getDoc } from '../services/firebase';
+import { db, doc, getDoc, onSnapshot } from '../services/firebase';
 import { useOwner } from '../hooks/useOwner';
 import { getCreatorName, getScaleAndWidth } from './orderTicket/ticketUtils';
 import { useTicketActions } from './orderTicket/useTicketActions';
 import TicketPaper from './orderTicket/TicketPaper';
 import TicketBill from './orderTicket/TicketBill';
+import type { TicketPrintPaper } from './orderTicket/printTicket';
 
 interface OrderTicketProps {
 	order: any;
@@ -21,18 +22,47 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose, products }) =
 	const [isSavingImage, setIsSavingImage] = useState(false);
 	const [capturedImage, setCapturedImage] = useState<string | null>(null);
 	const [showCopySuccess, setShowCopySuccess] = useState(false);
+	const [copySuccessMessage, setCopySuccessMessage] = useState('');
 	const [layoutMode, setLayoutMode] = useState<'a4' | 'receipt'>(window.innerWidth < 768 ? 'receipt' : 'a4');
+	const [paperSize, setPaperSize] = useState<TicketPrintPaper>(window.innerWidth < 768 ? 'k80' : 'a4');
 
 	useEffect(() => {
 		if (!owner.ownerId) return;
-		const fetchSettings = async () => {
-			const settingsRef = doc(db, 'settings', owner.ownerId);
-			const settingsSnap = await getDoc(settingsRef);
+		const settingsRef = doc(db, 'settings', owner.ownerId);
+		const unsub = onSnapshot(settingsRef, (settingsSnap) => {
+			let data: any = {};
 			if (settingsSnap.exists()) {
-				setCompanyInfo(settingsSnap.data());
+				data = settingsSnap.data();
+			}
+			if (!data.logoUrl) {
+				try {
+					const sess = JSON.parse(localStorage.getItem('dunvex_user_session') || '{}');
+					if (sess.logoUrl || sess.photoURL) data.logoUrl = sess.logoUrl || sess.photoURL;
+				} catch {}
+			}
+			setCompanyInfo(data);
+		});
+
+		const handleSettingsChange = (e: any) => {
+			if (e.detail?.collection === 'settings' && owner.ownerId) {
+				getDoc(settingsRef).then(snap => {
+					const d = snap.exists() ? snap.data() : {};
+					if (!d.logoUrl) {
+						try {
+							const sess = JSON.parse(localStorage.getItem('dunvex_user_session') || '{}');
+							if (sess.logoUrl || sess.photoURL) d.logoUrl = sess.logoUrl || sess.photoURL;
+						} catch {}
+					}
+					setCompanyInfo(d);
+				});
 			}
 		};
-		fetchSettings();
+		window.addEventListener('collection_changed', handleSettingsChange);
+
+		return () => {
+			unsub();
+			window.removeEventListener('collection_changed', handleSettingsChange);
+		};
 	}, [owner.ownerId]);
 
 	useEffect(() => {
@@ -53,8 +83,10 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose, products }) =
 		setCapturedImage,
 		setIsSavingImage,
 		setShowCopySuccess,
+		setCopySuccessMessage,
 		companyInfo,
 		products,
+		paperSize,
 	});
 
 	return (
@@ -80,6 +112,28 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose, products }) =
 					>
 						Mẫu Bill
 					</button>
+				</div>
+
+				<div className="flex items-center gap-2 bg-white/10 backdrop-blur-md rounded-full border border-white/20 px-2 py-1.5 shrink-0">
+					<label className="text-[9px] font-black uppercase tracking-[0.18em] text-white/80 hidden sm:inline">Giấy</label>
+					<select
+						value={paperSize}
+						onChange={(e) => {
+							const nextPaperSize = e.target.value as TicketPrintPaper;
+							setPaperSize(nextPaperSize);
+							if (nextPaperSize === 'k80' || nextPaperSize === 'k57') {
+								setLayoutMode('receipt');
+							} else {
+								setLayoutMode('a4');
+							}
+						}}
+						className="bg-slate-900/80 text-white text-[10px] font-bold rounded-full border border-white/10 px-2.5 py-1.5 outline-none focus:border-white/40"
+					>
+						<option value="a4">A4</option>
+						<option value="a5">A5</option>
+						<option value="k80">80mm</option>
+						<option value="k57">57mm</option>
+					</select>
 				</div>
 
 				<div className="flex items-center gap-2">
@@ -262,8 +316,8 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose, products }) =
 							<CheckCircle2 size={36} className="stroke-[2.5]" />
 						</div>
 						<div>
-							<h4 className="text-white font-black text-base uppercase tracking-wider mb-1">Sao chép thành công!</h4>
-							<p className="text-slate-400 text-xs leading-relaxed">Đã sao chép ảnh phiếu giao hàng vào khay nhớ tạm. Bạn có thể dán (Paste) gửi ngay sang Zalo / Facebook!</p>
+							<h4 className="text-white font-black text-base uppercase tracking-wider mb-1">Hoàn tất xử lý ảnh</h4>
+							<p className="text-slate-400 text-xs leading-relaxed">{copySuccessMessage}</p>
 						</div>
 					</div>
 				</div>

@@ -7,8 +7,9 @@ import { usePurchaseOrders } from '../hooks/usePurchaseOrders';
 import { useToast } from '../components/shared/Toast';
 import { Search, X, Plus, Trash2, Edit2, ChevronLeft, ChevronRight, Package, FileText, Printer, Image as ImageIcon, Copy, CheckCircle2, Camera, Loader2 } from 'lucide-react';
 import { serverTimestamp, Timestamp, db, getDoc, doc, auth } from '../services/firebase';
-import html2canvas from 'html2canvas-pro';
+import { generateTicketPng, dataURLtoBlob } from '../components/orderTicket/ticketImage';
 import { uploadImageToVPS } from '../utils/vpsUpload';
+import { copyOrShareImage } from '../utils/imageSharing';
 
 // ─── Helpers ────────────────────────────────────────────
 const fmt = (n: number) => Number(n || 0).toLocaleString('vi-VN');
@@ -82,17 +83,7 @@ const SupplierDebts = () => {
 
 		setIsSavingImage(true);
 		try {
-			const targetWidth = 420;
-			const canvas = await html2canvas(node, {
-				backgroundColor: '#ffffff',
-				width: targetWidth,
-				scale: 2,
-				useCORS: true,
-				allowTaint: false,
-				logging: false,
-			});
-			const dataUrl = canvas.toDataURL('image/png');
-
+			const dataUrl = await generateTicketPng(node, true, 420);
 			const link = document.createElement('a');
 			link.download = `cong_no_ncc_${selectedSupplier.name?.replace(/\s+/g, '_')}.png`;
 			link.href = dataUrl;
@@ -111,44 +102,32 @@ const SupplierDebts = () => {
 		if (!node) return;
 
 		setIsSavingImage(true);
-		let generatedUrl = '';
 		try {
-			const targetWidth = 420;
+			const dataUrl = await generateTicketPng(node, true, 420);
+			const fileName = `cong_no_ncc_${selectedSupplier.name?.replace(/\s+/g, '_')}.png`;
+			const res = await copyOrShareImage({
+				dataUrl,
+				fileName,
+				title: 'Phiếu công nợ nhà cung cấp',
+				text: `Bảng đối soát công nợ - NCC ${selectedSupplier.name || ''}`,
+			});
 
-			if (!navigator.clipboard || !window.ClipboardItem) {
-				throw new Error("Trình duyệt không hỗ trợ Clipboard API hoặc kết nối HTTP không bảo mật");
-			}
-
-			const blobPromise = (async () => {
-				const canvas = await html2canvas(node, {
-					backgroundColor: '#ffffff',
-					width: targetWidth,
-					scale: 2,
-					useCORS: true,
-					allowTaint: false,
-					logging: false,
-				});
-				const dataUrl = canvas.toDataURL('image/png');
-				generatedUrl = dataUrl;
-				const response = await fetch(dataUrl);
-				if (!response.ok) throw new Error(`HTTP status ${response.status}`);
-				return await response.blob();
-			})();
-
-			await navigator.clipboard.write([
-				new ClipboardItem({
-					'image/png': blobPromise
-				})
-			]);
 			setShowCopySuccess(true);
 			setTimeout(() => setShowCopySuccess(false), 2500);
+			if (res.message) {
+				showToast(res.message, "success");
+			}
 		} catch (error) {
 			console.error("Lỗi sao chép hình ảnh:", error);
-			if (generatedUrl) {
-				setCapturedImage(generatedUrl);
-				alert("Sao chép trực tiếp thất bại. Hệ thống đã tự động tạo ảnh phía dưới, bạn hãy NHẤN GIỮ VÀO ẢNH để Sao chép hoặc Lưu lại nhé!");
-			} else {
-				alert("Không thể tạo hình ảnh phiếu công nợ: " + (error instanceof Error ? error.message : String(error)));
+			try {
+				const dataUrl = await generateTicketPng(node, true, 420);
+				const link = document.createElement('a');
+				link.download = `cong_no_ncc_${selectedSupplier.name?.replace(/\s+/g, '_')}.png`;
+				link.href = dataUrl;
+				link.click();
+				showToast("Đã tải ảnh phiếu công nợ về máy!", "success");
+			} catch (downloadErr) {
+				showToast("Không thể tạo hình ảnh phiếu công nợ: " + (error instanceof Error ? error.message : String(error)), "error");
 			}
 		} finally {
 			setIsSavingImage(false);
@@ -156,20 +135,23 @@ const SupplierDebts = () => {
 	};
 
 	const handleCopyStatementCapturedImage = async () => {
-		if (!capturedImage) return;
+		if (!capturedImage || !selectedSupplier) return;
 		try {
-			const response = await fetch(capturedImage);
-			const blob = await response.blob();
-			await navigator.clipboard.write([
-				new ClipboardItem({
-					[blob.type]: blob
-				})
-			]);
+			const fileName = `cong_no_ncc_${selectedSupplier.name?.replace(/\s+/g, '_')}.png`;
+			const res = await copyOrShareImage({
+				dataUrl: capturedImage,
+				fileName,
+				title: 'Phiếu công nợ nhà cung cấp',
+				text: `Bảng đối soát công nợ - NCC ${selectedSupplier.name || ''}`,
+			});
 			setShowCopySuccess(true);
 			setTimeout(() => setShowCopySuccess(false), 2500);
+			if (res.message) {
+				showToast(res.message, "success");
+			}
 		} catch (error) {
 			console.error("Lỗi sao chép hình ảnh:", error);
-			alert("Thiết bị hoặc trình duyệt không hỗ trợ sao chép trực tiếp. Bạn vui lòng nhấn giữ hình ảnh để Sao chép!");
+			showToast("Không thể sao chép hoặc chia sẻ ảnh", "warning");
 		}
 	};
 

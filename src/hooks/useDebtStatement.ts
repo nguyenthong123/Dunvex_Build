@@ -6,7 +6,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
-import { collection, query, where, getDocs, getDoc, doc } from '../services/firebase';
+import { collection, query, where, getDocs, getDoc, doc, onSnapshot } from '../services/firebase';
+import { printService } from '../services/printService';
+import { generateTicketPng } from '../components/orderTicket/ticketImage';
 
 export interface UseDebtStatementParams {
   ownerId: string;
@@ -33,19 +35,42 @@ export function useDebtStatement({
   const [companyInfo, setCompanyInfo] = useState<any>(null);
 
   useEffect(() => {
-    const fetchSettings = async () => {
-      try {
-        const settingsSnap = await getDoc(doc(db, 'settings', ownerId));
-        if (settingsSnap.exists()) {
-          setCompanyInfo(settingsSnap.data());
-        }
-      } catch (err) {
-        console.warn('Error fetching settings for printing:', err);
+    if (!ownerId) return;
+    const settingsRef = doc(db, 'settings', ownerId);
+    const unsub = onSnapshot(settingsRef, (settingsSnap) => {
+      let data: any = {};
+      if (settingsSnap.exists()) {
+        data = settingsSnap.data();
+      }
+      if (!data.logoUrl) {
+        try {
+          const sess = JSON.parse(localStorage.getItem('dunvex_user_session') || '{}');
+          if (sess.logoUrl || sess.photoURL) data.logoUrl = sess.logoUrl || sess.photoURL;
+        } catch {}
+      }
+      setCompanyInfo(data);
+    });
+
+    const handleCollectionChange = (e: any) => {
+      if (e.detail?.collection === 'settings' && ownerId) {
+        getDoc(settingsRef).then(snap => {
+          const d = snap.exists() ? snap.data() : {};
+          if (!d.logoUrl) {
+            try {
+              const sess = JSON.parse(localStorage.getItem('dunvex_user_session') || '{}');
+              if (sess.logoUrl || sess.photoURL) d.logoUrl = sess.logoUrl || sess.photoURL;
+            } catch {}
+          }
+          setCompanyInfo(d);
+        });
       }
     };
-    if (ownerId) {
-      fetchSettings();
-    }
+    window.addEventListener('collection_changed', handleCollectionChange);
+
+    return () => {
+      unsub();
+      window.removeEventListener('collection_changed', handleCollectionChange);
+    };
   }, [ownerId]);
 
   // ── Resize listener for statement scale ──────────────────
@@ -127,15 +152,82 @@ export function useDebtStatement({
   };
 
   // ── Print statement ──────────────────────────────────────
-  const handlePrintStatement = () => {
+  const handlePrintStatement = async (cachedPngUrl?: string | null) => {
     if (!selectedCustomer) return;
-    const printWindow = window.open('', '_blank', 'width=1200,height=1000');
-    if (!printWindow) {
-      alert('Vui lòng cho phép trình duyệt mở popup để in!');
+
+    let dataUrl = cachedPngUrl;
+    if (!dataUrl) {
+      const node = document.getElementById('debt-statement-container');
+      if (node) {
+        try {
+          dataUrl = await generateTicketPng(node, true, 800);
+        } catch (e) {
+          console.warn('[handlePrintStatement] Error generating PNG for print:', e);
+        }
+      }
+    }
+
+    if (dataUrl) {
+      const fullHtml = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <title>Phiếu Công Nợ - ${selectedCustomer?.name || ''}</title>
+            <style>
+              @page {
+                size: A4 portrait;
+                margin: 0;
+              }
+              * { box-sizing: border-box; margin: 0; padding: 0; }
+              html, body {
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+                background: #ffffff;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                overflow: hidden;
+              }
+              .page-container {
+                width: 100%;
+                height: 100%;
+                display: flex;
+                justify-content: center;
+                align-items: flex-start;
+                padding: 0;
+                margin: 0;
+                page-break-inside: avoid !important;
+                page-break-after: avoid !important;
+              }
+              img {
+                width: 100%;
+                max-width: 210mm;
+                max-height: 297mm;
+                height: auto;
+                display: block;
+                margin: 0 auto;
+                page-break-inside: avoid !important;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="page-container">
+              <img src="${dataUrl}" alt="Phiếu Công Nợ" />
+            </div>
+          </body>
+        </html>
+      `;
+
+      printService.printHtml(fullHtml, {
+        isReceipt: false,
+        title: `Phiếu Công Nợ - ${selectedCustomer?.name || ''}`
+      });
       return;
     }
 
-    // Compile active CSS rules directly to prevent black & white styling due to lazy-loaded CSS
+    // Fallback: compile HTML directly
     let styles = '';
     try {
       for (const sheet of document.styleSheets) {
@@ -278,7 +370,7 @@ export function useDebtStatement({
           ${(companyInfo?.name || 'D').slice(0, 1).toUpperCase()}
          </div>`;
 
-    printWindow.document.write(`
+    const fullDebtHtml = `
       <html>
         <head>
           <base href="${window.location.origin}/">
@@ -379,7 +471,7 @@ export function useDebtStatement({
                   <span>DANH SÁCH ĐƠN MUA</span>
                   <span>Số tiền</span>
                 </div>
-                <div class="divide-y divide-dashed divide-slate-200 mt-1">
+                <div class="divide-y divide-dashed border-slate-200 mt-1">
                   ${ordersRows}
                 </div>
               </div>
@@ -390,7 +482,7 @@ export function useDebtStatement({
                   <span>ĐÃ THANH TOÁN</span>
                   <span>Số tiền</span>
                 </div>
-                <div class="divide-y divide-dashed divide-slate-200 mt-1">
+                <div class="divide-y divide-dashed border-slate-200 mt-1">
                   ${paymentsRows}
                 </div>
               </div>
@@ -435,81 +527,15 @@ export function useDebtStatement({
               </div>
             </main>
           </div>
-          <script>
-            function checkStylesAndPrint() {
-              const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
-              let loadedCount = 0;
-
-              const printAndClose = () => {
-                if (window.hasPrinted) return;
-                window.hasPrinted = true;
-
-                if (document.fonts && document.fonts.ready) {
-                  document.fonts.ready.then(() => {
-                    setTimeout(() => {
-                      window.print();
-                      if (!/Android|iPhone|iPad/i.test(navigator.userAgent)) {
-                        window.close();
-                      }
-                    }, 250);
-                  }).catch(() => {
-                    setTimeout(() => {
-                      window.print();
-                      if (!/Android|iPhone|iPad/i.test(navigator.userAgent)) {
-                        window.close();
-                      }
-                    }, 250);
-                  });
-                } else {
-                  setTimeout(() => {
-                    window.print();
-                    if (!/Android|iPhone|iPad/i.test(navigator.userAgent)) {
-                      window.close();
-                    }
-                  }, 250);
-                }
-              };
-
-              if (links.length === 0) {
-                printAndClose();
-                return;
-              }
-
-              links.forEach(link => {
-                if (link.sheet) {
-                  loadedCount++;
-                  if (loadedCount === links.length) {
-                    printAndClose();
-                  }
-                } else {
-                  link.onload = () => {
-                    loadedCount++;
-                    if (loadedCount === links.length) {
-                      printAndClose();
-                    }
-                  };
-                  link.onerror = () => {
-                    loadedCount++;
-                    if (loadedCount === links.length) {
-                      printAndClose();
-                    }
-                  };
-                }
-              });
-
-              setTimeout(printAndClose, 1200);
-            }
-
-            if (document.readyState === 'complete') {
-              checkStylesAndPrint();
-            } else {
-              window.onload = checkStylesAndPrint;
-            }
-          </script>
         </body>
       </html>
-    `);
-    printWindow.document.close();
+    `;
+
+    printService.printHtml(fullDebtHtml, {
+      isReceipt: false,
+      paperSize: 'a4',
+      title: `Phiếu Công Nợ - ${selectedCustomer?.name || ''}`
+    });
   };
 
   return {

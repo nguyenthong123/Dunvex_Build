@@ -4,6 +4,7 @@ import {
 	auth, db, collection, query, onSnapshot, doc,
 	where, serverTimestamp, orderBy, limit, getDoc, getDocs, setDoc, addDoc
 } from '../services/firebase';
+import { getCollection } from '../services/apiClient';
 
 export interface NexusStats {
 	totalUsers: number;
@@ -214,66 +215,73 @@ export function useNexusData() {
 			setStats(prev => ({ ...prev, pendingPayments: data.filter((r: any) => r.status === 'pending').length }));
 		});
 
-		// 2. Listen to Users & Settings to merge data
-		const unsubUsers = onSnapshot(collection(db, 'users'), (userSnap) => {
-			const usersData = userSnap.docs.map(d => ({ id: d.id, ...d.data(), uid: d.data().uid || d.id }));
-			const owners = usersData.filter((u: any) => u.uid === u.ownerId || !u.ownerId);
-			const staffUsers = usersData.filter((u: any) => u.uid !== u.ownerId && u.ownerId && u.role !== 'admin');
+		// Nexus must load these system-wide collections from the authenticated server,
+		// not the owner-scoped local SQLite/RAM cache used by normal app screens.
+		let cancelled = false;
+		const refreshCustomers = async () => {
+			try {
+				const [usersData, settingsData] = await Promise.all([
+					getCollection('users'),
+					getCollection('settings')
+				]);
+				if (cancelled) return;
 
-			const unsubSettings = onSnapshot(collection(db, 'settings'), (settingsSnap) => {
-				const settingsData: Record<string, any> = {};
-				settingsSnap.docs.forEach(d => { settingsData[d.id] = d.data(); });
+				const owners: any[] = usersData
+					.map((u): any => ({ ...u, uid: u.uid || u.id }))
+					.filter((u: any) => u.uid === u.ownerId || !u.ownerId);
+				const staffUsers: any[] = usersData
+					.map((u): any => ({ ...u, uid: u.uid || u.id }))
+					.filter((u: any) => u.uid !== u.ownerId && u.ownerId && u.role !== 'admin');
+				const settingsById = Object.fromEntries(settingsData.map(setting => [setting.id, setting]));
 
 				const adminMap: Record<string, any> = {};
-				for (const u of owners) {
-					const s = settingsData[u.uid] || {};
-					adminMap[u.uid] = {
-						...u,
-						isPro: s.isPro ?? u.isPro ?? false,
-						planId: s.planId || (s.isPro ? 'premium_monthly' : 'free'),
-						subscriptionStatus: s.subscriptionStatus || (u.isPro ? 'active' : 'trial'),
-						subscriptionExpiresAt: s.subscriptionExpiresAt || null,
-						paymentConfirmedAt: s.paymentConfirmedAt || null,
-						manualLockOrders: s.manualLockOrders || false,
-						manualLockDebts: s.manualLockDebts || false,
-						manualLockSheets: s.manualLockSheets || false,
-						manualLockAi: s.manualLockAi || false
+				for (const owner of owners) {
+					const settings = settingsById[owner.uid] || {};
+					adminMap[owner.uid] = {
+						...owner,
+						isPro: settings.isPro ?? owner.isPro ?? false,
+						planId: settings.planId || (settings.isPro ? 'premium_monthly' : 'free'),
+						subscriptionStatus: settings.subscriptionStatus || (owner.isPro ? 'active' : 'trial'),
+						subscriptionExpiresAt: settings.subscriptionExpiresAt || null,
+						paymentConfirmedAt: settings.paymentConfirmedAt || null,
+						manualLockOrders: settings.manualLockOrders || false,
+						manualLockDebts: settings.manualLockDebts || false,
+						manualLockSheets: settings.manualLockSheets || false,
+						manualLockAi: settings.manualLockAi || false
 					};
 				}
 
-				const mergedAdmins = owners.map((u: any) => {
-					const s = settingsData[u.uid] || {};
+				const mergedAdmins = owners.map((owner: any) => ({
+					...adminMap[owner.uid],
+					isStaff: false
+				}));
+				const mergedStaff = staffUsers.map((user: any) => {
+					const admin = adminMap[user.ownerId];
+					if (admin) {
+						return {
+							...user,
+							isPro: admin.isPro ?? false,
+							planId: admin.planId || 'free',
+							subscriptionStatus: admin.subscriptionStatus,
+							subscriptionExpiresAt: admin.subscriptionExpiresAt,
+							paymentConfirmedAt: admin.paymentConfirmedAt || null,
+							manualLockOrders: admin.manualLockOrders,
+							manualLockDebts: admin.manualLockDebts,
+							manualLockSheets: admin.manualLockSheets,
+							manualLockAi: admin.manualLockAi,
+							isStaff: true,
+							adminId: user.ownerId,
+							adminName: admin.displayName || admin.email || 'Admin'
+						};
+					}
 					return {
-						...u, isPro: s.isPro ?? u.isPro ?? false,
-						planId: s.planId || (s.isPro ? 'premium_monthly' : 'free'),
-						subscriptionStatus: s.subscriptionStatus || (u.isPro ? 'active' : 'trial'),
-						subscriptionExpiresAt: s.subscriptionExpiresAt || null,
-						paymentConfirmedAt: s.paymentConfirmedAt || null,
-						manualLockOrders: s.manualLockOrders || false,
-						manualLockDebts: s.manualLockDebts || false,
-						manualLockSheets: s.manualLockSheets || false,
-						manualLockAi: s.manualLockAi || false,
-						isStaff: false
-					};
-				});
-
-				const mergedStaff = staffUsers.map((u: any) => {
-					const admin = adminMap[u.ownerId];
-					if (admin) return {
-						...u, isPro: admin.isPro ?? false, planId: admin.planId || 'free',
-						subscriptionStatus: admin.subscriptionStatus,
-						subscriptionExpiresAt: admin.subscriptionExpiresAt,
-						paymentConfirmedAt: admin.paymentConfirmedAt || null,
-						manualLockOrders: admin.manualLockOrders,
-						manualLockDebts: admin.manualLockDebts,
-						manualLockSheets: admin.manualLockSheets,
-						manualLockAi: admin.manualLockAi,
-						isStaff: true, adminId: u.ownerId,
-						adminName: admin.displayName || admin.email || 'Admin'
-					};
-					return {
-						...u, isPro: false, planId: 'free', subscriptionStatus: 'trial',
-						subscriptionExpiresAt: null, isStaff: true, adminName: 'Không xác định'
+						...user,
+						isPro: false,
+						planId: 'free',
+						subscriptionStatus: 'trial',
+						subscriptionExpiresAt: null,
+						isStaff: true,
+						adminName: 'Không xác định'
 					};
 				});
 
@@ -281,13 +289,15 @@ export function useNexusData() {
 				setCustomers(merged);
 				setStats(prev => ({
 					...prev,
-					totalUsers: merged.length,
-					activePro: merged.filter((c: any) => c.isPro).length
+					totalUsers: owners.length,
+					activePro: owners.filter((owner: any) => adminMap[owner.uid]?.isPro).length
 				}));
-			});
-
-			return () => unsubSettings();
-		});
+			} catch (error) {
+				console.error('[Nexus] Failed to load system-wide customer list:', error);
+			}
+		};
+		void refreshCustomers();
+		const customerRefreshTimer = window.setInterval(() => void refreshCustomers(), 30_000);
 
 		// 3. System Config
 		const fetchConfig = async () => {
@@ -300,49 +310,82 @@ export function useNexusData() {
 		};
 		fetchConfig();
 
-		// 4. Listen to Audit Logs (System-wide)
-		const qLogs = query(collection(db, 'audit_logs'), orderBy('createdAt', 'desc'), limit(100));
-		const unsubLogs = onSnapshot(qLogs, (snap) => {
-			const newLogs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-			setLogs(newLogs);
-
-			// AI ANOMALY DETECTION (Pocket Click Logic)
-			if (isAiActive) {
-				const userActionCounts: Record<string, any[]> = {};
-				const now = Date.now();
-
-				newLogs.forEach((log: any) => {
-					const time = log.createdAt?.toMillis ? log.createdAt.toMillis() : 0;
-					if (now - time < 60000) {
-						if (!userActionCounts[log.ownerId]) userActionCounts[log.ownerId] = [];
-						userActionCounts[log.ownerId].push(log);
-					}
+		// 4. Load the latest system-wide audit logs directly from the server.
+		// The general collection bootstrap is capped and unordered, so sorting that
+		// partial RAM cache can hide the newest audit records.
+		const refreshAuditLogs = async () => {
+			try {
+				const newLogs = await getCollection('audit_logs', {
+					orderBy: 'createdAt:desc',
+					limit: 100
 				});
+				if (cancelled) return;
+				setLogs(newLogs);
 
-				const anomalies: any[] = [];
-				Object.entries(userActionCounts).forEach(([ownerId, actions]) => {
-					if (actions.length >= 10) {
-						const times = actions.map(a => a.createdAt?.toMillis ? a.createdAt.toMillis() : 0).sort();
-						const span = times[times.length - 1] - times[0];
-						if (span < 30000) {
-							anomalies.push({
-								ownerId,
-								email: actions[0].user,
-								severity: 'high',
-								reason: 'RAPID_ACTIONS_DETECTED',
-								details: `Phát hiện ${actions.length} thao tác trong ${Math.round(span / 1000)}s — Nghi ngờ thao tác nhanh bất thường.`
-							});
+				// AI ANOMALY DETECTION (Pocket Click Logic)
+				if (isAiActive) {
+					const userActionCounts: Record<string, any[]> = {};
+					const now = Date.now();
 
-							// AUTO LOCK if enabled
-							if (systemConfig.ai_auto_lock) {
-								executeAiAutoLock(ownerId, actions[0].user);
+					newLogs.forEach((log: any) => {
+						const createdAt = log.createdAt;
+						const time = typeof createdAt?.toMillis === 'function'
+							? createdAt.toMillis()
+							: typeof createdAt?.seconds === 'number'
+								? createdAt.seconds * 1000
+								: typeof createdAt === 'string' || typeof createdAt === 'number'
+									? new Date(createdAt).getTime()
+									: 0;
+						if (Number.isFinite(time) && now - time < 60000) {
+							if (!userActionCounts[log.ownerId]) userActionCounts[log.ownerId] = [];
+							userActionCounts[log.ownerId].push(log);
+						}
+					});
+
+					const anomalies: any[] = [];
+					Object.entries(userActionCounts).forEach(([ownerId, actions]) => {
+						if (actions.length >= 10) {
+							const times = actions.map((action: any) => {
+								const createdAt = action.createdAt;
+								return typeof createdAt?.toMillis === 'function'
+									? createdAt.toMillis()
+									: typeof createdAt?.seconds === 'number'
+										? createdAt.seconds * 1000
+										: new Date(createdAt).getTime();
+							}).sort((a, b) => a - b);
+							const span = times[times.length - 1] - times[0];
+							if (span < 30000) {
+								anomalies.push({
+									ownerId,
+									email: actions[0].user,
+									severity: 'high',
+									reason: 'RAPID_ACTIONS_DETECTED',
+									details: `Phát hiện ${actions.length} thao tác trong ${Math.round(span / 1000)}s — Nghi ngờ thao tác nhanh bất thường.`
+								});
+
+								// AUTO LOCK if enabled
+								if (systemConfig.ai_auto_lock) {
+									executeAiAutoLock(ownerId, actions[0].user);
+								}
 							}
 						}
-					}
-				});
-				setAiAnomalies(anomalies);
+					});
+					setAiAnomalies(anomalies);
+				}
+			} catch (error) {
+				console.error('[Nexus] Failed to load system audit logs:', error);
 			}
-		});
+		};
+		void refreshAuditLogs();
+		const handleAuditLogsChanged = (event: Event) => {
+			const collectionName = (event as CustomEvent<{ collection?: string }>).detail?.collection;
+			if (collectionName === 'audit_logs') void refreshAuditLogs();
+		};
+		const handleAuditLogsVisibility = () => {
+			if (document.visibilityState === 'visible') void refreshAuditLogs();
+		};
+		window.addEventListener('collection_changed', handleAuditLogsChanged);
+		document.addEventListener('visibilitychange', handleAuditLogsVisibility);
 
 		// 5. System config & Addons for Config Tab
 		const unsubConfig = onSnapshot(doc(db, 'system_config', 'payment'), (snap) => {
@@ -365,8 +408,10 @@ export function useNexusData() {
 
 		return () => {
 			unsubRequests();
-			unsubUsers();
-			unsubLogs();
+			cancelled = true;
+			window.clearInterval(customerRefreshTimer);
+			window.removeEventListener('collection_changed', handleAuditLogsChanged);
+			document.removeEventListener('visibilitychange', handleAuditLogsVisibility);
 			unsubConfig();
 			unsubAddons();
 			unsubAiAnalytics();

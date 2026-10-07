@@ -6,6 +6,9 @@
 import { useState, useEffect } from 'react';
 import { productService, type WithId } from '../services/dataAccess';
 
+import { offlineImageCache } from '../services/offlineImageCache';
+import { isNativeApp } from '../utils/platform';
+
 interface UseProductsOptions {
   ownerId: string;
   enabled?: boolean;
@@ -48,8 +51,12 @@ export function useProducts({
           setTotalPages(res.totalPages);
           setLoading(false);
           setError(null);
+          // Pre-cache all product images in background for offline use (chỉ trên Native App)
+          if (isNativeApp() && res.items && res.items.length > 0) {
+            offlineImageCache.precacheProducts(res.items);
+          }
         } catch (err) {
-          console.error('useProducts paginated error:', err);
+          console.error('useProducts error:', err);
           setError(err as Error);
           setLoading(false);
         }
@@ -75,6 +82,10 @@ export function useProducts({
           setProducts(data);
           setLoading(false);
           setError(null);
+          // Pre-cache all product images in background for offline use (chỉ trên Native App)
+          if (isNativeApp() && data && data.length > 0) {
+            offlineImageCache.precacheProducts(data);
+          }
         },
         (err) => {
           console.error('useProducts error:', err);

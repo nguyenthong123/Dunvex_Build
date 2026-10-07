@@ -1,5 +1,6 @@
 import { Building2, MapPin, Phone, Mail, ShieldCheck } from 'lucide-react';
 import { formatDate, formatPrice, getTicketImageUrl, computeTotalPackages, groupOrderItems } from './ticketUtils';
+import { CachedImage } from '../shared/CachedImage';
 
 interface TicketPaperProps {
 	order: any;
@@ -25,7 +26,7 @@ const TicketPaper: React.FC<TicketPaperProps> = ({ order, products, companyInfo,
 										<div className="flex items-center gap-4">
 											{companyInfo?.logoUrl ? (
 												<div className="w-12 h-12 rounded-full border border-slate-200 overflow-hidden bg-white shrink-0 shadow-sm">
-													<img src={getTicketImageUrl(companyInfo.logoUrl)} alt="Logo" className="w-full h-full object-cover" />
+													<CachedImage src={companyInfo.logoUrl} alt="Logo" className="w-full h-full object-cover" />
 												</div>
 											) : (
 												<div className="w-12 h-12 bg-slate-900 rounded-full flex items-center justify-center text-white shrink-0 shadow-sm">
@@ -143,11 +144,12 @@ const TicketPaper: React.FC<TicketPaperProps> = ({ order, products, companyInfo,
 														<div className="flex justify-center">
 															{itemImageUrl ? (
 																<div className="w-12 h-12 rounded-full border border-slate-200 overflow-hidden bg-white shrink-0">
-																	<img 
-																		src={getTicketImageUrl(itemImageUrl)} 
+																	<CachedImage 
+																		src={itemImageUrl} 
 																		alt={item.name} 
 																		className="w-full h-full object-cover rounded-full" 
-																		/>
+																		fallbackText={item.name}
+																	/>
 																</div>
 															) : (
 																<div className="w-12 h-12 rounded-full border border-dashed border-slate-200 bg-slate-50 flex items-center justify-center text-[10px] font-black text-slate-400 uppercase tracking-tighter">

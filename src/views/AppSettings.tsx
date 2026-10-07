@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { auth, db, doc, getDoc, setDoc, onSnapshot, collection, addDoc, serverTimestamp } from '../services/firebase';
-import { signOut } from 'firebase/auth';
+import { logoutSQLiteSession, apiUrl } from '../services/apiClient';
 import { useTheme } from '../context/ThemeContext';
 import { Moon, Sun, Globe, Bell, LogOut, User, HelpCircle, Key, Copy, Check, RefreshCw, Link, Send, Save, Download, Lock, RefreshCcw, ShoppingBag, Calendar, Clock, MapPin, DollarSign, FileText, Zap } from 'lucide-react';
 import { useToast } from '../components/shared/Toast';
 import { useOwner } from '../hooks/useOwner';
+import { biometricAuth } from '../services/biometricAuthService';
+import { exportLocalDataToExcel } from '../utils/excelExport';
+import { getAppVersionInfo, isNativeApp } from '../utils/platform';
+import { StoragePartitionManager } from '../components/admin/StoragePartitionManager';
 
 const AppSettings = () => {
+	const appInfo = getAppVersionInfo();
 	const navigate = useNavigate();
 	const location = useLocation();
 	const { theme, toggleTheme } = useTheme();
@@ -27,6 +32,14 @@ const AppSettings = () => {
 	const [apiEnabled, setApiEnabled] = React.useState(false);
 	const [webhookSecret, setWebhookSecret] = React.useState('');
 	const [regeneratingWebhook, setRegeneratingWebhook] = React.useState(false);
+
+	// ── Biometric Authentication State ──
+	const [biometricInfo, setBiometricInfo] = React.useState<{ available: boolean; label: string; biometryType: string }>({
+		available: false,
+		label: 'Vân tay / Face ID',
+		biometryType: 'none',
+	});
+	const [isBiometricActive, setIsBiometricActive] = React.useState(false);
 
 	// ── Notification Toggles State (n8n Engine) ──
 	const [notifyNewOrder, setNotifyNewOrder] = React.useState(true);
@@ -157,7 +170,7 @@ const AppSettings = () => {
 		}
 		setSavingTelegram(true);
 		try {
-			const res = await fetch('/api/setup-telegram', {
+			const res = await fetch(apiUrl('/api/setup-telegram'), {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
 				body: JSON.stringify({ 
@@ -211,7 +224,7 @@ const AppSettings = () => {
 		}
 		setTestingTelegram(true);
 		try {
-			const res = await fetch('/api/telegram-notify', {
+			const res = await fetch(apiUrl('/api/telegram-notify'), {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ 
@@ -229,6 +242,68 @@ const AppSettings = () => {
 			showToast(err.message, 'error');
 		} finally {
 			setTestingTelegram(false);
+		}
+	};
+
+	// ─── Biometric Authentication Lifecycle ───
+	React.useEffect(() => {
+		let isMounted = true;
+		biometricAuth.getBiometricDetails().then(details => {
+			if (!isMounted) return;
+			setBiometricInfo({
+				available: details.available,
+				label: details.label,
+				biometryType: details.biometryType,
+			});
+			const hasActiveProfile = biometricAuth.hasBiometricProfile();
+			setIsBiometricActive(hasActiveProfile);
+		});
+		return () => {
+			isMounted = false;
+		};
+	}, []);
+
+	const handleToggleBiometric = async () => {
+		const willEnable = !isBiometricActive;
+		if (willEnable) {
+			try {
+				// Yêu cầu xác thực sinh trắc học thiết bị để kích hoạt
+				const testAuth = await biometricAuth.authenticate(`Kích hoạt đăng nhập nhanh bằng ${biometricInfo.label}`);
+				if (!testAuth.success) {
+					showToast(testAuth.error || 'Xác thực sinh trắc học không thành công', 'error');
+					return;
+				}
+
+				// Lấy thông tin user hiện tại từ local session hoặc owner
+				const rawSession = localStorage.getItem('dunvex_user_session');
+				const currentSession = rawSession ? JSON.parse(rawSession) : null;
+				const currentUserEmail = auth.currentUser?.email || currentSession?.email || owner.userEmail || '';
+				const currentToken = localStorage.getItem('dunvex_token') || currentSession?.token || '';
+
+				if (!currentUserEmail) {
+					showToast('Không tìm thấy thông tin tài khoản đăng nhập hiện tại.', 'error');
+					return;
+				}
+
+				const ok = await biometricAuth.registerBiometrics(
+					currentUserEmail,
+					currentSession || { email: currentUserEmail, uid: owner.ownerId },
+					currentToken
+				);
+
+				if (ok) {
+					setIsBiometricActive(true);
+					showToast(`Đã bật xác thực bằng ${biometricInfo.label} thành công!`, 'success');
+				} else {
+					showToast('Không thể kích hoạt phương thức sinh trắc học này.', 'error');
+				}
+			} catch (err: any) {
+				showToast(err.message || 'Lỗi kích hoạt sinh trắc học', 'error');
+			}
+		} else {
+			biometricAuth.disableBiometrics();
+			setIsBiometricActive(false);
+			showToast(`Đã tắt xác thực bằng ${biometricInfo.label}.`, 'info');
 		}
 	};
 
@@ -256,7 +331,7 @@ const AppSettings = () => {
 			localStorage.removeItem('dunvex_owner_id');
 			localStorage.removeItem('dunvex_api_key');
 			window.dispatchEvent(new CustomEvent('dunvex_logout'));
-			await signOut(auth);
+			await logoutSQLiteSession();
 			navigate('/login');
 		} catch (error) {
 			console.error("Logout error:", error);
@@ -284,94 +359,19 @@ const AppSettings = () => {
 
 		setExportLoading(true);
 		try {
-			// 1. Fetch data from API (server-side fetch + date filter)
-			const apiRes = await fetch('/api/export-data', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					ownerId: owner.ownerId,
-					startDate: syncRange.start || undefined,
-					endDate: syncRange.end || undefined,
-				}),
+			const { totalRows, fileName, savedLocation } = await exportLocalDataToExcel({
+				ownerId: owner.ownerId,
+				startDate: syncRange.start,
+				endDate: syncRange.end,
+				isEmployee: owner.isEmployee,
+				role: owner.role,
+				exportCount,
+				userEmail: auth.currentUser?.email || '',
+				displayName: auth.currentUser?.displayName || '',
+				uid: auth.currentUser?.uid || ''
 			});
 
-			if (!apiRes.ok) {
-				const errData = await apiRes.json().catch(() => ({}));
-				throw new Error(errData.error || `Server error: ${apiRes.status}`);
-			}
-
-			const { data: serverData } = await apiRes.json();
-
-			// 2. Create Excel workbook from server data
-			const XLSX = await import('xlsx');
-			const workbook = XLSX.utils.book_new();
-
-			const isEmployee = owner.isEmployee && owner.role !== 'admin';
-
-			// Cấu hình bảng xuất Excel cho Nhân viên vs Admin
-			const employeeSheetConfig: [string, string][] = [
-				['orders', 'don_hang'],
-				['customers', 'khach_hang'],
-				['products', 'san_pham'],
-				['inventory_logs', 'ton_kho'],
-				['debts', 'cong_no'],
-				['checkins', 'checkin'],
-				['attendance_logs', 'cham_cong'],
-			];
-
-			const adminSheetConfig: [string, string][] = [
-				['products', 'san_pham'],
-				['customers', 'khach_hang'],
-				['orders', 'don_hang'],
-				['debts', 'cong_no'],
-				['checkins', 'checkin'],
-				['attendance_logs', 'cham_cong'],
-				['payments', 'lich_su_thanh_toan'],
-				['inventory_logs', 'ton_kho'],
-				['supplier_debts', 'cong_no_nha_cung_cap'],
-				['purchase_orders', 'don_nhap_hang'],
-			];
-
-			const sheetConfig = isEmployee ? employeeSheetConfig : adminSheetConfig;
-
-			for (const [key, sheetName] of sheetConfig) {
-				const items = serverData[key];
-				if (items && items.length > 0) {
-					const worksheet = XLSX.utils.json_to_sheet(items);
-					XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
-				}
-			}
-
-			// Add order details sheet
-			if (serverData.orderDetails && serverData.orderDetails.length > 0) {
-				const detailsSheet = XLSX.utils.json_to_sheet(serverData.orderDetails);
-				XLSX.utils.book_append_sheet(workbook, detailsSheet, 'chi_tiet_don_hang');
-			}
-
-			// 3. Download file
-			XLSX.writeFile(workbook, `Dunvex_Export_${owner.ownerId}_${new Date().toISOString().slice(0, 10)}.xlsx`);
-
-			// 4. Update Usage Count in Firestore
-			const currentMonth = new Date().toISOString().slice(0, 7);
-			const usageRef = doc(db, 'usage_limits', `${owner.ownerId}_${currentMonth}`);
-			await setDoc(usageRef, {
-				ownerId: owner.ownerId,
-				count: exportCount + 1,
-				lastExportAt: serverTimestamp(),
-				lastExportBy: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên'
-			}, { merge: true });
-
-			// 5. Audit Log
-			await addDoc(collection(db, 'audit_logs'), {
-				action: 'Bộ lưu dữ liệu (Export - API)',
-				user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
-				userId: auth.currentUser?.uid || "",
-				ownerId: owner.ownerId,
-				details: `Đã xuất dữ liệu ra Excel (Lần thứ ${exportCount + 1} trong tháng)`,
-				createdAt: serverTimestamp()
-			});
-
-			showToast("Tải dữ liệu thành công!", "success");
+			showToast(`Đã xuất ${totalRows} dòng vào ${fileName}! Kiểm tra ${savedLocation}.`, "success");
 		} catch (error: any) {
 			console.error("Export Error:", error);
 			showToast("Lỗi khi trích xuất dữ liệu: " + (error.message || "Vui lòng thử lại sau"), "error");
@@ -388,6 +388,45 @@ const AppSettings = () => {
 
 			<div className="flex-1 p-4 md:p-8 overflow-y-auto custom-scrollbar">
 				<div className="max-w-2xl mx-auto space-y-6">
+
+					{/* App Version & Update Section */}
+					<div className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800">
+						<div className="flex items-center justify-between mb-4">
+							<div>
+								<h3 className="text-lg font-bold text-slate-800 dark:text-white">Phiên bản & Cập nhật</h3>
+								<p className="text-xs text-slate-500 dark:text-slate-400">
+									Phiên bản: <b className="text-indigo-600 dark:text-indigo-400 font-bold">v{appInfo.version}</b> • Build: <b className="text-indigo-600 dark:text-indigo-400 font-bold">#{appInfo.buildNumber}</b>
+								</p>
+							</div>
+							<span className="px-3 py-1 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 text-xs font-bold rounded-full border border-indigo-200/80 dark:border-indigo-800/80">
+								{appInfo.platformName}
+							</span>
+						</div>
+						<div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-4 bg-slate-50 dark:bg-slate-800 rounded-xl">
+							<div className="flex items-center gap-3">
+								<div className="p-3 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl">
+									<RefreshCcw size={20} />
+								</div>
+								<div>
+									<p className="text-sm font-bold text-slate-800 dark:text-white">Kiểm tra phiên bản mới</p>
+									<p className="text-xs text-slate-500 dark:text-slate-400">Tự động kiểm tra & cập nhật bản mới nhất từ máy chủ</p>
+								</div>
+							</div>
+							<button
+								type="button"
+								onClick={() => {
+									window.dispatchEvent(new CustomEvent('check_app_updates', { detail: { manual: true } }));
+								}}
+								className="px-5 py-2.5 bg-[#1A237E] hover:bg-indigo-900 active:scale-95 text-white font-bold text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+							>
+								<RefreshCw size={14} />
+								<span>Kiểm tra cập nhật</span>
+							</button>
+						</div>
+					</div>
+
+					{/* 5 GB Storage Partition & P2P Sync Manager (Chỉ dành riêng cho App Native Android / Mac / Windows) */}
+					{isNativeApp() && <StoragePartitionManager ownerId={owner.ownerId} />}
 
 					{/* Theme Section */}
 					<div className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800">
@@ -426,6 +465,34 @@ const AppSettings = () => {
 								</p>
 							</div>
 						</div>
+
+						{/* Biometric Security Toggle (Adaptive: Touch ID, Face ID, Passcode, Windows Hello) */}
+						{biometricInfo.available && (
+							<div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800 rounded-xl mb-4">
+								<div className="flex items-center gap-4">
+									<div className={`p-3 rounded-full ${isBiometricActive ? 'bg-indigo-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'}`}>
+										<Lock size={22} />
+									</div>
+									<div>
+										<h4 className="font-bold text-slate-700 dark:text-white flex items-center gap-2">
+											<span>Xác thực bằng {biometricInfo.label}</span>
+										</h4>
+										<p className="text-xs text-slate-500 dark:text-slate-400">
+											Đăng nhập nhanh không cần nhập mật khẩu trên thiết bị này
+										</p>
+									</div>
+								</div>
+								<label className="relative inline-flex items-center cursor-pointer">
+									<input
+										type="checkbox"
+										className="sr-only peer"
+										checked={isBiometricActive}
+										onChange={handleToggleBiometric}
+									/>
+									<div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-[#1A237E]"></div>
+								</label>
+							</div>
+						)}
 
 						{showConfirmLogout ? (
 							<div className="p-4 bg-rose-50 dark:bg-rose-900/10 rounded-xl border border-rose-200 dark:border-rose-900/30 animate-in zoom-in-95 duration-200">
@@ -828,9 +895,21 @@ const AppSettings = () => {
 					)}
 
 
-					<div className="text-center text-xs text-slate-400 mt-8 pb-32">
-						<p>Dunvex Build v1.0.1</p>
-						<p>© 2026 Dunvex Technology</p>
+					<div className="text-center text-xs text-slate-400 mt-8 pb-32 space-y-3">
+						<button
+							type="button"
+							onClick={() => {
+								window.dispatchEvent(new CustomEvent('check_app_updates', { detail: { manual: true } }));
+							}}
+							className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl transition-all active:scale-95 shadow-sm border border-slate-200 dark:border-slate-700"
+						>
+							<RefreshCw size={14} className="text-indigo-600 dark:text-indigo-400" />
+							<span>Kiểm tra cập nhật ứng dụng</span>
+						</button>
+						<div>
+							<p className="font-bold text-slate-600 dark:text-slate-400">Dunvex Build v{appInfo.version} (Build #{appInfo.buildNumber})</p>
+							<p className="text-[11px] text-slate-400">{appInfo.platformName} • © 2026 Dunvex Technology</p>
+						</div>
 					</div>
 
 				</div>

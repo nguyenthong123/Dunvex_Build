@@ -72,7 +72,7 @@ export function useOrders({
         window.removeEventListener('collection_changed', handleGlobalChange);
       };
     } else {
-      // Old behavior
+      // Real-time snapshot listener
       const unsubscribe = orderService.listenByOwner(
         ownerId,
         (data) => {
@@ -87,7 +87,10 @@ export function useOrders({
         },
         maxResults,
       );
-      return unsubscribe;
+
+      return () => {
+        unsubscribe();
+      };
     }
   }, [ownerId, enabled, maxResults, isPaginated, page, pageSize, searchKeyword]);
   return {

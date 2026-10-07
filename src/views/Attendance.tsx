@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
@@ -17,6 +17,8 @@ import MonthlyAttendanceCalendar from '../components/shared/MonthlyAttendanceCal
 import { createAdminNotification, createUserNotification } from '../utils/notifications';
 import { useCustomers } from '../hooks/useCustomers';
 import { notifyAttendanceEvent, notifySiteCheckinEvent, notifyLeaveRequestEvent } from '../utils/telegramNotify';
+import { getGeolocationErrorMessage, getOfficeCoordinates } from '../utils/attendanceLocation';
+import { getAppPlatformName, isAndroidNativeApp } from '../utils/platform';
 
 
 const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -41,11 +43,34 @@ const Attendance = () => {
 	const [todayLogs, setTodayLogs] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [location, setLocation] = useState<{ lat: number, lng: number } | null>(null);
+	const [locationError, setLocationError] = useState<string | null>(null);
 	const [distance, setDistance] = useState<number | null>(null);
 	const [checking, setChecking] = useState(false);
 	const [deviceId, setDeviceId] = useState('');
 	const [showRequestModal, setShowRequestModal] = useState(false);
 	const [requestData, setRequestData] = useState({ type: 'leave', note: '', selectedDates: [] as string[] });
+	const supportedNativeLocationApp = isAndroidNativeApp() || getAppPlatformName().startsWith('macOS Native');
+
+	const updateLocation = useCallback((position: GeolocationPosition) => {
+		setLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
+		setLocationError(null);
+	}, []);
+
+	const requestLocation = useCallback(() => {
+		if (!navigator.geolocation) {
+			setLocationError('Thiết bị hoặc ứng dụng không hỗ trợ định vị.');
+			return;
+		}
+
+		setLocationError(null);
+		navigator.geolocation.getCurrentPosition(
+			updateLocation,
+			(error) => setLocationError(getGeolocationErrorMessage(error)),
+			supportedNativeLocationApp
+				? { enableHighAccuracy: false, timeout: 30000, maximumAge: 120000 }
+				: { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 }
+		);
+	}, [supportedNativeLocationApp, updateLocation]);
 
 	// GPS Attendance based on Customer / Project coordinates
 	const [attendanceType, setAttendanceType] = useState<'store' | 'customer'>('store');
@@ -83,24 +108,40 @@ const Attendance = () => {
 	};
 
 	const customersWithGps = React.useMemo(() => {
-		return rawCustomers.filter((c: any) => typeof c.lat === 'number' && typeof c.lng === 'number');
+		return rawCustomers.map((c: any) => {
+			const lat = typeof c.lat === 'number' ? c.lat : (c.lat ? parseFloat(c.lat) : null);
+			const lng = typeof c.lng === 'number' ? c.lng : (c.lng ? parseFloat(c.lng) : null);
+			return {
+				...c,
+				parsedLat: (lat !== null && !isNaN(lat)) ? lat : null,
+				parsedLng: (lng !== null && !isNaN(lng)) ? lng : null,
+			};
+		}).filter((c: any) => c.parsedLat !== null && c.parsedLng !== null);
 	}, [rawCustomers]);
 
 	const distanceToSelectedCustomer = React.useMemo(() => {
-		if (location && selectedCustomer && typeof selectedCustomer.lat === 'number' && typeof selectedCustomer.lng === 'number') {
-			return getDistance(location.lat, location.lng, selectedCustomer.lat, selectedCustomer.lng);
+		if (location && selectedCustomer) {
+			const cLat = selectedCustomer.parsedLat ?? (typeof selectedCustomer.lat === 'number' ? selectedCustomer.lat : parseFloat(selectedCustomer.lat));
+			const cLng = selectedCustomer.parsedLng ?? (typeof selectedCustomer.lng === 'number' ? selectedCustomer.lng : parseFloat(selectedCustomer.lng));
+			if (!isNaN(cLat) && !isNaN(cLng)) {
+				return getDistance(location.lat, location.lng, cLat, cLng);
+			}
 		}
 		return null;
 	}, [location, selectedCustomer]);
 
 	const sortedCustomers = React.useMemo(() => {
-		if (!location || customersWithGps.length === 0) return [];
-		return customersWithGps
-			.map((c: any) => {
-				const d = getDistance(location.lat, location.lng, c.lat, c.lng);
-				return { ...c, distance: d };
-			})
-			.sort((a: any, b: any) => a.distance - b.distance);
+		if (customersWithGps.length === 0) return [];
+		if (location) {
+			return [...customersWithGps]
+				.map((c: any) => {
+					const d = getDistance(location.lat, location.lng, c.parsedLat, c.parsedLng);
+					return { ...c, distance: d };
+				})
+				.sort((a: any, b: any) => a.distance - b.distance);
+		}
+		// Khi chưa có vị trí GPS (đang định vị hoặc đang xin quyền), vẫn hiển thị đầy đủ danh sách khách hàng để người dùng chọn
+		return [...customersWithGps].sort((a: any, b: any) => (a.name || '').localeCompare(b.name || ''));
 	}, [location, customersWithGps]);
 
 	const filteredSortedCustomers = React.useMemo(() => {
@@ -179,39 +220,73 @@ const Attendance = () => {
 			setLoading(false);
 		});
 
-		// 3. Keep tracking user location
-		const watchId = navigator.geolocation.watchPosition(
-			(pos) => setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-			(err) => console.error(err),
-			{ enableHighAccuracy: true }
-		);
+		// Native WebViews may issue a location permission request for each geolocation call.
+		if (supportedNativeLocationApp) {
+			requestLocation();
+			return () => unsubscribe();
+		}
+
+		if ('geolocation' in navigator) {
+			navigator.geolocation.getCurrentPosition(
+				updateLocation,
+				(err) => {
+					console.warn('[Geolocation] getCurrentPosition error:', err.message);
+					navigator.geolocation.getCurrentPosition(
+						updateLocation,
+						(e) => console.warn('[Geolocation] fallback error:', e.message),
+						{ enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+					);
+				},
+				{ enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 }
+			);
+
+			const watchId = navigator.geolocation.watchPosition(
+				updateLocation,
+				(err) => console.warn('[Geolocation] watchPosition warning:', err.message),
+				{ enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+			);
+
+			return () => {
+				unsubscribe();
+				navigator.geolocation.clearWatch(watchId);
+			};
+		}
 
 		return () => {
 			unsubscribe();
-			navigator.geolocation.clearWatch(watchId);
 		};
-	}, [owner.loading, owner.ownerId]);
+	}, [owner.loading, owner.ownerId, requestLocation, updateLocation, supportedNativeLocationApp]);
 
 	// Calculate distance when location or settings changes
+	const officeCoordinates = supportedNativeLocationApp ? getOfficeCoordinates(companySettings) : null;
 	useEffect(() => {
-		if (location && companySettings?.lat && companySettings?.lng) {
+		if (location && supportedNativeLocationApp && officeCoordinates) {
 			const d = getDistance(
 				location.lat, location.lng,
-				companySettings.lat, companySettings.lng
+				officeCoordinates.lat, officeCoordinates.lng
 			);
 			setDistance(d);
+		} else if (location && !supportedNativeLocationApp && companySettings?.lat && companySettings?.lng) {
+			setDistance(getDistance(location.lat, location.lng, companySettings.lat, companySettings.lng));
+		} else {
+			setDistance(null);
 		}
-	}, [location, companySettings]);
+	}, [location, supportedNativeLocationApp, officeCoordinates?.lat, officeCoordinates?.lng, companySettings?.lat, companySettings?.lng]);
 
-	const hasCompanyGps = companySettings && typeof companySettings.lat === 'number' && typeof companySettings.lng === 'number';
+	const hasCompanyGps = supportedNativeLocationApp
+		? officeCoordinates !== null
+		: companySettings && typeof companySettings.lat === 'number' && typeof companySettings.lng === 'number';
 	const effectiveStoreDistance = hasCompanyGps ? distance : 0;
 	const activeDistance = attendanceType === 'customer' ? distanceToSelectedCustomer : effectiveStoreDistance;
 	const activeAllowedRadius = attendanceType === 'customer' ? 100 : (companySettings?.geofenceRadius || 500);
 
 	const isWithinRange = activeDistance !== null && activeDistance <= activeAllowedRadius;
+	const isLocationPending = supportedNativeLocationApp && !location && !locationError;
 	const isWithinCheckOutRange = attendanceType === 'customer'
 		? (distanceToSelectedCustomer !== null && distanceToSelectedCustomer <= 100)
-		: ((distance !== null ? distance : 0) <= ((companySettings?.geofenceRadius || 500) * 1.5));
+		: (supportedNativeLocationApp && hasCompanyGps
+			? distance !== null && distance <= ((companySettings?.geofenceRadius || 500) * 1.5)
+			: ((distance !== null ? distance : 0) <= ((companySettings?.geofenceRadius || 500) * 1.5)));
 
 	const handleCheckIn = async () => {
 		if (!auth.currentUser) {
@@ -223,7 +298,7 @@ const Attendance = () => {
 			return;
 		}
 		if (!location) {
-			showToast("Vui lòng bật định vị GPS trên thiết bị di động để chấm công!", "warning");
+			showToast(supportedNativeLocationApp ? "Vui lòng cấp quyền định vị và bật Dịch vụ vị trí trên thiết bị để chấm công." : "Vui lòng bật định vị GPS trên thiết bị di động để chấm công!", "warning");
 			return;
 		}
 		if (attendanceType === 'customer' && !selectedCustomer) {
@@ -241,8 +316,9 @@ const Attendance = () => {
 
 		setChecking(true);
 		try {
-			const today = new Date().toISOString().split('T')[0];
 			const now = new Date();
+			const today = now.toISOString().split('T')[0];
+			const localTimeStr = now.toLocaleTimeString('vi-VN', { hour12: false }) + ' ' + now.toLocaleDateString('vi-VN');
 
 			let status = 'on-time';
 			if (companySettings?.workStart) {
@@ -258,13 +334,15 @@ const Attendance = () => {
 				userName: auth.currentUser.displayName || auth.currentUser.email,
 				userEmail: auth.currentUser.email,
 				date: today,
-				checkInAt: serverTimestamp(),
+				clientCheckInAt: now.getTime(),
+				checkInTimeStr: localTimeStr,
+				checkInAt: now,
 				location: location,
 				deviceId: deviceId,
 				deviceInfo: navigator.userAgent,
 				status: status,
 				type: attendanceType,
-				createdAt: serverTimestamp()
+				createdAt: now
 			};
 
 			if (attendanceType === 'customer' && selectedCustomer) {
@@ -282,6 +360,7 @@ const Attendance = () => {
 				notifySiteCheckinEvent(owner.ownerId, {
 					userName: auth.currentUser.displayName || auth.currentUser.email || 'Nhân viên',
 					customerName: selectedCustomer?.name,
+					time: localTimeStr,
 					distance: Math.round(activeDistance),
 					location: location,
 					note: `Check-in tại công trình / khách hàng: ${selectedCustomer?.name}`
@@ -291,6 +370,7 @@ const Attendance = () => {
 					userName: auth.currentUser.displayName || auth.currentUser.email || 'Nhân viên',
 					userEmail: auth.currentUser.email || '',
 					action: 'checkin',
+					time: localTimeStr,
 					distance: Math.round(activeDistance),
 					location: location,
 					status: status
@@ -311,16 +391,21 @@ const Attendance = () => {
 			return;
 		}
 		if (!location) {
-			showToast("Vui lòng bật định vị GPS trên thiết bị di động để thực hiện ra ca!", "warning");
+			showToast(supportedNativeLocationApp ? "Vui lòng cấp quyền định vị và bật Dịch vụ vị trí trên thiết bị để thực hiện ra ca." : "Vui lòng bật định vị GPS trên thiết bị di động để thực hiện ra ca!", "warning");
 			return;
 		}
 
 		setChecking(true);
 		try {
+			const now = new Date();
+			const localTimeStr = now.toLocaleTimeString('vi-VN', { hour12: false }) + ' ' + now.toLocaleDateString('vi-VN');
+
 			const updateData: any = {
-				checkOutAt: serverTimestamp(),
+				clientCheckOutAt: now.getTime(),
+				checkOutTimeStr: localTimeStr,
+				checkOutAt: now,
 				checkOutLocation: location,
-				updatedAt: serverTimestamp()
+				updatedAt: now
 			};
 
 			let activeDist = distance !== null ? Math.round(distance) : undefined;
@@ -339,6 +424,7 @@ const Attendance = () => {
 				userName: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
 				userEmail: auth.currentUser?.email || '',
 				action: 'checkout',
+				time: localTimeStr,
 				distance: activeDist,
 				location: location,
 				status: 'Đã hoàn thành ca làm việc'
@@ -565,41 +651,89 @@ const Attendance = () => {
 					)}
 
 					{/* Location Tracking */}
-					<div className={`rounded-[2.5rem] p-6 border transition-all duration-500 ${isWithinRange ? 'bg-emerald-50/50 border-emerald-200 dark:bg-emerald-900/10 dark:border-emerald-800/50' : 'bg-rose-50/50 border-rose-200 dark:bg-rose-900/10 dark:border-rose-800/50'}`}>
+					<div className={`rounded-[2.5rem] p-6 border transition-all duration-500 ${isWithinRange ? 'bg-emerald-50/50 border-emerald-200 dark:bg-emerald-900/10 dark:border-emerald-800/50' : isLocationPending ? 'bg-amber-50/50 border-amber-200 dark:bg-amber-900/10 dark:border-amber-800/50' : 'bg-rose-50/50 border-rose-200 dark:bg-rose-900/10 dark:border-rose-800/50'}`}>
 						<div className="flex items-center gap-4">
-							<div className={`p-3 rounded-2xl ${isWithinRange ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
+							<div className={`p-3 rounded-2xl ${isWithinRange ? 'bg-emerald-500 text-white' : isLocationPending ? 'bg-amber-500 text-white' : 'bg-rose-500 text-white'}`}>
 								{attendanceType === 'customer' ? <Building size={24} /> : <MapPin size={24} />}
 							</div>
 							<div className="flex-1">
 								<p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Vị trí của bạn</p>
-								<h4 className={`text-sm font-black ${isWithinRange ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
-									{isWithinRange 
+								<h4 className={`text-sm font-black ${isWithinRange ? 'text-emerald-700 dark:text-emerald-400' : isLocationPending ? 'text-amber-700 dark:text-amber-400' : 'text-rose-700 dark:text-rose-400'}`}>
+									{supportedNativeLocationApp && !location
+										? locationError ? 'Chưa lấy được vị trí GPS' : 'Đang xác định vị trí GPS'
+										: isWithinRange
 										? (attendanceType === 'customer' ? 'Phạm vi chấm công hợp lệ (<=100m)' : 'Đã vào khu vực văn phòng') 
 										: (attendanceType === 'customer' ? 'Ngoài phạm vi công trình (>100m)' : 'Ngoài khu vực văn phòng')}
 								</h4>
 								<p className="text-[10px] font-bold text-slate-500 mt-1">
-									{attendanceType === 'customer' && selectedCustomer
+									{supportedNativeLocationApp && !location && locationError
+										? locationError
+										: attendanceType === 'customer' && selectedCustomer
 										? `Khoảng cách tới ${selectedCustomer.name}: ${activeDistance !== null ? `${Math.round(activeDistance)}m` : 'Đang định vị...'}`
 										: `Khoảng cách tới văn phòng: ${activeDistance !== null ? `${Math.round(activeDistance)}m` : 'Đang định vị...'}`
 									}
 								</p>
 							</div>
-							{isWithinRange ? <CheckCircle size={24} className="text-emerald-500" /> : <AlertCircle size={24} className="text-rose-500 animate-pulse" />}
+							{supportedNativeLocationApp && !location ? (
+								<button
+									type="button"
+									onClick={requestLocation}
+									className="shrink-0 rounded-xl bg-white/80 p-2 text-indigo-600 shadow-sm dark:bg-slate-800 dark:text-indigo-300"
+									aria-label="Thử lấy lại vị trí GPS"
+								>
+									<MapPin size={20} />
+								</button>
+							) : isWithinRange ? (
+								<CheckCircle size={24} className="text-emerald-500" />
+							) : (
+								<AlertCircle size={24} className="text-rose-500 animate-pulse" />
+							)}
 						</div>
 					</div>
 
 					{/* Action Buttons */}
 					<div className="space-y-4">
-						{attendanceType === 'customer' && todayOfficeLog ? (
-							<div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 text-center">
-								<p className="text-emerald-600 font-black uppercase text-sm mb-1">Đã chấm công tại cửa hàng / VP hôm nay</p>
-								<p className="text-xs text-slate-400 font-bold">Hẹn gặp lại bạn vào ngày mai!</p>
+						{/* Case: Đang ở tab Công trình nhưng có ca Cửa hàng chưa checkout */}
+						{attendanceType === 'customer' && todayOfficeLog && !todayOfficeLog.checkOutAt && !activeCustomerLog ? (
+							<div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-amber-200 dark:border-amber-800 text-center space-y-3">
+								<p className="text-amber-600 font-black uppercase text-sm mb-1">Bạn đang có ca tại Cửa hàng / VP chưa checkout</p>
+								<button
+									onClick={() => setAttendanceType('store')}
+									className="w-full h-12 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 transition-all"
+								>
+									<LogOut size={18} /> Chuyển về tab Cửa hàng để Checkout
+								</button>
 							</div>
-						) : attendanceType === 'store' && todayLogs.some(l => l.type === 'customer') ? (
-							<div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 text-center">
-								<p className="text-emerald-600 font-black uppercase text-sm mb-1">Đã chấm công đi thị trường hôm nay</p>
-								<p className="text-xs text-slate-400 font-bold">Vui lòng sử dụng tab thị trường để chấm công tiếp.</p>
+						) : attendanceType === 'customer' && todayOfficeLog && todayOfficeLog.checkOutAt && !activeCustomerLog ? (
+							/* Đã checkout cửa hàng xong → cho phép checkin công trình */
+							<button
+								onClick={handleCheckIn}
+								disabled={!isWithinRange || checking || !selectedCustomer}
+								className="w-full h-16 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black uppercase tracking-[2px] shadow-xl shadow-indigo-600/20 transition-all disabled:opacity-50 disabled:grayscale flex items-center justify-center gap-3"
+							>
+								{checking ? 'Đang xử lý...' : <><CheckCircle size={24} /> CHẤM CÔNG VÀO (Công trình)</>}
+							</button>
+						) : attendanceType === 'store' && activeCustomerLog ? (
+							/* Đang ở tab Cửa hàng nhưng có ca Công trình chưa checkout */
+							<div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-amber-200 dark:border-amber-800 text-center space-y-3">
+								<p className="text-amber-600 font-black uppercase text-sm mb-1">Bạn đang có ca tại Công trình chưa checkout</p>
+								<p className="text-xs text-slate-400 font-bold">Công trình: {activeCustomerLog.customerName || 'Không rõ'}</p>
+								<button
+									onClick={() => setAttendanceType('customer')}
+									className="w-full h-12 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 transition-all"
+								>
+									<LogOut size={18} /> Chuyển về tab Công trình để Checkout
+								</button>
 							</div>
+						) : attendanceType === 'store' && todayLogs.some(l => l.type === 'customer' && l.checkOutAt) && !todayOfficeLog ? (
+							/* Đã checkout công trình xong → cho phép checkin cửa hàng */
+							<button
+								onClick={handleCheckIn}
+								disabled={!isWithinRange || checking}
+								className="w-full h-16 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black uppercase tracking-[2px] shadow-xl shadow-indigo-600/20 transition-all disabled:opacity-50 disabled:grayscale flex items-center justify-center gap-3"
+							>
+								{checking ? 'Đang xử lý...' : <><CheckCircle size={24} /> CHẤM CÔNG VÀO (Cửa hàng)</>}
+							</button>
 						) : !todayLog ? (
 							<button
 								onClick={handleCheckIn}
@@ -611,7 +745,7 @@ const Attendance = () => {
 						) : !todayLog.checkOutAt ? (
 							<button
 								onClick={handleCheckOut}
-								disabled={!isWithinCheckOutRange || checking}
+								disabled={checking}
 								className="w-full h-16 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl font-black uppercase tracking-[2px] shadow-xl shadow-orange-500/20 transition-all disabled:opacity-50 disabled:grayscale flex items-center justify-center gap-3"
 							>
 								{checking ? 'Đang xử lý...' : <><LogOut size={24} /> CHẤM CÔNG RA</>}

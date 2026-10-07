@@ -7,19 +7,22 @@ import {
 	ChevronLeft, ChevronRight, Download, ShieldAlert
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
-import { auth, db, functions } from '../services/firebase';
+import { auth, db } from '../services/firebase';
+import { getSessionToken } from '../services/sqliteSession';
 import {
 	collection, query, onSnapshot, doc, updateDoc, addDoc, serverTimestamp,
 	orderBy, limit, deleteDoc, getDoc, setDoc, where, getDocs, writeBatch, Timestamp
 } from '../services/firebase';
-import { httpsCallable } from 'firebase/functions';
 
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
+import { apiUrl } from '../services/apiClient';
 import { TabItem, InputSection, LogoUploadSection } from '../components/admin/SharedComponents';
 import { UserManagement } from '../components/admin/UserManagement';
 import { AttendanceAdmin } from '../components/admin/AttendanceAdmin';
 import { StaffApprovalTab } from '../components/admin/StaffApprovalTab';
+import { SalarySummary } from '../components/admin/SalarySummary';
+import { exportLocalDataToExcel } from '../utils/excelExport';
 
 const scrollbarHideStyle = `
   .no-scrollbar::-webkit-scrollbar {
@@ -348,14 +351,14 @@ const AdminSettings = () => {
 			const cleanEmail = newUser.email.toLowerCase().trim();
 			const password = newUser.password?.trim() || '123456';
 
-			// 1. Tạo hoặc Cập nhật tài khoản Auth & Database trực tiếp qua backend API
+			// Tạo hoặc cập nhật user và mật khẩu trong SQLite qua backend.
 			try {
-				const idToken = auth.currentUser ? await auth.currentUser.getIdToken() : '';
-				const res = await fetch('/api/create-user', {
+				const sessionToken = getSessionToken();
+				const res = await fetch(apiUrl('/api/create-user'), {
 					method: 'POST',
 					headers: {
 						'Content-Type': 'application/json',
-						'Authorization': `Bearer ${idToken}`
+						'Authorization': `Bearer ${sessionToken}`
 					},
 					body: JSON.stringify({
 						email: cleanEmail,
@@ -373,37 +376,12 @@ const AdminSettings = () => {
 					throw new Error(resData.error || 'Lỗi tạo tài khoản');
 				}
 
-				showToast(`Đã tạo tài khoản nhân viên thành công! Mật khẩu: ${password}`, "success");
+				showToast(resData.emailSent 
+					? `Đã gửi thư mời vào công ty và cấp tài khoản cho ${cleanEmail}!`
+					: `Đã tạo tài khoản nhân viên thành công! Mật khẩu: ${password}`, "success");
 			} catch (apiErr: any) {
-				console.warn("Backend create-user fallback:", apiErr);
-				// Fallback: update directly via Firestore/REST
-				const allUsersSnap = await getDocs(query(collection(db, 'users')));
-				const existingUser = allUsersSnap.docs.find(d => (d.data().email || '').toLowerCase().trim() === cleanEmail);
-
-				if (existingUser) {
-					await updateDoc(doc(db, 'users', existingUser.id), {
-						displayName: newUser.displayName || existingUser.data().displayName || cleanEmail.split('@')[0],
-						ownerId: owner.ownerId,
-						ownerEmail: owner.ownerEmail,
-						role: newUser.role || 'sale',
-						marketPointsRequired: Number(newUser.marketPointsRequired) || 1,
-						status: 'active'
-					});
-					showToast("Đã liên kết nhân viên vào doanh nghiệp thành công!", "success");
-				} else {
-					const tempId = cleanEmail.replace(/\W/g, '_');
-					await setDoc(doc(db, 'permissions', tempId), {
-						email: cleanEmail,
-						displayName: newUser.displayName || cleanEmail,
-						role: newUser.role,
-						marketPointsRequired: Number(newUser.marketPointsRequired) || 1,
-						ownerId: owner.ownerId,
-						ownerEmail: owner.ownerEmail,
-						status: 'pending',
-						createdAt: serverTimestamp()
-					});
-					showToast("Đã tạo lời mời thành công!", "success");
-				}
+				console.warn('SQLite create-user failed:', apiErr);
+				throw apiErr;
 			}
 
 			setShowAddUser(false);
@@ -656,79 +634,19 @@ const AdminSettings = () => {
 
 		setExportLoading(true);
 		try {
-			// 1. Fetch data from Vercel API (server-side Firestore fetch + date filter)
-			const apiRes = await fetch('/api/export-data', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					ownerId: owner.ownerId,
-					startDate: syncRange.start || undefined,
-					endDate: syncRange.end || undefined,
-				}),
+			const { totalRows, fileName, savedLocation } = await exportLocalDataToExcel({
+				ownerId: owner.ownerId,
+				startDate: syncRange.start,
+				endDate: syncRange.end,
+				isEmployee: false,
+				role: 'admin',
+				exportCount,
+				userEmail: auth.currentUser?.email || '',
+				displayName: auth.currentUser?.displayName || '',
+				uid: auth.currentUser?.uid || ''
 			});
 
-			if (!apiRes.ok) {
-				const errData = await apiRes.json().catch(() => ({}));
-				throw new Error(errData.error || `Server error: ${apiRes.status}`);
-			}
-
-			const { data: serverData } = await apiRes.json();
-
-			// 2. Create Excel workbook from server data
-			const XLSX = await import('xlsx');
-			const workbook = XLSX.utils.book_new();
-
-			const sheetConfig: [string, string][] = [
-				['products', 'san_pham'],
-				['customers', 'khach_hang'],
-				['orders', 'don_hang'],
-				['debts', 'cong_no'],
-				['checkins', 'checkin'],
-				['attendance_logs', 'cham_cong'],
-				['payments', 'lich_su_thanh_toan'],
-				['inventory_logs', 'ton_kho'],
-				['supplier_debts', 'cong_no_nha_cung_cap'],
-				['purchase_orders', 'don_nhap_hang'],
-			];
-
-			for (const [key, sheetName] of sheetConfig) {
-				const items = serverData[key];
-				if (items && items.length > 0) {
-					const worksheet = XLSX.utils.json_to_sheet(items);
-					XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
-				}
-			}
-
-			// Add order details sheet
-			if (serverData.orderDetails && serverData.orderDetails.length > 0) {
-				const detailsSheet = XLSX.utils.json_to_sheet(serverData.orderDetails);
-				XLSX.utils.book_append_sheet(workbook, detailsSheet, 'chi_tiet_don_hang');
-			}
-
-			// 3. Download file
-			XLSX.writeFile(workbook, `Dunvex_Export_${owner.ownerId}_${new Date().toISOString().slice(0, 10)}.xlsx`);
-
-			// 4. Update Usage Count in Firestore
-			const currentMonth = new Date().toISOString().slice(0, 7);
-			const usageRef = doc(db, 'usage_limits', `${owner.ownerId}_${currentMonth}`);
-			await setDoc(usageRef, {
-				ownerId: owner.ownerId,
-				count: exportCount + 1,
-				lastExportAt: serverTimestamp(),
-				lastExportBy: auth.currentUser?.email || 'Admin'
-			}, { merge: true });
-
-			// 5. Audit Log
-			await addDoc(collection(db, 'audit_logs'), {
-				action: 'Bộ lưu dữ liệu (Export - API)',
-				user: auth.currentUser?.email || 'Admin',
-				userId: auth.currentUser?.uid || "",
-				ownerId: owner.ownerId,
-				details: `Đã xuất dữ liệu ra Excel (Lần thứ ${exportCount + 1} trong tháng)`,
-				createdAt: serverTimestamp()
-			});
-
-			showToast("Tải dữ liệu thành công!", "success");
+			showToast(`Đã xuất ${totalRows} dòng vào ${fileName}! Kiểm tra ${savedLocation}.`, "success");
 		} catch (error: any) {
 			console.error("Export Error:", error);
 			showToast("Lỗi khi trích xuất dữ liệu: " + (error.message || "Vui lòng thử lại sau"), "error");
@@ -1071,7 +989,13 @@ const AdminSettings = () => {
 							handleUpdateUser={handleUpdateUser}
 						/>
 						<div className="mt-8">
-							<SalarySummary userList={filteredUserList} ownerId={owner.ownerId} companyInfo={companyInfo} />
+							<SalarySummary
+								userList={filteredUserList}
+								ownerId={owner.ownerId}
+								companyInfo={companyInfo}
+								logs={attendanceLogs}
+								fieldLogs={fieldCheckins}
+							/>
 						</div>
 						</>
 					)}
@@ -1138,442 +1062,5 @@ const AdminSettings = () => {
 		</div>
 	);
 };
-
-// ==================== BẢNG LƯƠNG NHÂN VIÊN ====================
-const SalarySummary = ({ userList, ownerId, companyInfo }: { userList: any[], ownerId: string, companyInfo: any }) => {
-	const [salaryData, setSalaryData] = useState<any[]>([]);
-	const [loading, setLoading] = useState(true);
-	const [month, setMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
-	const [expandedUser, setExpandedUser] = useState<string | null>(null);
-	const [rawCheckins, setRawCheckins] = useState<any[]>([]);
-	const [rawAttendance, setRawAttendance] = useState<any[]>([]);
-
-	useEffect(() => {
-		if (!ownerId || userList.length === 0) return;
-		setExpandedUser(null);
-		loadSalaryData();
-	}, [ownerId, userList, month]);
-
-	const loadSalaryData = async () => {
-		setLoading(true);
-		try {
-			const [year, mon] = month.split('-').map(Number);
-			const startDate = new Date(year, mon - 1, 1);
-			const endDate = new Date(year, mon, 0); // Last day of month
-
-			const checkinsQ = query(
-				collection(db, 'checkins'),
-				where('ownerId', '==', ownerId),
-				where('createdAt', '>=', Timestamp.fromDate(startDate)),
-				where('createdAt', '<=', Timestamp.fromDate(endDate))
-			);
-			
-			const attendanceQ = query(
-				collection(db, 'attendance_logs'),
-				where('ownerId', '==', ownerId),
-				where('createdAt', '>=', Timestamp.fromDate(startDate)),
-				where('createdAt', '<=', Timestamp.fromDate(endDate))
-			);
-
-			const [checkinsSnap, attendanceSnap] = await Promise.all([
-				getDocs(checkinsQ),
-				getDocs(attendanceQ)
-			]);
-
-			const allCheckins: any[] = checkinsSnap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
-			const allAttendance: any[] = attendanceSnap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
-			setRawCheckins(allCheckins);
-			setRawAttendance(allAttendance);
-			
-			const data = userList.map(user => {
-				const userCheckins = allCheckins.filter(c => c.userId === user.id || c.userEmail === user.email);
-				const userAttendance = allAttendance.filter(a => a.userId === user.id || a.userEmail === user.email);
-				
-				// Loại bỏ các đơn từ (nghỉ phép, đi muộn) khỏi ngày công thực tế
-				const validAttendance = userAttendance.filter(a => a.type !== 'request');
-
-				// Gom nhóm chi tiết theo ngày
-				const dailyDetails: Record<string, { checkin?: any; attendances: any[] }> = {};
-				userCheckins.forEach(c => {
-					const dt = c.createdAt?.toDate?.() || new Date(c.createdAt);
-					const day = dt.toISOString().slice(0, 10);
-					if (!dailyDetails[day]) dailyDetails[day] = { attendances: [] };
-					dailyDetails[day].checkin = c;
-				});
-				validAttendance.forEach(a => {
-					const dt = a.createdAt?.toDate?.() || new Date(a.createdAt);
-					const day = dt.toISOString().slice(0, 10);
-					if (!dailyDetails[day]) dailyDetails[day] = { attendances: [] };
-					dailyDetails[day].attendances.push(a);
-				});
-
-				let daysWorked = 0;
-				const todayStr = new Date().toISOString().slice(0, 10);
-
-				Object.keys(dailyDetails).forEach(day => {
-					const dayData = dailyDetails[day];
-					const officeCheckins = dayData.attendances.filter((a: any) => a.type !== 'customer' && a.type !== 'request');
-					const marketCheckinsCount = (dayData.checkin ? 1 : 0) + dayData.attendances.filter((a: any) => a.type === 'customer').length;
-					
-					let dayFraction = 0;
-					if (officeCheckins.length > 0) {
-						let totalWorkedMs = 0;
-						officeCheckins.forEach((a: any) => {
-							const inMs = a.checkInAt ? (typeof a.checkInAt === 'string' ? new Date(a.checkInAt).getTime() : a.checkInAt?.seconds ? a.checkInAt.seconds * 1000 : null) : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : a.createdAt ? new Date(a.createdAt).getTime() : null);
-							const outMs = a.checkOutAt ? (typeof a.checkOutAt === 'string' ? new Date(a.checkOutAt).getTime() : a.checkOutAt?.seconds ? a.checkOutAt.seconds * 1000 : null) : null;
-
-							if (inMs) {
-								if (outMs && outMs > inMs) {
-									totalWorkedMs += (outMs - inMs);
-								} else if (day === todayStr) {
-									// Ca đang diễn ra hôm nay
-									const currentMs = Math.max(0, Date.now() - inMs);
-									totalWorkedMs += currentMs;
-								} else {
-									// Ngày cũ quên check-out -> Tính 0.5 công (4h)
-									totalWorkedMs += 4 * 3600 * 1000;
-								}
-							}
-						});
-
-						const hours = totalWorkedMs / (1000 * 3600);
-						if (hours >= 6.5) {
-							dayFraction = 1.0;
-						} else if (hours >= 3.5) {
-							dayFraction = 0.5;
-						} else if (hours > 0) {
-							dayFraction = Math.min(0.5, Math.round((hours / 8) * 100) / 100);
-						} else {
-							dayFraction = 0.5;
-						}
-					} else if (marketCheckinsCount > 0) {
-						const reqPoints = Number(user.marketPointsRequired) || Number(companyInfo.marketPointsRequired) || 1;
-						dayFraction = reqPoints > 0 ? Math.min(1, marketCheckinsCount / reqPoints) : 1;
-					}
-					daysWorked += dayFraction;
-				});
-				daysWorked = Math.round(daysWorked * 100) / 100;
-
-				const WORKING_DAYS = 26; // Ngày công chuẩn / tháng
-				const monthlyWage = Number(user.monthlyWage) || 0;
-				const dailyWage = monthlyWage > 0 
-					? Math.round(monthlyWage / WORKING_DAYS)
-					: (Number(user.dailyWage) || 0); // fallback lương ngày cũ
-				return {
-					userId: user.id,
-					name: user.displayName || user.email?.split('@')[0] || 'N/A',
-					email: user.email,
-					role: user.role,
-					checkins: userCheckins.length + validAttendance.length,
-					daysWorked,
-					monthlyWage,
-					dailyWage,
-					totalSalary: daysWorked * dailyWage,
-					marketPointsRequired: user.marketPointsRequired || 1,
-					dailyDetails,
-				};
-			});
-			setSalaryData(data);
-		} catch(e) {
-			console.error('SalarySummary error:', e);
-		} finally {
-			setLoading(false);
-		}
-	};
-
-	const getDetailForUser = (userId: string) => {
-		const user = salaryData.find(d => d.userId === userId);
-		if (!user?.dailyDetails) return [];
-		const todayStr = new Date().toISOString().slice(0, 10);
-
-		return Object.entries(user.dailyDetails)
-			.sort(([a], [b]) => b.localeCompare(a))
-			.map(([day, detail]: [string, any]) => {
-				const officeCheckins = detail.attendances.filter((a: any) => a.type !== 'customer' && a.type !== 'request');
-				const marketCheckinsCount = (detail.checkin ? 1 : 0) + detail.attendances.filter((a: any) => a.type === 'customer').length;
-				
-				let dayFraction = 0;
-				let workedHoursFormatted = '';
-
-				if (officeCheckins.length > 0) {
-					let totalWorkedMs = 0;
-					officeCheckins.forEach((a: any) => {
-						const inMs = a.checkInAt ? (typeof a.checkInAt === 'string' ? new Date(a.checkInAt).getTime() : a.checkInAt?.seconds ? a.checkInAt.seconds * 1000 : null) : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : a.createdAt ? new Date(a.createdAt).getTime() : null);
-						const outMs = a.checkOutAt ? (typeof a.checkOutAt === 'string' ? new Date(a.checkOutAt).getTime() : a.checkOutAt?.seconds ? a.checkOutAt.seconds * 1000 : null) : null;
-
-						if (inMs) {
-							if (outMs && outMs > inMs) {
-								totalWorkedMs += (outMs - inMs);
-							} else if (day === todayStr) {
-								const currentMs = Math.max(0, Date.now() - inMs);
-								totalWorkedMs += currentMs;
-							} else {
-								totalWorkedMs += 4 * 3600 * 1000;
-							}
-						}
-					});
-
-					const hours = totalWorkedMs / (1000 * 3600);
-					workedHoursFormatted = `${Math.round(hours * 10) / 10}h`;
-
-					if (hours >= 6.5) {
-						dayFraction = 1.0;
-					} else if (hours >= 3.5) {
-						dayFraction = 0.5;
-					} else if (hours > 0) {
-						dayFraction = Math.min(0.5, Math.round((hours / 8) * 100) / 100);
-					} else {
-						dayFraction = 0.5;
-					}
-				} else if (marketCheckinsCount > 0) {
-					const reqPoints = Number(user.marketPointsRequired) || Number(companyInfo.marketPointsRequired) || 1;
-					dayFraction = reqPoints > 0 ? Math.min(1, marketCheckinsCount / reqPoints) : 1;
-				}
-
-				return {
-					day,
-					dayFraction: Math.round(dayFraction * 100) / 100,
-					workedHoursFormatted,
-					marketCheckinsCount,
-					checkinTime: detail.checkin ? (() => {
-						const dt = detail.checkin.createdAt?.toDate?.() || new Date(detail.checkin.createdAt);
-						return dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-					})() : null,
-					checkinNote: detail.checkin?.note || detail.checkin?.location || '',
-					attendances: detail.attendances.map((a: any) => {
-						const dt = a.createdAt?.toDate?.() || new Date(a.createdAt);
-						return {
-							time: dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-							type: a.type || a.status || 'check',
-							note: a.note || a.location || ''
-						};
-					})
-				};
-			});
-	};
-
-	const formatPrice = (n: number) => n.toLocaleString('vi-VN');
-	const totalAll = salaryData.reduce((s, d) => s + d.totalSalary, 0);
-
-	return (
-		<div className="space-y-4">
-			<div className="flex items-center justify-between">
-				<h3 className="text-lg font-black uppercase text-slate-800 dark:text-white">💰 Bảng lương nhân viên</h3>
-				<input
-					type="month"
-					value={month}
-					onChange={e => setMonth(e.target.value)}
-					className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-sm font-bold dark:text-white outline-none"
-				/>
-			</div>
-			{loading ? (
-				<div className="text-center py-8 text-slate-400">Đang tính...</div>
-			) : (
-				<>
-					{/* Desktop View */}
-					<div className="hidden md:block bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
-						<div className="overflow-x-auto custom-scrollbar">
-							<table className="w-full text-left min-w-[800px] md:min-w-0">
-								<thead className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black uppercase text-slate-400">
-									<tr>
-										<th className="px-4 py-3">Nhân viên</th>
-										<th className="px-4 py-3 text-center">Ngày làm</th>
-										<th className="px-4 py-3 text-center">Lượt chấm</th>
-										<th className="px-4 py-3 text-right">Lương/tháng</th>
-										<th className="px-4 py-3 text-right">Lương/ngày</th>
-										<th className="px-4 py-3 text-right">Thực lãnh</th>
-									</tr>
-								</thead>
-								<tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-									{salaryData.map((d, i) => {
-										const isExpanded = expandedUser === d.userId;
-										const details = isExpanded ? getDetailForUser(d.userId) : [];
-										return (
-											<React.Fragment key={i}>
-												<tr
-													className={`hover:bg-slate-50 dark:hover:bg-slate-800/30 cursor-pointer transition-all ${isExpanded ? 'bg-indigo-50/50 dark:bg-indigo-900/10' : ''}`}
-													onClick={() => setExpandedUser(isExpanded ? null : d.userId)}
-												>
-													<td className="px-4 py-3">
-														<div className="flex items-center gap-2">
-															<ChevronRight size={14} className={`text-slate-300 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
-															<div>
-																<div className="font-bold text-sm dark:text-white">{d.name}</div>
-																<div className="text-[10px] text-slate-400">{d.role === 'admin' ? 'Quản trị' : d.role === 'sale' ? `Sale (Chỉ tiêu: ${d.marketPointsRequired || companyInfo.marketPointsRequired || 1} đ/ngày)` : d.role === 'warehouse' ? 'Kho' : 'Kế toán'}</div>
-															</div>
-														</div>
-													</td>
-													<td className="px-4 py-3 text-center">
-														<span className={`font-black text-sm ${d.daysWorked > 0 ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-300'}`}>
-															{d.daysWorked} ngày
-														</span>
-													</td>
-													<td className="px-4 py-3 text-center text-xs text-slate-500">{d.checkins} lượt</td>
-													<td className="px-4 py-3 text-right text-xs font-bold text-slate-600 dark:text-slate-300">
-														{d.monthlyWage > 0 ? formatPrice(d.monthlyWage) + 'đ' : <span className="text-slate-300 italic">-</span>}
-													</td>
-													<td className="px-4 py-3 text-right text-xs font-bold text-slate-600 dark:text-slate-300">
-														{d.dailyWage > 0 ? formatPrice(d.dailyWage) + 'đ' : <span className="text-slate-300 italic">-</span>}
-													</td>
-													<td className="px-4 py-3 text-right">
-														<span className={`font-black text-sm ${d.totalSalary > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-300'}`}>
-															{formatPrice(d.totalSalary)}đ
-														</span>
-													</td>
-												</tr>
-												{isExpanded && details.length > 0 && (
-													<tr key={`detail-${i}`}>
-														<td colSpan={6} className="px-4 py-3 bg-slate-50/50 dark:bg-slate-800/30">
-															<div className="space-y-2">
-																<p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">📅 Chi tiết chấm công tháng {month}</p>
-																<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-																	{details.map((day: any, di: number) => (
-																		<div key={di} className="bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-700 p-3">
-																			<div className="flex items-center justify-between mb-2">
-																				<span className="font-black text-sm text-indigo-600 dark:text-indigo-400">
-																					{new Date(day.day).toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' })}
-																				</span>
-																				<div className="flex items-center gap-1.5">
-																					<span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md ${day.dayFraction >= 1 ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400' : 'bg-amber-50 text-amber-650 dark:bg-amber-900/20 dark:text-amber-400'}`}>
-																						{day.dayFraction} công {day.workedHoursFormatted ? `(${day.workedHoursFormatted})` : ''} {day.marketCheckinsCount > 0 ? `(${day.marketCheckinsCount}/${d.marketPointsRequired || companyInfo.marketPointsRequired || 1} đ)` : ''}
-																					</span>
-																					{day.checkinTime && (
-																						<span className="text-[9px] font-bold text-slate-500 bg-slate-50 dark:bg-slate-800 px-1.5 py-0.5 rounded-full">
-																							{day.checkinTime}
-																						</span>
-																					)}
-																				</div>
-																			</div>
-																			{day.checkinNote && (
-																				<p className="text-[10px] text-slate-400 mb-1">📍 {day.checkinNote}</p>
-																			)}
-																			{day.attendances.length > 0 && (
-																				<div className="space-y-1 mt-2 pt-2 border-t border-slate-100 dark:border-slate-700">
-																					{day.attendances.map((att: any, ai: number) => (
-																						<div key={ai} className="flex items-center justify-between">
-																							<span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${att.type === 'checkin' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400' : att.type === 'checkout' ? 'bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'}`}>
-																								{att.type === 'checkin' ? 'Vào' : att.type === 'checkout' ? 'Ra' : att.type}
-																							</span>
-																							<span className="text-[10px] text-slate-500">{att.time}</span>
-																						</div>
-																					))}
-																				</div>
-																			)}
-																		</div>
-																	))}
-																</div>
-															</div>
-														</td>
-													</tr>
-												)}
-											</React.Fragment>
-										);
-									})}
-								</tbody>
-								<tfoot className="bg-indigo-50 dark:bg-indigo-900/20">
-									<tr>
-										<td colSpan={5} className="px-4 py-3 text-xs font-black uppercase text-indigo-600 dark:text-indigo-400 text-right">TỔNG CỘNG</td>
-										<td className="px-4 py-3 text-right font-black text-lg text-indigo-600 dark:text-indigo-400">{formatPrice(totalAll)}đ</td>
-									</tr>
-								</tfoot>
-							</table>
-						</div>
-					</div>
-
-					{/* Mobile View */}
-					<div className="md:hidden space-y-4">
-						{salaryData.map((d, i) => {
-							const isExpanded = expandedUser === d.userId;
-							const details = isExpanded ? getDetailForUser(d.userId) : [];
-							return (
-								<div key={i} className="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-100 dark:border-slate-800 space-y-3">
-									<div 
-										className="flex justify-between items-start cursor-pointer"
-										onClick={() => setExpandedUser(isExpanded ? null : d.userId)}
-									>
-										<div className="flex items-center gap-2">
-											<ChevronRight size={14} className={`text-slate-300 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
-											<div>
-												<h4 className="font-bold text-sm dark:text-white">{d.name}</h4>
-												<span className="text-[10px] text-slate-400 font-bold uppercase">{d.role === 'admin' ? 'Quản trị' : d.role === 'sale' ? `Sale (Chỉ tiêu: ${d.marketPointsRequired || companyInfo.marketPointsRequired || 1} đ/ngày)` : d.role === 'warehouse' ? 'Kho' : 'Kế toán'}</span>
-											</div>
-										</div>
-										<div className="text-right">
-											<span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-0.5 rounded-md">
-												{d.daysWorked} ngày
-											</span>
-										</div>
-									</div>
-
-									<div className="flex justify-between items-center text-xs pt-3 border-t border-slate-50 dark:border-slate-800/50">
-										<div className="space-y-0.5">
-											<div className="text-slate-400 text-[10px]">Lương tháng: <strong>{d.monthlyWage > 0 ? formatPrice(d.monthlyWage) + 'đ' : '-'}</strong></div>
-											<div className="text-slate-400 text-[10px]">Lương ngày: <strong>{d.dailyWage > 0 ? formatPrice(d.dailyWage) + 'đ' : '-'}</strong></div>
-											<div className="text-slate-400 text-[10px]">Lượt chấm: <strong>{d.checkins} lượt</strong></div>
-										</div>
-										<div className="text-right">
-											<div className="text-[9px] text-slate-400 uppercase font-black">Thực lãnh</div>
-											<div className="text-sm font-black text-emerald-600 dark:text-emerald-400">{formatPrice(d.totalSalary)}đ</div>
-										</div>
-									</div>
-
-									{isExpanded && details.length > 0 && (
-										<div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2 animate-in fade-in duration-200">
-											<p className="text-[9px] font-black uppercase text-slate-400 tracking-wider">📅 Chi tiết chấm công tháng {month}</p>
-											<div className="space-y-2">
-												{details.map((day: any, di: number) => (
-													<div key={di} className="bg-slate-50 dark:bg-slate-850 rounded-xl p-3 space-y-2">
-														<div className="flex justify-between items-center">
-															<div className="font-bold text-xs text-indigo-600 dark:text-indigo-400">
-																{new Date(day.day).toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' })}
-															</div>
-															<div className="flex items-center gap-1.5">
-																<span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md ${day.dayFraction >= 1 ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400' : 'bg-amber-50 text-amber-650 dark:bg-amber-900/20 dark:text-amber-400'}`}>
-																	{day.dayFraction} công {day.workedHoursFormatted ? `(${day.workedHoursFormatted})` : ''} {day.marketCheckinsCount > 0 ? `(${day.marketCheckinsCount}/${d.marketPointsRequired || companyInfo.marketPointsRequired || 1} đ)` : ''}
-																</span>
-																{day.checkinTime && (
-																	<span className="text-[9px] font-bold text-slate-500 bg-slate-50 dark:bg-slate-800 px-1.5 py-0.5 rounded-full">
-																		{day.checkinTime}
-																	</span>
-																)}
-															</div>
-														</div>
-														{day.checkinNote && (
-															<p className="text-[10px] text-slate-400">📍 {day.checkinNote}</p>
-														)}
-														{day.attendances && day.attendances.length > 0 && (
-															<div className="space-y-1 mt-1 pt-1.5 border-t border-slate-100 dark:border-slate-800">
-																{day.attendances.map((att: any, ai: number) => (
-																	<div key={ai} className="flex items-center justify-between text-[10px]">
-																		<span className={`font-bold px-1.5 py-0.5 rounded ${att.type === 'checkin' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400' : att.type === 'checkout' ? 'bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'}`}>
-																			{att.type === 'checkin' ? 'Vào' : att.type === 'checkout' ? 'Ra' : att.type}
-																		</span>
-																		<span className="text-slate-500">{att.time}</span>
-																	</div>
-																))}
-															</div>
-														)}
-													</div>
-												)
-											)}
-										</div>
-									</div>
-								)}
-							</div>
-						);
-					})}
-					
-					{/* Mobile Total Card */}
-					<div className="bg-indigo-50 dark:bg-indigo-950/40 rounded-2xl p-4 border border-indigo-100 dark:border-indigo-900/30 flex justify-between items-center">
-						<span className="text-xs font-black uppercase text-indigo-600 dark:text-indigo-400 tracking-wider">TỔNG CỘNG LƯƠNG</span>
-						<span className="font-black text-lg text-indigo-600 dark:text-indigo-400">{formatPrice(totalAll)}đ</span>
-					</div>
-				</div>
-			</>
-			)}
-		</div>
-	);
-};
-
 
 export default AdminSettings;

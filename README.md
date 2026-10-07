@@ -32,10 +32,13 @@ Dunvex Build là nền tảng quản trị doanh nghiệp chuyên biệt cho ng�
 | **Auth** | Firebase Authentication (Google OAuth) |
 | **Database** | SQLite trên VPS (qua REST API, không dùng Firestore) |
 | **API Bridge** | `fakeFirestore.ts` (giả lập Firestore API → gọi REST API nội bộ) |
+| **Offline Android** | SQLite cục bộ trong vùng lưu trữ riêng của app; IndexedDB dùng trên web và làm bản dự phòng |
 | **Backend** | Node.js + Express + PM2 |
 | **Storage** | Cloudinary (ảnh) |
 | **Maps** | Leaflet + React-Leaflet |
 | **PWA** | Service Worker (Workbox), offline support |
+
+Trên Android, dữ liệu đã tải về được đọc từ SQLite cục bộ; thao tác tạo/sửa/xóa được lưu tại máy trước và đưa vào hàng đợi đồng bộ khi có mạng. Không có dữ liệu nào được lấy mới từ VPS khi thiết bị đang offline. Dữ liệu IndexedDB hiện có được chuyển sang SQLite cục bộ ở lần khởi chạy đầu tiên có plugin SQLite.
 
 ---
 
@@ -76,9 +79,12 @@ scp -o StrictHostKeyChecking=no -i ~/.ssh/google_compute_engine \
 ## 🚢 Deploy lên VPS
 
 ```bash
-bash deploy_vps.sh
+npm run deploy:web -- "Web release"
+npm run release:apps -- all "Cập nhật ứng dụng Dunvex"
 ```
-Tự động: build → tar → scp → PM2 restart. Database trên VPS được giữ nguyên (không bị ghi đè).
+Hai lệnh phát hành độc lập: `deploy:web` chỉ cập nhật web/PWA; `release:apps` nhận `android`, `mac`, `windows` hoặc `all`, chỉ cập nhật gói tải và OTA của các nền tảng được chọn. Mỗi nền tảng có build number, metadata và bundle OTA riêng; cả hai lệnh giữ nguyên database VPS. Bộ cài Windows tạo ứng dụng trong Start Menu, Apps & Features và lối tắt Desktop tùy chọn; gói ZIP portable vẫn được giữ cho trường hợp cần dùng thủ công. `bash deploy_vps.sh` là alias tương thích cho web-only, không phát hành app.
+
+Ứng dụng Android kiểm tra phiên bản khi mở, tải APK mới và mở trình cài đặt khi có build mới. Android vẫn yêu cầu người dùng xác nhận cài đặt. Bản Android đầu tiên có cơ chế kiểm tra/tải cập nhật cần được cài thủ công từ trang tải ứng dụng; các bản kế tiếp mới kiểm tra OTA APK được.
 
 ---
 

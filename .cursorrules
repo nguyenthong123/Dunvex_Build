@@ -1,0 +1,30 @@
+# DUNVEX BUILD - STRICT AI AGENT RULES
+
+TUÂN THỦ TUYỆT ĐỐI NGUYÊN TẮC TÁCH BIỆT NỀN TẢNG (WEB VS NATIVE APPS) THEO AGENTS.md:
+
+1. WEB LÀ THIN CLIENT:
+   - Web kết nối trực tiếp với VPS SQLite qua REST API và RAM store.
+   - TUYỆT ĐỐI KHÔNG đưa tính năng App (Phân vùng 5GB, P2P sync Zalo-style, license offline) lên Web.
+   - TUYỆT ĐỐI KHÔNG chạy interval nền, không lắng nghe window.onfocus hay visibilitychange để sync đè dữ liệu trên Web.
+   - TUYỆT ĐỐI KHÔNG ép nạp hình ảnh vào IndexedDB trên Web.
+
+2. NATIVE APPS (ANDROID, MAC, WIN):
+   - Mọi tính năng chỉ dành cho App Native BẮT BUỘC bọc:
+     `import { isNativeApp } from '../utils/platform';`
+     `{isNativeApp() && <FeatureComponent />}`
+
+3. ĐÚNG PHẠM VI YÊU CẦU:
+   - Người dùng yêu cầu cho App -> CHỈ LÀM CHO APP, không cho rò rỉ sang Web.
+   - Người dùng yêu cầu cho Web -> CHỈ LÀM CHO WEB.
+
+4. AN TOÀN DỮ LIỆU & DEPLOY / BACKUP:
+   - CẤM TUYỆT ĐỐI đụng tới, can thiệp, ghi đè hoặc chỉnh sửa trực tiếp file SQLite VPS (`/home/zomby/dunvex_app/data/dunvex.db`).
+   - CẤM TUYỆT ĐỐI tự động backup hoặc deploy phiên bản khi CHƯA có sự cho phép cụ thể từ người dùng.
+
+5. DEPLOY PHÂN BIỆT RÕ RÀNG (CHỈ CHẠY KHI ĐƯỢC PHÉP):
+   - Web: `npm run deploy:web`
+   - Android: `npm run deploy:android`
+   - Mac: `npm run deploy:mac`
+   - Windows: `npm run deploy:win`
+   - All apps: `npm run deploy:apps`
+

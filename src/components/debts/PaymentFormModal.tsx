@@ -79,7 +79,16 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
 						<PlusCircle size={24} className="text-[#FF6D00]" />
 						<h3 className="text-xl font-black uppercase tracking-tight">{editingPaymentId ? 'Chỉnh sửa phiếu thu' : 'Ghi nhận thu nợ'}</h3>
 					</div>
-					<button onClick={() => { setShowPaymentForm(false); setEditingPaymentId(null); }} className="size-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+					<button
+						type="button"
+						onClick={(e) => {
+							e.preventDefault();
+							e.stopPropagation();
+							setShowPaymentForm(false);
+							setEditingPaymentId(null);
+						}}
+						className="size-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+					>
 						<X size={20} />
 					</button>
 				</div>

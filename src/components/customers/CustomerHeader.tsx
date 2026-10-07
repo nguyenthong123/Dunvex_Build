@@ -14,6 +14,7 @@ export interface CustomerHeaderProps {
     setShowMap: (v: boolean) => void;
     resetForm: () => void;
     setShowAddForm: (v: boolean) => void;
+    onExportExcel?: () => void;
 }
 
 export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
@@ -28,7 +29,8 @@ export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
     setShowImport,
     setShowMap,
     resetForm,
-    setShowAddForm
+    setShowAddForm,
+    onExportExcel
 }) => {
     const navigate = useNavigate();
     return (
@@ -46,7 +48,7 @@ export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
                         <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0"></div>
                         <h2 className="text-lg md:text-xl font-black text-[#1A237E] dark:text-indigo-400 uppercase tracking-tight truncate">Khách Hàng</h2>
                     </div>
-                    <div className="flex items-center gap-2 md:gap-4 flex-shrink-0 ml-auto">
+                    <div className="flex items-center gap-2 md:gap-3 flex-shrink-0 ml-auto">
                         {/* Search on Desktop */}
                         <div className="hidden lg:flex items-center gap-2">
                             <div className="relative">
@@ -69,20 +71,31 @@ export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
                             <span className="material-symbols-outlined text-xl">search</span>
                         </button>
 
+                        {onExportExcel && (
+                            <button
+                                onClick={onExportExcel}
+                                className="hidden sm:flex bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 px-3.5 py-2.5 rounded-xl font-bold border border-emerald-200 dark:border-emerald-800/60 transition-all items-center gap-1.5 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 shadow-sm"
+                                title="Xuất danh sách ra file Excel"
+                            >
+                                <span className="material-symbols-outlined text-lg">download</span>
+                                <span className="text-xs">Xuất Excel</span>
+                            </button>
+                        )}
+
                         <button
                             onClick={() => setShowImport(true)}
-                            className="hidden lg:flex bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-4 py-2.5 rounded-xl font-bold border border-slate-200 dark:border-slate-800 transition-all items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-700"
+                            className="hidden lg:flex bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-3.5 py-2.5 rounded-xl font-bold border border-slate-200 dark:border-slate-800 transition-all items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-700"
                         >
-                            <span className="material-symbols-outlined">file_upload</span>
-                            <span className="hidden sm:inline">Nhập Excel</span>
+                            <span className="material-symbols-outlined text-lg">file_upload</span>
+                            <span className="text-xs">Nhập Excel</span>
                         </button>
-                        <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
+                        <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1 hidden sm:block"></div>
                         <button
                             onClick={() => { resetForm(); setShowAddForm(true); }}
-                            className="bg-[#FF6D00] hover:bg-orange-600 text-white px-3 md:px-4 py-2.5 rounded-xl font-bold shadow-lg shadow-orange-500/20 transition-all flex items-center gap-2"
+                            className="bg-[#FF6D00] hover:bg-orange-600 text-white px-3 md:px-4 py-2.5 rounded-xl font-bold shadow-lg shadow-orange-500/20 transition-all flex items-center gap-1.5"
                         >
-                            <span className="material-symbols-outlined">person_add</span>
-                            <span className="hidden lg:inline">Thêm mới</span>
+                            <span className="material-symbols-outlined text-lg">person_add</span>
+                            <span className="text-xs hidden md:inline">Thêm mới</span>
                         </button>
                     </div>
                 </>

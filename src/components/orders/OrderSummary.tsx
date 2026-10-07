@@ -27,6 +27,7 @@ interface OrderSummaryProps {
     setShowProfitPreview: (show: boolean) => void;
     handleConfirmOrder: () => void;
     isSubmitting: boolean;
+    editId?: string;
 }
 
 const OrderSummary: React.FC<OrderSummaryProps> = ({
@@ -38,7 +39,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
     subTotal, finalTotal, totalWeight,
     totalCostActual, totalProfitActual, overheadRate, hasOverheadItems,
     isAdmin, showProfitPreview, setShowProfitPreview,
-    handleConfirmOrder, isSubmitting
+    handleConfirmOrder, isSubmitting, editId
 }) => {
     const [showVoucherModal, setShowVoucherModal] = useState(false);
 
@@ -226,7 +227,9 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
                             disabled={isSubmitting}
                             className="hidden md:flex items-center justify-center w-[300px] ml-auto h-12 bg-[#1A237E] hover:bg-[#121858] dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white rounded-xl font-bold text-sm uppercase tracking-wider shadow-md hover:shadow-lg transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            {isSubmitting ? 'ĐANG XỬ LÝ...' : 'XÁC NHẬN LÊN ĐƠN'}
+                            {isSubmitting 
+                                ? (editId ? 'ĐANG LƯU...' : 'ĐANG XỬ LÝ...') 
+                                : (editId ? 'LƯU THAY ĐỔI' : 'XÁC NHẬN LÊN ĐƠN')}
                         </button>
                     </div>
                 </div>

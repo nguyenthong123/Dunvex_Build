@@ -1,0 +1,13 @@
+{
+  "platform": "mac",
+  "version": "1.0.1",
+  "buildNumber": 158,
+  "releaseDate": "2026-10-04T04:15:16.274Z",
+  "releaseNotes": "Chấm công GPS: sửa lấy vị trí trên macOS",
+  "downloadUrl": "/downloads/Dunvex-Build-1.0.1-Apple-Silicon.dmg",
+  "bundleUrl": "/api/releases/mac/bundle.zip",
+  "bundleHash": "e624b935145dd72d9f974ba8c9fe1501d7ca82630b329da5ae4fea575f162380",
+  "size": 1025358,
+  "downloadSize": 1666239,
+  "downloadSha256": "21edaf7362d37549aee68fea9a7efb1474d461e3f8bdd697b1accef558a48d28"
+}

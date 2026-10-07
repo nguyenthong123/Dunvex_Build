@@ -57,6 +57,7 @@ async function handler(req, res) {
 
     // ── ĐIỀU PHỐI QUA N8N ALERT HUB (CHUẨN N8N ENGINE) ──
     let n8nSuccess = false;
+    let n8nAccepted = false;
     try {
       const n8nWebhookUrl = process.env.N8N_ALERT_HUB_URL || "https://34-133-127-214.nip.io/webhook/dunvex-events";
       const n8nRes = await fetch(n8nWebhookUrl, {
@@ -70,17 +71,18 @@ async function handler(req, res) {
           message,
           data
         }),
-        signal: AbortSignal.timeout(5000)
+        signal: AbortSignal.timeout(15000)
       });
       if (n8nRes.ok) {
         n8nSuccess = true;
+        n8nAccepted = true;
       }
     } catch (n8nErr) {
       console.warn('[n8n Webhook] Fetch error:', n8nErr.message);
     }
 
-    // Dự phòng nếu n8n gián đoạn
-    if (!n8nSuccess && message) {
+    // Dự phòng trực tiếp nạp Telegram CHỈ KHI n8n không thể kết nối hoặc n8n bị lỗi hoàn toàn
+    if (!n8nSuccess && !n8nAccepted && message) {
       try {
         await sendTelegramMessage(botToken, chatId, message);
       } catch (teleErr) {

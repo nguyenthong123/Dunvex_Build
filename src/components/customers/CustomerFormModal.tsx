@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, Image as ImageIcon, X } from 'lucide-react';
+import { FileText, Image as ImageIcon, LoaderCircle, X } from 'lucide-react';
 
 export interface CustomerFormModalProps {
     showAddForm: boolean;
@@ -10,6 +10,7 @@ export interface CustomerFormModalProps {
     setFormData: (data: any) => void;
     handleAddCustomer: (e: React.FormEvent) => void;
     handleUpdateCustomer: (e: React.FormEvent) => void;
+    isSavingCustomer: boolean;
     customerTypes: string[];
     uploadingLicense: boolean;
     uploadingImages: boolean;
@@ -32,6 +33,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
     setFormData,
     handleAddCustomer,
     handleUpdateCustomer,
+    isSavingCustomer,
     customerTypes,
     uploadingLicense,
     uploadingImages,
@@ -51,7 +53,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
             <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] transition-colors duration-300">
                 <div className="px-8 py-6 bg-[#1A237E] dark:bg-indigo-900 text-white flex items-center justify-between">
                     <h3 className="text-xl font-black uppercase tracking-tight">{showAddForm ? 'Thêm Khách Hàng' : 'Cập Nhật Hồ Sơ'}</h3>
-                    <button onClick={() => { if (showAddForm) setShowAddForm(false); else if (showEditForm) setShowEditForm(false); }} className="size-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors">
+                    <button disabled={isSavingCustomer} onClick={() => { if (showAddForm) setShowAddForm(false); else if (showEditForm) setShowEditForm(false); }} className="size-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors disabled:opacity-50">
                         <span className="material-symbols-outlined">close</span>
                     </button>
                 </div>
@@ -343,9 +345,15 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                     <div className="pt-4">
                         <button
                             type="submit"
-                            className="w-full bg-[#FF6D00] text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-orange-500/30 hover:bg-orange-600 transition-all active:scale-[0.98]"
+                            disabled={isSavingCustomer}
+                            className="w-full bg-[#FF6D00] text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-orange-500/30 hover:bg-orange-600 transition-all active:scale-[0.98] disabled:cursor-wait disabled:opacity-75"
                         >
-                            {showAddForm ? 'Xác nhận tạo hồ sơ' : 'Cập nhật thông tin'}
+                            {isSavingCustomer ? (
+                                <span className="inline-flex items-center justify-center gap-2">
+                                    <LoaderCircle className="h-4 w-4 animate-spin" />
+                                    Đang lưu trên máy...
+                                </span>
+                            ) : showAddForm ? 'Xác nhận tạo hồ sơ' : 'Cập nhật thông tin'}
                         </button>
                     </div>
                 </form>

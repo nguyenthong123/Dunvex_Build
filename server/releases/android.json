@@ -1,0 +1,13 @@
+{
+  "platform": "android",
+  "version": "1.0.1",
+  "buildNumber": 151,
+  "releaseDate": "2026-10-04T04:16:14.088Z",
+  "releaseNotes": "Chấm công GPS: sửa lấy vị trí trên Android",
+  "downloadUrl": "/downloads/dunvex_app.apk",
+  "apkUrl": "https://dunvex.com/dunvex_app.apk",
+  "forceUpdate": false,
+  "minSupportedVersion": "1.0.0",
+  "size": 13182362,
+  "sha256": "3d3fb3df4f1242afdad2a8337f4ee28f764ac09e5cd94f264fedbf66bebb6985"
+}

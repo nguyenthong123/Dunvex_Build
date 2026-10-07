@@ -5,9 +5,23 @@
  * Giữ interface tương tự Firebase để dataAccess.ts dễ migrate.
  */
 
-import { getAuth } from 'firebase/auth';
+import { Capacitor } from '@capacitor/core';
+import { clearSQLiteSession, getCurrentSessionUser, getSessionToken } from './sqliteSession';
 
-const API_BASE = import.meta.env.VITE_API_URL || '/api/data';
+const isStandaloneDesktopOrMobile = typeof window !== 'undefined' && (
+  window.location.port === '41738' ||
+  (window as any).webkit?.messageHandlers !== undefined ||
+  Capacitor.isNativePlatform()
+);
+
+const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || (isStandaloneDesktopOrMobile ? 'https://dunvex.com' : '');
+
+export function apiUrl(path: string): string {
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${API_ORIGIN}${path.startsWith('/') ? path : `/${path}`}`;
+}
+
+const API_BASE = apiUrl(import.meta.env.VITE_API_URL || '/api/data');
 
 // ─── Auth Headers ───────────────────────────────────────────
 
@@ -17,10 +31,7 @@ export function getAuthHeaders() {
   let ownerId = localStorage.getItem('dunvex_owner_id') || '';
   if (!ownerId) {
     try {
-      const auth = getAuth();
-      if (auth && auth.currentUser) {
-        ownerId = auth.currentUser.uid;
-      }
+      ownerId = getCurrentSessionUser()?.uid || '';
     } catch (e) {}
   }
   return {
@@ -35,24 +46,30 @@ export function setApiCredentials(apiKey: string, ownerId: string) {
   localStorage.setItem('dunvex_owner_id', ownerId);
 }
 
-async function apiFetch<T = any>(url: string, options: RequestInit = {}): Promise<T> {
-  let token = '';
-  const auth = getAuth();
+export async function logoutSQLiteSession() {
+  const token = getSessionToken();
   try {
-    if (auth && auth.currentUser) {
-      token = await auth.currentUser.getIdToken();
+    if (token) {
+      await fetch(apiUrl('/api/auth/logout'), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
     }
-  } catch (e) {
-    console.warn('Failed to get Firebase token', e);
+  } finally {
+    clearSQLiteSession();
   }
+}
 
-  const buildHeaders = (currToken: string) => {
+async function apiFetch<T = any>(url: string, options: RequestInit = {}): Promise<T> {
+  const token = getSessionToken();
+
+  const buildHeaders = () => {
     const headers: Record<string, string> = {
       ...getAuthHeaders(),
       ...(options.headers as any || {}),
     };
-    if (currToken) {
-      headers['Authorization'] = `Bearer ${currToken}`;
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
     return headers;
   };
@@ -60,25 +77,11 @@ async function apiFetch<T = any>(url: string, options: RequestInit = {}): Promis
   let res = await fetch(url, {
     ...options,
     cache: 'no-store',
-    headers: buildHeaders(token)
+    headers: buildHeaders()
   });
 
-  // 🔄 Tự động refresh token và retry nếu gặp lỗi 401 Unauthorized (token hết hạn)
-  if (res.status === 401 && auth && auth.currentUser) {
-    try {
-      console.warn('[apiClient] Nhận mã 401, đang tự động làm mới Firebase token...');
-      const freshToken = await auth.currentUser.getIdToken(true);
-      if (freshToken) {
-        token = freshToken;
-        res = await fetch(url, {
-          ...options,
-          cache: 'no-store',
-          headers: buildHeaders(freshToken)
-        });
-      }
-    } catch (refreshErr) {
-      console.error('[apiClient] Làm mới token thất bại:', refreshErr);
-    }
+  if (res.status === 401 && token) {
+    clearSQLiteSession();
   }
 
   if (!res.ok) {
@@ -202,16 +205,43 @@ function localInvalidate(collection: string) {
   }
 }
 
+function stripImageBinaries(data: Record<string, any>): Record<string, any> {
+  if (!data || typeof data !== 'object') return data;
+  const sanitized: Record<string, any> = {};
+  for (const [key, val] of Object.entries(data)) {
+    if (typeof val === 'string') {
+      if (
+        val.startsWith('data:image/') ||
+        val.startsWith('blob:') ||
+        val.startsWith('file:') ||
+        val.startsWith('capacitor:') ||
+        val.startsWith('/var/mobile') ||
+        val.startsWith('/data/user') ||
+        (val.length > 500 && /^[A-Za-z0-9+/=]+$/.test(val.substring(0, 100)))
+      ) {
+        sanitized[key] = ''; // Do NOT push binary or local image paths to VPS
+        continue;
+      }
+    } else if (val && typeof val === 'object' && !Array.isArray(val)) {
+      sanitized[key] = stripImageBinaries(val);
+      continue;
+    }
+    sanitized[key] = val;
+  }
+  return sanitized;
+}
+
 /** Create a new document (auto-generated ID if not provided) */
 export async function createDocument(
   collection: string,
   data: Record<string, any>
 ): Promise<string> {
+  const sanitizedData = stripImageBinaries(data);
   const result = await apiFetch<{ success: boolean; id: string }>(
     `${API_BASE}/${collection}`,
     {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(sanitizedData),
     }
   );
 
@@ -267,7 +297,7 @@ export async function setDocument(
   try {
     await apiFetch(`${API_BASE}/${collection}/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(data),
+      body: JSON.stringify(stripImageBinaries(data)),
     });
     localInvalidate(collection);
   } catch (e) {
@@ -324,7 +354,7 @@ export async function updateDocument(
   try {
     await apiFetch(`${API_BASE}/${collection}/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(data),
+      body: JSON.stringify(stripImageBinaries(data)),
     });
     localInvalidate(collection);
   } catch (e) {
@@ -421,19 +451,11 @@ const docListeners = new Map<string, {
 let sseConnection: AbortController | null = null;
 let isConnecting = false;
 
-async function setupSSE() {
+export async function setupSSE() {
   if (sseConnection || isConnecting) return;
   isConnecting = true;
   
-  let token = '';
-  try {
-    const auth = getAuth();
-    if (auth && auth.currentUser) {
-      token = await auth.currentUser.getIdToken();
-    }
-  } catch (e) {
-    console.warn('Failed to get Firebase token for SSE', e);
-  }
+  const token = getSessionToken();
 
   const abortController = new AbortController();
   sseConnection = abortController;

@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { auth } from '../services/firebase';
+import { auth, refreshCollection } from '../services/firebase';
 import { useOrders } from '../hooks/useOrders';
 import { usePayments } from '../hooks/usePayments';
 import { useCustomers } from '../hooks/useCustomers';
-import { Filter, Download, Printer, X, Lock, Crown, Image as ImageIcon, Copy, CheckCircle2 } from 'lucide-react';
-import html2canvas from 'html2canvas-pro';
+import { Filter, Download, Printer, X, Lock, Crown, Image as ImageIcon, Copy, CheckCircle2, ArrowUpDown, Calendar, ChevronDown, Clock, Sparkles } from 'lucide-react';
+import { generateTicketPng, dataURLtoBlob } from '../components/orderTicket/ticketImage';
+import { getTodayString } from '../utils/dateUtils';
 import UpgradeModal from '../components/UpgradeModal';
 import { DebtKPIs } from '../components/debts/DebtKPIs';
 import { PaymentDetailModal } from '../components/debts/PaymentDetailModal';
@@ -20,6 +21,9 @@ import { useDebtCalculations } from '../hooks/useDebtCalculations';
 import { useDebtFilters } from '../hooks/useDebtFilters';
 import { useDebtPayments } from '../hooks/useDebtPayments';
 import { useDebtStatement } from '../hooks/useDebtStatement';
+import { saveWorkbookToFile } from '../utils/excelExport';
+import { copyOrShareImage } from '../utils/imageSharing';
+import { isNativeApp } from '../utils/platform';
 
 // ── Types ──────────────────────────────────────────────────
 interface DataRow {
@@ -44,24 +48,57 @@ const Debts: React.FC = () => {
 	const owner = useOwner();
 	const { isNavVisible } = useScroll();
 	const { showToast } = useToast();
+	const isWebClient = !isNativeApp();
 
 	const [activeTab, setActiveTab] = useState<'customers' | 'history'>('customers');
 
 	// ── Data hooks ────────────────────────────────────────
-	const { orders } = useOrders({
+	const { orders, loading: ordersLoading, error: ordersError } = useOrders({
 		ownerId: owner.ownerId,
 		enabled: !owner.loading && !!owner.ownerId,
 		maxResults: 99999,
 	});
-	const { payments } = usePayments({
+	const { payments, loading: paymentsLoading, error: paymentsError } = usePayments({
 		ownerId: owner.ownerId,
 		enabled: !owner.loading && !!owner.ownerId,
 		maxResults: 99999,
 	});
-	const { customers, loading } = useCustomers({
+	const { customers, loading: customersLoading, error: customersError } = useCustomers({
 		ownerId: owner.ownerId,
 		enabled: !owner.loading && !!owner.ownerId,
 	});
+
+	useEffect(() => {
+		if (!isWebClient) return;
+
+		const refreshDebtData = () => {
+			Promise.all([
+				refreshCollection('orders'),
+				refreshCollection('payments'),
+				refreshCollection('customers'),
+			]).catch((error) => {
+				console.error('Failed to refresh debt data from VPS:', error);
+				showToast('Chưa tải được dữ liệu công nợ mới nhất. Vui lòng kiểm tra kết nối và thử tải lại.', 'error');
+			});
+		};
+		const handlePageShow = (event: PageTransitionEvent) => {
+			if (event.persisted) refreshDebtData();
+		};
+
+		window.addEventListener('online', refreshDebtData);
+		window.addEventListener('pageshow', handlePageShow);
+		return () => {
+			window.removeEventListener('online', refreshDebtData);
+			window.removeEventListener('pageshow', handlePageShow);
+		};
+	}, [isWebClient, showToast]);
+
+	const isDebtDataLoading = ordersLoading || paymentsLoading || customersLoading;
+	const debtDataErrors = [
+		ordersError && 'đơn hàng',
+		customersError && 'khách hàng',
+		paymentsError && 'phiếu thu',
+	].filter(Boolean);
 
 	// ── Filters (search, dates, pagination, notifications) ─
 	const enhancedPayments = useMemo(
@@ -91,7 +128,13 @@ const Debts: React.FC = () => {
 		setFromDate,
 		toDate,
 		setToDate,
+		timePreset,
+		handleSetTimePreset,
 		statusFilter,
+		debtStatusFilter,
+		setDebtStatusFilter,
+		sortBy,
+		setSortBy,
 		showFilterOptions,
 		setShowFilterOptions,
 		currentPage,
@@ -108,7 +151,6 @@ const Debts: React.FC = () => {
 		historyTotalPages,
 		paginatedHistory,
 		getHistoryPageNumbers,
-		// useDebtFilters takes enhancedPayments — computed inside useDebtCalculations
 	} = useDebtFilters({
 		enhancedPayments,
 	});
@@ -126,6 +168,7 @@ const Debts: React.FC = () => {
 		totalWaitedAll,
 		totalPaidAll,
 		totalUnpaidAll,
+		debtCounts,
 		getPageNumbers,
 	} = useDebtCalculations({
 		orders,
@@ -135,6 +178,8 @@ const Debts: React.FC = () => {
 		fromDate,
 		toDate,
 		statusFilter,
+		debtStatusFilter,
+		sortBy,
 		currentPage,
 		itemsPerPage: ITEMS_PER_PAGE,
 	});
@@ -195,6 +240,41 @@ const Debts: React.FC = () => {
 		showToast,
 	});
 
+	// Cache the pre-generated PNG/Blob for instant clipboard copy (iOS & Safari friendly)
+	const cachedStatementPngRef = useRef<string | null>(null);
+	const cachedStatementBlobRef = useRef<Blob | null>(null);
+	const isGeneratingStatementRef = useRef(false);
+
+	const preGenerateStatementPng = useCallback(async () => {
+		if (isGeneratingStatementRef.current || !selectedCustomer) return;
+		const node = document.getElementById('debt-statement-container');
+		if (!node) return;
+
+		isGeneratingStatementRef.current = true;
+		try {
+			const dataUrl = await generateTicketPng(node, true, 420);
+			cachedStatementPngRef.current = dataUrl;
+			cachedStatementBlobRef.current = dataURLtoBlob(dataUrl);
+		} catch (e) {
+			console.warn('Pre-generate statement PNG failed:', e);
+		} finally {
+			isGeneratingStatementRef.current = false;
+		}
+	}, [selectedCustomer]);
+
+	// Auto pre-generate statement image when statement modal is shown or dates change
+	useEffect(() => {
+		if (!showStatement || loadingStatementTx) {
+			cachedStatementPngRef.current = null;
+			cachedStatementBlobRef.current = null;
+			return;
+		}
+		const timer = setTimeout(() => {
+			preGenerateStatementPng();
+		}, 300);
+		return () => clearTimeout(timer);
+	}, [showStatement, loadingStatementTx, statementTx, statementFromDate, statementToDate, preGenerateStatementPng]);
+
 	const [isSavingImage, setIsSavingImage] = useState(false);
 	const [capturedImage, setCapturedImage] = useState<string | null>(null);
 	const [showCopySuccess, setShowCopySuccess] = useState(false);
@@ -206,19 +286,13 @@ const Debts: React.FC = () => {
 
 		setIsSavingImage(true);
 		try {
-			const targetWidth = 420;
-			const canvas = await html2canvas(node, {
-				backgroundColor: '#ffffff',
-				width: targetWidth,
-				scale: 2,
-				useCORS: true,
-				allowTaint: false,
-				logging: false,
-			});
-			const dataUrl = canvas.toDataURL('image/png');
-
+			let dataUrl = cachedStatementPngRef.current;
+			if (!dataUrl) {
+				dataUrl = await generateTicketPng(node, true, 420);
+				cachedStatementPngRef.current = dataUrl;
+			}
 			const link = document.createElement('a');
-			link.download = `cong_no_${selectedCustomer.name?.replace(/\s+/g, '_')}.png`;
+			link.download = `cong_no_${selectedCustomer.name?.replace(/\s+/g, '_') || 'khach_hang'}.png`;
 			link.href = dataUrl;
 			link.click();
 		} catch (error) {
@@ -235,44 +309,42 @@ const Debts: React.FC = () => {
 		if (!node) return;
 
 		setIsSavingImage(true);
-		let generatedUrl = '';
 		try {
-			const targetWidth = 420;
-
-			if (!navigator.clipboard || !window.ClipboardItem) {
-				throw new Error("Trình duyệt không hỗ trợ Clipboard API hoặc kết nối HTTP không bảo mật");
+			let dataUrl = cachedStatementPngRef.current;
+			if (!dataUrl) {
+				dataUrl = await generateTicketPng(node, true, 420);
+				cachedStatementPngRef.current = dataUrl;
 			}
 
-			const blobPromise = (async () => {
-				const canvas = await html2canvas(node, {
-					backgroundColor: '#ffffff',
-					width: targetWidth,
-					scale: 2,
-					useCORS: true,
-					allowTaint: false,
-					logging: false,
-				});
-				const dataUrl = canvas.toDataURL('image/png');
-				generatedUrl = dataUrl;
-				const response = await fetch(dataUrl);
-				if (!response.ok) throw new Error(`HTTP status ${response.status}`);
-				return await response.blob();
-			})();
+			const fileName = `cong_no_${selectedCustomer.name?.replace(/\s+/g, '_') || 'khach_hang'}.png`;
+			const res = await copyOrShareImage({
+				dataUrl,
+				fileName,
+				title: 'Phiếu công nợ khách hàng',
+				text: `Bảng đối soát công nợ - Khách hàng ${selectedCustomer.name || ''}`,
+			});
 
-			await navigator.clipboard.write([
-				new ClipboardItem({
-					'image/png': blobPromise
-				})
-			]);
 			setShowCopySuccess(true);
 			setTimeout(() => setShowCopySuccess(false), 2500);
+			if (res.message) {
+				showToast(res.message, "success");
+			}
+			setTimeout(() => preGenerateStatementPng(), 400);
 		} catch (error) {
 			console.error("Lỗi sao chép hình ảnh:", error);
-			if (generatedUrl) {
-				setCapturedImage(generatedUrl);
-				showToast("Sao chép trực tiếp thất bại. Bạn hãy NHẤN GIỮ VÀO ẢNH phía dưới để Sao chép hoặc Lưu lại nhé!", "warning");
-			} else {
-				showToast("Không thể tạo hình ảnh phiếu công nợ: " + (error instanceof Error ? error.message : String(error)), "error");
+			// Do NOT pop up intermediate modal; trigger direct image download as graceful fallback
+			try {
+				let fallbackDataUrl = cachedStatementPngRef.current;
+				if (!fallbackDataUrl) {
+					fallbackDataUrl = await generateTicketPng(node, true, 420);
+				}
+				const link = document.createElement('a');
+				link.download = `cong_no_${selectedCustomer.name?.replace(/\s+/g, '_') || 'khach_hang'}.png`;
+				link.href = fallbackDataUrl;
+				link.click();
+				showToast("Đã tải ảnh phiếu công nợ về máy để gửi Zalo / Messenger!", "success");
+			} catch (downloadErr) {
+				showToast("Không thể sao chép hoặc tải ảnh phiếu công nợ: " + (error instanceof Error ? error.message : String(error)), "error");
 			}
 		} finally {
 			setIsSavingImage(false);
@@ -280,20 +352,23 @@ const Debts: React.FC = () => {
 	};
 
 	const handleCopyStatementCapturedImage = async () => {
-		if (!capturedImage) return;
+		if (!capturedImage || !selectedCustomer) return;
 		try {
-			const response = await fetch(capturedImage);
-			const blob = await response.blob();
-			await navigator.clipboard.write([
-				new ClipboardItem({
-					[blob.type]: blob
-				})
-			]);
+			const fileName = `cong_no_${selectedCustomer.name?.replace(/\s+/g, '_') || 'khach_hang'}.png`;
+			const res = await copyOrShareImage({
+				dataUrl: capturedImage,
+				fileName,
+				title: 'Phiếu công nợ khách hàng',
+				text: `Bảng đối soát công nợ - Khách hàng ${selectedCustomer.name || ''}`,
+			});
 			setShowCopySuccess(true);
 			setTimeout(() => setShowCopySuccess(false), 2500);
+			if (res.message) {
+				showToast(res.message, "success");
+			}
 		} catch (error) {
 			console.error("Lỗi sao chép hình ảnh:", error);
-			showToast("Thiết bị hoặc trình duyệt không hỗ trợ sao chép trực tiếp. Bạn vui lòng nhấn giữ hình ảnh để Sao chép!", "warning");
+			showToast("Không thể sao chép hoặc chia sẻ ảnh", "warning");
 		}
 	};
 
@@ -324,7 +399,6 @@ const Debts: React.FC = () => {
 		const handleOpenAdd = () => {
 			setSelectedCustomer(null);
 			setShowPaymentForm(true);
-			navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
 		};
 		window.addEventListener('open-mobile-add', handleOpenAdd);
 		return () => window.removeEventListener('open-mobile-add', handleOpenAdd);
@@ -447,14 +521,13 @@ const Debts: React.FC = () => {
 									customerId: '',
 									customerName: '',
 									amount: 0,
-									date: new Date().toISOString().split('T')[0],
+									date: getTodayString(),
 									note: '',
 									paymentMethod: 'Tiền mặt',
 									proofImage: '',
 								});
 								setPaymentCustomerSearchQuery('');
 								setShowPaymentForm(true);
-								navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
 							}}
 							className="hidden md:flex items-center justify-center gap-2 bg-[#1A237E] dark:bg-indigo-600 hover:bg-[#0D47A1] dark:hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-blue-900/20 dark:shadow-indigo-900/20 transition-all active:scale-95"
 						>
@@ -467,6 +540,20 @@ const Debts: React.FC = () => {
 
 			{/* Content Area */}
 			<div className="flex-1 p-4 md:p-8 print:hidden">
+					{debtDataErrors.length > 0 && (
+						<div role="alert" className="mb-5 flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100 sm:flex-row sm:items-center sm:justify-between">
+							<p>
+								Không tải được {debtDataErrors.join(', ')}. Danh sách chưa đầy đủ; điều này không có nghĩa là dữ liệu đã bị xóa.
+							</p>
+							<button
+								type="button"
+								onClick={() => window.location.reload()}
+								className="shrink-0 font-bold underline underline-offset-2"
+							>
+								Tải lại dữ liệu
+							</button>
+						</div>
+					)}
 				{showMobileSearch && (
 					<div className="lg:hidden mb-6 animate-in slide-in-from-top duration-300">
 						<div className="flex items-center gap-3 bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-200 dark:border-slate-800">
@@ -508,82 +595,251 @@ const Debts: React.FC = () => {
 						}
 					/>
 
-					{/* View Toggle Tabs */}
-					<div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-800/50 rounded-2xl w-fit mb-2">
-						<button
-							onClick={() => setActiveTab('customers')}
-							className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-								activeTab === 'customers'
-									? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm'
-									: 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-							}`}
-						>
-							Bảng công nợ
-						</button>
-						<button
-							onClick={() => setActiveTab('history')}
-							className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-								activeTab === 'history'
-									? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm'
-									: 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-							}`}
-						>
-							Lịch sử thu nợ
-						</button>
+					{/* View Toggle Tabs (Bảng công nợ / Lịch sử thu nợ) */}
+					<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+						<div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-800/50 rounded-2xl w-fit">
+							<button
+								onClick={() => setActiveTab('customers')}
+								className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+									activeTab === 'customers'
+										? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm'
+										: 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+								}`}
+							>
+								Bảng công nợ
+							</button>
+							<button
+								onClick={() => setActiveTab('history')}
+								className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+									activeTab === 'history'
+										? 'bg-white dark:bg-slate-700 text-[#1A237E] dark:text-indigo-400 shadow-sm'
+										: 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+								}`}
+							>
+								Lịch sử thu nợ
+							</button>
+						</div>
+
+						{/* Quick Time Presets */}
+						<div className="flex flex-wrap items-center gap-1.5 bg-slate-100/70 dark:bg-slate-800/40 p-1.5 rounded-2xl border border-slate-200/50 dark:border-slate-800">
+							<span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest px-2.5 hidden lg:inline">
+								Thời gian:
+							</span>
+							<button
+								onClick={() => handleSetTimePreset('all')}
+								className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+									timePreset === 'all' && !fromDate && !toDate
+										? 'bg-[#1A237E] text-white shadow-md shadow-indigo-900/20 dark:bg-indigo-600'
+										: 'text-slate-600 dark:text-slate-400 hover:bg-white/60 dark:hover:bg-slate-700/60'
+								}`}
+							>
+								Tất cả
+							</button>
+							<button
+								onClick={() => handleSetTimePreset('this_month')}
+								className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+									timePreset === 'this_month'
+										? 'bg-[#1A237E] text-white shadow-md shadow-indigo-900/20 dark:bg-indigo-600'
+										: 'text-slate-600 dark:text-slate-400 hover:bg-white/60 dark:hover:bg-slate-700/60'
+								}`}
+							>
+								Tháng này
+							</button>
+							<button
+								onClick={() => handleSetTimePreset('2_months')}
+								className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+									timePreset === '2_months'
+										? 'bg-[#1A237E] text-white shadow-md shadow-indigo-900/20 dark:bg-indigo-600'
+										: 'text-slate-600 dark:text-slate-400 hover:bg-white/60 dark:hover:bg-slate-700/60'
+								}`}
+							>
+								2 tháng
+							</button>
+							<button
+								onClick={() => handleSetTimePreset('3_months')}
+								className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+									timePreset === '3_months'
+										? 'bg-[#1A237E] text-white shadow-md shadow-indigo-900/20 dark:bg-indigo-600'
+										: 'text-slate-600 dark:text-slate-400 hover:bg-white/60 dark:hover:bg-slate-700/60'
+								}`}
+							>
+								3 tháng
+							</button>
+							<button
+								onClick={() => setShowFilterOptions(!showFilterOptions)}
+								className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+									showFilterOptions || (fromDate && timePreset === 'custom')
+										? 'bg-amber-500 text-white shadow-md shadow-amber-500/20'
+										: 'text-slate-600 dark:text-slate-400 hover:bg-white/60 dark:hover:bg-slate-700/60'
+								}`}
+							>
+								<Calendar size={12} />
+								<span>{fromDate && toDate ? `${fromDate} → ${toDate}` : 'Tùy chọn'}</span>
+							</button>
+						</div>
 					</div>
+
+					{/* Custom Date Filter Panel */}
+					{showFilterOptions && (
+						<div className="bg-white dark:bg-slate-900 p-5 rounded-[2rem] shadow-sm border border-slate-200/80 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-4 duration-300">
+							<div>
+								<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">
+									Từ ngày
+								</label>
+								<input
+									type="date"
+									className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#1A237E]/20 outline-none"
+									value={fromDate}
+									onChange={(e) => {
+										setFromDate(e.target.value);
+										handleSetTimePreset('custom');
+									}}
+								/>
+							</div>
+							<div>
+								<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">
+									Đến ngày
+								</label>
+								<input
+									type="date"
+									className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#1A237E]/20 outline-none"
+									value={toDate}
+									onChange={(e) => {
+										setToDate(e.target.value);
+										handleSetTimePreset('custom');
+									}}
+								/>
+							</div>
+							<div className="flex items-end gap-2">
+								<button
+									onClick={() => {
+										setFromDate('');
+										setToDate('');
+										handleSetTimePreset('all');
+										setShowFilterOptions(false);
+									}}
+									className="w-full py-2.5 px-4 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold"
+								>
+									Xóa bộ lọc
+								</button>
+							</div>
+						</div>
+					)}
 
 					{activeTab === 'customers' ? (
 						<>
-							{/* Filters */}
-							<div className="flex flex-col gap-4">
-								<div className="flex justify-end gap-4">
-									<div className="flex items-center gap-2 w-full md:w-auto">
-										<button
-											onClick={() => setShowFilterOptions(!showFilterOptions)}
-											className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-												showFilterOptions
-													? 'bg-[#1A237E] dark:bg-indigo-600 text-white'
-													: 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 shadow-sm'
-											}`}
-										>
-											<Filter size={16} /> Lọc thời gian
-										</button>
-										<button className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-[#FF6D00] rounded-xl text-[10px] font-black uppercase tracking-widest text-white shadow-lg shadow-orange-500/20">
-											<Download size={16} /> Xuất File
-										</button>
-									</div>
+							{/* Status Filter Tabs & Action Controls */}
+							<div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+								{/* Quick Debt Status Tabs */}
+								<div className="flex flex-wrap items-center gap-2">
+									<button
+										onClick={() => setDebtStatusFilter('unpaid')}
+										className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-2 border ${
+											debtStatusFilter === 'unpaid'
+												? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-900/60 shadow-sm'
+												: 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200/80 dark:border-slate-800 hover:border-slate-300'
+										}`}
+									>
+										<span className="size-2 rounded-full bg-rose-500 animate-pulse" />
+										<span>Đang còn nợ</span>
+										<span className="px-2 py-0.5 rounded-full text-[10px] bg-rose-100 dark:bg-rose-900/50 text-rose-700 dark:text-rose-300">
+											{debtCounts.unpaid}
+										</span>
+									</button>
+
+									<button
+										onClick={() => setDebtStatusFilter('paid')}
+										className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-2 border ${
+											debtStatusFilter === 'paid'
+												? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/60 shadow-sm'
+												: 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200/80 dark:border-slate-800 hover:border-slate-300'
+										}`}
+									>
+										<CheckCircle2 size={13} />
+										<span>Đã hết nợ</span>
+										<span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300">
+											{debtCounts.paid}
+										</span>
+									</button>
+
+									<button
+										onClick={() => setDebtStatusFilter('all')}
+										className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-2 border ${
+											debtStatusFilter === 'all'
+												? 'bg-indigo-50 dark:bg-indigo-950/40 text-[#1A237E] dark:text-indigo-400 border-indigo-200 dark:border-indigo-900/60 shadow-sm'
+												: 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200/80 dark:border-slate-800 hover:border-slate-300'
+										}`}
+									>
+										<span>Tất cả</span>
+										<span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-black">
+											{debtCounts.all}
+										</span>
+									</button>
 								</div>
 
-								{showFilterOptions && (
-									<div className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-top-4 duration-300 transition-colors duration-300">
-										<div>
-											<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">
-												Từ ngày
-											</label>
-											<input
-												type="date"
-												className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#1A237E]/20 dark:focus:ring-indigo-500/20 outline-none"
-												value={fromDate}
-												onChange={(e) => setFromDate(e.target.value)}
-											/>
-										</div>
-										<div>
-											<label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">
-												Đến ngày
-											</label>
-											<input
-												type="date"
-												className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-[#1A237E]/20 dark:focus:ring-indigo-500/20 outline-none"
-												value={toDate}
-												onChange={(e) => setToDate(e.target.value)}
-											/>
-										</div>
+								{/* Sort & Export Controls */}
+								<div className="flex items-center gap-2.5">
+									{/* Sắp xếp */}
+									<div className="relative flex items-center">
+										<select
+											value={sortBy}
+											onChange={(e) => setSortBy(e.target.value as any)}
+											className="appearance-none bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl px-4 py-2 pr-8 text-[11px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-[#1A237E]/20 outline-none cursor-pointer shadow-sm"
+										>
+											<option value="debt_desc">Dư nợ: Cao → Thấp</option>
+											<option value="recent_tx">Giao dịch gần nhất</option>
+											<option value="name_asc">Tên khách: A → Z</option>
+											<option value="debt_asc">Dư nợ: Thấp → Cao</option>
+										</select>
+										<ArrowUpDown
+											size={13}
+											className="absolute right-3 text-slate-400 pointer-events-none"
+										/>
 									</div>
-								)}
+
+									{/* Export Button */}
+									<button
+										onClick={async () => {
+											if (!aggregatedData.length) {
+												showToast("Không có dữ liệu để xuất file", "warning");
+												return;
+											}
+											try {
+												showToast("Đang chuẩn bị file Excel công nợ...", "info");
+												const XLSX = await import('xlsx');
+												const dataToExport = aggregatedData.map((r, idx) => ({
+													'STT': idx + 1,
+													'Mã KH': r.id ? r.id.slice(0, 8).toUpperCase() : '',
+													'Tên đối tác': r.name || '',
+													'Tên cơ sở': (r as any).businessName || '',
+													'Số điện thoại': r.phone || '',
+													'Tổng mua (đ)': Number(r.totalOrdersAmount || 0),
+													'Đã thanh toán (đ)': Number(r.totalPaymentsAmount || 0),
+													'Dư nợ hiện tại (đ)': Number(r.currentDebt || 0),
+													'Hạn mức nợ (đ)': Number(r.creditLimit || 0),
+													'Giao dịch gần nhất': r.lastTxDate || ''
+												}));
+												const ws = XLSX.utils.json_to_sheet(dataToExport);
+												const wb = XLSX.utils.book_new();
+												XLSX.utils.book_append_sheet(wb, ws, "Cong_No");
+												const fileName = `Bang_Cong_No_${new Date().toISOString().slice(0, 10)}.xlsx`;
+												const savedLoc = await saveWorkbookToFile(wb, fileName);
+												showToast(`Đã xuất ${dataToExport.length} khách hàng công nợ (${savedLoc})!`, "success");
+											} catch (err: any) {
+												console.error("Debt export error:", err);
+												showToast("Lỗi khi xuất file Excel", "error");
+											}
+										}}
+										className="flex items-center gap-1.5 px-4 py-2 bg-[#FF6D00] hover:bg-[#F57C00] rounded-xl text-[11px] font-black uppercase tracking-wider text-white shadow-md shadow-orange-500/20 transition-all active:scale-95"
+									>
+										<Download size={14} />
+										<span className="hidden sm:inline">Xuất Excel</span>
+									</button>
+								</div>
 							</div>
 
 							<DebtCustomerTable
-								loading={loading}
+								loading={isDebtDataLoading || debtDataErrors.length > 0}
 								paginatedData={paginatedData}
 								openStatement={openStatement}
 								formatPrice={formatPrice}
@@ -601,7 +857,7 @@ const Debts: React.FC = () => {
 						</>
 					) : (
 						<DebtHistoryTable
-							loading={loading}
+							loading={isDebtDataLoading || debtDataErrors.length > 0}
 							paginatedHistory={paginatedHistory}
 							formatPrice={formatPrice}
 							formatDate={formatDate}
@@ -610,10 +866,7 @@ const Debts: React.FC = () => {
 							setEditingPaymentId={setEditingPaymentId}
 							setPaymentData={setPaymentData}
 							setPaymentCustomerSearchQuery={setPaymentCustomerSearchQuery}
-							setShowPaymentForm={(val) => {
-								setShowPaymentForm(val);
-								if (val) navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
-							}}
+							setShowPaymentForm={setShowPaymentForm}
 							handleDeletePayment={handleDeletePayment}
 							historyTotalPages={historyTotalPages}
 							historyCurrentPage={historyCurrentPage}
@@ -629,14 +882,7 @@ const Debts: React.FC = () => {
 			{/* PAYMENT FORM MODAL */}
 			<PaymentFormModal
 				showPaymentForm={showPaymentForm}
-				setShowPaymentForm={(val) => {
-					if (!val) {
-						window.history.back();
-					} else {
-						setShowPaymentForm(true);
-						navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
-					}
-				}}
+				setShowPaymentForm={setShowPaymentForm}
 				editingPaymentId={editingPaymentId}
 				setEditingPaymentId={setEditingPaymentId}
 				handleRecordPayment={handleRecordPayment}
@@ -694,8 +940,8 @@ const Debts: React.FC = () => {
 						{/* Desktop buttons (Hidden on Mobile) */}
 						<div className="hidden md:flex bg-white/10 backdrop-blur-md rounded-full p-1 border border-white/20 gap-2 shrink-0">
 							<button
-								onClick={handlePrintStatement}
-								className="px-3.5 py-1.5 bg-white text-slate-900 rounded-full text-xs font-black uppercase tracking-wider transition-all hover:bg-slate-100 flex items-center gap-1"
+								onClick={() => handlePrintStatement(cachedStatementPngRef.current)}
+								className="px-3.5 py-1.5 bg-white text-slate-900 rounded-full text-xs font-black uppercase tracking-wider transition-all hover:bg-slate-100 flex items-center gap-1 active:scale-95"
 							>
 								<Printer size={14} /> In Phiếu
 							</button>
@@ -1025,7 +1271,7 @@ const Debts: React.FC = () => {
 						</button>
 
 						<button
-							onClick={handlePrintStatement}
+							onClick={() => handlePrintStatement(cachedStatementPngRef.current)}
 							className="w-12 h-12 rounded-xl bg-slate-800 text-white flex items-center justify-center border border-slate-700 shadow-lg transition-all active:scale-95 hover:bg-black"
 							title="In phiếu"
 						>

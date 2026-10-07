@@ -1,5 +1,6 @@
 import { Building2 } from 'lucide-react';
 import { formatDate, formatPrice, getTicketImageUrl, computeTotalPackages, groupOrderItems } from './ticketUtils';
+import { CachedImage } from '../shared/CachedImage';
 
 interface TicketBillProps {
 	order: any;
@@ -10,6 +11,7 @@ interface TicketBillProps {
 
 const TicketBill: React.FC<TicketBillProps> = ({ order, products, companyInfo, creatorName }) => {
 	const groupedItems = groupOrderItems(order.items);
+
 	return (
 					<div
 						id="order-ticket-bill"
@@ -25,7 +27,7 @@ const TicketBill: React.FC<TicketBillProps> = ({ order, products, companyInfo, c
 							<div className="flex items-center gap-3.5 mb-3.5">
 								{companyInfo?.logoUrl ? (
 									<div className="w-12 h-12 rounded-full border border-slate-200 overflow-hidden bg-white shrink-0 shadow-sm">
-										<img src={getTicketImageUrl(companyInfo.logoUrl)} alt="Logo" className="w-full h-full object-cover" />
+										<CachedImage src={companyInfo.logoUrl} alt="Logo" className="w-full h-full object-cover" />
 									</div>
 								) : (
 									<div className="w-12 h-12 bg-slate-900 rounded-full flex items-center justify-center text-white shrink-0 shadow-sm">
@@ -93,10 +95,11 @@ const TicketBill: React.FC<TicketBillProps> = ({ order, products, companyInfo, c
 												<span className="shrink-0 pt-0.5 font-extrabold text-black text-sm">{idx + 1}.</span>
 												{itemImageUrl && (
 													<div className="w-8 h-8 rounded-full border border-slate-200 overflow-hidden bg-white shrink-0 shadow-sm">
-														<img 
-															src={getTicketImageUrl(itemImageUrl)} 
+														<CachedImage 
+															src={itemImageUrl} 
 															alt={item.name} 
 															className="w-full h-full object-cover"
+															fallbackText={item.name}
 														/>
 													</div>
 												)}

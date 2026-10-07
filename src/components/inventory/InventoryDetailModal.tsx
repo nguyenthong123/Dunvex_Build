@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
+import { CachedImage } from '../shared/CachedImage';
 
 interface InventoryDetailModalProps {
 	show: boolean;
@@ -178,16 +179,12 @@ const InventoryDetailModal: React.FC<InventoryDetailModalProps> = ({
 					{/* Image + Name / SKU section */}
 					<div className="flex items-center gap-4 mb-6">
 						<div className="size-20 rounded-2xl bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 flex items-center justify-center overflow-hidden border border-gray-100 dark:border-slate-800 shadow-inner shrink-0 leading-none">
-							{selectedProduct.imageUrl ? (
-								<img
-									src={getImageUrl(selectedProduct.imageUrl)}
-									alt={selectedProduct.name}
-									className="size-full object-cover"
-									referrerPolicy="no-referrer"
-								/>
-							) : (
-								<span className="material-symbols-outlined text-4xl">inventory_2</span>
-							)}
+							<CachedImage
+								src={selectedProduct.imageUrl}
+								alt={selectedProduct.name}
+								className="size-full object-cover"
+								fallbackIcon={<span className="material-symbols-outlined text-4xl">inventory_2</span>}
+							/>
 						</div>
 						<div className="flex-1 min-w-0">
 							<p className="text-[10px] font-bold text-[#FF6D00] uppercase tracking-wider mb-1">{selectedProduct.category}</p>

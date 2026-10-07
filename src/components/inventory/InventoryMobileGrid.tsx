@@ -1,6 +1,7 @@
 import React from 'react';
 import InventoryActionButtons from './InventoryActionButtons';
 import { ApprovalBadge } from '../shared/ApprovalBadge';
+import { CachedImage } from '../shared/CachedImage';
 
 interface InventoryMobileGridProps {
 	activeTab: string;
@@ -56,29 +57,48 @@ const InventoryMobileGrid: React.FC<InventoryMobileGridProps> = ({
 			<div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-12">
 				{activeTab === 'products' ? (
 					paginatedProducts.map((product) => (
-						<div key={product.id} className="bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-slate-800 flex flex-col justify-between" onClick={() => openDetail(product)}>
-							<div className="flex justify-between items-start mb-4">
+						<div key={product.id} className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 shadow-sm border border-slate-200/80 dark:border-slate-800 flex flex-col justify-between" onClick={() => openDetail(product)}>
+							<div className="flex justify-between items-start gap-3 mb-3.5">
 								<div className="flex items-center gap-3 flex-1 min-w-0">
-									<div className="size-14 rounded-xl bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 flex items-center justify-center overflow-hidden border border-gray-100 dark:border-slate-700 shrink-0">
-										{product.imageUrl ? <img src={getImageUrl(product.imageUrl)} alt={product.name} className="size-full object-cover"  loading="lazy" /> : <span className="material-symbols-outlined text-2xl">package_2</span>}
+									<div className="size-13 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center overflow-hidden border border-slate-200/80 dark:border-slate-700 shrink-0">
+										<CachedImage 
+											src={product.imageUrl} 
+											alt={product.name} 
+											className="size-full object-cover" 
+											fallbackIcon={<span className="material-symbols-outlined text-2xl text-slate-300">package_2</span>}
+										/>
 									</div>
 									<div className="flex-1 min-w-0">
-										<h4 className="font-black text-slate-900 dark:text-white line-clamp-2 whitespace-normal break-words">{product.name}</h4>
-										<p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{product.category}</p>
-										<p className="text-[10px] font-black text-blue-500 uppercase mt-1">SKU: {product.sku || 'N/A'}</p>
+										<h4 className="font-black text-sm text-slate-900 dark:text-white line-clamp-2 leading-tight">{product.name}</h4>
+										<p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-0.5">{product.category || 'Chưa phân loại'}</p>
+										<p className="text-[10px] font-mono font-black text-slate-600 dark:text-slate-400 uppercase mt-1">SKU: {product.sku || 'N/A'}</p>
 									</div>
 								</div>
-								<div className="text-right">
-									<div className="text-xs font-black text-slate-900 dark:text-white">{formatPrice(product.priceSell)}</div>
-									<div className={`text-[10px] font-bold mt-1 ${product.stock <= 5 ? 'text-rose-500' : 'text-slate-400'}`}>Tồn: {product.stock} {product.unit}</div>
+								<div className="text-right shrink-0">
+									<div className="text-xs font-black text-[#1A237E] dark:text-indigo-400">{formatPrice(product.priceSell)}</div>
+									<div className="mt-1">
+										<span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black ${
+											(Number(product.stock) || 0) <= 0
+												? 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200 dark:border-rose-900/40'
+												: (Number(product.stock) || 0) <= 5
+													? 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200 dark:border-amber-900/40'
+													: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/40'
+										}`}>
+											Tồn: {product.stock} {product.unit || 'cái'}
+										</span>
+									</div>
 								</div>
 							</div>
-							<div className="flex items-center justify-between pt-4 border-t border-slate-50 dark:border-slate-800">
+							<div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">
 								<div>
 									<ApprovalBadge status={product.approvalStatus} />
 									{(!product.approvalStatus || product.approvalStatus === 'approved') && (
-										<span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${product.status === 'Kinh doanh' ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-500'}`}>
-											{product.status || 'Kinh doanh'}
+										<span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wide border ${
+											product.status === 'Kinh doanh' || !product.status
+												? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900/50'
+												: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+										}`}>
+											{product.status === 'Kinh doanh' || !product.status ? 'Đang bán' : (product.status || 'Ngừng bán')}
 										</span>
 									)}
 								</div>
@@ -98,11 +118,12 @@ const InventoryMobileGrid: React.FC<InventoryMobileGridProps> = ({
 								<div className="flex justify-between items-start mb-3">
 									<div className="flex items-center gap-3 flex-1 min-w-0">
 										<div className="size-12 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center overflow-hidden border border-slate-100 dark:border-slate-700 shrink-0">
-											{product.imageUrl ? (
-												<img src={getImageUrl(product.imageUrl)} alt="" className="size-full object-cover"  loading="lazy" />
-											) : (
-												<span className="material-symbols-outlined text-slate-300">image</span>
-											)}
+											<CachedImage 
+												src={product.imageUrl} 
+												alt={product.name} 
+												className="size-full object-cover" 
+												fallbackIcon={<span className="material-symbols-outlined text-slate-300">image</span>}
+											/>
 										</div>
 										<div className="flex-1 min-w-0">
 											<p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">

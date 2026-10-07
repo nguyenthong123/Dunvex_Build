@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Phone, Mail, Save, ArrowLeft, Shield, CheckCircle2, MapPin, Eye, EyeOff } from 'lucide-react';
+import { User, Phone, Mail, Save, ArrowLeft, Shield, MapPin, CheckCircle2, Camera, Trash2, Building2 } from 'lucide-react';
 import { auth, db } from '../services/firebase';
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit } from '../services/firebase';
 import { useOwner } from '../hooks/useOwner';
 import { useToast } from '../components/shared/Toast';
 import SalesChart from '../components/profile/SalesChart';
-import { updatePassword, EmailAuthProvider, linkWithCredential, updateProfile } from 'firebase/auth';
-import { setDocument, updateDocument } from '../services/apiClient';
+import { apiUrl, getAuthHeaders } from '../services/apiClient';
+import { getSessionToken, setSQLiteSession } from '../services/sqliteSession';
+import { compressImage } from '../utils/vpsUpload';
 
 const Profile = () => {
     const navigate = useNavigate();
@@ -15,31 +16,34 @@ const Profile = () => {
     const { showToast } = useToast();
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
-    const [newPassword, setNewPassword] = useState('');
-    const [showPassword, setShowPassword] = useState(false);
-    const [passwordSaving, setPasswordSaving] = useState(false);
+    const [logoUploading, setLogoUploading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const [hasPassword, setHasPassword] = useState(false);
     const [profile, setProfile] = useState({
         displayName: '',
         phone: '',
         email: '',
+        logoUrl: '',
     });
 
     useEffect(() => {
         if (!auth.currentUser) return;
         loadProfile();
-    }, [auth.currentUser?.uid]);
+    }, [auth.currentUser?.uid, owner.ownerId]);
 
     const loadProfile = async () => {
         try {
             const uid = auth.currentUser?.uid || '';
             const email = auth.currentUser?.email || '';
+            const ownerId = owner.ownerId || uid;
             const docRef = doc(db, 'profiles', uid);
             const userRef = doc(db, 'users', uid);
-            const [snap, userSnap] = await Promise.all([
+            const settingsRef = ownerId ? doc(db, 'settings', ownerId) : null;
+
+            const [snap, userSnap, settingsSnap] = await Promise.all([
                 getDoc(docRef).catch(() => null),
-                getDoc(userRef).catch(() => null)
+                getDoc(userRef).catch(() => null),
+                settingsRef ? getDoc(settingsRef).catch(() => null) : null
             ]);
 
             const savedName = (snap?.exists() ? (snap.data().displayName || snap.data().name) : '') ||
@@ -47,25 +51,149 @@ const Profile = () => {
                               owner.userDisplayName ||
                               auth.currentUser?.displayName || '';
 
+            const savedLogo = (settingsSnap?.exists() ? settingsSnap.data().logoUrl : '') ||
+                              (snap?.exists() ? (snap.data().logoUrl || snap.data().photoURL) : '') ||
+                              (userSnap?.exists() ? (userSnap.data().logoUrl || userSnap.data().photoURL) : '') || '';
+
             setProfile({
                 displayName: savedName,
                 phone: (snap?.exists() ? snap.data().phone : userSnap?.data()?.phone) || '',
                 email: email,
+                logoUrl: savedLogo,
             });
-
-            if (email || uid) {
-                try {
-                    const res = await fetch(`/api/auth/status?uid=${uid}&email=${encodeURIComponent(email)}`);
-                    const data = await res.json();
-                    if (data.hasPassword) {
-                        setHasPassword(true);
-                        setNewPassword('••••••••');
-                    }
-                } catch (err) {}
-            }
         } catch (e) {
             console.error('Load profile error:', e);
         }
+    };
+
+    const handleLogoUpload = async (file: File) => {
+        if (!file) return;
+        setLogoUploading(true);
+        try {
+            // Nén ảnh gọn nhẹ (tối đa 800x800) để in phiếu sắc nét và tiết kiệm bộ nhớ
+            const base64 = await compressImage(file, 800, 800, 0.85);
+            let finalUrl = '';
+
+            // 1. Thử tải lên Cloudinary như cấu hình Web
+            try {
+                const formData = new FormData();
+                formData.append('file', base64);
+                formData.append('upload_preset', 'dunvexbuil');
+                formData.append('folder', 'dunvex_branding');
+                const res = await fetch('https://api.cloudinary.com/v1_1/dtx0uvb4e/image/upload', {
+                    method: 'POST',
+                    body: formData,
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.secure_url) finalUrl = data.secure_url;
+                }
+            } catch (err) {
+                console.warn('Cloudinary upload error:', err);
+            }
+
+            // 2. Dự phòng: Tải lên VPS qua endpoint /api/upload
+            if (!finalUrl) {
+                try {
+                    const res = await fetch(apiUrl('/api/upload'), {
+                        method: 'POST',
+                        headers: {
+                            ...getAuthHeaders(),
+                            Authorization: `Bearer ${getSessionToken()}`,
+                        },
+                        body: JSON.stringify({
+                            imageBase64: base64,
+                            fileName: `logo_${Date.now()}`,
+                            folder: 'branding',
+                        }),
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.url) finalUrl = data.url;
+                    }
+                } catch (err) {
+                    console.warn('VPS upload error:', err);
+                }
+            }
+
+            // 3. Fallback: Base64 data URL
+            if (!finalUrl) {
+                finalUrl = base64;
+            }
+
+            setProfile(prev => ({ ...prev, logoUrl: finalUrl }));
+
+            // Đồng bộ trực tiếp vào Firestore / SQLite settings & profiles
+            const uid = auth.currentUser?.uid || '';
+            const ownerId = owner.ownerId || uid;
+            if (ownerId) {
+                await setDoc(doc(db, 'settings', ownerId), {
+                    logoUrl: finalUrl,
+                    updatedAt: serverTimestamp(),
+                }, { merge: true });
+            }
+            if (uid) {
+                await setDoc(doc(db, 'profiles', uid), {
+                    logoUrl: finalUrl,
+                    photoURL: finalUrl,
+                    updatedAt: serverTimestamp(),
+                }, { merge: true });
+                await setDoc(doc(db, 'users', uid), {
+                    photoURL: finalUrl,
+                    updatedAt: serverTimestamp(),
+                }, { merge: true });
+            }
+
+            // Cập nhật session offline
+            try {
+                const sessionStr = localStorage.getItem('dunvex_user_session');
+                const sessionObj = sessionStr ? JSON.parse(sessionStr) : {};
+                sessionObj.logoUrl = finalUrl;
+                sessionObj.photoURL = finalUrl;
+                localStorage.setItem('dunvex_user_session', JSON.stringify(sessionObj));
+                if (getSessionToken()) setSQLiteSession(sessionObj, getSessionToken());
+            } catch {}
+
+            // Bắn tín hiệu để phiếu bán hàng và phiếu thu nợ render lại ngay
+            window.dispatchEvent(new CustomEvent('collection_changed', { detail: { collection: 'settings' } }));
+            window.dispatchEvent(new CustomEvent('dunvex_profile_updated', { detail: { logoUrl: finalUrl } }));
+
+            showToast('✅ Đã cập nhật logo! Đã áp dụng lên phiếu bán hàng và phiếu thu nợ.', 'success');
+        } catch (err: any) {
+            showToast('❌ Lỗi upload ảnh: ' + (err.message || 'Không thể tải ảnh'), 'error');
+        } finally {
+            setLogoUploading(false);
+        }
+    };
+
+    const handleRemoveLogo = async () => {
+        setProfile(prev => ({ ...prev, logoUrl: '' }));
+        const uid = auth.currentUser?.uid || '';
+        const ownerId = owner.ownerId || uid;
+        if (ownerId) {
+            await setDoc(doc(db, 'settings', ownerId), {
+                logoUrl: '',
+                updatedAt: serverTimestamp(),
+            }, { merge: true });
+        }
+        if (uid) {
+            await setDoc(doc(db, 'profiles', uid), {
+                logoUrl: '',
+                photoURL: '',
+                updatedAt: serverTimestamp(),
+            }, { merge: true });
+        }
+        try {
+            const sessionStr = localStorage.getItem('dunvex_user_session');
+            const sessionObj = sessionStr ? JSON.parse(sessionStr) : {};
+            sessionObj.logoUrl = '';
+            sessionObj.photoURL = '';
+            localStorage.setItem('dunvex_user_session', JSON.stringify(sessionObj));
+            if (getSessionToken()) setSQLiteSession(sessionObj, getSessionToken());
+        } catch {}
+
+        window.dispatchEvent(new CustomEvent('collection_changed', { detail: { collection: 'settings' } }));
+        showToast('Đã xóa logo!', 'success');
     };
 
     const handleSave = async () => {
@@ -75,71 +203,57 @@ const Profile = () => {
             const uid = auth.currentUser.uid;
             const newName = profile.displayName.trim();
             const newPhone = profile.phone.trim();
+            const newLogo = profile.logoUrl;
+            const ownerId = owner.ownerId || uid;
 
-            // 1. Update Firebase Auth User Display Name
-            if (auth.currentUser) {
-                await updateProfile(auth.currentUser, { displayName: newName }).catch((err) => console.warn('updateProfile warn:', err));
+            const response = await fetch(apiUrl('/api/auth/update-profile'), {
+                method: 'POST',
+                headers: {
+                    ...getAuthHeaders(),
+                    Authorization: `Bearer ${getSessionToken()}`,
+                },
+                body: JSON.stringify({ displayName: newName, phone: newPhone }),
+            });
+            const result = await response.json();
+            if (!response.ok || result.error) throw new Error(result.error || 'Không lưu được hồ sơ');
+
+            // Đồng bộ settings logo & thông tin cá nhân
+            if (ownerId) {
+                await setDoc(doc(db, 'settings', ownerId), {
+                    logoUrl: newLogo,
+                    updatedAt: serverTimestamp(),
+                }, { merge: true });
             }
-
-            // 2. Update Firestore 'profiles' collection
             await setDoc(doc(db, 'profiles', uid), {
                 displayName: newName,
-                name: newName,
                 phone: newPhone,
-                email: auth.currentUser.email || '',
+                logoUrl: newLogo,
+                photoURL: newLogo,
+                updatedAt: serverTimestamp(),
+            }, { merge: true });
+            await setDoc(doc(db, 'users', uid), {
+                displayName: newName,
+                phone: newPhone,
+                photoURL: newLogo,
                 updatedAt: serverTimestamp(),
             }, { merge: true });
 
-            // 3. Update Firestore 'users' collection
-            await setDoc(doc(db, 'users', uid), {
-                displayName: newName,
-                name: newName,
-                phone: newPhone,
-                updatedAt: serverTimestamp(),
-            }, { merge: true }).catch(() => {});
-
-            // 4. Update Backend SQLite DB (profiles & users tables) on VPS via apiClient (handles auth)
-            try {
-                await setDocument('profiles', uid, {
-                    id: uid,
-                    displayName: newName,
-                    name: newName,
-                    phone: newPhone,
-                    email: auth.currentUser.email || '',
-                    updatedAt: new Date().toISOString(),
-                });
-                await updateDocument('users', uid, {
-                    displayName: newName,
-                    name: newName,
-                    phone: newPhone,
-                    updatedAt: new Date().toISOString(),
-                });
-            } catch (err) {
-                console.warn('Backend SQLite sync notice:', err);
-            }
-
-            // 5. Update backend /api/auth/update-profile via Admin SDK
-            try {
-                await fetch('/api/auth/update-profile', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ uid, displayName: newName, phone: newPhone })
-                });
-            } catch (err) {
-                console.warn('update-profile API notice:', err);
-            }
-
-            // 6. Update local session & dispatch event for immediate UI reactivity
+            // Update the local session for immediate UI reactivity.
             try {
                 const sessionStr = localStorage.getItem('dunvex_user_session');
                 const sessionObj = sessionStr ? JSON.parse(sessionStr) : {};
                 sessionObj.displayName = newName;
+                sessionObj.phone = newPhone;
+                sessionObj.logoUrl = newLogo;
+                sessionObj.photoURL = newLogo;
                 localStorage.setItem('dunvex_user_session', JSON.stringify(sessionObj));
-                window.dispatchEvent(new CustomEvent('dunvex_profile_updated', { detail: { displayName: newName, phone: newPhone } }));
+                if (getSessionToken()) setSQLiteSession(sessionObj, getSessionToken());
+                window.dispatchEvent(new CustomEvent('dunvex_profile_updated', { detail: { displayName: newName, phone: newPhone, logoUrl: newLogo } }));
+                window.dispatchEvent(new CustomEvent('collection_changed', { detail: { collection: 'settings' } }));
             } catch (e) {}
 
             setSaved(true);
-            showToast('✅ Đã lưu thông tin cá nhân!', 'success');
+            showToast('✅ Đã lưu thông tin cá nhân và logo!', 'success');
             setTimeout(() => setSaved(false), 2000);
         } catch (e: any) {
             showToast('❌ Lỗi: ' + (e.message || 'Không lưu được'), 'error');
@@ -148,53 +262,6 @@ const Profile = () => {
         }
     };
 
-    const handleSetPassword = async () => {
-        if (!auth.currentUser) {
-            showToast('❌ Bạn chưa đăng nhập!', 'error');
-            return;
-        }
-        if (newPassword === '••••••••') {
-            showToast('💡 Mật khẩu của bạn đã được lưu sẵn. Vui lòng nhập mật khẩu mới nếu muốn thay đổi!', 'info');
-            return;
-        }
-        if (!newPassword || newPassword.length < 6) {
-            showToast('❌ Mật khẩu phải có ít nhất 6 ký tự!', 'error');
-            return;
-        }
-        setPasswordSaving(true);
-        try {
-            const user = auth.currentUser;
-            const email = user.email || '';
-            if (!email) {
-                showToast('❌ Tài khoản của bạn không có Email để đặt mật khẩu!', 'error');
-                return;
-            }
-
-            // Mã hóa scrypt & lưu trực tiếp vào CSDL SQLite (dunvex.db) trên máy chủ VPS
-            const res = await fetch('/api/auth/set-password', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    uid: user.uid,
-                    email: email,
-                    password: newPassword
-                })
-            });
-            const data = await res.json();
-            if (res.ok && data.success) {
-                showToast('✅ Đã mã hóa và lưu mật khẩu mới vào CSDL SQLite thành công!', 'success');
-                setHasPassword(true);
-                setNewPassword('••••••••');
-            } else {
-                throw new Error(data.error || 'Lưu mật khẩu thất bại');
-            }
-        } catch (e: any) {
-            console.error('Set password error:', e);
-            showToast('❌ Lỗi: ' + (e?.message || 'Không thiết lập được mật khẩu'), 'error');
-        } finally {
-            setPasswordSaving(false);
-        }
-    };
 
     if (owner.loading) {
         return (
@@ -225,12 +292,85 @@ const Profile = () => {
                     </div>
                 </div>
 
-                {/* Avatar */}
+                {/* Avatar & Logo Section */}
                 <div className="flex flex-col items-center mb-8">
-                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-3xl font-black shadow-lg mb-3">
-                        {profile.displayName?.charAt(0)?.toUpperCase() || auth.currentUser?.email?.charAt(0)?.toUpperCase() || '?'}
+                    <div className="relative group">
+                        <div
+                            onClick={() => !logoUploading && fileInputRef.current?.click()}
+                            className="w-24 h-24 rounded-full border-2 border-indigo-200 dark:border-indigo-800 bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-3xl font-black shadow-xl overflow-hidden cursor-pointer hover:opacity-95 active:scale-95 transition-all relative"
+                            title="Nhấp để tải lên logo / ảnh đại diện"
+                        >
+                            {profile.logoUrl ? (
+                                <img
+                                    src={profile.logoUrl}
+                                    alt="Logo"
+                                    className="w-full h-full object-cover"
+                                />
+                            ) : (
+                                <span>{profile.displayName?.charAt(0)?.toUpperCase() || auth.currentUser?.email?.charAt(0)?.toUpperCase() || '?'}</span>
+                            )}
+
+                            {logoUploading && (
+                                <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center">
+                                    <div className="animate-spin w-7 h-7 border-2 border-white border-t-transparent rounded-full" />
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Nút máy ảnh tải ảnh */}
+                        <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={logoUploading}
+                            className="absolute bottom-0 right-0 p-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg border-2 border-white dark:border-slate-900 cursor-pointer active:scale-90 transition-transform"
+                            title="Chọn ảnh logo"
+                        >
+                            <Camera size={14} />
+                        </button>
                     </div>
-                    <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
+
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleLogoUpload(file);
+                            e.target.value = '';
+                        }}
+                    />
+
+                    {/* Logo actions */}
+                    <div className="flex items-center gap-3 mt-3">
+                        <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={logoUploading}
+                            className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                        >
+                            {profile.logoUrl ? 'Thay đổi Logo' : 'Tải lên Logo'}
+                        </button>
+                        {profile.logoUrl && (
+                            <>
+                                <span className="text-slate-300 dark:text-slate-700">•</span>
+                                <button
+                                    type="button"
+                                    onClick={handleRemoveLogo}
+                                    disabled={logoUploading}
+                                    className="text-xs font-bold text-rose-500 hover:underline cursor-pointer"
+                                >
+                                    Xóa Logo
+                                </button>
+                            </>
+                        )}
+                    </div>
+
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center mt-1.5 max-w-xs">
+                        Logo này sẽ được áp dụng làm logo trên <b>phiếu bán hàng</b> và <b>phiếu thu nợ</b>
+                    </p>
+
+                    <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mt-2">
                         {profile.displayName || auth.currentUser?.email?.split('@')[0] || 'Người dùng'}
                     </p>
                     <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
@@ -319,75 +459,6 @@ const Profile = () => {
                     </p>
                 </div>
 
-                {/* 🔒 Thiết lập mật khẩu PWA */}
-                <div className="mt-6 p-5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl">
-                    <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight mb-2">
-                        Thiết lập mật khẩu đăng nhập PWA
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 leading-relaxed">
-                        Đặt mật khẩu để bạn có thể đăng nhập bằng Email trực tiếp trên ứng dụng màn hình chính (PWA) mà không cần qua Google.
-                    </p>
-                    <div className="space-y-3">
-                        {hasPassword && (
-                            <div className="px-3.5 py-2.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl flex items-center gap-2 text-xs font-bold text-emerald-700 dark:text-emerald-300">
-                                <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
-                                <span>Tài khoản đã có mật khẩu mã hóa trên CSDL VPS</span>
-                            </div>
-                        )}
-                        <div className="relative">
-                            <input
-                                id="new-password"
-                                name="password"
-                                type={showPassword ? "text" : "password"}
-                                value={newPassword}
-                                onFocus={() => {
-                                    if (newPassword === '••••••••') {
-                                        setNewPassword('');
-                                    }
-                                }}
-                                onChange={(e) => setNewPassword(e.target.value)}
-                                placeholder={hasPassword ? "Nhập mật khẩu mới để thay đổi" : "Nhập mật khẩu mới (tối thiểu 6 ký tự)"}
-                                autoComplete="current-password"
-                                className="w-full px-4 py-3 pr-11 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-mono"
-                                disabled={passwordSaving}
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setShowPassword(!showPassword)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors p-1.5 rounded-lg focus:outline-none"
-                                title={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
-                            >
-                                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                            </button>
-                        </div>
-                        <button
-                            onClick={handleSetPassword}
-                            disabled={passwordSaving || !newPassword}
-                            className="w-full py-3 bg-slate-800 hover:bg-slate-900 dark:bg-indigo-600 dark:hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                        >
-                            {passwordSaving ? 'Đang lưu...' : hasPassword ? 'Cập nhật mật khẩu mới' : 'Đặt mật khẩu'}
-                        </button>
-                    </div>
-                </div>
-
-                {/* 📱 PWA Pin App Card */}
-                <div className="mt-5 p-5 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-slate-900 dark:to-indigo-950/20 border border-indigo-100/80 dark:border-indigo-900/30 rounded-3xl shadow-sm">
-                    <div className="flex items-start gap-4">
-                        <div className="p-3 bg-indigo-500 text-white rounded-2xl shadow-md">
-                            <span className="material-symbols-outlined text-2xl font-bold">install_mobile</span>
-                        </div>
-                        <div className="flex-1">
-                            <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight">Ghim ứng dụng ra MH chính</h3>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">Chạy toàn màn hình, mượt mà và tiết kiệm dữ liệu như một ứng dụng gốc trên điện thoại.</p>
-                            <button 
-                                onClick={() => window.dispatchEvent(new CustomEvent('pin-app'))}
-                                className="mt-3.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all active:scale-95 shadow-sm shadow-indigo-500/20 cursor-pointer"
-                            >
-                                Xem hướng dẫn ghim app
-                            </button>
-                        </div>
-                    </div>
-                </div>
             </div>
 
             {/* 📊 Biểu đồ doanh thu cá nhân */}

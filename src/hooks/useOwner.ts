@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { auth, db } from '../services/firebase';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, setDoc, deleteDoc, onSnapshot } from '../services/firebase';
+import { onSQLiteAuthStateChanged } from '../services/sqliteSession';
+import { doc, onSnapshot } from '../services/firebase';
 import { setApiCredentials } from '../services/apiClient';
+import { licenseService } from '../services/licenseService';
 
 export interface OwnerState {
 	ownerId: string;
@@ -56,12 +57,14 @@ export function useOwner() {
 		let unsubUser: (() => void) | null = null;
 		let unsubConfig: (() => void) | null = null;
 		let unsubSettings: (() => void) | null = null;
+		let unsubLicense: (() => void) | null = null;
 		let checkInterval: any = null;
 
 		const cleanupActiveListeners = () => {
 			if (unsubUser) { unsubUser(); unsubUser = null; }
 			if (unsubConfig) { unsubConfig(); unsubConfig = null; }
 			if (unsubSettings) { unsubSettings(); unsubSettings = null; }
+			if (unsubLicense) { unsubLicense(); unsubLicense = null; }
 			if (checkInterval) { clearInterval(checkInterval); checkInterval = null; }
 		};
 
@@ -106,32 +109,66 @@ export function useOwner() {
 				let manualLockSheets = userData.manualLockSheets || false;
 				let manualLockAi = userData.manualLockAi || false;
 
+				const parseDateSafe = (val: any): Date | null => {
+					if (!val) return null;
+					if (typeof val?.toDate === 'function') return val.toDate();
+					if (val?.seconds) return new Date(val.seconds * 1000);
+					if (val instanceof Date) return val;
+					if (typeof val === 'string') {
+						const d = new Date(val);
+						return isNaN(d.getTime()) ? null : d;
+					}
+					return null;
+				};
+
 				if (settingsData) {
 					subscriptionStatus = settingsData.subscriptionStatus || 'trial';
 					trialEndsAt = settingsData.trialEndsAt;
 					subscriptionExpiresAt = settingsData.subscriptionExpiresAt;
 					planId = settingsData.planId || planId;
 
+					const parsedExpire = parseDateSafe(subscriptionExpiresAt);
+					const parsedTrial = parseDateSafe(trialEndsAt);
+					const now = new Date();
+
 					if (subscriptionStatus === 'active') {
-						if (subscriptionExpiresAt && typeof subscriptionExpiresAt.toDate === 'function' && subscriptionExpiresAt.toDate() < new Date()) {
+						if (parsedExpire && parsedExpire < now) {
 							isPro = false;
 							subscriptionStatus = 'expired';
 						} else {
 							isPro = true;
 						}
 					} else if (subscriptionStatus === 'trial') {
-						if (trialEndsAt && typeof trialEndsAt.toDate === 'function' && trialEndsAt.toDate() < new Date()) {
+						if (parsedTrial && parsedTrial < now) {
+							isPro = false;
+							subscriptionStatus = 'expired';
+						} else if (parsedExpire && parsedExpire < now) {
 							isPro = false;
 							subscriptionStatus = 'expired';
 						} else {
 							isPro = true;
 						}
-					} else isPro = false;
+					} else {
+						isPro = false;
+					}
 
 					manualLockOrders = settingsData.manualLockOrders ?? manualLockOrders;
 					manualLockDebts = settingsData.manualLockDebts ?? manualLockDebts;
 					manualLockSheets = settingsData.manualLockSheets ?? manualLockSheets;
 					manualLockAi = settingsData.manualLockAi ?? manualLockAi;
+				}
+
+				// Authoritative Offline-Proof License Certificate Enforcement
+				const licStatus = licenseService.getStatus();
+				if (licStatus.isExpired || licStatus.isClockTampered) {
+					isPro = false;
+					subscriptionStatus = 'expired';
+					manualLockOrders = true;
+					manualLockDebts = true;
+					manualLockSheets = true;
+					manualLockAi = true;
+				} else if (licStatus.features.lockOrders) {
+					manualLockOrders = true;
 				}
 
 				// Info from System Config (Must have defaults)
@@ -168,57 +205,16 @@ export function useOwner() {
 				});
 			};
 
+			// Render from the persisted session immediately; remote snapshots can refresh
+			// profile and settings later without leaving offline users on a loading screen.
+			userData = user;
+			updateUserState();
+
 			// 1. Listen to User
-			const userRef = doc(db, 'users', user.uid);
-			let hasCheckedInvite = false;
-			unsubUser = onSnapshot(userRef, async (docSnap) => {
+			const userRef = doc(db, 'users', user.id || user.uid);
+			unsubUser = onSnapshot(userRef, (docSnap) => {
 				if (!isMounted) return;
-				userData = docSnap.exists() ? docSnap.data() : { role: 'admin' };
-				// Tự động kiểm tra lời mời nếu tài khoản chưa gắn ownerId (chỉ chạy 1 lần và bỏ qua nếu đã là chủ xưởng/admin)
-				const isAlreadyEstablished = (userData?.role === 'admin' && userData?.ownerId) || (userData?.ownerId && userData?.ownerId !== user.uid);
-				if (!hasCheckedInvite && user.email && !isAlreadyEstablished && !userData?.ownerId) {
-					hasCheckedInvite = true;
-					try {
-						const emailClean = (user.email || '').toLowerCase().trim();
-						const tempId = emailClean.replace(/\W/g, '_');
-						const [invDirect, invUnder, invUpperUnder] = await Promise.all([
-							getDoc(doc(db, 'permissions', emailClean)),
-							getDoc(doc(db, 'permissions', tempId)),
-							getDoc(doc(db, 'permissions', tempId.toUpperCase()))
-						]);
-						const inv = invDirect.exists() ? invDirect : (invUnder.exists() ? invUnder : (invUpperUnder.exists() ? invUpperUnder : null));
-						if (inv && inv.data()?.ownerId) {
-							const invData = inv.data();
-							const updatedProfile = {
-								...userData,
-								uid: user.uid,
-								email: user.email,
-								displayName: userData.displayName || user.displayName || user.email.split('@')[0],
-								role: invData.role || 'sale',
-								marketPointsRequired: invData.marketPointsRequired || 1,
-								ownerId: invData.ownerId,
-								ownerEmail: invData.ownerEmail,
-								status: 'active',
-								accessRights: invData.accessRights || {
-									dashboard: true,
-									orders_view: true,
-									orders_create: true,
-									inventory_view: true,
-									customers_manage: true,
-									debts_manage: true,
-									users_manage: false,
-									admin: false,
-									system_manage: false
-								}
-							};
-							await setDoc(userRef, updatedProfile, { merge: true });
-							await deleteDoc(doc(db, 'permissions', inv.id));
-							userData = updatedProfile;
-						}
-					} catch (e) {
-						console.warn('useOwner: auto-invitation check warning', e);
-					}
-				}
+				userData = docSnap.exists() ? docSnap.data() : user;
 
 				isUserReady = true;
 				updateUserState();
@@ -266,10 +262,14 @@ export function useOwner() {
 					}
 				}
 			}, 100);
+
+			unsubLicense = licenseService.subscribe(() => {
+				if (isMounted) updateUserState();
+			});
 		};
 
 		// 🔄 Lắng nghe onAuthStateChanged để luôn kích hoạt ngay khi Firebase xác thực xong
-		const unsubAuth = onAuthStateChanged(auth, (user) => {
+		const unsubAuth = onSQLiteAuthStateChanged((user) => {
 			if (user) {
 				initForUser(user);
 			} else {
@@ -303,4 +303,3 @@ export function useOwner() {
 
 	return state;
 };
-

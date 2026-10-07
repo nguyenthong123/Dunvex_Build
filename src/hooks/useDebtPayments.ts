@@ -19,6 +19,7 @@ import {
 
 import { useToast } from '../components/shared/Toast';
 import { notifyDebtPaymentEvent } from '../utils/telegramNotify';
+import { getTodayString } from '../utils/dateUtils';
 
 
 export interface PaymentData {
@@ -59,7 +60,7 @@ export function useDebtPayments({
     customerId: '',
     customerName: '',
     amount: 0,
-    date: new Date().toISOString().split('T')[0],
+    date: getTodayString(),
     note: '',
     paymentMethod: 'Tiền mặt',
     proofImage: '',
@@ -247,7 +248,7 @@ export function useDebtPayments({
         customerId: '',
         customerName: '',
         amount: 0,
-        date: new Date().toISOString().split('T')[0],
+        date: getTodayString(),
         note: '',
         paymentMethod: 'Tiền mặt',
         proofImage: '',

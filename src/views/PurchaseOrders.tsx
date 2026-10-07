@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { smartSearchMatch, calculateSearchScore } from '../utils/searchUtils';
 import { Store, Plus, Search, Trash, X, ArrowLeft, CheckCircle2, Package, History, MessageCircle, Send, Loader, Edit3, Printer, Image as ImageIcon, Copy } from 'lucide-react';
-import html2canvas from 'html2canvas-pro';
+import { generateTicketPng, dataURLtoBlob } from '../components/orderTicket/ticketImage';
 import { useOwner } from '../hooks/useOwner';
 import { useSuppliers } from '../hooks/useSuppliers';
 import { useProducts } from '../hooks/useProducts';
@@ -16,6 +16,8 @@ import { getOptimizedImageUrl } from '../utils/validation';
 import { SupplierSelection } from '../components/purchase/SupplierSelection';
 import { ProductSearchTable } from '../components/purchase/ProductSearchTable';
 import { PurchaseOrderSummary } from '../components/purchase/PurchaseOrderSummary';
+import { CachedImage } from '../components/shared/CachedImage';
+import { copyOrShareImage } from '../utils/imageSharing';
 
 
 
@@ -43,6 +45,7 @@ const PurchaseOrders = () => {
 	const [isSavingProduct, setIsSavingProduct] = useState(false);
 
 	const [companyInfo, setCompanyInfo] = useState<any>(null);
+	const [logoError, setLogoError] = useState(false);
 	const [isSavingImage, setIsSavingImage] = useState(false);
 	const [capturedImage, setCapturedImage] = useState<string | null>(null);
 	const [showCopySuccess, setShowCopySuccess] = useState(false);
@@ -52,6 +55,10 @@ const PurchaseOrders = () => {
 		if (!optimized) return '';
 		return optimized + (optimized.includes('?') ? '&' : '?') + 'nocache=1';
 	};
+
+	useEffect(() => {
+		setLogoError(false);
+	}, [detailPO]);
 
 	useEffect(() => {
 		if (!owner.ownerId) return;
@@ -257,19 +264,9 @@ const PurchaseOrders = () => {
 
 		setIsSavingImage(true);
 		try {
-			const targetWidth = 420;
-			const canvas = await html2canvas(node, {
-				backgroundColor: '#ffffff',
-				width: targetWidth,
-				scale: 2,
-				useCORS: true,
-				allowTaint: false,
-				logging: false,
-			});
-			const dataUrl = canvas.toDataURL('image/png');
-
+			const dataUrl = await generateTicketPng(node, true, 420);
 			const link = document.createElement('a');
-			link.download = `phieu_nhap_hang_\${detailPO.id?.slice(0, 8).toUpperCase()}.png`;
+			link.download = `phieu_nhap_hang_${detailPO.id?.slice(0, 8).toUpperCase()}.png`;
 			link.href = dataUrl;
 			link.click();
 		} catch (error) {
@@ -283,18 +280,17 @@ const PurchaseOrders = () => {
 	const handleCopyImage = async () => {
 		if (!capturedImage) return;
 		try {
-			const response = await fetch(capturedImage);
-			const blob = await response.blob();
-			await navigator.clipboard.write([
-				new ClipboardItem({
-					[blob.type]: blob
-				})
-			]);
+			const fileName = `phieu_nhap_${detailPO?.id || Date.now()}.png`;
+			await copyOrShareImage({
+				dataUrl: capturedImage,
+				fileName,
+				title: 'Phiếu nhập hàng',
+				text: `Phiếu nhập hàng - NCC ${detailPO?.supplierName || ''}`,
+			});
 			setShowCopySuccess(true);
 			setTimeout(() => setShowCopySuccess(false), 2500);
 		} catch (error) {
 			console.error("Lỗi sao chép hình ảnh:", error);
-			alert("Thiết bị hoặc trình duyệt không hỗ trợ sao chép trực tiếp. Bạn vui lòng nhấn giữ hình ảnh để Sao chép!");
 		}
 	};
 
@@ -304,44 +300,31 @@ const PurchaseOrders = () => {
 		if (!node) return;
 
 		setIsSavingImage(true);
-		let generatedUrl = '';
 		try {
-			const targetWidth = 420;
+			const dataUrlPromise = generateTicketPng(node, true, 420);
+			const fileName = `phieu_nhap_${detailPO?.id || Date.now()}.png`;
+			await copyOrShareImage({
+				dataUrl: dataUrlPromise,
+				fileName,
+				title: 'Phiếu nhập hàng',
+				text: `Phiếu nhập hàng - NCC ${detailPO?.supplierName || ''}`,
+			});
 
-			if (!navigator.clipboard || !window.ClipboardItem) {
-				throw new Error("Trình duyệt không hỗ trợ Clipboard API hoặc kết nối HTTP không bảo mật");
-			}
-			// Sử dụng Promise bên trong ClipboardItem để bảo toàn quyền user gesture trong sự kiện click
-			const blobPromise = (async () => {
-				const canvas = await html2canvas(node, {
-					backgroundColor: '#ffffff',
-					width: targetWidth,
-					scale: 2,
-					useCORS: true,
-					allowTaint: false,
-					logging: false,
-				});
-				const dataUrl = canvas.toDataURL('image/png');
-				generatedUrl = dataUrl;
-				const response = await fetch(dataUrl);
-				if (!response.ok) throw new Error(`HTTP status ${response.status}`);
-				return await response.blob();
-			})();
-
-			await navigator.clipboard.write([
-				new ClipboardItem({
-					'image/png': blobPromise
-				})
-			]);
 			setShowCopySuccess(true);
 			setTimeout(() => setShowCopySuccess(false), 2500);
 		} catch (error) {
 			console.error("Lỗi sao chép hình ảnh:", error);
-			if (generatedUrl) {
-				setCapturedImage(generatedUrl);
-				alert("Sao chép trực tiếp thất bại (do thiết bị, trình duyệt, hoặc do bạn truy cập web bằng liên kết HTTP không bảo mật). Hệ thống đã tự động tạo ảnh phía dưới, bạn hãy NHẤN GIỮ VÀO ẢNH để Sao chép hoặc Lưu lại nhé!");
-			} else {
-				alert("Không thể tạo hình ảnh phiếu nhập hàng: " + (error instanceof Error ? error.message : String(error)));
+			// Direct fallback download
+			try {
+				const dataUrl = await generateTicketPng(node, true, 420);
+				const link = document.createElement('a');
+				link.download = `phieu_nhap_${detailPO?.id || Date.now()}.png`;
+				link.href = dataUrl;
+				link.click();
+				setShowCopySuccess(true);
+				setTimeout(() => setShowCopySuccess(false), 2500);
+			} catch (e) {
+				console.error("Lỗi fallback ảnh:", e);
 			}
 		} finally {
 			setIsSavingImage(false);
@@ -1147,9 +1130,16 @@ const PurchaseOrders = () => {
 						<main className="bg-white text-black text-sm">
 							{/* Company Header */}
 							<div className="flex items-center gap-4 mb-4">
-								{companyInfo?.logoUrl ? (
-									<div className="w-16 h-16 rounded-full border border-slate-200 overflow-hidden bg-white shrink-0 shadow-[inset_0_2px_4px_rgba(0,0,0,0.05)]">
-										<img src={getTicketImageUrl(companyInfo.logoUrl)} alt="Logo" className="w-full h-full object-cover" loading="lazy" crossOrigin="anonymous" />
+								{companyInfo?.logoUrl && !logoError ? (
+									<div className="w-16 h-16 rounded-full border border-slate-200 overflow-hidden bg-white shrink-0 shadow-[inset_0_2px_4px_rgba(0,0,0,0.05)] flex items-center justify-center">
+										<img 
+											src={getTicketImageUrl(companyInfo.logoUrl)} 
+											alt="" 
+											className="w-full h-full object-cover" 
+											loading="lazy" 
+											crossOrigin="anonymous" 
+											onError={() => setLogoError(true)}
+										/>
 									</div>
 								) : (
 									<div className="w-16 h-16 bg-slate-900 rounded-full flex items-center justify-center text-white shrink-0">
@@ -1205,13 +1195,11 @@ const PurchaseOrders = () => {
 												<span className="shrink-0 pt-0.5">{idx + 1}.</span>
 												{productImage && (
 													<div className="w-8 h-8 rounded-full border border-slate-200 overflow-hidden bg-white shrink-0 shadow-sm flex justify-center items-center">
-														<img 
-															src={getTicketImageUrl(productImage)} 
+														<CachedImage 
+															src={productImage} 
 															alt={item.name} 
 															className="w-full h-full object-cover rounded-full" 
-															loading="lazy"
-															crossOrigin="anonymous"
-															onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+															fallbackText={item.name}
 														/>
 													</div>
 												)}

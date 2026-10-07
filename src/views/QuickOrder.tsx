@@ -17,16 +17,15 @@ const QuickOrder = () => {
 	const owner = useOwner();
 	const { showToast } = useToast();
 
-	const form = useOrderForm({ owner, showToast, editId: id, location });
-
-	// 🚀 Auto-navigate về danh sách đơn sau 1.2s, không cần nhấn nút
-	useEffect(() => {
-		if (form.showSuccessModal) {
-			const timer = setTimeout(() => navigate('/orders'), 1200);
-			return () => clearTimeout(timer);
+	const form = useOrderForm({ 
+		owner, 
+		showToast, 
+		editId: id, 
+		location,
+		onSuccess: () => {
+			navigate('/orders', { replace: true });
 		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [form.showSuccessModal]);
+	});
 
 	if (owner.loading) return null;
 
@@ -170,18 +169,16 @@ const QuickOrder = () => {
 					setShowProfitPreview={form.setShowProfitPreview}
 					handleConfirmOrder={form.handleConfirmOrder}
 					isSubmitting={form.isSubmitting}
+					editId={id}
 				/>
 			</div>
 
-			{/* STICKY BOTTOM BAR + SUCCESS MODAL */}
+			{/* STICKY BOTTOM BAR */}
 			<OrderFooter
 				finalTotal={form.finalTotal}
 				editId={id}
 				handleConfirmOrder={form.handleConfirmOrder}
 				isSubmitting={form.isSubmitting}
-				showSuccessModal={form.showSuccessModal}
-				setShowSuccessModal={form.setShowSuccessModal}
-				onNavigateOrders={() => navigate('/orders')}
 			/>
 
 			<style dangerouslySetInnerHTML={{

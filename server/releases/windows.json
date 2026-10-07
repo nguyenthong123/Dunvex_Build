@@ -1,0 +1,15 @@
+{
+  "platform": "windows",
+  "version": "1.0.1",
+  "buildNumber": 158,
+  "releaseDate": "2026-10-04T03:50:24.975Z",
+  "releaseNotes": "Windows: sửa sao chép ảnh phiếu qua Clipboard",
+  "downloadUrl": "/downloads/Dunvex-Setup-1.0.1-x64.exe",
+  "bundleUrl": "/api/releases/windows/bundle.zip",
+  "bundleHash": "ca7e29866882f7a4377a058b5c1b693600c84e1948e19115144c8d9913d3cfd1",
+  "size": 1024615,
+  "downloadSize": 139969443,
+  "downloadSha256": "a5d5f6abe215ed135132e559a5b3a49230c65a66c7203bc9b59acf50c008bcd9",
+  "portableDownloadUrl": "/downloads/Dunvex-Build-1.0.1-Windows-x64.zip",
+  "portableSize": 68327372
+}

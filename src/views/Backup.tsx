@@ -2,6 +2,8 @@ import { useState, useRef } from 'react';
 import { useToast } from '../components/shared/Toast';
 import { SUPER_ADMIN_EMAIL } from '../constants';
 import { db, auth } from '../services/firebase';
+import { getSessionToken } from '../services/sqliteSession';
+import { apiUrl } from '../services/apiClient';
 import { collection, getDocs, query, where, orderBy, writeBatch, doc } from '../services/firebase';
 
 // ============================================================
@@ -356,15 +358,15 @@ export default function Backup() {
       async () => {
         setIsUploadingSqlite(true);
         try {
-          const idToken = await auth.currentUser?.getIdToken();
-          if (!idToken) {
+          const sessionToken = getSessionToken();
+          if (!sessionToken) {
             throw new Error('Vui lòng đăng nhập trước!');
           }
 
-          const response = await fetch('/api/db/upload', {
+          const response = await fetch(apiUrl('/api/db/upload'), {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${idToken}`,
+              'Authorization': `Bearer ${sessionToken}`,
               'Content-Type': 'application/x-sqlite3'
             },
             body: file

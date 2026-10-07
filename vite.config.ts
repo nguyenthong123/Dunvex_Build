@@ -2,10 +2,23 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react-swc'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
+import fs from 'fs'
 import { VitePWA } from 'vite-plugin-pwa'
+
+const webManifestPath = path.resolve(__dirname, './server/releases/web.json');
+const webManifest = fs.existsSync(webManifestPath)
+	? JSON.parse(fs.readFileSync(webManifestPath, 'utf8'))
+	: { buildNumber: 1, version: '1.0.1' };
 
 // https://vitejs.dev/config/
 export default defineConfig({
+	define: {
+		'__APP_BUILD_INFO__': JSON.stringify({
+			version: process.env.APP_VERSION || webManifest.version || '1.0.1',
+			buildNumber: Number(process.env.APP_BUILD_NUMBER) || Number(process.env.WEB_BUILD_NUMBER) || webManifest.buildNumber || 1,
+			builtAt: new Date().toISOString()
+		})
+	},
 	plugins: [
 		react(),
 		tailwindcss(),
@@ -72,13 +85,42 @@ export default defineConfig({
 								statuses: [0, 200]
 							}
 						}
+					},
+					{
+						urlPattern: /\.(?:png|jpg|jpeg|svg|webp|gif)$/i,
+						handler: 'CacheFirst',
+						options: {
+							cacheName: 'images-cache',
+							expiration: {
+								maxEntries: 500,
+								maxAgeSeconds: 60 * 60 * 24 * 60 // 60 days
+							},
+							cacheableResponse: {
+								statuses: [0, 200]
+							}
+						}
+					},
+					{
+						urlPattern: /^https?:\/\/.*\/(?:uploads|images|api\/image-proxy).*/i,
+						handler: 'CacheFirst',
+						options: {
+							cacheName: 'product-uploads-cache',
+							expiration: {
+								maxEntries: 500,
+								maxAgeSeconds: 60 * 60 * 24 * 60 // 60 days
+							},
+							cacheableResponse: {
+								statuses: [0, 200]
+							}
+						}
 					}
 				]
 			}
 		})
 	],
 	esbuild: {
-		drop: ['console', 'debugger']
+		drop: ['debugger'],
+		pure: ['console.log', 'console.debug']
 	},
 	resolve: {
 		alias: {
@@ -87,15 +129,7 @@ export default defineConfig({
 	},
 	server: {
 		proxy: {
-			'/api/upload': {
-				target: 'http://localhost:5000',
-				changeOrigin: true
-			},
-			'/api/data': {
-				target: 'http://localhost:5000',
-				changeOrigin: true
-			},
-			'/api/db': {
+			'/api': {
 				target: 'http://localhost:5000',
 				changeOrigin: true
 			}
@@ -110,7 +144,6 @@ export default defineConfig({
 			output: {
 				manualChunks: {
 					'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-					'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/functions'],
 					'vendor-ui': ['lucide-react', 'framer-motion'],
 					'vendor-map': ['leaflet', 'react-leaflet'],
 					'vendor-xlsx': ['xlsx'],

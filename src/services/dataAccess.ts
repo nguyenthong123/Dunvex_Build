@@ -32,6 +32,8 @@ import {
   getCountFromServer,
 } from './firebase';
 
+import { getOrderTimestamp } from '../utils/orderFilter';
+
 // Type stubs for Firebase-compatible interfaces
 type Unsubscribe = () => void;
 type DocumentData = Record<string, any>;
@@ -212,11 +214,7 @@ export const orderService = {
       limit(maxResults),
     );
     return onSnapshot(q, (snap: QuerySnapshot) => {
-      const docs = snap.docs.map(withId).sort((a: any, b: any) => {
-        const timeA = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
-        const timeB = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
-        return timeB - timeA;
-      });
+      const docs = snap.docs.map(withId).sort((a: any, b: any) => getOrderTimestamp(b) - getOrderTimestamp(a));
       onData(docs);
     }, onError);
   },
@@ -229,11 +227,7 @@ export const orderService = {
       limit(maxResults),
     );
     const snap = await getDocs(q);
-    return snap.docs.map(withId).sort((a: any, b: any) => {
-      const timeA = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
-      const timeB = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
-      return timeB - timeA;
-    });
+    return snap.docs.map(withId).sort((a: any, b: any) => getOrderTimestamp(b) - getOrderTimestamp(a));
   },
 
   async getOrdersPaginated(
@@ -386,11 +380,7 @@ export const paymentService = {
       limit(maxResults),
     );
     return onSnapshot(q, (snap: QuerySnapshot) => {
-      const docs = snap.docs.map(withId).sort((a: any, b: any) => {
-        const timeA = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
-        const timeB = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
-        return timeB - timeA;
-      });
+      const docs = snap.docs.map(withId).sort((a: any, b: any) => getOrderTimestamp(b) - getOrderTimestamp(a));
       onData(docs);
     }, onError);
   },

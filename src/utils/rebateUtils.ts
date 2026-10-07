@@ -3,10 +3,11 @@
  */
 
 import type { CustomerRebateData } from '../services/dataAccess';
+import { getTodayString } from './dateUtils';
 
 export type RebateStatusType = 'active' | 'used' | 'expired' | 'upcoming' | 'disabled';
 
-export function getRebateStatus(rebate: Partial<CustomerRebateData>, checkDate: string = new Date().toISOString().split('T')[0]): RebateStatusType {
+export function getRebateStatus(rebate: Partial<CustomerRebateData>, checkDate: string = getTodayString()): RebateStatusType {
   if (rebate.status === 'disabled') {
     return 'disabled';
   }
@@ -33,7 +34,7 @@ export function isRebateValidForOrder(
   rebate: Partial<CustomerRebateData>,
   customerId?: string,
   customerName?: string,
-  orderDate: string = new Date().toISOString().split('T')[0]
+  orderDate: string = getTodayString()
 ): boolean {
   if (!rebate) return false;
 
@@ -54,7 +55,7 @@ export function findValidCustomerRebate(
   rebates: Array<Partial<CustomerRebateData> & { id: string }>,
   customerId?: string,
   customerName?: string,
-  orderDate: string = new Date().toISOString().split('T')[0]
+  orderDate: string = getTodayString()
 ): (Partial<CustomerRebateData> & { id: string }) | null {
   if (!Array.isArray(rebates) || rebates.length === 0) return null;
 

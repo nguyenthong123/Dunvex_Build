@@ -1,12 +1,8 @@
-import { getAuthHeaders } from '../services/apiClient';
-import { getAuth } from 'firebase/auth';
+import { localFileService } from '../services/localFileService';
 
-const UPLOAD_URL = import.meta.env.VITE_UPLOAD_URL || '/api/upload';
-
-// Helper to compress image before uploading (Optimized for iOS / Android low-memory devices)
-async function compressImage(file: File, maxWidth = 1200, maxHeight = 1200, quality = 0.8): Promise<string> {
+// Helper to compress image before saving (Optimized for macOS / iOS / Android memory and storage)
+export async function compressImage(file: File, maxWidth = 1200, maxHeight = 1200, quality = 0.82): Promise<string> {
   return new Promise<string>((resolve, reject) => {
-    // Use ObjectURL instead of reading entire 15MB file into string memory
     const objectUrl = URL.createObjectURL(file);
     const img = new Image();
 
@@ -28,7 +24,6 @@ async function compressImage(file: File, maxWidth = 1200, maxHeight = 1200, qual
 
         if (!width || !height) {
           cleanup();
-          // Fallback: read directly as DataURL if dimensions not readable
           const reader = new FileReader();
           reader.onload = () => resolve(reader.result as string);
           reader.onerror = (err) => reject(err);
@@ -68,7 +63,7 @@ async function compressImage(file: File, maxWidth = 1200, maxHeight = 1200, qual
 
         const dataUrl = canvas.toDataURL('image/jpeg', quality);
 
-        // Immediate release of backing buffer to avoid WebKit jetsam OOM crash
+        // Immediate release of backing buffer
         canvas.width = 0;
         canvas.height = 0;
         cleanup();
@@ -82,7 +77,6 @@ async function compressImage(file: File, maxWidth = 1200, maxHeight = 1200, qual
 
     img.onerror = () => {
       cleanup();
-      // Fallback
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result as string);
       reader.onerror = (err) => reject(err);
@@ -93,7 +87,10 @@ async function compressImage(file: File, maxWidth = 1200, maxHeight = 1200, qual
   });
 }
 
-// Helper to upload image to VPS endpoint /api/upload
+/**
+ * Save image 100% locally to machine storage (macOS SSD / Mobile Filesystem / Local IndexedDB).
+ * Does NOT upload image binaries to VPS server to protect VPS disk storage.
+ */
 export async function uploadImageToVPS(fileOrBase64: File | string, fileName?: string): Promise<string> {
   let imageBase64: string = '';
 
@@ -101,10 +98,9 @@ export async function uploadImageToVPS(fileOrBase64: File | string, fileName?: s
     imageBase64 = fileOrBase64;
   } else if (fileOrBase64 instanceof File) {
     try {
-      // Compress the image before uploading (default: max 1200px width/height, 0.85 quality)
-      imageBase64 = await compressImage(fileOrBase64, 1200, 1200, 0.85);
+      imageBase64 = await compressImage(fileOrBase64, 1200, 1200, 0.82);
     } catch (err) {
-      console.warn('Failed to compress image, falling back to original upload', err);
+      console.warn('Failed to compress image, using original read', err);
       imageBase64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result as string);
@@ -114,40 +110,16 @@ export async function uploadImageToVPS(fileOrBase64: File | string, fileName?: s
     }
   }
 
-  let token = '';
+  const customName = fileName || (fileOrBase64 instanceof File ? fileOrBase64.name : `img_${Date.now()}.jpg`);
+
   try {
-    const auth = getAuth();
-    if (auth && auth.currentUser) {
-      token = await auth.currentUser.getIdToken();
+    const saved = await localFileService.saveImage(imageBase64, customName);
+    if (saved && (saved.url || saved.localPath)) {
+      return saved.url || saved.localPath;
     }
-  } catch (e) {
-    console.warn('Failed to get Firebase token for upload', e);
+  } catch (err) {
+    console.warn('[LocalFile] Local save failed, returning data URI:', err);
   }
 
-  const headers: Record<string, string> = {
-    ...getAuthHeaders(),
-  };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  const response = await fetch(UPLOAD_URL, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      imageBase64,
-      fileName: fileName || (fileOrBase64 instanceof File ? fileOrBase64.name : 'image')
-    })
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`VPS Upload failed: ${response.status} ${errText}`);
-  }
-
-  const data = await response.json();
-  if (data.success && data.url) {
-    return data.url;
-  }
-  throw new Error(data.error || 'Failed to upload image to VPS');
+  return imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`;
 }

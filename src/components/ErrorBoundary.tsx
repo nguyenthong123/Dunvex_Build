@@ -19,6 +19,16 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
+    const isChunkLoadError = /importing a module script failed|failed to fetch dynamically imported module|loading chunk|error loading dynamically imported module/i.test(error?.message || '');
+    if (isChunkLoadError && typeof window !== 'undefined') {
+      const now = Date.now();
+      const lastReload = Number(sessionStorage.getItem('last_chunk_reload') || 0);
+      if (now - lastReload > 6000) {
+        sessionStorage.setItem('last_chunk_reload', String(now));
+        window.location.reload();
+        return { hasError: false, error: null, errorInfo: null };
+      }
+    }
     return { hasError: true, error };
   }
 
@@ -36,6 +46,10 @@ export default class ErrorBoundary extends Component<Props, State> {
   };
 
   handleRetry = () => {
+    if (/importing a module script failed|failed to fetch dynamically imported module|loading chunk/i.test(this.state.error?.message || '')) {
+      window.location.reload();
+      return;
+    }
     this.setState({ hasError: false, error: null, errorInfo: null });
   };
 

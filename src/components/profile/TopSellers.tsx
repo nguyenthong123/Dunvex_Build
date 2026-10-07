@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { db } from '../../services/firebase';
 import { collection, query, where, getDocs, Timestamp, doc, getDoc } from '../../services/firebase';
 import { Trophy, Medal, TrendingUp, Loader2 } from 'lucide-react';
+import { isNativeApp } from '../../utils/platform';
+import { getNativeMonthlySellerStats } from '../../utils/nativeDashboardData';
 
 interface TopSellersProps {
 	ownerId: string;
+	orders?: Record<string, any>[];
 }
 
 interface SellerStat {
@@ -14,16 +17,11 @@ interface SellerStat {
 	orderCount: number;
 }
 
-const TopSellers: React.FC<TopSellersProps> = ({ ownerId }) => {
+const TopSellers: React.FC<TopSellersProps> = ({ ownerId, orders }) => {
 	const [sellers, setSellers] = useState<SellerStat[]>([]);
 	const [loading, setLoading] = useState(true);
 
-	useEffect(() => {
-		if (!ownerId) { setLoading(false); return; }
-		loadData();
-	}, [ownerId]);
-
-	const loadData = async () => {
+	const loadData = useCallback(async () => {
 		try {
 			setLoading(true);
 
@@ -96,7 +94,17 @@ const TopSellers: React.FC<TopSellersProps> = ({ ownerId }) => {
 		} finally {
 			setLoading(false);
 		}
-	};
+	}, [ownerId]);
+
+	useEffect(() => {
+		if (!ownerId) { setLoading(false); return; }
+		if (isNativeApp()) {
+			setSellers(getNativeMonthlySellerStats(orders || []));
+			setLoading(false);
+			return;
+		}
+		void loadData();
+	}, [ownerId, orders, loadData]);
 
 	const maxRevenue = sellers.length > 0 ? sellers[0].totalRevenue : 1;
 

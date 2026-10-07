@@ -1,4 +1,5 @@
 import express from 'express';
+import http from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
@@ -6,12 +7,14 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { initSignaling } from './server/signaling.js';
 
 // Load environment variables
 dotenv.config();
 
-// Create Express app
+// Create Express app & HTTP Server
 const app = express();
+const httpServer = http.createServer(app);
 const PORT = process.env.PORT || 5000;
 
 // Resolve directory paths for ES Modules
@@ -26,7 +29,7 @@ app.use(helmet({
   contentSecurityPolicy: false, // Prevent breaking external CDN / Maps / Leaflet / Firebase fonts
   crossOriginResourcePolicy: { policy: 'cross-origin' }, // Allow images / assets proxying
   crossOriginEmbedderPolicy: false,
-  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' }, // Chuẩn Firebase Auth popup (ngăn cảnh báo window.closed)
+  crossOriginOpenerPolicy: false, // Tắt COOP để tránh làm đứt liên kết opener giữa cửa sổ chính và Google Auth popup
   noSniff: true,
   xssFilter: true,
   hidePoweredBy: true
@@ -119,6 +122,43 @@ cron.schedule('0 */6 * * *', async () => {
   timezone: "Asia/Ho_Chi_Minh"
 });
 
+// Setup 30-minute cron for Subscription Expiry & Feature Lock scan
+cron.schedule('*/30 * * * *', async () => {
+  console.log('Running Subscription Expiry & Feature Lock Cron Job...');
+  try {
+    const res = await fetch(`http://localhost:${PORT}/api/cron-subscription-expiry`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${process.env.CRON_SECRET || 'dunvex-cron-secret'}`
+      }
+    });
+    const data = await res.json();
+    console.log('Subscription Expiry Scan Result:', data);
+  } catch (err) {
+    console.error('Subscription Expiry Scan Failed:', err);
+  }
+}, {
+  scheduled: true,
+  timezone: "Asia/Ho_Chi_Minh"
+});
+
+// Run an initial scan 10 seconds after server start
+setTimeout(async () => {
+  try {
+    console.log('Running initial Subscription Expiry scan on startup...');
+    const res = await fetch(`http://localhost:${PORT}/api/cron-subscription-expiry`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${process.env.CRON_SECRET || 'dunvex-cron-secret'}`
+      }
+    });
+    const data = await res.json();
+    console.log('Initial Expiry Scan Result:', data);
+  } catch (e) {
+    console.warn('Initial Expiry Scan warning:', e.message);
+  }
+}, 10000);
+
 // Image proxy to bypass CORS issues on native app (Capacitor/Ionic) for external images
 app.get('/api/image-proxy', async (req, res) => {
   const imageUrl = req.query.url;
@@ -198,6 +238,47 @@ app.get('/api/image-base64', async (req, res) => {
 // Serve uploaded files (images, logos, etc.)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Serve downloadable application packages (Mac .dmg, Windows .zip, Android .apk)
+app.use('/downloads', express.static(path.join(__dirname, 'downloads'), {
+  setHeaders: (res, filePath) => {
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+  }
+}));
+
+// Convenient download endpoints
+app.get('/download/mac', (req, res) => {
+  const p = path.join(__dirname, 'downloads/Dunvex-Build-1.0.1-Apple-Silicon.dmg');
+  if (fs.existsSync(p)) return res.download(p, 'Dunvex-Build-1.0.1-Apple-Silicon.dmg');
+  res.status(404).send('Bản cài đặt macOS chưa sẵn sàng');
+});
+
+app.get('/download/windows', (req, res) => {
+  const p = path.join(__dirname, 'downloads/Dunvex-Build-1.0.1-Windows-x64.zip');
+  if (fs.existsSync(p)) return res.download(p, 'Dunvex-Build-1.0.1-Windows-x64.zip');
+  res.status(404).send('Bản cài đặt Windows chưa sẵn sàng');
+});
+
+app.get('/download/android', (req, res) => {
+  const p = path.join(__dirname, 'downloads/dunvex_app.apk');
+  const fallback = path.join(__dirname, 'dunvex_app.apk');
+  if (fs.existsSync(p)) return res.download(p, 'Dunvex-Build-1.0.1.apk');
+  if (fs.existsSync(fallback)) return res.download(fallback, 'Dunvex-Build-1.0.1.apk');
+  res.status(404).send('Bản cài đặt Android chưa sẵn sàng');
+});
+
+// Direct APK Download endpoint for Android phone
+app.get('/dunvex_app.apk', (req, res) => {
+  const apkPath = path.join(__dirname, 'dunvex_app.apk');
+  const dPath = path.join(__dirname, 'downloads/dunvex_app.apk');
+  if (fs.existsSync(apkPath)) {
+    return res.download(apkPath, 'dunvex_app.apk');
+  } else if (fs.existsSync(dPath)) {
+    return res.download(dPath, 'dunvex_app.apk');
+  } else {
+    res.status(404).send('APK not found');
+  }
+});
+
 // Serve static frontend from 'dist' directory with custom cache control policies
 app.use(express.static(path.join(__dirname, 'dist'), {
   setHeaders: (res, filePath) => {
@@ -214,7 +295,7 @@ app.use(express.static(path.join(__dirname, 'dist'), {
 
 // Fallback for React Router (SPA) — skip /api and /uploads
 app.use((req, res, next) => {
-  if (req.method === 'GET' && !req.path.startsWith('/api') && !req.path.startsWith('/uploads')) {
+  if ((req.method === 'GET' || req.method === 'HEAD') && !req.path.startsWith('/api') && !req.path.startsWith('/uploads') && !req.path.startsWith('/downloads')) {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
@@ -235,8 +316,12 @@ app.use((err, req, res, next) => {
   res.status(err && err.status ? err.status : 500).json({ error: err && err.message ? err.message : 'Internal Server Error' });
 });
 
+// Initialize Socket.io P2P Signaling Server
+initSignaling(httpServer);
+
 // Start server
-app.listen(PORT, () => {
+httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on port ${PORT}`);
   console.log(`API endpoints are available at http://localhost:${PORT}/api`);
+  console.log(`P2P WebRTC Signaling Server is active on port ${PORT}`);
 });

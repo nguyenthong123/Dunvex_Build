@@ -32,6 +32,10 @@ proguard/
 # Log Files
 *.log
 
+# The Android package name includes "build"; keep application source tracked.
+!/app/src/main/java/com/dunvex/build/
+!/app/src/main/java/com/dunvex/build/**
+
 # Android Studio Navigation editor temp files
 .navigation/
 

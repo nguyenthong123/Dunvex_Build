@@ -1,6 +1,7 @@
 /**
  * Hook quản lý bộ lọc & tìm kiếm trong trang Công Nợ
  * 🔧 REFACTOR: Extract from Debts.tsx (search, date filters, pagination, notifications)
+ * 🚀 UPGRADE: Hỗ trợ DebtStatusFilter, TimePresets, Sorting, và chuẩn hóa Timestamp cho History
  */
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -13,6 +14,10 @@ import {
   getDocs,
   writeBatch,
 } from '../services/firebase';
+import { getPaymentTimestamp, getTxDateString, getTimeRangeForPreset } from '../utils/orderFilter';
+import type { DebtStatusFilter, DebtSortOption } from './useDebtCalculations';
+
+export type TimePresetOption = 'all' | 'this_month' | '2_months' | '3_months' | 'custom';
 
 export interface UseDebtFiltersParams {
   /** Payments đã được enhance với displayCustomerName */
@@ -25,11 +30,16 @@ export function useDebtFilters({ enhancedPayments }: UseDebtFiltersParams) {
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // ── Date filters ─────────────────────────────────────────
+  // ── Date filters & Presets ───────────────────────────────
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
-  const [statusFilter, setStatusFilter] = useState('Đơn chốt');
+  const [timePreset, setTimePreset] = useState<TimePresetOption>('all');
   const [showFilterOptions, setShowFilterOptions] = useState(false);
+
+  // ── Status & Sorting filters ─────────────────────────────
+  const [statusFilter, setStatusFilter] = useState('Đơn chốt');
+  const [debtStatusFilter, setDebtStatusFilter] = useState<DebtStatusFilter>('all');
+  const [sortBy, setSortBy] = useState<DebtSortOption>('recent_tx');
 
   // ── Pagination ───────────────────────────────────────────
   const [currentPage, setCurrentPage] = useState(1);
@@ -38,6 +48,16 @@ export function useDebtFilters({ enhancedPayments }: UseDebtFiltersParams) {
 
   // ── Notifications ────────────────────────────────────────
   const [unreadCount, setUnreadCount] = useState(0);
+
+  // ── Preset handler ───────────────────────────────────────
+  const handleSetTimePreset = (preset: TimePresetOption) => {
+    setTimePreset(preset);
+    if (preset !== 'custom') {
+      const { fromDate: f, toDate: t } = getTimeRangeForPreset(preset);
+      setFromDate(f);
+      setToDate(t);
+    }
+  };
 
   // ── Mobile search listener ──────────────────────────────
   useEffect(() => {
@@ -67,11 +87,11 @@ export function useDebtFilters({ enhancedPayments }: UseDebtFiltersParams) {
       .replace(/Đ/g, 'D');
   };
 
-  const isMatch = (target: string, query: string) => {
-    if (!query) return true;
+  const isMatch = (target: string, q: string) => {
+    if (!q) return true;
     const t = normalizeText(target);
-    const q = normalizeText(query);
-    return t.includes(q) || removeAccents(t).includes(removeAccents(q));
+    const queryStr = normalizeText(q);
+    return t.includes(queryStr) || removeAccents(t).includes(removeAccents(queryStr));
   };
 
   // ── Notification listener (Firestore realtime) ──────────
@@ -91,7 +111,7 @@ export function useDebtFilters({ enhancedPayments }: UseDebtFiltersParams) {
   // ── Reset page when filters change ──────────────────────
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, statusFilter, fromDate, toDate]);
+  }, [searchTerm, debtStatusFilter, sortBy, fromDate, toDate]);
 
   // ── Mark all notifications read ─────────────────────────
   const markAllAsRead = async () => {
@@ -114,41 +134,21 @@ export function useDebtFilters({ enhancedPayments }: UseDebtFiltersParams) {
   const filteredHistory = useMemo(() => {
     return [...enhancedPayments]
       .sort((a, b) => {
-        const da = a.date
-          ? new Date(a.date).getTime()
-          : a.createdAt?.seconds
-            ? a.createdAt.seconds * 1000
-            : 0;
-        const db = b.date
-          ? new Date(b.date).getTime()
-          : b.createdAt?.seconds
-            ? b.createdAt.seconds * 1000
-            : 0;
-        if (db === da) {
-          const ca = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0;
-          const cb = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0;
-          return cb - ca;
-        }
+        const da = getPaymentTimestamp(a);
+        const db = getPaymentTimestamp(b);
         return db - da;
       })
       .filter((p) => {
         const matchesName =
           !searchTerm ||
-          String(p.displayCustomerName || '')
-            .toLowerCase()
-            .includes(searchTerm.toLowerCase()) ||
-          String(p.customerName || '')
-            .toLowerCase()
-            .includes(searchTerm.toLowerCase());
+          isMatch(p.displayCustomerName, searchTerm) ||
+          isMatch(p.customerName, searchTerm) ||
+          isMatch(p.note, searchTerm);
 
         if (fromDate || toDate) {
           const start = fromDate || '0000-00-00';
           const end = toDate || '9999-99-99';
-          const pDate =
-            p.date ||
-            (p.createdAt?.seconds
-              ? new Date(p.createdAt.seconds * 1000).toISOString().split('T')[0]
-              : '');
+          const pDate = getTxDateString(p);
           return matchesName && pDate >= start && pDate <= end;
         }
         return matchesName;
@@ -200,15 +200,23 @@ export function useDebtFilters({ enhancedPayments }: UseDebtFiltersParams) {
     showMobileSearch,
     setShowMobileSearch,
     searchRef,
-    // Date filters
+    // Date filters & Presets
     fromDate,
     setFromDate,
     toDate,
     setToDate,
-    statusFilter,
-    setStatusFilter,
+    timePreset,
+    setTimePreset,
+    handleSetTimePreset,
     showFilterOptions,
     setShowFilterOptions,
+    // Status & Sorting
+    statusFilter,
+    setStatusFilter,
+    debtStatusFilter,
+    setDebtStatusFilter,
+    sortBy,
+    setSortBy,
     // Pagination
     currentPage,
     setCurrentPage,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { smartSearchMatch, calculateSearchScore } from '../utils/searchUtils';
 import { auth, db } from '../services/firebase';
@@ -11,6 +11,8 @@ import { useCustomers } from '../hooks/useCustomers';
 import { useScroll } from '../context/ScrollContext';
 import { useToast } from '../components/shared/Toast';
 import { CustomerSchema, getOptimizedImageUrl } from '../utils/validation';
+import { saveWorkbookToFile } from '../utils/excelExport';
+import { isNativeApp } from '../utils/platform';
 
 import { CustomerHeader } from '../components/customers/CustomerHeader';
 import { CustomerDesktopTable } from '../components/customers/CustomerDesktopTable';
@@ -32,12 +34,15 @@ const CustomerList = () => {
 	const [showAddForm, setShowAddForm] = useState(false);
 	const [showImport, setShowImport] = useState(false);
 	const [showEditForm, setShowEditForm] = useState(false);
+	const [isSavingCustomer, setIsSavingCustomer] = useState(false);
 	const [showDetail, setShowDetail] = useState(false);
 	const [showMap, setShowMap] = useState(false);
 	const [showTaxDetail, setShowTaxDetail] = useState(false);
 	const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
 	const [searchTerm, setSearchTerm] = useState(() => sessionStorage.getItem('customers_searchTerm') || '');
 	const [selectedRoute, setSelectedRoute] = useState(() => sessionStorage.getItem('customers_selectedRoute') || 'All');
+	const [selectedType, setSelectedType] = useState<string>(() => sessionStorage.getItem('customers_selectedType') || 'all');
+	const [sortBy, setSortBy] = useState<string>(() => sessionStorage.getItem('customers_sortBy') || 'name_asc');
 	const [showMobileSearch, setShowMobileSearch] = useState(false);
 	const searchInputRef = React.useRef<HTMLInputElement>(null!);
 	const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -47,8 +52,10 @@ const CustomerList = () => {
 	useEffect(() => {
 		sessionStorage.setItem('customers_searchTerm', searchTerm);
 		sessionStorage.setItem('customers_selectedRoute', selectedRoute);
+		sessionStorage.setItem('customers_selectedType', selectedType);
+		sessionStorage.setItem('customers_sortBy', sortBy);
 		sessionStorage.setItem('customers_currentPage', currentPage.toString());
-	}, [searchTerm, selectedRoute, currentPage]);
+	}, [searchTerm, selectedRoute, selectedType, sortBy, currentPage]);
 
 	useEffect(() => {
 		const handleOpenSearch = () => {
@@ -67,21 +74,6 @@ const CustomerList = () => {
 		window.addEventListener('open-mobile-add', handleOpenAdd);
 		return () => window.removeEventListener('open-mobile-add', handleOpenAdd);
 	}, []);
-
-	// Enhanced Search Functions
-	const normalizeText = (text: any) => text ? String(text).normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase() : '';
-	const removeAccents = (str: any) => {
-		return String(str || '').normalize('NFD')
-			.replace(/[\u0300-\u036f]/g, '')
-			.replace(/đ/g, 'd')
-			.replace(/Đ/g, 'D');
-	};
-	const isMatch = (target: string, query: string) => {
-		if (!query) return true;
-		const t = normalizeText(target);
-		const q = normalizeText(query);
-		return t.includes(q) || removeAccents(t).includes(removeAccents(q));
-	};
 
 	// Form state
 	const [formData, setFormData] = useState({
@@ -109,11 +101,9 @@ const CustomerList = () => {
 
 	const [uploadingLicense, setUploadingLicense] = useState(false);
 	const [uploadingImages, setUploadingImages] = useState(false);
-
 	const [gettingLocation, setGettingLocation] = useState(false);
 
-
-	// Get unique types from existing customers for the suggestions
+	// Base types for form suggestion
 	const baseTypes = [
 		'Chủ nhà', 'Thầu Thợ', 'Cửa Hàng', 'Cửa hàng nhựa',
 		'Cửa hàng weber', 'Cửa hàng keo dán gach', 'Cửa hàng kim khí',
@@ -129,9 +119,23 @@ const CustomerList = () => {
 	const customerTypes = [...baseTypes, ...dynamicTypes];
 
 	// Extract unique sales routes
-	const salesRoutes = Array.isArray(customers)
-		? Array.from(new Set(customers.map(c => c.route).filter(Boolean)))
-		: [];
+	const salesRoutes = useMemo(() => {
+		return Array.isArray(customers)
+			? Array.from(new Set(customers.map(c => c.route).filter(Boolean)))
+			: [];
+	}, [customers]);
+
+	// Extract dynamic classifications and their count from actual database
+	const dynamicTypeList = useMemo(() => {
+		const map = new Map<string, number>();
+		customers.forEach(c => {
+			const t = (c.type || 'Chưa phân loại').trim();
+			if (t) {
+				map.set(t, (map.get(t) || 0) + 1);
+			}
+		});
+		return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+	}, [customers]);
 
 	const handleGetLocation = async () => {
 		setGettingLocation(true);
@@ -227,7 +231,7 @@ const CustomerList = () => {
 				}));
 			}
 		} catch (error) {
-			showToast("Lỗi upload Cloudinary", "error");
+			showToast("Lỗi upload hình ảnh", "error");
 		} finally {
 			setUploadingLicense(false);
 			setUploadingImages(false);
@@ -254,19 +258,16 @@ const CustomerList = () => {
 	useEffect(() => {
 		const timer = setTimeout(() => {
 			setDebouncedSearchTerm(searchTerm);
-			setCurrentPage(1); // Reset page on search change
+			setCurrentPage(1);
 		}, 300);
 		return () => clearTimeout(timer);
 	}, [searchTerm]);
 
-	// 🔧 REFACTOR: Sử dụng useCustomers hook thay vì raw onSnapshot
-	const { customers: hookCustomers, totalItems, totalPages, loading: hookLoading, error: hookError } = useCustomers({
+	// Fetch full customer dataset for real-time classification tabs & sorting
+	const { customers: hookCustomers, loading: hookLoading, error: hookError } = useCustomers({
 		ownerId: owner.ownerId,
 		enabled: !owner.loading && !!owner.ownerId,
-		isPaginated: true,
-		page: currentPage,
-		pageSize: ITEMS_PER_PAGE,
-		searchKeyword: debouncedSearchTerm
+		isPaginated: false
 	});
 
 	// Sync hook data to local state
@@ -288,8 +289,6 @@ const CustomerList = () => {
 		const params = new URLSearchParams(search);
 		if (params.get('new') === 'true') {
 			resetForm();
-			
-			
 			if (state?.prefill) {
 				const data = state.prefill;
 				setFormData(prev => ({
@@ -300,10 +299,8 @@ const CustomerList = () => {
 				}));
 				showToast("Đã nhập thông tin khách!", "success");
 			}
-			
 			setShowAddForm(true);
 			navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
-			// Xóa param và state khỏi URL để tránh lặp lại khi refresh
 			navigate('/customers', { replace: true, state: {} });
 		}
 		if (params.get('search') === 'true' || params.get('search') === 'focus') {
@@ -331,7 +328,7 @@ const CustomerList = () => {
 
 	useEffect(() => {
 		setCurrentPage(1);
-	}, [searchTerm, selectedRoute]);
+	}, [searchTerm, selectedRoute, selectedType, sortBy]);
 
 	// Track modal state for back button
 	const showDetailRef = useRef(showDetail);
@@ -349,21 +346,11 @@ const CustomerList = () => {
 	// Handle browser back button — close modal
 	useEffect(() => {
 		const handlePopState = () => {
-			if (showDetailRef.current) {
-				setShowDetail(false);
-			}
-			if (showAddFormRef.current) {
-				setShowAddForm(false);
-			}
-			if (showEditFormRef.current) {
-				setShowEditForm(false);
-			}
-			if (showImportRef.current) {
-				setShowImport(false);
-			}
-			if (showMapRef.current) {
-				setShowMap(false);
-			}
+			if (showDetailRef.current) setShowDetail(false);
+			if (showAddFormRef.current) setShowAddForm(false);
+			if (showEditFormRef.current) setShowEditForm(false);
+			if (showImportRef.current) setShowImport(false);
+			if (showMapRef.current) setShowMap(false);
 		};
 		window.addEventListener('popstate', handlePopState);
 		return () => window.removeEventListener('popstate', handlePopState);
@@ -394,6 +381,7 @@ const CustomerList = () => {
 			}
 
 			const validatedData = result.data;
+			setIsSavingCustomer(true);
 			await addDoc(collection(db, 'customers'), {
 				...validatedData,
 				createdAt: serverTimestamp(),
@@ -401,8 +389,7 @@ const CustomerList = () => {
 				createdBy: auth.currentUser?.uid,
 			});
 
-			// Log Add Customer
-			await addDoc(collection(db, 'audit_logs'), {
+			const auditLogWrite = addDoc(collection(db, 'audit_logs'), {
 				action: 'Thêm khách hàng mới',
 				user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
 				userId: auth.currentUser?.uid || "",
@@ -410,12 +397,21 @@ const CustomerList = () => {
 				details: `Đã thêm khách hàng: ${formData.name} - SĐT: ${formData.phone}`,
 				createdAt: serverTimestamp()
 			});
+			if (isNativeApp()) {
+				void auditLogWrite.catch((error) => {
+					console.error('Customer was saved locally, but its audit log could not be written:', error);
+				});
+			} else {
+				await auditLogWrite;
+			}
 
 			window.history.back();
 			showToast("Thêm khách hàng thành công", "success");
 		} catch (error: any) {
 			console.error("Add customer error:", error);
 			showToast("Lỗi khi thêm khách hàng: " + (error.message || ""), "error");
+		} finally {
+			setIsSavingCustomer(false);
 		}
 	};
 
@@ -437,8 +433,8 @@ const CustomerList = () => {
 			}
 
 			const validatedData = result.data;
+			setIsSavingCustomer(true);
 
-			// Đảm bảo các trường tax luôn có giá trị (tránh undefined)
 			const updatePayload = {
 				...validatedData,
 				taxName: validatedData.taxName || '',
@@ -451,7 +447,6 @@ const CustomerList = () => {
 
 			await updateDoc(doc(db, 'customers', selectedCustomer.id), updatePayload);
 
-			// Log Update Customer
 			await addDoc(collection(db, 'audit_logs'), {
 				action: 'Cập nhật khách hàng',
 				user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
@@ -466,6 +461,8 @@ const CustomerList = () => {
 		} catch (error: any) {
 			console.error("Update customer error:", error);
 			showToast("Lỗi khi cập nhật: " + (error.message || "Vui lòng kiểm tra lại dữ liệu"), "error");
+		} finally {
+			setIsSavingCustomer(false);
 		}
 	};
 
@@ -475,10 +472,8 @@ const CustomerList = () => {
 				const customer = customers.find(c => c.id === id);
 				const customerName = customer?.name || 'Khách hàng';
 
-				// 1. Xóa doc khách hàng
 				await deleteDoc(doc(db, 'customers', id));
 
-				// 2. Tìm và dọn dẹp các phiếu thu tiền và công nợ liên quan của khách hàng này
 				try {
 					const [paySnap, debtSnap] = await Promise.all([
 						getDocs(query(collection(db, 'payments'), where('ownerId', '==', owner.ownerId), where('customerId', '==', id))),
@@ -493,7 +488,6 @@ const CustomerList = () => {
 					console.warn("Lỗi dọn dẹp phiếu thu phụ:", cleanErr);
 				}
 
-				// Log Delete Customer
 				await addDoc(collection(db, 'audit_logs'), {
 					action: 'Xóa khách hàng',
 					user: auth.currentUser?.displayName || auth.currentUser?.email || 'Nhân viên',
@@ -589,26 +583,69 @@ const CustomerList = () => {
 		navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
 	};
 
-	const filteredCustomers = customers.filter(c => {
-		const matchesRoute = selectedRoute === 'All' || c.route === selectedRoute;
-		const matchesSearch = smartSearchMatch([
-			c.name || '',
-			c.businessName || '',
-			c.phone || '',
-			c.address || '',
-			c.taxCode || '',
-			c.route || '',
-			c.note || ''
-		], debouncedSearchTerm);
-		return matchesRoute && matchesSearch;
-	}).sort((a, b) => {
-		const scoreA = calculateSearchScore(a, debouncedSearchTerm, { primary: ['name', 'businessName', 'phone'] });
-		const scoreB = calculateSearchScore(b, debouncedSearchTerm, { primary: ['name', 'businessName', 'phone'] });
-		if (scoreA !== scoreB) return scoreB - scoreA;
-		return (a.name || '').localeCompare(b.name || '');
-	});
+	// Real-time dynamic filtering and sorting
+	const filteredAndSortedCustomers = useMemo(() => {
+		const result = customers.filter(c => {
+			// Route filter
+			if (selectedRoute !== 'All' && c.route !== selectedRoute) return false;
+			
+			// Dynamic Classification filter (Section B)
+			if (selectedType !== 'all') {
+				const cType = (c.type || 'Chưa phân loại').trim();
+				if (cType !== selectedType) return false;
+			}
 
-	const paginatedCustomers = filteredCustomers;
+			// Smart search
+			if (debouncedSearchTerm) {
+				const match = smartSearchMatch([
+					c.name || '',
+					c.businessName || '',
+					c.phone || '',
+					c.address || '',
+					c.taxCode || '',
+					c.route || '',
+					c.note || '',
+					c.type || ''
+				], debouncedSearchTerm);
+				if (!match) return false;
+			}
+
+			return true;
+		});
+
+		// Sort logic
+		return result.sort((a, b) => {
+			if (debouncedSearchTerm) {
+				const scoreA = calculateSearchScore(a, debouncedSearchTerm, { primary: ['name', 'businessName', 'phone'] });
+				const scoreB = calculateSearchScore(b, debouncedSearchTerm, { primary: ['name', 'businessName', 'phone'] });
+				if (scoreA !== scoreB) return scoreB - scoreA;
+			}
+
+			if (sortBy === 'name_asc') {
+				return (a.name || '').localeCompare(b.name || '', 'vi');
+			}
+			if (sortBy === 'name_desc') {
+				return (b.name || '').localeCompare(a.name || '', 'vi');
+			}
+			if (sortBy === 'newest') {
+				const tA = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : a.createdAt ? new Date(a.createdAt).getTime() : 0;
+				const tB = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : b.createdAt ? new Date(b.createdAt).getTime() : 0;
+				return tB - tA;
+			}
+			if (sortBy === 'type') {
+				return (a.type || '').localeCompare(b.type || '', 'vi');
+			}
+			return (a.name || '').localeCompare(b.name || '', 'vi');
+		});
+	}, [customers, selectedRoute, selectedType, debouncedSearchTerm, sortBy]);
+
+	const totalFiltered = filteredAndSortedCustomers.length;
+	const totalPages = Math.max(1, Math.ceil(totalFiltered / ITEMS_PER_PAGE));
+
+	const paginatedCustomers = useMemo(() => {
+		const start = (currentPage - 1) * ITEMS_PER_PAGE;
+		return filteredAndSortedCustomers.slice(start, start + ITEMS_PER_PAGE);
+	}, [filteredAndSortedCustomers, currentPage, ITEMS_PER_PAGE]);
 
 	const getPageNumbers = () => {
 		const pages: (number | string)[] = [];
@@ -636,6 +673,60 @@ const CustomerList = () => {
 			withEllipsis.push(uniquePages[i]);
 		}
 		return withEllipsis;
+	};
+
+	// Excel Export
+	const handleExportExcel = async () => {
+		try {
+			showToast("Đang chuẩn bị dữ liệu xuất Excel...", "info");
+			const XLSX = await import('xlsx');
+			
+			const dataToExport = filteredAndSortedCustomers.map((c, index) => ({
+				"STT": index + 1,
+				"Mã khách": c.id ? c.id.slice(0, 8).toUpperCase() : '',
+				"Tên khách hàng": c.name || '',
+				"Tên cơ sở / Cửa hàng": c.businessName || '',
+				"Số điện thoại": c.phone || '',
+				"Phân loại": c.type || 'Chưa phân loại',
+				"Tuyến đường / Khu vực": c.route || '',
+				"Địa chỉ": c.address || '',
+				"Mã số thuế": c.taxCode || '',
+				"Tên xuất HĐ": c.taxName || '',
+				"Địa chỉ xuất HĐ": c.taxAddress || '',
+				"Hạn mức nợ (VNĐ)": Number(c.creditLimit || 0),
+				"Trạng thái": c.status || 'Hoạt động',
+				"Ghi chú": c.note || ''
+			}));
+
+			const ws = XLSX.utils.json_to_sheet(dataToExport);
+			ws['!cols'] = [
+				{ wch: 6 },
+				{ wch: 12 },
+				{ wch: 26 },
+				{ wch: 26 },
+				{ wch: 15 },
+				{ wch: 18 },
+				{ wch: 18 },
+				{ wch: 35 },
+				{ wch: 16 },
+				{ wch: 25 },
+				{ wch: 35 },
+				{ wch: 18 },
+				{ wch: 14 },
+				{ wch: 25 },
+			];
+
+			const wb = XLSX.utils.book_new();
+			XLSX.utils.book_append_sheet(wb, ws, "Khách hàng");
+			
+			const dateStr = new Date().toISOString().slice(0, 10);
+			const fileName = `Danh_Sach_Khach_Hang_${dateStr}.xlsx`;
+			const savedLocation = await saveWorkbookToFile(wb, fileName);
+			showToast(`Đã xuất ${dataToExport.length} khách hàng ra Excel thành công (${savedLocation})!`, "success");
+		} catch (err: any) {
+			console.error("Excel export error:", err);
+			showToast("Lỗi khi xuất file Excel: " + (err.message || ""), "error");
+		}
 	};
 
 	const hasManagePermission = owner.role === 'admin' || (owner.accessRights?.customers_manage ?? true);
@@ -681,6 +772,7 @@ const CustomerList = () => {
 					setShowAddForm(val);
 					if (val) navigate(window.location.pathname + window.location.search, { state: { modalOpen: true } });
 				}}
+				onExportExcel={handleExportExcel}
 			/>
 
 			{showImport && (
@@ -689,27 +781,150 @@ const CustomerList = () => {
 					ownerId={owner.ownerId}
 					ownerEmail={owner.ownerEmail}
 					onClose={() => setShowImport(false)}
-					onSuccess={() => {
-						// Optional: refresh data or show success message
-					}}
+					onSuccess={() => {}}
 				/>
 			)}
 
 			{/* CONTENT */}
-			<div className="flex-1 p-4 md:p-8">
+			<div className="flex-1 p-4 md:p-6 lg:p-8 max-w-[1600px] w-full mx-auto space-y-5">
 				{/* Stats Cards */}
-				<div className="grid grid-cols-2 gap-4 mb-8">
-					<StatCard icon="group" label="Tổng khách" value={totalItems.toString()} color="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400" />
-					<StatCard icon="person_add" label="Khách mới trong tháng" value={(() => {
-						const now = new Date();
-						const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-						return customers.filter(c => {
-							const created = c.createdAt?.seconds ? c.createdAt.seconds * 1000 : c.createdAt ? new Date(c.createdAt).getTime() : 0;
-							return created >= monthStart;
-						}).length.toString();
-					})()} color="bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400" />
+				<div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+					<StatCard 
+						icon="group" 
+						label="Tổng khách hàng" 
+						value={customers.length.toLocaleString('vi-VN')} 
+						color="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400" 
+					/>
+					<StatCard 
+						icon="category" 
+						label="Nhóm phân loại" 
+						value={`${dynamicTypeList.length} nhóm`} 
+						color="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400" 
+					/>
+					<StatCard 
+						icon="alt_route" 
+						label="Tuyến bán hàng" 
+						value={`${salesRoutes.length} tuyến`} 
+						color="bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400" 
+					/>
+					<StatCard 
+						icon="person_add" 
+						label="Khách mới trong tháng" 
+						value={(() => {
+							const now = new Date();
+							const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+							return customers.filter(c => {
+								const created = c.createdAt?.seconds ? c.createdAt.seconds * 1000 : c.createdAt ? new Date(c.createdAt).getTime() : 0;
+								return created >= monthStart;
+							}).length.toString();
+						})()} 
+						color="bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400" 
+					/>
 				</div>
 
+				{/* B. Dynamic Customer Classification Filter Tabs & Controls */}
+				<div className="bg-white dark:bg-slate-900 rounded-2xl p-4 md:p-5 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-3.5">
+					<div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+						<div className="flex items-center gap-2">
+							<span className="material-symbols-outlined text-[#FF6D00] text-lg">filter_alt</span>
+							<h3 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">
+								Phân Loại Khách Hàng
+							</h3>
+						</div>
+
+						{/* Sort & Route Selector */}
+						<div className="flex flex-wrap items-center gap-2">
+							{salesRoutes.length > 0 && (
+								<div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+									<span className="material-symbols-outlined text-sm text-slate-400">route</span>
+									<select
+										value={selectedRoute}
+										onChange={(e) => setSelectedRoute(e.target.value)}
+										aria-label="Tất cả tuyến"
+										className="bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 border-none outline-none cursor-pointer pr-2"
+									>
+										<option value="All">Tất cả tuyến</option>
+										{salesRoutes.map((r, i) => (
+											<option key={i} value={r}>{r}</option>
+										))}
+									</select>
+								</div>
+							)}
+
+							<div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+								<span className="material-symbols-outlined text-sm text-slate-400">sort</span>
+								<select
+									value={sortBy}
+									onChange={(e) => setSortBy(e.target.value)}
+									aria-label="Sắp xếp danh sách khách hàng"
+									className="bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 border-none outline-none cursor-pointer pr-2"
+								>
+									<option value="name_asc">Tên: A → Z</option>
+									<option value="name_desc">Tên: Z → A</option>
+									<option value="newest">Mới nhất (gần đây)</option>
+									<option value="type">Theo phân loại</option>
+								</select>
+							</div>
+
+							{(selectedType !== 'all' || selectedRoute !== 'All' || searchTerm) && (
+								<button
+									onClick={() => {
+										setSelectedType('all');
+										setSelectedRoute('All');
+										setSearchTerm('');
+									}}
+									className="text-xs font-bold text-rose-500 hover:text-rose-600 bg-rose-50 dark:bg-rose-950/40 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1"
+								>
+									<span className="material-symbols-outlined text-sm">close</span>
+									Xóa lọc
+								</button>
+							)}
+						</div>
+					</div>
+
+					{/* Dynamic Tabs derived from database */}
+					<div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+						<button
+							onClick={() => setSelectedType('all')}
+							className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+								selectedType === 'all'
+									? 'bg-[#1A237E] dark:bg-indigo-600 text-white shadow-md shadow-indigo-500/20'
+									: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+							}`}
+						>
+							<span>Tất cả</span>
+							<span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+								selectedType === 'all' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+							}`}>
+								{customers.length}
+							</span>
+						</button>
+
+						{dynamicTypeList.map(([type, count]) => {
+							const isSelected = selectedType === type;
+							return (
+								<button
+									key={type}
+									onClick={() => setSelectedType(type)}
+									className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+										isSelected
+											? 'bg-[#FF6D00] text-white shadow-md shadow-orange-500/20'
+											: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+									}`}
+								>
+									<span>{type}</span>
+									<span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+										isSelected ? 'bg-white/25 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+									}`}>
+										{count}
+									</span>
+								</button>
+							);
+						})}
+					</div>
+				</div>
+
+				{/* Tables and List */}
 				<CustomerDesktopTable
 					loading={loading}
 					paginatedCustomers={paginatedCustomers}
@@ -720,15 +935,15 @@ const CustomerList = () => {
 					openEdit={openEdit}
 				/>
 
-                <CustomerPagination
-                    loading={loading}
-                    totalPages={totalPages}
-                    currentPage={currentPage}
-                    setCurrentPage={setCurrentPage}
-                    getPageNumbers={getPageNumbers}
-                    filteredCustomersLength={totalItems}
-                    ITEMS_PER_PAGE={ITEMS_PER_PAGE}
-                />
+				<CustomerPagination
+					loading={loading}
+					totalPages={totalPages}
+					currentPage={currentPage}
+					setCurrentPage={setCurrentPage}
+					getPageNumbers={getPageNumbers}
+					filteredCustomersLength={totalFiltered}
+					ITEMS_PER_PAGE={ITEMS_PER_PAGE}
+				/>
 
 				<CustomerMobileList
 					loading={loading}
@@ -752,6 +967,7 @@ const CustomerList = () => {
 				setFormData={setFormData}
 				handleAddCustomer={handleAddCustomer}
 				handleUpdateCustomer={handleUpdateCustomer}
+				isSavingCustomer={isSavingCustomer}
 				customerTypes={customerTypes}
 				uploadingLicense={uploadingLicense}
 				uploadingImages={uploadingImages}
@@ -798,8 +1014,8 @@ const PageSkeleton = () => (
 					<div className="w-32 h-10 rounded-xl skeleton" />
 				</div>
 			</div>
-			<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-				{[1, 2, 3].map(i => <div key={i} className="h-32 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 skeleton" />)}
+			<div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+				{[1, 2, 3, 4].map(i => <div key={i} className="h-28 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 skeleton" />)}
 			</div>
 			<div className="h-96 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 skeleton opacity-20" />
 		</div>
@@ -807,12 +1023,12 @@ const PageSkeleton = () => (
 );
 
 const StatCard = ({ icon, label, value, color }: any) => (
-	<div className="bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 transition-colors duration-300">
-		<div className={`p-2 ${color} w-fit rounded-lg mb-2`}>
+	<div className="bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 transition-colors duration-300">
+		<div className={`p-2 ${color} w-fit rounded-xl mb-2.5 flex items-center justify-center`}>
 			<span className="material-symbols-outlined text-lg">{icon}</span>
 		</div>
-		<p className="text-slate-500 dark:text-slate-500 text-[10px] font-black uppercase tracking-widest">{label}</p>
-		<h3 className="text-xl font-black text-slate-900 dark:text-indigo-400 leading-none mt-1">{value}</h3>
+		<p className="text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-widest">{label}</p>
+		<h3 className="text-xl font-black text-slate-900 dark:text-indigo-400 leading-none mt-1.5">{value}</h3>
 	</div>
 );
 

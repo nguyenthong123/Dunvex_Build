@@ -1,6 +1,7 @@
 import React from 'react';
 import InventoryActionButtons from './InventoryActionButtons';
 import { ApprovalBadge } from '../shared/ApprovalBadge';
+import { CachedImage } from '../shared/CachedImage';
 
 interface InventoryDesktopTableProps {
 	activeTab: string;
@@ -48,89 +49,134 @@ const InventoryDesktopTable: React.FC<InventoryDesktopTableProps> = ({
 	const allSelected = paginatedProducts.length > 0 && paginatedProducts.every(p => selectedIds.includes(p.id));
 
 	return (
-		<div className="hidden lg:block bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-800 overflow-x-auto custom-scrollbar overflow-y-hidden transition-colors duration-300">
-			<table className="w-full text-left min-w-[800px]">
+		<div className="hidden lg:block bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 overflow-x-auto custom-scrollbar overflow-y-hidden transition-colors duration-300">
+			<table className="w-full text-left min-w-[900px]">
 				{activeTab === 'products' ? (
 					<>
 						<thead>
-							<tr className="bg-slate-100/50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
-								<th className="py-4 px-6 w-10">
+							<tr className="bg-slate-50/80 dark:bg-slate-800/50 border-b border-slate-200/80 dark:border-slate-800">
+								<th className="py-4 px-4 w-12 text-center">
 									<input
 										type="checkbox"
-										className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+										className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer size-4"
 										checked={allSelected}
 										onChange={toggleSelectAll}
 									/>
 								</th>
-								<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">Sản phẩm</th>
-								<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest">SKU / Số Seri</th>
-								<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-right">Giá Bán</th>
-								<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Tồn kho</th>
-								<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-center">Trạng thái</th>
-								<th className="py-4 px-6 text-[10px] font-black text-slate-600 dark:text-slate-500 uppercase tracking-widest text-right">Hành động</th>
+								<th className="py-4 px-6 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Sản phẩm</th>
+								<th className="py-4 px-6 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest whitespace-nowrap">SKU / Số Seri</th>
+								<th className="py-4 px-6 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right whitespace-nowrap">Giá Bán</th>
+								<th className="py-4 px-6 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest text-center whitespace-nowrap">Tồn kho</th>
+								<th className="py-4 px-6 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest text-center whitespace-nowrap">Trạng thái</th>
+								<th className="py-4 px-6 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right whitespace-nowrap">Hành động</th>
 							</tr>
 						</thead>
-						<tbody className="divide-y divide-gray-100 dark:divide-slate-800">
+						<tbody className="divide-y divide-slate-100 dark:divide-slate-800">
 							{loading ? (
 								[1, 2, 3, 4, 5].map(i => (
 									<tr key={i} className="animate-pulse">
-										<td className="py-4 px-6"><div className="size-4 bg-slate-200 dark:bg-slate-800 rounded" /></td>
+										<td className="py-4 px-4 text-center"><div className="size-4 bg-slate-200 dark:bg-slate-800 rounded mx-auto" /></td>
 										<td className="py-4 px-6"><div className="w-48 h-4 bg-slate-200 dark:bg-slate-800 rounded" /></td>
 										<td className="py-4 px-6"><div className="w-24 h-4 bg-slate-200 dark:bg-slate-800 rounded" /></td>
 										<td className="py-4 px-6"><div className="w-20 h-4 bg-slate-200 dark:bg-slate-800 rounded ml-auto" /></td>
-										<td className="py-4 px-6"><div className="w-12 h-4 bg-slate-200 dark:bg-slate-800 rounded mx-auto" /></td>
-										<td className="py-4 px-6"><div className="w-16 h-4 bg-slate-200 dark:bg-slate-800 rounded mx-auto" /></td>
-										<td className="py-4 px-6"><div className="w-20 h-8 bg-slate-200 dark:bg-slate-800 rounded ml-auto" /></td>
+										<td className="py-4 px-6"><div className="w-16 h-5 bg-slate-200 dark:bg-slate-800 rounded-full mx-auto" /></td>
+										<td className="py-4 px-6"><div className="w-20 h-5 bg-slate-200 dark:bg-slate-800 rounded-full mx-auto" /></td>
+										<td className="py-4 px-6"><div className="w-16 h-8 bg-slate-200 dark:bg-slate-800 rounded ml-auto" /></td>
 									</tr>
 								))
 							) : paginatedProducts.length === 0 ? (
-								<tr><td colSpan={7} className="py-8 text-center text-slate-400">Không tìm thấy sản phẩm nào</td></tr>
+								<tr><td colSpan={7} className="py-12 text-center text-slate-400 dark:text-slate-500 uppercase font-black text-xs tracking-widest">Không tìm thấy sản phẩm nào</td></tr>
 							) : (
 								paginatedProducts.map((product) => (
-									<tr key={product.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer ${selectedIds.includes(product.id) ? 'bg-indigo-50/30' : ''}`} onClick={() => openDetail(product)}>
-										<td className="py-4 px-6" onClick={(e) => e.stopPropagation()}>
+									<tr key={product.id} className={`hover:bg-slate-50/70 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer ${selectedIds.includes(product.id) ? 'bg-indigo-50/40 dark:bg-indigo-950/20' : ''}`} onClick={() => openDetail(product)}>
+										<td className="py-4 px-4 text-center" onClick={(e) => e.stopPropagation()}>
 											<input
 												type="checkbox"
-												className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+												className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer size-4"
 												checked={selectedIds.includes(product.id)}
 												onChange={() => toggleSelect(product.id)}
 											/>
 										</td>
 										<td className="py-4 px-6">
-											<div className="flex items-center gap-3">
-												<div className="size-10 rounded-lg bg-slate-50 dark:bg-slate-800 flex items-center justify-center overflow-hidden border border-slate-100 dark:border-slate-700">
-													{product.imageUrl ? <img src={getImageUrl(product.imageUrl)} alt="" className="size-full object-cover"  loading="lazy" /> : <span className="material-symbols-outlined text-slate-300">image</span>}
+											<div className="flex items-center gap-3.5">
+												<div className="size-11 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center overflow-hidden border border-slate-200/80 dark:border-slate-700 shrink-0">
+													<CachedImage 
+														src={product.imageUrl} 
+														alt={product.name} 
+														className="size-full object-cover" 
+														fallbackIcon={<span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-xl">image</span>}
+													/>
 												</div>
-												<div>
-													<div className="font-bold text-slate-900 dark:text-white">{product.name}</div>
-													<div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{product.category}</div>
+												<div className="min-w-0">
+													<div className="font-black text-sm text-slate-900 dark:text-white leading-tight hover:text-[#1A237E] dark:hover:text-indigo-400 transition-colors">
+														{product.name}
+													</div>
+													<div className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider mt-1">
+														{product.category || 'Chưa phân loại'}
+													</div>
 												</div>
 											</div>
 										</td>
-										<td className="py-4 px-6">
+										<td className="py-4 px-6 whitespace-nowrap">
 											<div className="flex flex-col gap-0.5">
-												<div className="flex items-center gap-1.5 group/sku" onClick={(e) => { e.stopPropagation(); copyToClipboard(product.sku || product.id, 'mã SKU'); }}>
-													<span className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">{product.sku || 'N/A'}</span>
-													<span className="material-symbols-outlined text-[14px] opacity-0 group-hover/sku:opacity-100 transition-opacity">content_copy</span>
+												<div
+													className="inline-flex items-center gap-1.5 group/sku text-slate-600 dark:text-slate-400 hover:text-indigo-600 cursor-pointer"
+													onClick={(e) => {
+														e.stopPropagation();
+														copyToClipboard(product.sku || product.id, 'mã SKU');
+													}}
+													title="Bấm để sao chép SKU"
+												>
+													<span className="text-xs font-black font-mono tracking-wide whitespace-nowrap bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+														{product.sku || 'N/A'}
+													</span>
+													<span className="material-symbols-outlined text-[13px] opacity-0 group-hover/sku:opacity-100 transition-opacity">
+														content_copy
+													</span>
 												</div>
-												{product.serialNumber && <div className="text-[9px] font-bold text-orange-500 uppercase">SN: {product.serialNumber}</div>}
+												{product.serialNumber && (
+													<div className="text-[9px] font-bold text-orange-500 uppercase whitespace-nowrap mt-0.5">
+														SN: {product.serialNumber}
+													</div>
+												)}
 											</div>
 										</td>
-										<td className="py-4 px-6 text-right">
-											<div className="font-black text-[#1A237E] dark:text-indigo-400">{formatPrice(product.priceSell)}</div>
+										<td className="py-4 px-6 text-right whitespace-nowrap">
+											<div className="font-black text-sm text-[#1A237E] dark:text-indigo-400">
+												{formatPrice(product.priceSell)}
+											</div>
 										</td>
-										<td className="py-4 px-6 text-center">
-											<div className={`text-sm font-black ${product.stock <= 5 ? 'text-rose-500' : 'text-slate-600 dark:text-slate-300'}`}>{product.stock} {product.unit}</div>
+										<td className="py-4 px-6 text-center whitespace-nowrap">
+											<span
+												className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black whitespace-nowrap ${
+													(Number(product.stock) || 0) <= 0
+														? 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200/80 dark:border-rose-900/40'
+														: (Number(product.stock) || 0) <= 5
+															? 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200/80 dark:border-amber-900/40'
+															: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-900/40'
+												}`}
+											>
+												{(Number(product.stock) || 0) <= 0 && (
+													<span className="size-1.5 rounded-full bg-rose-500 animate-pulse" />
+												)}
+												{product.stock} {product.unit || 'cái'}
+											</span>
 										</td>
-										<td className="py-4 px-6 text-center">
+										<td className="py-4 px-6 text-center whitespace-nowrap">
 											<ApprovalBadge status={product.approvalStatus} />
 											{(!product.approvalStatus || product.approvalStatus === 'approved') && (
-												<span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${product.status === 'Kinh doanh' ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-500'}`}>
-													{product.status || 'Kinh doanh'}
+												<span
+													className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black uppercase whitespace-nowrap tracking-wide border ${
+														product.status === 'Kinh doanh' || !product.status
+															? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900/50'
+															: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+													}`}
+												>
+													{product.status === 'Kinh doanh' || !product.status ? 'Đang bán' : (product.status || 'Ngừng bán')}
 												</span>
 											)}
 										</td>
-										<td className="py-4 px-6 text-right">
+										<td className="py-4 px-6 text-right whitespace-nowrap">
 											<InventoryActionButtons 
 												product={product}
 												handleDeleteProduct={handleDeleteProduct}
@@ -221,11 +267,12 @@ const InventoryDesktopTable: React.FC<InventoryDesktopTableProps> = ({
 											</td>
 											<td className="py-4 px-6 text-center" onClick={(e) => e.stopPropagation()}>
 												<div className="size-12 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center overflow-hidden border border-slate-100 dark:border-slate-700 mx-auto">
-													{product.imageUrl ? (
-														<img src={getImageUrl(product.imageUrl)} alt="" className="size-full object-cover"  loading="lazy" />
-													) : (
-														<span className="material-symbols-outlined text-slate-300">image</span>
-													)}
+													<CachedImage 
+														src={product.imageUrl} 
+														alt={product.name} 
+														className="size-full object-cover" 
+														fallbackIcon={<span className="material-symbols-outlined text-slate-300">image</span>}
+													/>
 												</div>
 											</td>
 											<td className="py-4 px-6">

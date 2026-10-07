@@ -1,25 +1,37 @@
-import React, { useState, useEffect } from 'react';
-import { WifiOff, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { WifiOff, RefreshCw, X } from 'lucide-react';
 
 const OfflineBanner = () => {
 	const [isOnline, setIsOnline] = useState(navigator.onLine);
 	const [show, setShow] = useState(!navigator.onLine);
+	const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	useEffect(() => {
+		const showTemporarily = (duration: number) => {
+			if (hideTimer.current) clearTimeout(hideTimer.current);
+			hideTimer.current = setTimeout(() => {
+				setShow(false);
+				hideTimer.current = null;
+			}, duration);
+		};
+
 		const handleOnline = () => {
 			setIsOnline(true);
-			// Hide after 3 seconds when back online
-			setTimeout(() => setShow(false), 3000);
+			setShow(true);
+			showTemporarily(3000);
 		};
 		const handleOffline = () => {
 			setIsOnline(false);
 			setShow(true);
+			showTemporarily(5000);
 		};
 
+		if (!navigator.onLine) showTemporarily(5000);
 		window.addEventListener('online', handleOnline);
 		window.addEventListener('offline', handleOffline);
 
 		return () => {
+			if (hideTimer.current) clearTimeout(hideTimer.current);
 			window.removeEventListener('online', handleOnline);
 			window.removeEventListener('offline', handleOffline);
 		};
@@ -45,14 +57,17 @@ const OfflineBanner = () => {
 						{isOnline ? 'Hệ thống đang đồng bộ dữ liệu...' : 'Đang sử dụng dữ liệu ngoại tuyến'}
 					</p>
 				</div>
-				{!isOnline && (
-					<button
-						onClick={() => window.location.reload()}
-						className="size-8 rounded-lg bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors"
-					>
-						<RefreshCw className="size-4" />
-					</button>
-				)}
+				<button
+					onClick={() => {
+						if (hideTimer.current) clearTimeout(hideTimer.current);
+						hideTimer.current = null;
+						setShow(false);
+					}}
+					aria-label="Đóng thông báo kết nối"
+					className="size-8 rounded-lg bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors shrink-0"
+				>
+					<X className="size-4" />
+				</button>
 			</div>
 		</div>
 	);

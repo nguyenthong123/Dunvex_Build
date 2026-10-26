@@ -1,8 +1,8 @@
 {
   "platform": "web",
   "version": "1.0.1",
-  "buildNumber": 148,
-  "releaseDate": "2026-10-04T04:26:33.318Z",
-  "releaseNotes": "Sửa đồng bộ dữ liệu công nợ trên Web mobile",
+  "buildNumber": 149,
+  "releaseDate": "2026-10-26T06:55:26.747Z",
+  "releaseNotes": "Web stability fix for customer phone search, print ticket pagination, excel export, and persistent vps image upload",
   "downloadUrl": "https://dunvex.com"
 }

@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useToast } from './shared/Toast';
+import { normalizePhoneDisplay } from '../utils/validation';
 
 // Fix for Leaflet marker icon issue in React
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
@@ -292,12 +293,18 @@ const CustomerMap: React.FC<CustomerMapProps> = ({ customers = [], onClose }) =>
 												<span className="material-symbols-outlined text-[10px] align-middle mr-1">location_on</span>
 												{customer.address || 'Không có địa chỉ'}
 											</p>
-											<a
-												href={`tel:${customer.phone}`}
-												className="flex items-center justify-center gap-2 w-full bg-[#1A237E] dark:bg-indigo-600 text-white py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all"
-											>
-												<span className="material-symbols-outlined text-xs">call</span> Gọi ngay
-											</a>
+											{(() => {
+												const phoneStr = normalizePhoneDisplay(customer.phone);
+												if (!phoneStr) return null;
+												return (
+													<a
+														href={`tel:${phoneStr}`}
+														className="flex items-center justify-center gap-2 w-full bg-[#1A237E] dark:bg-indigo-600 text-white py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all"
+													>
+														<span className="material-symbols-outlined text-xs">call</span> Gọi ngay
+													</a>
+												);
+											})()}
 										</div>
 									</Popup>
 								</Marker>

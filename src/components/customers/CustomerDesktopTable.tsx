@@ -1,6 +1,7 @@
 import React from 'react';
 import { Phone, PhoneCall, Copy, MapPin, Edit, Trash2 } from 'lucide-react';
 import { ApprovalBadge } from '../shared/ApprovalBadge';
+import { normalizePhoneDisplay, getZaloPhoneDigits } from '../../utils/validation';
 
 export const TableSkeleton = () => (
     <>
@@ -119,29 +120,36 @@ export const CustomerDesktopTable: React.FC<CustomerDesktopTableProps> = ({
                                     </div>
                                 </td>
                                 <td className="py-4 px-6 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                                    {customer.phone ? (
-                                        <div className="flex items-center gap-2">
-                                            <a
-                                                href={`tel:${customer.phone}`}
-                                                className="inline-flex items-center gap-1.5 font-bold text-sm text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
-                                                title="Bấm để gọi điện"
-                                            >
-                                                <Phone size={13} className="text-slate-400" />
-                                                <span>{customer.phone}</span>
-                                            </a>
-                                            <a
-                                                href={`https://zalo.me/${customer.phone.replace(/\D/g, '')}`}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="px-1.5 py-0.5 rounded text-[9px] font-black bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200/80 dark:border-blue-900/40 hover:bg-blue-100 transition-colors"
-                                                title="Nhắn Zalo"
-                                            >
-                                                Zalo
-                                            </a>
-                                        </div>
-                                    ) : (
-                                        <span className="text-xs text-slate-300 dark:text-slate-700 italic">Chưa có SĐT</span>
-                                    )}
+                                    {(() => {
+                                        const phoneStr = normalizePhoneDisplay(customer.phone);
+                                        const zaloDigits = getZaloPhoneDigits(customer.phone);
+                                        if (!phoneStr) {
+                                            return <span className="text-xs text-slate-300 dark:text-slate-700 italic">Chưa có SĐT</span>;
+                                        }
+                                        return (
+                                            <div className="flex items-center gap-2">
+                                                <a
+                                                    href={`tel:${phoneStr}`}
+                                                    className="inline-flex items-center gap-1.5 font-bold text-sm text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                                                    title="Bấm để gọi điện"
+                                                >
+                                                    <Phone size={13} className="text-slate-400" />
+                                                    <span>{phoneStr}</span>
+                                                </a>
+                                                {zaloDigits && (
+                                                    <a
+                                                        href={`https://zalo.me/${zaloDigits}`}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="px-1.5 py-0.5 rounded text-[9px] font-black bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200/80 dark:border-blue-900/40 hover:bg-blue-100 transition-colors"
+                                                        title="Nhắn Zalo"
+                                                    >
+                                                        Zalo
+                                                    </a>
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
                                 </td>
                                 <td className="py-4 px-6 whitespace-nowrap">
                                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${

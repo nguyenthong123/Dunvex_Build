@@ -15,6 +15,7 @@ interface UseTicketActionsParams {
 	companyInfo?: any;
 	products?: any[];
 	paperSize?: TicketPrintPaper;
+	creatorName?: string;
 }
 
 import { copyOrShareImage } from '../../utils/imageSharing';
@@ -30,6 +31,7 @@ export const useTicketActions = ({
 	companyInfo,
 	products,
 	paperSize,
+	creatorName,
 }: UseTicketActionsParams) => {
 	const nativeApp = isNativeApp();
 	// Cache the pre-generated PNG so clipboard copy can be near-instant
@@ -87,7 +89,14 @@ export const useTicketActions = ({
 	}, [layoutMode, order, companyInfo, products, preGeneratePng, nativeApp]);
 
 	const handlePrint = async () => {
-		await printTicket(layoutMode, order, cachedPngRef.current, paperSize);
+		const isReceipt = layoutMode === 'receipt';
+		await printTicket(
+			layoutMode,
+			order,
+			isReceipt ? cachedPngRef.current : null,
+			paperSize,
+			{ companyInfo, products, creatorName }
+		);
 	};
 
 	const handleSaveImage = async () => {

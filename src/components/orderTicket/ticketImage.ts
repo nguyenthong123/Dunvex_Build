@@ -156,10 +156,22 @@ export const generateTicketPng = async (
 				try {
 					await img.decode();
 				} catch (e) {
-					if (isNativeDesktop) {
-						throw new Error(`Không thể tải ảnh trong phiếu để sao chép: ${src}`);
+					console.warn('Image load/decode failed, replacing with clean placeholder:', src, e);
+					const parent = img.parentElement;
+					if (parent) {
+						const placeholder = document.createElement('div');
+						placeholder.style.width = '100%';
+						placeholder.style.height = '100%';
+						placeholder.style.display = 'flex';
+						placeholder.style.alignItems = 'center';
+						placeholder.style.justifyContent = 'center';
+						placeholder.style.background = '#f1f5f9';
+						placeholder.style.color = '#94a3b8';
+						placeholder.style.fontSize = '10px';
+						placeholder.style.fontWeight = '800';
+						placeholder.textContent = (img.alt || 'SP').slice(0, 2).toUpperCase();
+						parent.replaceChild(placeholder, img);
 					}
-					console.warn('Image load/decode failed:', src, e);
 				}
 			})
 		);

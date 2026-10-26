@@ -1,4 +1,6 @@
 import { localFileService } from '../services/localFileService';
+import { isNativeApp } from './platform';
+import { uploadImageApi } from '../services/apiClient';
 
 // Helper to compress image before saving (Optimized for macOS / iOS / Android memory and storage)
 export async function compressImage(file: File, maxWidth = 1200, maxHeight = 1200, quality = 0.82): Promise<string> {
@@ -88,8 +90,9 @@ export async function compressImage(file: File, maxWidth = 1200, maxHeight = 120
 }
 
 /**
- * Save image 100% locally to machine storage (macOS SSD / Mobile Filesystem / Local IndexedDB).
- * Does NOT upload image binaries to VPS server to protect VPS disk storage.
+ * Upload hoặc lưu ảnh phù hợp từng nền tảng:
+ * - Trên Web: gửi binary lên VPS server (/api/upload) để lưu trữ bền vững lâu dài.
+ * - Trên App Native: lưu offline cục bộ vào bộ nhớ máy qua localFileService.
  */
 export async function uploadImageToVPS(fileOrBase64: File | string, fileName?: string): Promise<string> {
   let imageBase64: string = '';
@@ -112,14 +115,29 @@ export async function uploadImageToVPS(fileOrBase64: File | string, fileName?: s
 
   const customName = fileName || (fileOrBase64 instanceof File ? fileOrBase64.name : `img_${Date.now()}.jpg`);
 
-  try {
-    const saved = await localFileService.saveImage(imageBase64, customName);
-    if (saved && (saved.url || saved.localPath)) {
-      return saved.url || saved.localPath;
+  // 1. Nền tảng Native App (Android / macOS / Windows): Offline-First vào storage máy
+  if (isNativeApp()) {
+    try {
+      const saved = await localFileService.saveImage(imageBase64, customName);
+      if (saved && (saved.url || saved.localPath)) {
+        return saved.url || saved.localPath;
+      }
+    } catch (err) {
+      console.warn('[LocalFile] Local save failed, returning data URI:', err);
     }
-  } catch (err) {
-    console.warn('[LocalFile] Local save failed, returning data URI:', err);
+    return imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`;
   }
 
-  return imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`;
+  // 2. Nền tảng Web: Upload trực tiếp lên VPS server để có URL bền vững
+  // CẤM dùng blob: hay IndexedDB trên Web
+  try {
+    const res = await uploadImageApi(imageBase64, customName, 'images');
+    if (res && (res.url || res.relativeUrl)) {
+      return res.url || res.relativeUrl;
+    }
+    throw new Error('Máy chủ không trả về URL ảnh hợp lệ.');
+  } catch (err: any) {
+    console.error('[WebUpload] Failed to upload image to VPS:', err);
+    throw new Error(err.message || 'Không thể tải ảnh lên máy chủ VPS.');
+  }
 }

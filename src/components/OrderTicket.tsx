@@ -87,6 +87,7 @@ const OrderTicket: React.FC<OrderTicketProps> = ({ order, onClose, products }) =
 		companyInfo,
 		products,
 		paperSize,
+		creatorName,
 	});
 
 	return (

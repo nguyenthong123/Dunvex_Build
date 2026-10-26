@@ -1,5 +1,9 @@
 import { db, collection, getDocs, query, where, doc, getDoc, setDoc, addDoc, serverTimestamp } from '../services/firebase';
 import { formatDateVN } from './dateUtils';
+import { normalizePhoneDisplay } from './validation';
+import { isNativeApp } from './platform';
+import { getCollection } from '../services/apiClient';
+import { ramStore } from '../services/ramStore';
 
 const TECHNICAL_FIELDS = ['ownerId', 'ownerEmail', 'updatedBy', 'updatedAt', 'sync_status', 'is_deleted', 'data_json', 'composite_key', '_key'];
 
@@ -71,7 +75,7 @@ export async function saveWorkbookToFile(workbook: any, fileName: string): Promi
 					URL.revokeObjectURL(url);
 				} catch {}
 			}, 2000);
-		} else {
+		} else if (typeof document !== 'undefined') {
 			// Web / Desktop Browser
 			const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
 			const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -129,22 +133,49 @@ export async function exportLocalDataToExcel(options: ExportDataOptions): Promis
 	];
 
 	const localData: Record<string, any[]> = {};
+	const failedCollections: string[] = [];
 
-	// 1. Đọc dữ liệu từ SQLite / RAM Store cục bộ (0ms)
+	// 1. Đọc dữ liệu từ SQLite / REST API với phân trang đầy đủ
 	for (const colName of targetCollections) {
 		try {
-			const snap = await getDocs(query(collection(db, colName), where('ownerId', '==', ownerId)));
-			const items: any[] = [];
-			snap.forEach((d: any) => {
-				items.push({ id: d.id, ...d.data() });
-			});
+			let items: any[] = [];
+			if (isNativeApp()) {
+				const snap = await getDocs(query(collection(db, colName), where('ownerId', '==', ownerId)));
+				snap.forEach((d: any) => {
+					items.push({ id: d.id, ...d.data() });
+				});
+			} else {
+				// Trên Web: Tải từ API với phân trang đầy đủ, không giới hạn 10.000 dòng
+				const BATCH_SIZE = 5000;
+				let offset = 0;
+				while (true) {
+					const batch = await getCollection(colName, {
+						where: [`ownerId:==:${ownerId}`],
+						limit: BATCH_SIZE,
+						offset
+					});
+					if (!batch || batch.length === 0) break;
+					items.push(...batch);
+					if (batch.length < BATCH_SIZE) break;
+					offset += BATCH_SIZE;
+				}
+				if (items.length > 0) {
+					ramStore.loadDocuments(colName, items, true);
+				}
+			}
 
 			const filtered = filterByDate(items, startTS, endTS);
 			localData[colName] = filtered;
-		} catch (err) {
-			console.warn(`[LocalExport] Failed querying ${colName}:`, err);
+		} catch (err: any) {
+			console.warn(`[ExcelExport] Failed querying ${colName}:`, err);
+			failedCollections.push(colName);
 			localData[colName] = [];
 		}
+	}
+
+	// Nếu toàn bộ collection đều thất bại, thông báo lỗi rõ ràng thay vì xuất file trống âm thầm
+	if (failedCollections.length === targetCollections.length) {
+		throw new Error('Không thể tải dữ liệu từ máy chủ để xuất Excel. Vui lòng kiểm tra mạng hoặc đăng nhập lại.');
 	}
 
 	// 2. Chuyển đổi dữ liệu sang định dạng tiếng Việt rõ ràng, đầy đủ 100% thông tin
@@ -155,16 +186,17 @@ export async function exportLocalDataToExcel(options: ExportDataOptions): Promis
 		'Mã khách hàng': c.id ? c.id.slice(0, 8).toUpperCase() : '',
 		'Tên khách hàng': c.name || '',
 		'Tên cơ sở / Cửa hàng': c.businessName || '',
-		'Số điện thoại': c.phone || '',
+		'Số điện thoại': normalizePhoneDisplay(c.phone),
 		'Email': c.email || '',
 		'Địa chỉ': c.address || '',
 		'Tuyến đường / Khu vực': c.route || '',
 		'Phân loại': c.type || 'Chưa phân loại',
-		'Hạn mức công nợ (đ)': Number(c.creditLimit || 0),
+		'Công nợ hiện tại (đ)': Number(c.debt ?? 0),
+		'Hạn mức công nợ (đ)': Number(c.creditLimit ?? 0),
 		'Mã số thuế': c.taxCode || '',
 		'Tên xuất HĐ': c.taxName || '',
 		'Địa chỉ xuất HĐ': c.taxAddress || '',
-		'SĐT xuất HĐ': c.taxPhone || '',
+		'SĐT xuất HĐ': normalizePhoneDisplay(c.taxPhone),
 		'Trạng thái': c.status || 'Hoạt động',
 		'Ghi chú': c.note || '',
 		'Ngày tạo': c.createdAt ? formatDateVN(c.createdAt) : ''
@@ -181,46 +213,53 @@ export async function exportLocalDataToExcel(options: ExportDataOptions): Promis
 		'Quy cách': p.specification || '',
 		'Đóng gói': p.packaging || '',
 		'Tỷ trọng': p.density || '',
-		'Giá bán (đ)': Number(p.priceSell || p.base_price || 0),
-		'Giá vốn (đ)': Number(p.priceImport || p.buyPrice || p.costPrice || 0),
-		'Tồn kho': Number(p.stock || p.inventory || 0),
+		'Giá bán (đ)': Number(p.priceSell ?? p.base_price ?? 0),
+		'Giá vốn (đ)': Number(p.priceImport ?? p.buyPrice ?? p.costPrice ?? 0),
+		'Tồn kho': Number(p.stock ?? p.inventory ?? 0),
 		'Trạng thái': p.status || 'Đang kinh doanh',
 		'Ghi chú': p.note || ''
 	}));
 
 	// ĐƠN HÀNG (Tổng quan đơn hàng)
-	const ordersFormatted = (localData.orders || []).map((o, idx) => ({
-		'STT': idx + 1,
-		'Mã đơn hàng': o.order_code || (o.id ? o.id.slice(0, 8).toUpperCase() : ''),
-		'Ngày đặt hàng': o.orderDate || (o.createdAt ? formatDateVN(o.createdAt) : ''),
-		'Tên khách hàng': o.customerName || '',
-		'Tên cơ sở': o.customerBusinessName || '',
-		'Số điện thoại': o.customerPhone || '',
-		'Địa chỉ giao': o.shippingAddress || o.customerAddress || '',
-		'Tổng tiền hàng (đ)': Number(o.subTotal || o.totalAmount || 0),
-		'Giảm giá (đ)': Number(o.discountAmt || o.discountValue || 0),
-		'Phí vận chuyển (đ)': Number(o.shippingFee || 0),
-		'Tổng thanh toán (đ)': Number(o.finalTotal || o.totalAmount || 0),
-		'Đã thanh toán (đ)': Number(o.paidAmount || 0),
-		'Còn nợ (đ)': Math.max(0, Number(o.finalTotal || o.totalAmount || 0) - Number(o.paidAmount || 0)),
-		'Trạng thái thanh toán': o.isPaid ? 'Đã thanh toán' : (Number(o.paidAmount || 0) > 0 ? 'Thanh toán 1 phần' : 'Chưa thanh toán'),
-		'Trạng thái giao hàng': o.deliveryStatus || o.status || 'Đã tạo',
-		'Ghi chú': o.note || '',
-		'Người lập đơn': o.createdByDisplayName || o.createdByEmail || o.createdBy || 'Admin'
-	}));
+	const ordersFormatted = (localData.orders || []).map((o, idx) => {
+		const totalAmt = Number(o.totalAmount ?? o.finalTotal ?? 0);
+		const subTotalAmt = Number(o.subTotal ?? o.totalAmount ?? 0);
+		const paidAmt = Number(o.paidAmount ?? 0);
+		const remainingDebt = o.debtAmount !== undefined ? Number(o.debtAmount) : Math.max(0, totalAmt - paidAmt);
+		return {
+			'STT': idx + 1,
+			'Mã đơn hàng': o.order_code || (o.id ? o.id.slice(0, 8).toUpperCase() : ''),
+			'Ngày đặt hàng': o.orderDate || (o.createdAt ? formatDateVN(o.createdAt) : ''),
+			'Tên khách hàng': o.customerName || '',
+			'Tên cơ sở': o.customerBusinessName || '',
+			'Số điện thoại': normalizePhoneDisplay(o.customerPhone),
+			'Địa chỉ giao': o.shippingAddress || o.customerAddress || '',
+			'Tổng tiền hàng (đ)': subTotalAmt,
+			'Giảm giá (đ)': Number(o.discountAmt ?? o.discountValue ?? 0),
+			'Phí vận chuyển (đ)': Number(o.shippingFee ?? o.adjustmentValue ?? 0),
+			'Tổng thanh toán (đ)': totalAmt,
+			'Đã thanh toán (đ)': paidAmt,
+			'Còn nợ (đ)': remainingDebt,
+			'Trạng thái thanh toán': o.isPaid ? 'Đã thanh toán' : (paidAmt > 0 ? 'Thanh toán 1 phần' : 'Chưa thanh toán'),
+			'Trạng thái giao hàng': o.deliveryStatus || o.status || 'Đã tạo',
+			'Ghi chú': o.note || '',
+			'Người lập đơn': o.createdByDisplayName || o.createdByEmail || o.createdBy || 'Admin'
+		};
+	});
 
-	// CÔNG NỢ KHÁCH HÀNG
+	// CÔNG NỢ & LỊCH SỬ BIẾN ĐỘNG NỢ
 	const debtsFormatted = (localData.debts || []).map((d, idx) => ({
 		'STT': idx + 1,
 		'Mã khách hàng': d.customerId ? d.customerId.slice(0, 8).toUpperCase() : (d.id ? d.id.slice(0, 8).toUpperCase() : ''),
 		'Tên khách hàng': d.customerName || '',
 		'Tên cơ sở': d.customerBusinessName || '',
-		'Số điện thoại': d.customerPhone || '',
-		'Tổng tiền mua (đ)': Number(d.totalOrdersAmount || 0),
-		'Tổng đã trả (đ)': Number(d.totalPaymentsAmount || 0),
-		'Công nợ hiện tại (đ)': Number(d.totalDebt || d.debt || 0),
-		'Hạn mức nợ (đ)': Number(d.creditLimit || 0),
-		'Ghi chú': d.note || ''
+		'Số điện thoại': normalizePhoneDisplay(d.customerPhone),
+		'Loại giao dịch': d.type === 'debt_increase' ? 'Tăng nợ (Đơn hàng)' : (d.type === 'payment' ? 'Thanh toán' : (d.type === 'cancellation' ? 'Hủy / Giảm nợ' : (d.type || 'Biến động nợ'))),
+		'Số tiền phát sinh (đ)': Number(d.amount ?? d.totalDebt ?? d.debt ?? 0),
+		'Mã đơn liên quan': d.orderId ? (d.orderId.startsWith('#') ? d.orderId : '#' + d.orderId.slice(0, 8).toUpperCase()) : '',
+		'Hạn mức nợ (đ)': Number(d.creditLimit ?? 0),
+		'Ghi chú': d.note || '',
+		'Thời gian': d.createdAt ? formatDateVN(d.createdAt) : ''
 	}));
 
 	// LỊCH SỬ THU TIỀN
@@ -229,7 +268,7 @@ export async function exportLocalDataToExcel(options: ExportDataOptions): Promis
 		'Mã phiếu thu': pay.id ? pay.id.slice(0, 8).toUpperCase() : '',
 		'Ngày thu': pay.date ? formatDateVN(pay.date) : (pay.createdAt ? formatDateVN(pay.createdAt) : ''),
 		'Tên khách hàng': pay.customerName || '',
-		'Số tiền thu (đ)': Number(pay.amount || 0),
+		'Số tiền thu (đ)': Number(pay.amount ?? 0),
 		'Hình thức': pay.method === 'transfer' ? 'Chuyển khoản' : (pay.method === 'cash' ? 'Tiền mặt' : (pay.method || 'Tiền mặt')),
 		'Mã đơn liên quan': pay.orderId ? pay.orderId.slice(0, 8).toUpperCase() : '',
 		'Người thu': pay.createdByDisplayName || pay.createdByEmail || pay.createdByName || '',
@@ -276,10 +315,10 @@ export async function exportLocalDataToExcel(options: ExportDataOptions): Promis
 	const supplierDebtsFormatted = (localData.supplier_debts || []).map((sd, idx) => ({
 		'STT': idx + 1,
 		'Nhà cung cấp': sd.supplierName || '',
-		'Số điện thoại': sd.supplierPhone || '',
-		'Tổng tiền nhập (đ)': Number(sd.totalPurchases || 0),
-		'Đã thanh toán (đ)': Number(sd.totalPaid || 0),
-		'Còn nợ NCC (đ)': Number(sd.debt || 0),
+		'Số điện thoại': normalizePhoneDisplay(sd.supplierPhone),
+		'Tổng tiền nhập (đ)': Number(sd.totalPurchases ?? 0),
+		'Đã thanh toán (đ)': Number(sd.totalPaid ?? 0),
+		'Còn nợ NCC (đ)': Number(sd.debt ?? sd.amount ?? 0),
 		'Ghi chú': sd.note || ''
 	}));
 
@@ -289,7 +328,7 @@ export async function exportLocalDataToExcel(options: ExportDataOptions): Promis
 		'Mã đơn nhập': po.po_code || (po.id ? po.id.slice(0, 8).toUpperCase() : ''),
 		'Ngày lập': po.orderDate ? formatDateVN(po.orderDate) : (po.createdAt ? formatDateVN(po.createdAt) : ''),
 		'Nhà cung cấp': po.supplierName || '',
-		'Tổng tiền nhập (đ)': Number(po.totalAmount || 0),
+		'Tổng tiền nhập (đ)': Number(po.totalAmount ?? 0),
 		'Trạng thái': po.status || 'Hoàn tất',
 		'Người lập': po.createdByDisplayName || po.createdByEmail || '',
 		'Ghi chú': po.note || ''
@@ -337,11 +376,11 @@ export async function exportLocalDataToExcel(options: ExportDataOptions): Promis
 						? Boolean(rawItem.applyOverheadCost)
 						: Boolean(matchedProd.applyOverheadCost);
 
-					const qty = Number(rawItem.qty || 0);
-					const priceSell = Number(rawItem.price !== undefined ? rawItem.price : (rawItem.priceSell || 0));
+					const qty = Number(rawItem.qty ?? 0);
+					const priceSell = Number(rawItem.price !== undefined ? rawItem.price : (rawItem.priceSell ?? 0));
 					const buyPrice = Number(rawItem.buyPrice !== undefined && rawItem.buyPrice !== null
 						? rawItem.buyPrice
-						: (matchedProd.priceImport || matchedProd.costPrice || matchedProd.buyPrice || 0));
+						: (matchedProd.priceImport ?? matchedProd.costPrice ?? matchedProd.buyPrice ?? 0));
 
 					let unitProfit = 0;
 					let profit = 0;

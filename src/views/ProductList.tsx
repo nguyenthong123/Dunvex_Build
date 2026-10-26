@@ -396,7 +396,10 @@ const ProductList = () => {
 
 	const handleAddProduct = async (e: React.FormEvent) => {
 		e.preventDefault();
-		if (isSaving) return;
+		if (isSaving || uploading) {
+			if (uploading) showToast("Đang tải ảnh lên, vui lòng chờ trong giây lát...", "warning");
+			return;
+		}
 		try {
 			if (!formData.name) {
 				showToast("Vui lòng nhập tên sản phẩm", "warning");
@@ -488,7 +491,10 @@ const ProductList = () => {
 	const handleUpdateProduct = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (!selectedProduct) return;
-		if (isSaving) return;
+		if (isSaving || uploading) {
+			if (uploading) showToast("Đang tải ảnh lên, vui lòng chờ trong giây lát...", "warning");
+			return;
+		}
 		try {
 			setIsSaving(true);
 			// NEW: Check if SKU exists for this Admin (excluding current product)

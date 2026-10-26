@@ -1,5 +1,6 @@
 import React from 'react';
 import { Phone, MapPin } from 'lucide-react';
+import { normalizePhoneDisplay, getZaloPhoneDigits } from '../../utils/validation';
 
 export interface CustomerMobileListProps {
     loading: boolean;
@@ -77,27 +78,34 @@ export const CustomerMobileList: React.FC<CustomerMobileListProps> = ({
                             {/* Contact info and classification */}
                             <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
                                 <div>
-                                    {customer.phone ? (
-                                        <div className="flex items-center gap-2">
-                                            <a
-                                                href={`tel:${customer.phone}`}
-                                                className="inline-flex items-center gap-1 font-bold text-xs text-slate-700 dark:text-slate-300 hover:text-indigo-600"
-                                            >
-                                                <Phone size={11} className="text-slate-400" />
-                                                <span>{customer.phone}</span>
-                                            </a>
-                                            <a
-                                                href={`https://zalo.me/${customer.phone.replace(/\D/g, '')}`}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="px-1.5 py-0.5 rounded text-[8px] font-black bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200/60"
-                                            >
-                                                Zalo
-                                            </a>
-                                        </div>
-                                    ) : (
-                                        <span className="text-[10px] text-slate-300 dark:text-slate-700 italic">Chưa có SĐT</span>
-                                    )}
+                                    {(() => {
+                                        const phoneStr = normalizePhoneDisplay(customer.phone);
+                                        const zaloDigits = getZaloPhoneDigits(customer.phone);
+                                        if (!phoneStr) {
+                                            return <span className="text-[10px] text-slate-300 dark:text-slate-700 italic">Chưa có SĐT</span>;
+                                        }
+                                        return (
+                                            <div className="flex items-center gap-2">
+                                                <a
+                                                    href={`tel:${phoneStr}`}
+                                                    className="inline-flex items-center gap-1 font-bold text-xs text-slate-700 dark:text-slate-300 hover:text-indigo-600"
+                                                >
+                                                    <Phone size={11} className="text-slate-400" />
+                                                    <span>{phoneStr}</span>
+                                                </a>
+                                                {zaloDigits && (
+                                                    <a
+                                                        href={`https://zalo.me/${zaloDigits}`}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="px-1.5 py-0.5 rounded text-[8px] font-black bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200/60"
+                                                    >
+                                                        Zalo
+                                                    </a>
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
 
                                 <div className="flex items-center gap-1.5">

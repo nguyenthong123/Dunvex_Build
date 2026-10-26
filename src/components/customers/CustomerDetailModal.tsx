@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ImageLightboxModal, LightboxImage } from '../shared/ImageLightboxModal';
+import { normalizePhoneDisplay } from '../../utils/validation';
 
 export interface CustomerDetailModalProps {
     showDetail: boolean;
@@ -93,7 +94,14 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                         </div>
                         <div className="bg-slate-50 dark:bg-slate-900 rounded-2xl p-4">
                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Số điện thoại</p>
-                            <a href={`tel:${selectedCustomer.phone}`} className="text-sm font-bold text-[#1A237E] dark:text-indigo-300">{selectedCustomer.phone}</a>
+                            {(() => {
+                                const phoneStr = normalizePhoneDisplay(selectedCustomer.phone);
+                                return phoneStr ? (
+                                    <a href={`tel:${phoneStr}`} className="text-sm font-bold text-[#1A237E] dark:text-indigo-300">{phoneStr}</a>
+                                ) : (
+                                    <span className="text-sm text-slate-400 italic">Chưa có SĐT</span>
+                                );
+                            })()}
                         </div>
                         <div className="bg-slate-50 dark:bg-slate-900 rounded-2xl p-4">
                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Hạn mức</p>

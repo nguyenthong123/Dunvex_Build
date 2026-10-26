@@ -11,6 +11,7 @@ VPS_IP="${VPS_IP:-34.133.127.214}"
 VPS_USER="${VPS_USER:-zomby}"
 VPS_DIR="${VPS_DIR:-/home/zomby/dunvex_app}"
 SSH_KEY="${SSH_KEY:-$HOME/.ssh/google_compute_engine}"
+SSH_KEY="${SSH_KEY/#\~/$HOME}"
 
 if [ ! -f "$SSH_KEY" ]; then
   echo "SSH key not found: $SSH_KEY" >&2

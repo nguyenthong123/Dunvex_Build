@@ -10,7 +10,7 @@ import { useOwner } from '../hooks/useOwner';
 import { useCustomers } from '../hooks/useCustomers';
 import { useScroll } from '../context/ScrollContext';
 import { useToast } from '../components/shared/Toast';
-import { CustomerSchema, getOptimizedImageUrl } from '../utils/validation';
+import { CustomerSchema, getOptimizedImageUrl, normalizePhoneDisplay } from '../utils/validation';
 import { saveWorkbookToFile } from '../utils/excelExport';
 import { isNativeApp } from '../utils/platform';
 
@@ -549,7 +549,7 @@ const CustomerList = () => {
 		setFormData({
 			name: customer.name || '',
 			businessName: customer.businessName || '',
-			phone: customer.phone || '',
+			phone: normalizePhoneDisplay(customer.phone),
 			email: customer.email || '',
 			type: customer.type || 'Chủ nhà',
 			address: customer.address || '',
@@ -564,7 +564,7 @@ const CustomerList = () => {
 			taxName: customer.taxName || '',
 			taxCode: customer.taxCode || '',
 			taxAddress: customer.taxAddress || '',
-			taxPhone: customer.taxPhone || '',
+			taxPhone: normalizePhoneDisplay(customer.taxPhone),
 			creditLimit: customer.creditLimit || 0
 		});
 		setShowTaxInfo(!!(customer.taxName || customer.taxCode || customer.taxAddress || customer.taxPhone));
@@ -600,7 +600,7 @@ const CustomerList = () => {
 				const match = smartSearchMatch([
 					c.name || '',
 					c.businessName || '',
-					c.phone || '',
+					normalizePhoneDisplay(c.phone),
 					c.address || '',
 					c.taxCode || '',
 					c.route || '',
@@ -686,7 +686,7 @@ const CustomerList = () => {
 				"Mã khách": c.id ? c.id.slice(0, 8).toUpperCase() : '',
 				"Tên khách hàng": c.name || '',
 				"Tên cơ sở / Cửa hàng": c.businessName || '',
-				"Số điện thoại": c.phone || '',
+				"Số điện thoại": normalizePhoneDisplay(c.phone),
 				"Phân loại": c.type || 'Chưa phân loại',
 				"Tuyến đường / Khu vực": c.route || '',
 				"Địa chỉ": c.address || '',

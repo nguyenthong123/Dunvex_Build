@@ -687,4 +687,31 @@ export async function decideApprovalRequest(
   });
 }
 
+// ─── Image Upload REST API ───────────────────────────────────
+
+export interface UploadImageResult {
+  success: boolean;
+  url: string;
+  relativeUrl: string;
+  fileName: string;
+  size?: number;
+}
+
+/**
+ * Tải ảnh lên VPS server qua /api/upload
+ * Dành cho Web client để lưu ảnh bền vững (thay thế blob: tạm thời)
+ */
+export async function uploadImageApi(
+  imageBase64: string,
+  fileName?: string,
+  folder: string = 'images'
+): Promise<UploadImageResult> {
+  const url = apiUrl('/api/upload');
+  return apiFetch<UploadImageResult>(url, {
+    method: 'POST',
+    body: JSON.stringify({ imageBase64, fileName, folder }),
+  });
+}
+
+
 

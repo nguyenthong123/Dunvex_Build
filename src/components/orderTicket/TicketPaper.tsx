@@ -16,7 +16,7 @@ const TicketPaper: React.FC<TicketPaperProps> = ({ order, products, companyInfo,
 	return (
 					<div
 						id="order-ticket-paper"
-						className="bg-white shadow-2xl overflow-hidden relative border border-slate-200"
+						className="bg-white shadow-2xl overflow-hidden relative border border-slate-200 min-w-[720px]"
 					>
 						<main className="bg-white text-black font-sans antialiased">
 							<header className="p-8 border-b border-slate-200">

@@ -54,6 +54,31 @@ export const CustomerSchema = z.object({
 export type CustomerInput = z.infer<typeof CustomerSchema>;
 
 /**
+ * Chuẩn hóa số điện thoại an toàn cho hiển thị và liên kết:
+ * - string: trim
+ * - number hữu hạn: chuyển chuỗi
+ * - null, undefined, boolean, object, array, NaN, Infinity: trả về ''
+ */
+export const normalizePhoneDisplay = (phone: unknown): string => {
+	if (typeof phone === 'string') {
+		return phone.trim();
+	}
+	if (typeof phone === 'number' && Number.isFinite(phone)) {
+		return String(phone);
+	}
+	return '';
+};
+
+/**
+ * Trích xuất các chữ số cho link Zalo an toàn:
+ * Trả về chuỗi chỉ gồm số, hoặc '' nếu không có số hợp lệ
+ */
+export const getZaloPhoneDigits = (phone: unknown): string => {
+	const normalized = normalizePhoneDisplay(phone);
+	return normalized.replace(/\D/g, '');
+};
+
+/**
  * Generic sanitation function to clean strings
  */
 export const sanitizeString = (str: string) => {

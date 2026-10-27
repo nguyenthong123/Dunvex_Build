@@ -2,11 +2,11 @@
 
 Đọc [bảng tổng hợp](ON_DINH_WEB_TONG_HOP_LOI.md) và `AGENTS.md` trước khi thao tác. Tài liệu này ghi nhận kết quả điều tra mã nguồn thực tế, phương án xử lý, danh sách tệp đã sửa đổi và bằng chứng kiểm thử ngày 26/10/2026.
 
-Bổ sung ngày 27/10/2026: WEB-06 bên dưới đã được tái hiện, chứng minh nguyên nhân, sửa đổi mã nguồn và kiểm thử hồi quy 9/9 ca đạt 100%. Trạng thái trên môi trường kiểm thử là ĐẠT; trên môi trường production ghi nhận **CHƯA KIỂM** do chưa được lệnh deploy từ người dùng.
+Bổ sung ngày 27/10/2026: WEB-06 bên dưới đã được tái hiện, chứng minh nguyên nhân, sửa đổi mã nguồn, kiểm thử hồi quy 9/9 ca đạt 100%, commit & push lên GitHub (`ad38e95`), và deploy web build 150 lên VPS production an toàn. Xác minh website đã phục vụ đúng asset mới `index-XB3O_PIC.js` và endpoint phiên bản trả về build 150. Nghiệp vụ tạo đơn/ghi nợ trực tiếp trên production được ghi nhận **CHƯA KIỂM TRỰC TIẾP TRÊN DỮ LIỆU SỐNG** để bảo toàn 100% dữ liệu kế toán và công nợ thật của khách hàng.
 
 ## WEB-06 — Chiết khấu nhập tay bị mất khi nhập thêm ghi chú/lưu nhiều trường
 
-**Trạng thái: ĐÃ SỬA MÃ NGUỒN & PASS TEST HỒI QUY — CHƯA KIỂM TRÊN PRODUCTION (P1).**
+**Trạng thái: ĐÃ SỬA MÃ NGUỒN — ĐÃ PUSH GITHUB — ĐÃ DEPLOY WEB BUILD 150 LÊN VPS (P1).**
 Người dùng báo: khi lên đơn, nhập số tiền chiết khấu rồi nhập thêm ghi chú, sau lưu chỉ còn ghi chú, chiết khấu mất; lo ngại các trường khác cũng bị rơi rụng.
 
 ### 1. Bằng chứng tái hiện lỗi thực tế trước khi sửa (Runtime Evidence)
@@ -79,7 +79,17 @@ Chạy kịch bản kiểm thử tích hợp mount hook `useOrderForm`:
   - `npx tsc --noEmit`: 0 lỗi (exit code 0).
   - `npm test`: **26 test files, 194/194 passed (100%)**.
   - `npm run build`: Production bundle thành công trong 6.27s.
-- **Trạng thái phát hành**: **CHƯA KIỂM trên production** (Tuân thủ nghiêm ngặt: không tự ý chạy deploy, không backup, không can thiệp SQLite VPS).
+- **Trạng thái phát hành & Bàn giao:**
+  - **Nhánh Git**: `codex/web-stability-fixes`
+  - **Commit GitHub**: `ad38e95607feb720e2f4c10402f058a075ca53cf` (đã push thành công, không force-push)
+  - **Lệnh deploy thực hiện**: `npm run deploy:web "Sửa WEB-06: giữ chiết khấu và ghi chú khi lưu đơn"`
+  - **Phiên bản phát hành**: Web build 150 (`version: 1.0.1`, `buildNumber: 150`)
+  - **Bằng chứng website đã nhận bản mới**:
+    - `curl -s https://dunvex.com/api/releases/web/version`: Trả về `{"success":true,"platform":"web","version":"1.0.1","buildNumber":150,"releaseDate":"2026-10-27T03:34:21.593Z","releaseNotes":"Sửa WEB-06: giữ chiết khấu và ghi chú khi lưu đơn"}`.
+    - `https://dunvex.com`: HTML phục vụ bundle script mới `src="/assets/index-XB3O_PIC.js"` (HTTP 200 OK, Last-Modified 2026-10-27 03:34:19 GMT).
+  - **Phần CHƯA KIỂM TRỰC TIẾP TRÊN PRODUCTION (Operational Boundaries)**:
+    - Chưa tạo đơn hàng hoặc sửa đơn hàng trực tiếp trên tài khoản khách hàng thực tế trên VPS SQLite production `/home/zomby/dunvex_app/data/dunvex.db`. Điều này là bắt buộc để tuân thủ quy tắc bảo vệ dữ liệu công nợ, doanh thu và sổ sách kế toán của doanh nghiệp.
+    - Khuyến nghị: Người quản trị/chủ doanh nghiệp đăng nhập tài khoản thực tế và thực hiện tạo một đơn thử nghiệm với khách hàng vãng lai hoặc đơn mẫu nội bộ để nghiệm thu cuối cùng trên giao diện người dùng.
 
 ## 0. Ranh giới công việc và bảo vệ dữ liệu
 

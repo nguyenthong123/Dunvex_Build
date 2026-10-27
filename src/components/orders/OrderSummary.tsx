@@ -13,8 +13,12 @@ interface OrderSummaryProps {
     handleRemoveRebate?: () => void;
     shippingFee: number | string;
     setShippingFee: (f: number | string) => void;
-    discountAmt: number | string;
-    setDiscountAmt: (d: number | string) => void;
+    discountAmt?: number | string;
+    setDiscountAmt?: (d: number | string) => void;
+    manualDiscount?: number | string;
+    setManualDiscount?: (d: number | string) => void;
+    autoDiscount?: number;
+    totalDiscount?: number;
     subTotal: number;
     finalTotal: number;
     totalWeight: number;
@@ -36,12 +40,23 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
     appliedRebate, handleRemoveRebate,
     shippingFee, setShippingFee,
     discountAmt, setDiscountAmt,
+    manualDiscount, setManualDiscount,
+    autoDiscount, totalDiscount,
     subTotal, finalTotal, totalWeight,
     totalCostActual, totalProfitActual, overheadRate, hasOverheadItems,
     isAdmin, showProfitPreview, setShowProfitPreview,
     handleConfirmOrder, isSubmitting, editId
 }) => {
     const [showVoucherModal, setShowVoucherModal] = useState(false);
+
+    const activeManualDiscount = manualDiscount !== undefined
+        ? manualDiscount
+        : (discountAmt !== undefined ? discountAmt : 0);
+    const onManualDiscountChange = setManualDiscount || setDiscountAmt || (() => {});
+    const activeAutoDiscount = Number(autoDiscount) || 0;
+    const activeTotalDiscount = totalDiscount !== undefined
+        ? Number(totalDiscount)
+        : (Number(activeManualDiscount) + activeAutoDiscount);
 
     return (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-5 md:p-6 transition-colors duration-300">
@@ -145,14 +160,24 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
                             />
                         </div>
                         <div>
-                            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Số tiền Chiết khấu (-)</label>
+                            <div className="flex items-center justify-between ml-1 mb-1">
+                                <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Số tiền Chiết khấu (-)</label>
+                                {activeAutoDiscount > 0 && (
+                                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                                        (Đã gồm tự động: -{activeAutoDiscount.toLocaleString('vi-VN')} đ)
+                                    </span>
+                                )}
+                            </div>
                             <input
                                 type="number"
                                 autoComplete="off"
                                 placeholder="0"
                                 className="w-full h-11 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 text-sm font-semibold text-slate-900 dark:text-white focus:ring-1 focus:ring-[#f27121]/30 focus:border-[#f27121] transition-all outline-none"
-                                value={discountAmt === 0 ? '' : discountAmt}
-                                onChange={(e) => setDiscountAmt(e.target.value === '' ? 0 : Number(e.target.value))}
+                                value={Number(activeManualDiscount) === 0 ? '' : activeManualDiscount}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    onManualDiscountChange(val === '' ? 0 : Math.max(0, Number(val)));
+                                }}
                             />
                         </div>
                     </div>
@@ -171,10 +196,10 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
                                 <span className="text-sm font-black text-slate-900 dark:text-white w-32 tabular-nums">+{Number(shippingFee).toLocaleString('vi-VN')} đ</span>
                             </div>
                         )}
-                        {Number(discountAmt) > 0 && (
+                        {Number(activeTotalDiscount) > 0 && (
                             <div className="flex justify-end gap-12">
                                 <span className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase">Chiết khấu:</span>
-                                <span className="text-sm font-black text-rose-600 w-32 tabular-nums">-{Number(discountAmt).toLocaleString('vi-VN')} đ</span>
+                                <span className="text-sm font-black text-rose-600 w-32 tabular-nums">-{Number(activeTotalDiscount).toLocaleString('vi-VN')} đ</span>
                             </div>
                         )}
                         <div className="flex justify-end gap-12">

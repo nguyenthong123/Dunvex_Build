@@ -1,4 +1,4 @@
-import React, { useState, useEffect, createContext, useContext } from 'react';
+import React, { useState, useEffect, createContext, useContext, useCallback, useMemo } from 'react';
 import { CheckCircle2, XCircle, AlertCircle, Info, X } from 'lucide-react';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
@@ -24,24 +24,26 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 		onConfirm: () => void;
 	} | null>(null);
 
-	const showToast = (message: string, type: ToastType = 'info') => {
+	const showToast = useCallback((message: string, type: ToastType = 'info') => {
 		const id = Math.random().toString(36).substring(2, 9);
 		setToasts((prev) => [...prev, { id, message, type }]);
 		setTimeout(() => {
 			setToasts((prev) => prev.filter((t) => t.id !== id));
 		}, 5000);
-	};
+	}, []);
 
-	const removeToast = (id: string) => {
+	const removeToast = useCallback((id: string) => {
 		setToasts((prev) => prev.filter((t) => t.id !== id));
-	};
+	}, []);
 
-	const showConfirm = (title: string, message: string, onConfirm: () => void) => {
+	const showConfirm = useCallback((title: string, message: string, onConfirm: () => void) => {
 		setConfirmDialog({ title, message, onConfirm });
-	};
+	}, []);
+
+	const contextValue = useMemo(() => ({ showToast, showConfirm }), [showToast, showConfirm]);
 
 	return (
-		<ToastContext.Provider value={{ showToast, showConfirm }}>
+		<ToastContext.Provider value={contextValue}>
 			{children}
 			<div className="fixed bottom-24 left-1/2 -translate-x-1/2 md:bottom-10 md:left-auto md:right-10 md:translate-x-0 z-[9999] flex flex-col gap-3 w-[90%] md:w-auto max-w-md">
 				{toasts.map((toast) => (

@@ -42,6 +42,15 @@ const isMatch = (target: string, query: string) => {
 };
 
 export function useOrderForm({ owner, showToast, editId, location, onSuccess }: UseOrderFormParams) {
+	// ── Toast Ref (tránh kích hoạt effect khi showToast đổi reference) ──
+	const showToastRef = useRef(showToast);
+	useEffect(() => {
+		showToastRef.current = showToast;
+	}, [showToast]);
+
+	// ── Submission Guard Ref (tránh bấm trùng / lưu lặp) ──
+	const isSubmittingRef = useRef(false);
+
 	// ── Data Hooks (products, customers) ──
 	const { products: hookProducts } = useProducts({ ownerId: owner.ownerId, enabled: !owner.loading && !!owner.ownerId });
 	const { customers: hookCustomers } = useCustomers({ ownerId: owner.ownerId, enabled: !owner.loading && !!owner.ownerId });
@@ -118,7 +127,7 @@ export function useOrderForm({ owner, showToast, editId, location, onSuccess }: 
 
 	// ── Adjustments ──
 	const [shippingFee, setShippingFee] = useState(0);
-	const [discountAmt, setDiscountAmt] = useState(0);
+	const [manualDiscount, setManualDiscount] = useState(0);
 	const [couponCode, setCouponCode] = useState('');
 	const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
 	const [availableCoupons, setAvailableCoupons] = useState<any[]>([]);
@@ -126,6 +135,7 @@ export function useOrderForm({ owner, showToast, editId, location, onSuccess }: 
 	const [appliedRebate, setAppliedRebate] = useState<any>(null);
 	const userManuallyClearedCoupon = useRef(false);
 	const userManuallyClearedRebate = useRef(false);
+	const userManuallySelectedRebate = useRef(false);
 
 	// Load active coupons for store
 	useEffect(() => {
@@ -188,9 +198,32 @@ export function useOrderForm({ owner, showToast, editId, location, onSuccess }: 
 		return lineItems.reduce((sum, item) => sum + (Number(item.price) || 0) * parseVNQty(item.qty), 0);
 	}, [lineItems]);
 
+	const couponDiscount = useMemo(() => {
+		if (!appliedCoupon) return 0;
+		const res = calculateCouponDiscount(appliedCoupon, lineItems, subTotal, shippingFee);
+		return Number(res.totalDiscount) || 0;
+	}, [appliedCoupon, lineItems, subTotal, shippingFee]);
+
+	const rebateDiscount = useMemo(() => {
+		if (!appliedRebate) return 0;
+		return Number(appliedRebate.rebateAmount) || 0;
+	}, [appliedRebate]);
+
+	const autoDiscount = useMemo(() => {
+		return couponDiscount + rebateDiscount;
+	}, [couponDiscount, rebateDiscount]);
+
+	const totalDiscount = useMemo(() => {
+		const manual = Math.max(0, Number(manualDiscount) || 0);
+		return Math.min(subTotal, manual + autoDiscount);
+	}, [subTotal, manualDiscount, autoDiscount]);
+
+	const discountAmt = totalDiscount;
+	const setDiscountAmt = setManualDiscount;
+
 	const finalTotal = useMemo(() => {
-		return subTotal + Number(shippingFee) - Number(discountAmt);
-	}, [subTotal, shippingFee, discountAmt]);
+		return Math.max(0, subTotal + Number(shippingFee) - totalDiscount);
+	}, [subTotal, shippingFee, totalDiscount]);
 
 	const totalWeight = useMemo(() => {
 		return lineItems.reduce((sum, item) => {
@@ -230,8 +263,8 @@ export function useOrderForm({ owner, showToast, editId, location, onSuccess }: 
 	}, [profitItems, products, overheadRate]);
 
 	const totalProfitActual = useMemo(() => {
-		return profitSubTotal - profitCostTotal - Number(discountAmt);
-	}, [profitSubTotal, profitCostTotal, discountAmt]);
+		return profitSubTotal - profitCostTotal - totalDiscount;
+	}, [profitSubTotal, profitCostTotal, totalDiscount]);
 
 	const hasOverheadItems = useMemo(() => {
 		return lineItems.some(item => {
@@ -241,63 +274,48 @@ export function useOrderForm({ owner, showToast, editId, location, onSuccess }: 
 		});
 	}, [lineItems, products, overheadRate]);
 
-	// Tự động tính toán tổng chiết khấu (Chiết khấu SP / Coupon + Chiết khấu trả sau của khách hàng)
+	// Tự động tìm và áp dụng mã giảm giá tốt nhất nếu chưa chọn mã (chỉ khi tạo đơn mới, không ghi đè chiết khấu tay)
 	useEffect(() => {
-		let couponDisc = 0;
-		if (appliedCoupon) {
-			const res = calculateCouponDiscount(appliedCoupon, lineItems, subTotal, shippingFee);
-			couponDisc = res.totalDiscount;
-		} else if (!userManuallyClearedCoupon.current && availableCoupons.length > 0 && lineItems.some(i => i.productId && Number(i.qty) > 0)) {
-			let bestCoupon: any = null;
-			let maxDiscount = 0;
+		if (editId) return;
+		if (appliedCoupon || userManuallyClearedCoupon.current) return;
+		if (!availableCoupons.length || !lineItems.some(i => i.productId && parseVNQty(i.qty) > 0)) return;
 
-			for (const c of availableCoupons) {
-				const res = calculateCouponDiscount(c, lineItems, subTotal, shippingFee);
-				if (res.totalDiscount > maxDiscount) {
-					maxDiscount = res.totalDiscount;
-					bestCoupon = c;
-				}
-			}
+		let bestCoupon: any = null;
+		let maxDiscount = 0;
 
-			if (bestCoupon && maxDiscount > 0) {
-				setAppliedCoupon(bestCoupon);
-				setCouponCode(bestCoupon.code || '');
-				couponDisc = maxDiscount;
-				showToast(`✨ Tự động áp dụng chiết khấu sản phẩm [${bestCoupon.code}]: -${maxDiscount.toLocaleString('vi-VN')}đ`, "success");
+		for (const c of availableCoupons) {
+			const res = calculateCouponDiscount(c, lineItems, subTotal, shippingFee);
+			if (res.totalDiscount > maxDiscount) {
+				maxDiscount = res.totalDiscount;
+				bestCoupon = c;
 			}
 		}
 
-		let rebateDisc = 0;
-		if (appliedRebate) {
-			rebateDisc = Number(appliedRebate.rebateAmount) || 0;
+		if (bestCoupon && maxDiscount > 0) {
+			setAppliedCoupon(bestCoupon);
+			setCouponCode(bestCoupon.code || '');
+			showToastRef.current?.(`✨ Tự động áp dụng chiết khấu sản phẩm [${bestCoupon.code}]: -${maxDiscount.toLocaleString('vi-VN')}đ`, "success");
 		}
-
-		const totalDisc = couponDisc + rebateDisc;
-		setDiscountAmt(totalDisc);
-	}, [appliedCoupon, appliedRebate, availableCoupons, lineItems, subTotal, shippingFee, showToast]);
+	}, [editId, appliedCoupon, availableCoupons, lineItems, subTotal, shippingFee]);
 
 	const handleSelectCoupon = (coupon: any) => {
 		userManuallyClearedCoupon.current = false;
 		setAppliedCoupon(coupon);
 		setCouponCode(coupon.code || '');
 		const res = calculateCouponDiscount(coupon, lineItems, subTotal, shippingFee);
-		const rebDisc = appliedRebate ? (Number(appliedRebate.rebateAmount) || 0) : 0;
-		setDiscountAmt(res.totalDiscount + rebDisc);
-		showToast(`Đã áp dụng: ${coupon.title || coupon.code} (-${res.totalDiscount.toLocaleString('vi-VN')}đ)`, "success");
+		showToastRef.current?.(`Đã áp dụng: ${coupon.title || coupon.code} (-${res.totalDiscount.toLocaleString('vi-VN')}đ)`, "success");
 	};
 
 	const handleRemoveCoupon = () => {
 		userManuallyClearedCoupon.current = true;
 		setAppliedCoupon(null);
 		setCouponCode('');
-		const rebDisc = appliedRebate ? (Number(appliedRebate.rebateAmount) || 0) : 0;
-		setDiscountAmt(rebDisc);
-		showToast("Đã gỡ mã giảm giá", "info");
+		showToastRef.current?.("Đã gỡ mã giảm giá", "info");
 	};
 
 	// ── Tự động nhận diện & áp dụng Chiết khấu trả sau theo Khách hàng ──
 	useEffect(() => {
-		if (userManuallyClearedRebate.current) return;
+		if (userManuallyClearedRebate.current || userManuallySelectedRebate.current) return;
 		const custId = selectedCustomer?.id;
 		const custName = selectedCustomer?.name || searchCustomerQuery;
 		if (!custId && !custName) {
@@ -313,35 +331,25 @@ export function useOrderForm({ owner, showToast, editId, location, onSuccess }: 
 		if (validRebate && (!appliedRebate || appliedRebate.id !== validRebate.id)) {
 			setAppliedRebate(validRebate);
 			const rebDisc = Number(validRebate.rebateAmount) || 0;
-			showToast(`✨ Áp dụng chiết khấu trả sau của [${validRebate.customerName}]: -${rebDisc.toLocaleString('vi-VN')}đ (Thời hạn: ${validRebate.startDate || '...'} → ${validRebate.endDate || '...'})`, "success");
+			showToastRef.current?.(`✨ Áp dụng chiết khấu trả sau của [${validRebate.customerName}]: -${rebDisc.toLocaleString('vi-VN')}đ (Thời hạn: ${validRebate.startDate || '...'} → ${validRebate.endDate || '...'})`, "success");
 		} else if (!validRebate && appliedRebate) {
 			setAppliedRebate(null);
 		}
-	}, [selectedCustomer, searchCustomerQuery, orderDate, availableRebates, appliedRebate]);
+	}, [selectedCustomer, searchCustomerQuery, orderDate, availableRebates]);
 
 	const handleSelectRebate = (rebate: any) => {
 		userManuallyClearedRebate.current = false;
+		userManuallySelectedRebate.current = true;
 		setAppliedRebate(rebate);
 		const rebDisc = Number(rebate.rebateAmount) || 0;
-		let couponDisc = 0;
-		if (appliedCoupon) {
-			const res = calculateCouponDiscount(appliedCoupon, lineItems, subTotal, shippingFee);
-			couponDisc = res.totalDiscount;
-		}
-		setDiscountAmt(couponDisc + rebDisc);
-		showToast(`Đã áp dụng chiết khấu của ${rebate.customerName}: -${rebDisc.toLocaleString('vi-VN')}đ`, "success");
+		showToastRef.current?.(`Đã áp dụng chiết khấu của ${rebate.customerName}: -${rebDisc.toLocaleString('vi-VN')}đ`, "success");
 	};
 
 	const handleRemoveRebate = () => {
 		userManuallyClearedRebate.current = true;
+		userManuallySelectedRebate.current = false;
 		setAppliedRebate(null);
-		let couponDisc = 0;
-		if (appliedCoupon) {
-			const res = calculateCouponDiscount(appliedCoupon, lineItems, subTotal, shippingFee);
-			couponDisc = res.totalDiscount;
-		}
-		setDiscountAmt(couponDisc);
-		showToast("Đã gỡ chiết khấu trả sau của khách hàng", "info");
+		showToastRef.current?.("Đã gỡ chiết khấu trả sau của khách hàng", "info");
 	};
 
 	// ── Dropdown State ──
@@ -435,7 +443,17 @@ export function useOrderForm({ owner, showToast, editId, location, onSuccess }: 
 					setOrderStatus(data.status || 'Đơn chốt');
 					setOrderNote(data.note || '');
 					setShippingFee(data.adjustmentValue || 0);
-					setDiscountAmt(data.discountValue || 0);
+
+					const savedTotalDisc = Number(data.discountValue ?? data.discountAmt ?? 0);
+					const savedRebateAmt = Number(data.rebateAmount) || 0;
+					const initialManual = data.manualDiscount !== undefined 
+						? Number(data.manualDiscount) 
+						: Math.max(0, savedTotalDisc - savedRebateAmt);
+					setManualDiscount(initialManual);
+
+					if (data.couponCode) {
+						setCouponCode(data.couponCode);
+					}
 
 					setDeliveryLocation(data.rawDeliveryLocation || '');
 					if (data.deliveryLocation && typeof data.deliveryLocation === 'object' && data.deliveryLocation.lat && data.deliveryLocation.lng) {
@@ -593,8 +611,8 @@ export function useOrderForm({ owner, showToast, editId, location, onSuccess }: 
 				setShippingFee(data.shipping_fee);
 			}
 			
-			if (data.discount_amount) {
-				setDiscountAmt(data.discount_amount);
+			if (data.discount_amount !== undefined) {
+				setManualDiscount(Number(data.discount_amount) || 0);
 			}
 
 			setOrderStatus('Đơn nháp');
@@ -859,13 +877,14 @@ export function useOrderForm({ owner, showToast, editId, location, onSuccess }: 
 				showToast(`Mã "${coupon.code}" áp dụng cho sản phẩm khác, đơn hàng hiện chưa có sản phẩm được chiết khấu`, "warning");
 			}
 
+			userManuallyClearedCoupon.current = false;
 			setAppliedCoupon(coupon);
-			setDiscountAmt(res.totalDiscount);
+			setCouponCode(coupon.code || '');
 
 			if (coupon.scope === 'product') {
-				showToast(`Đã áp dụng: ${coupon.title} (${res.appliedCount} sản phẩm khớp chiết khấu -${res.totalDiscount.toLocaleString('vi-VN')}đ)`, "success");
+				showToastRef.current?.(`Đã áp dụng: ${coupon.title} (${res.appliedCount} sản phẩm khớp chiết khấu -${res.totalDiscount.toLocaleString('vi-VN')}đ)`, "success");
 			} else {
-				showToast(`Đã áp dụng: ${coupon.title} (-${res.totalDiscount.toLocaleString('vi-VN')}đ)`, "success");
+				showToastRef.current?.(`Đã áp dụng: ${coupon.title} (-${res.totalDiscount.toLocaleString('vi-VN')}đ)`, "success");
 			}
 
 		} catch (error) {
@@ -875,12 +894,15 @@ export function useOrderForm({ owner, showToast, editId, location, onSuccess }: 
 
 	// ── Confirm Order Handler ── (the big one)
 	const handleConfirmOrder = async () => {
+		if (isSubmittingRef.current || isSubmitting) return;
+
 		const validItems = lineItems.filter(item => item.productId && parseVNQty(item.qty) > 0);
 		if (validItems.length === 0) {
 			showToast("Vui lòng thêm sản phẩm vào đơn hàng", "warning");
 			return;
 		}
 
+		isSubmittingRef.current = true;
 		setIsSubmitting(true);
 		try {
 			const processedItems: any[] = [];
@@ -995,7 +1017,7 @@ export function useOrderForm({ owner, showToast, editId, location, onSuccess }: 
 				}
 				return sum + effectiveCost * (Number(it.qty) || 0);
 			}, 0);
-			const totalProfitFinal = profitSubTotalFinal - profitCostFinal - Number(discountAmt);
+			const totalProfitFinal = profitSubTotalFinal - profitCostFinal - Number(totalDiscount);
 
 			let staffPhone = '';
 			try {
@@ -1019,7 +1041,9 @@ export function useOrderForm({ owner, showToast, editId, location, onSuccess }: 
 				items: processedItems,
 				subTotal: Number(subTotal) || 0,
 				adjustmentValue: Number(shippingFee) || 0,
-				discountValue: Number(discountAmt) || 0,
+				discountValue: Number(totalDiscount) || 0,
+				discountAmt: Number(totalDiscount) || 0,
+				manualDiscount: Number(manualDiscount) || 0,
 				totalAmount: Number(finalTotal) || 0,
 				totalWeight: Number(totalWeight) || 0,
 				totalCost: Number(totalCostFinal) || 0,
@@ -1036,6 +1060,7 @@ export function useOrderForm({ owner, showToast, editId, location, onSuccess }: 
 				createdByEmail: owner.userEmail || auth.currentUser?.email || '',
 				createdByDisplayName: owner.userDisplayName || auth.currentUser?.displayName || 'Nhân viên',
 				createdByPhone: staffPhone,
+				orderCode: originalOrder?.orderCode || undefined
 			};
 
 			if (editId) {
@@ -1387,6 +1412,7 @@ export function useOrderForm({ owner, showToast, editId, location, onSuccess }: 
 		} catch (error) {
 			showToast("Lỗi khi lưu đơn hàng: " + error, "error");
 		} finally {
+			isSubmittingRef.current = false;
 			setIsSubmitting(false);
 		}
 	};
@@ -1469,6 +1495,11 @@ export function useOrderForm({ owner, showToast, editId, location, onSuccess }: 
 		// Adjustments
 		shippingFee, setShippingFee,
 		discountAmt, setDiscountAmt,
+		manualDiscount, setManualDiscount,
+		autoDiscount,
+		couponDiscount,
+		rebateDiscount,
+		totalDiscount,
 		couponCode, setCouponCode,
 		appliedCoupon,
 		availableCoupons,

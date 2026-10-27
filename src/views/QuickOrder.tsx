@@ -157,6 +157,10 @@ const QuickOrder = () => {
 					setShippingFee={form.setShippingFee as any}
 					discountAmt={form.discountAmt}
 					setDiscountAmt={form.setDiscountAmt as any}
+					manualDiscount={form.manualDiscount}
+					setManualDiscount={form.setManualDiscount as any}
+					autoDiscount={form.autoDiscount}
+					totalDiscount={form.totalDiscount}
 					subTotal={form.subTotal}
 					finalTotal={form.finalTotal}
 					totalWeight={form.totalWeight}

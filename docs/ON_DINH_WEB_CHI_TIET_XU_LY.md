@@ -2,6 +2,85 @@
 
 Đọc [bảng tổng hợp](ON_DINH_WEB_TONG_HOP_LOI.md) và `AGENTS.md` trước khi thao tác. Tài liệu này ghi nhận kết quả điều tra mã nguồn thực tế, phương án xử lý, danh sách tệp đã sửa đổi và bằng chứng kiểm thử ngày 26/10/2026.
 
+Bổ sung ngày 27/10/2026: WEB-06 bên dưới đã được tái hiện, chứng minh nguyên nhân, sửa đổi mã nguồn và kiểm thử hồi quy 9/9 ca đạt 100%. Trạng thái trên môi trường kiểm thử là ĐẠT; trên môi trường production ghi nhận **CHƯA KIỂM** do chưa được lệnh deploy từ người dùng.
+
+## WEB-06 — Chiết khấu nhập tay bị mất khi nhập thêm ghi chú/lưu nhiều trường
+
+**Trạng thái: ĐÃ SỬA MÃ NGUỒN & PASS TEST HỒI QUY — CHƯA KIỂM TRÊN PRODUCTION (P1).**
+Người dùng báo: khi lên đơn, nhập số tiền chiết khấu rồi nhập thêm ghi chú, sau lưu chỉ còn ghi chú, chiết khấu mất; lo ngại các trường khác cũng bị rơi rụng.
+
+### 1. Bằng chứng tái hiện lỗi thực tế trước khi sửa (Runtime Evidence)
+Chạy kịch bản kiểm thử tích hợp mount hook `useOrderForm`:
+- **Trước khi sửa:**
+  1. Nhập mặt hàng 1.000.000đ → Nhập chiết khấu tay 50.000đ → Đổi `shippingFee` thành 20.000đ:
+     `discountAmt after shippingFee change: 0` (Bị effect coupon/rebate tự động xoá sạch).
+  2. Nhập chiết khấu tay 50.000đ → Nhập ghi chú → Toast hiển thị / ToastProvider render lại làm đổi reference của `showToast`:
+     `discountAmt after showToast recreation: 0` (Effect phụ thuộc `showToast` chạy lại và gán `totalDisc = 0`).
+  3. Mở đơn cũ có sẵn chiết khấu tay 50.000đ, phí 20.000đ, tổng 970.000đ:
+     `After fetchOrder - discountAmt: 0`, `finalTotal: 1020000`. Khi người dùng sửa ghi chú và bấm lưu, `discountValue` bị gửi lên bằng 0, đồng thời hệ thống tính lệch `diffDebt = +50.000đ` và tự động cộng tăng nợ khách hàng sai trái!
+- **Sau khi sửa:**
+  1. `discountAmt after shippingFee change: 50000` (Giữ nguyên).
+  2. `discountAmt after showToast recreation: 50000` (Giữ nguyên).
+  3. `After fetchOrder - discountAmt: 50000`, `finalTotal: 970000`, `diffDebt: 0` (Giữ nguyên toàn bộ chiết khấu và tổng tiền, nợ khách không đổi).
+
+### 2. Nguyên nhân cốt lõi đã chứng minh
+1. **Dùng chung một biến state cho hai mục đích xung đột:** Hook `useOrderForm` chỉ có một state `discountAmt` duy nhất để lưu cả số tiền người dùng nhập tay lẫn tổng tiền tự tính từ Coupon + Rebate.
+2. **Effect tự tính ghi đè huỷ diệt:** Effect tại dòng 245-277 tính `totalDisc = couponDisc + rebateDisc` rồi gọi thẳng `setDiscountAmt(totalDisc)`. Khi đơn hàng không có coupon/rebate, `totalDisc = 0`, effect lập tức xoá sạch số tiền người dùng đã nhập tay.
+3. **Tham chiếu không ổn định của `showToast`:** `Toast.tsx` định nghĩa `showToast` và `showConfirm` bằng arrow function nội bộ không bọc `useCallback`, object value context không bọc `useMemo`. Khi có toast xuất hiện hoặc tự đóng sau 5s, `ToastProvider` render lại, tạo mới `showToast`, kích hoạt effect phụ thuộc nó chạy lại và xoá chiết khấu tay.
+4. **Hydration đơn cũ bị effect xoá:** Trong `fetchOrder`, sau khi nạp `discountValue` và `adjustmentValue`, effect tự động phát hiện `lineItems`/`shippingFee` thay đổi và chạy ngay lập tức, đè `discountAmt = 0`.
+5. **Thiếu guard submit trùng:** `handleConfirmOrder` không chặn double-click lúc đang submit (`isSubmittingRef`), dẫn đến rủi ro gửi hai giao dịch đồng thời và nhân đôi công nợ khi mạng chập chờn.
+
+### 3. Phương án xử lý chi tiết
+1. **Ổn định `ToastProvider` (`src/components/shared/Toast.tsx`):**
+   - Bọc `showToast`, `removeToast`, `showConfirm` bằng `useCallback`.
+   - Bọc giá trị context `value` bằng `useMemo`.
+2. **Tách bạch State & Logic chiết khấu trong `src/hooks/useOrderForm.ts`:**
+   - Tạo state riêng `manualDiscount` cho khoản nhập tay (`useState(0)`).
+   - Dùng `showToastRef` để lưu `showToast`, tách hẳn callback thông báo khỏi dependency array của các effect nghiệp vụ.
+   - Tính toán thuần túy (pure `useMemo`):
+     - `couponDiscount`: tính từ `appliedCoupon` + `lineItems` + `subTotal` + `shippingFee`.
+     - `rebateDiscount`: tính từ `appliedRebate`.
+     - `autoDiscount = couponDiscount + rebateDiscount`.
+     - `totalDiscount = Math.min(subTotal, Math.max(0, manualDiscount) + autoDiscount)`.
+     - `finalTotal = Math.max(0, subTotal + shippingFee - totalDiscount)`.
+     - `totalProfitActual = profitSubTotal - profitCostTotal - totalDiscount`.
+     - `discountAmt = totalDiscount` (giữ tương thích 100% cho mọi consumer).
+     - `setDiscountAmt = setManualDiscount` (khi người dùng gõ vào ô chiết khấu là gán vào `manualDiscount`).
+   - Effect auto-coupon: Chỉ tự động quét tìm coupon tốt nhất khi tạo đơn mới (`!editId`), chưa có mã và người dùng chưa chủ động gỡ mã. Tuyệt đối không gọi `setDiscountAmt` và không chạm vào `manualDiscount`.
+   - Effect auto-rebate: Khi người dùng chọn hoặc đổi khách hàng, tự tìm rebate hợp lệ. Bổ sung cờ `userManuallySelectedRebate` và `userManuallyClearedRebate` để không tự xoá rebate do người dùng chọn thủ công.
+   - Handlers `handleSelectCoupon`, `handleRemoveCoupon`, `handleSelectRebate`, `handleRemoveRebate`, `handleApplyCoupon`: Chỉ quản lý coupon/rebate, bảo toàn 100% `manualDiscount`.
+   - `fetchOrder`: Khôi phục `manualDiscount` từ `data.manualDiscount` hoặc `Math.max(0, data.discountValue - (data.rebateAmount || 0))`. Giữ nguyên `couponCode`.
+   - `handleConfirmOrder`: Bổ sung `isSubmittingRef` chống double submit; lưu đồng thời `discountValue: totalDiscount`, `discountAmt: totalDiscount`, `manualDiscount: manualDiscount`, `adjustmentValue: shippingFee`, `note: orderNote`, `orderCode`. Khi sửa chỉ ghi chú, `totalDiscount` được giữ nguyên → `diffDebt = 0` → không ghi nợ thừa.
+3. **Cập nhật giao diện `OrderSummary.tsx` & `QuickOrder.tsx`:**
+   - Ô input "Số tiền Chiết khấu (-)" liên kết trực tiếp với `manualDiscount`.
+   - Nếu có chiết khấu tự động (`autoDiscount > 0`), hiển thị nhãn phụ `(Đã gồm tự động: -X đ)`.
+   - Bảng tổng kết bên phải hiển thị tổng chiết khấu `totalDiscount`.
+   - Nhập chuỗi rỗng tự về 0, không gây `NaN`.
+
+### 4. Danh sách tệp đã chỉnh sửa
+- `src/components/shared/Toast.tsx`: Memoize `showToast`, `showConfirm`, context value.
+- `src/hooks/useOrderForm.ts`: Tách `manualDiscount`, `autoDiscount`, `totalDiscount`, ổn định effect, khôi phục đơn cũ, chống double submit.
+- `src/components/orders/OrderSummary.tsx`: Hỗ trợ `manualDiscount`, hiển thị nhãn phụ auto discount, input an toàn.
+- `src/views/QuickOrder.tsx`: Truyền `manualDiscount`, `autoDiscount`, `totalDiscount` xuống `OrderSummary`.
+- `src/hooks/__tests__/orderDiscountWEB06.test.ts`: Bộ test hồi quy 9 ca kiểm thử toàn diện.
+
+### 5. Kết quả kiểm thử & Bằng chứng xác nhận
+- **Test suite WEB-06 (`src/hooks/__tests__/orderDiscountWEB06.test.ts`): 9/9 test passed (100%)**:
+  1. Ca 1: Tiền hàng 1.000.000đ + phí 20.000đ − chiết khấu tay 50.000đ = 970.000đ; ghi chú "Giao buổi chiều" — lưu & reload giữ nguyên toàn bộ (PASSED).
+  2. Ca 2: Đảo thứ tự nhập (Ghi chú → Chiết khấu → Phí và các biến thể) cho kết quả đồng nhất 970.000đ (PASSED).
+  3. Ca 3: Mở đơn cũ có chiết khấu, chỉ sửa ghi chú rồi lưu — giữ nguyên chiết khấu, `diffDebt = 0`, không phát sinh nợ tăng (PASSED).
+  4. Ca 4: Giá trị biên (chiết khấu 0, xoá rỗng, nhập rồi lưu ngay) không bị NaN/rơi trường (PASSED).
+  5. Ca 5: Provider re-render & showToast liên tục không làm mất chiết khấu nhập tay (PASSED).
+  6. Ca 6: Áp dụng và gỡ Coupon khi có chiết khấu tay — không ghi đè, không cộng trùng (PASSED).
+  7. Ca 7: Áp dụng và gỡ Rebate khi có chiết khấu tay — bảo toàn số tay (PASSED).
+  8. Ca 8: Lưu đồng thời ngày đơn, khách, toạ độ, ghi chú, phí, chiết khấu — reload giữ đủ (PASSED).
+  9. Ca 9: Double submit guard chặn retry đồng thời, không tạo đơn kép và không nhân đôi nợ (PASSED).
+- **Toàn bộ dự án**:
+  - `npx tsc --noEmit`: 0 lỗi (exit code 0).
+  - `npm test`: **26 test files, 194/194 passed (100%)**.
+  - `npm run build`: Production bundle thành công trong 6.27s.
+- **Trạng thái phát hành**: **CHƯA KIỂM trên production** (Tuân thủ nghiêm ngặt: không tự ý chạy deploy, không backup, không can thiệp SQLite VPS).
+
 ## 0. Ranh giới công việc và bảo vệ dữ liệu
 
 **Tuyệt đối tuân thủ các quy định:**
